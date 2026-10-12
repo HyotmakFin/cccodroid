@@ -26,7 +26,11 @@ for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp "$f" "$A/assets/app/web/
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
 cp "$A/assets/TOOLS.md" "$A/assets/app/"     # 给 claude 的工具说明（网关读进系统提示）
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* | md5sum | cut -c1-12)
+# 原生小库：seccomp 拦截 → ENOSYS（不依赖 libc，见源码注释）。Android 14 上没有它 claude 起不来
+mkdir -p "$A/assets/app/lib"
+cc4 -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
+  -o "$A/assets/app/lib/seccomp-enosys.so" "$A/native/seccomp-enosys.c"
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 

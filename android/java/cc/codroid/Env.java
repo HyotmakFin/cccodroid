@@ -66,6 +66,8 @@ final class Env {
         e.put("CCAPP_LOADER", new File(usr, "glibc/lib/ld-linux-aarch64.so.1").getPath());
         e.put("CCAPP_GLIBC_LIB", new File(usr, "glibc/lib").getPath());
         e.put("CCAPP_CLAUDE", claude().getPath());
+        // ld-linux --preload 给 claude 挂上：被 seccomp 拦下的调用改回 ENOSYS（Android 14 拦 epoll_pwait2）
+        e.put("CCAPP_CLAUDE_PRELOAD", new File(app, "lib/seccomp-enosys.so").getPath());
         e.put("CCAPP_LOG", log.getPath());
         e.put("CCAPP_SEED", new File(home, "seed.json").getPath());
         e.put("CCAPP_BIN", new File(app, "bin").getPath());   // 应用自带的小工具（priv）

@@ -206,6 +206,8 @@ final class Priv {
                     break;
                 }
                 case "keepalive": resp = keepAlive(req.optBoolean("enable", true)); break;
+                case "usb_list": resp = Usb.list(ctx); break;
+                case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
                 default: resp = new JSONObject().put("ok", false).put("message", "未知操作 " + op);
             }
             out.write((resp.toString() + "\n").getBytes(StandardCharsets.UTF_8));

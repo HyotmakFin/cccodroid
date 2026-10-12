@@ -35,7 +35,14 @@ if [ -f "$OUT/claude" ] && [ "$(sha256sum "$OUT/claude" | cut -d' ' -f1)" = "$SU
   echo "已是该版本，校验通过"
 else
   echo "下载 $((SIZE / 1048576)) MB…"
-  curl -fL --retry 5 --retry-all-errors -C - -o "$OUT/claude.part" "$BASE/$VER/$PLATFORM/claude"
+  # 进度走 "@progress 已下 总量" 行（安装界面据此画进度条）；curl 自己的进度表在非终端下按 \r 刷新，会刷满日志
+  curl -fsSL --retry 5 --retry-all-errors -C - -o "$OUT/claude.part" "$BASE/$VER/$PLATFORM/claude" &
+  CURL=$!
+  while kill -0 $CURL 2>/dev/null; do
+    echo "@progress $(stat -c %s "$OUT/claude.part" 2>/dev/null || echo 0) $SIZE"
+    sleep 2
+  done
+  wait $CURL
   GOT=$(sha256sum "$OUT/claude.part" | cut -d' ' -f1)
   [ "$GOT" = "$SUM" ] || { echo "✗ sha256 不符（期望 $SUM，实得 $GOT）"; rm -f "$OUT/claude.part"; exit 1; }
   mv "$OUT/claude.part" "$OUT/claude"
@@ -45,4 +52,5 @@ chmod 755 "$OUT/claude"
 ln -sfn "$OUT" "$DEST/current"
 
 # 试跑一次（只读版本号）
-"$PREFIX/glibc/lib/ld-linux-aarch64.so.1" --library-path "$PREFIX/glibc/lib" "$DEST/current/claude" --version
+P=${CCAPP_CLAUDE_PRELOAD:-}; [ -f "$P" ] || P=""
+"$PREFIX/glibc/lib/ld-linux-aarch64.so.1" --library-path "$PREFIX/glibc/lib" ${P:+--preload "$P"} "$DEST/current/claude" --version

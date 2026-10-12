@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""usb-adb —— 让 adb 用上 OTG 线连着的另一台安卓设备。
+
+  usb-adb                  授权并接管唯一一台开了 USB 调试的设备，启动 adb 服务
+  usb-adb --name /dev/bus/usb/003/004   指定设备
+  usb-adb list             列出 USB 设备（JSON）
+
+普通进程打不开 /dev/bus/usb，必须经系统 UsbManager 授权（平板上会弹对话框，点「确定」）。
+cccodroid 拿到设备后把 fd 递过来，这里带着 TERMUX_USB_FD 启动 adb 服务；之后照常 adb devices / install / shell。
+一次接管一台设备；拔插后重新运行。被测设备上第一次连接还要点「允许 USB 调试」。
+"""
+import json, os, socket, subprocess, sys
+
+SOCK = "\0cc.codroid.priv"
+
+
+def call(req, want_fd=False):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(SOCK)
+    except OSError as e:
+        sys.exit(f"usb-adb: 连不上 cccodroid（{e}）—— 只能在 cccodroid 的终端里用")
+    s.sendall((json.dumps(req) + "\n").encode())
+    buf, fds = b"", []
+    while not buf.endswith(b"\n"):
+        if want_fd:
+            data, got, _, _ = socket.recv_fds(s, 65536, 1)
+            fds += got
+        else:
+            data = s.recv(65536)
+        if not data:
+            break
+        buf += data
+    s.close()
+    return (json.loads(buf) if buf else {"ok": False, "message": "cccodroid 没有回复"}), fds
+
+
+def main(argv):
+    if argv[:1] == ["list"]:
+        r, _ = call({"op": "usb_list"})
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+        return 0 if r.get("ok") else 1
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
+    name = argv[argv.index("--name") + 1] if "--name" in argv else ""
+    print("usb-adb: 申请 USB 授权（请在弹出的系统对话框里点「确定」）…", file=sys.stderr)
+    r, fds = call({"op": "usb_open", "name": name, "timeout": 90}, want_fd=True)
+    if not r.get("ok") or not fds:
+        for f in fds:
+            os.close(f)
+        sys.exit("usb-adb: " + r.get("message", "没拿到设备 fd"))
+    fd = fds[0]
+    os.set_inheritable(fd, True)
+    print(f"usb-adb: 已接管 {r.get('manufacturer')} {r.get('product')}（{r.get('name')}）", file=sys.stderr)
+    # adb 服务只在启动时读一次 TERMUX_USB_FD，所以先停掉旧服务
+    subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    env = dict(os.environ, TERMUX_USB_FD=str(fd))
+    rc = subprocess.run(["adb", "start-server"], env=env, pass_fds=(fd,)).returncode
+    os.close(fd)
+    if rc == 0:
+        import time; time.sleep(1)   # 服务刚起，给 libusb 一点时间认设备
+        subprocess.run(["adb", "devices", "-l"])
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

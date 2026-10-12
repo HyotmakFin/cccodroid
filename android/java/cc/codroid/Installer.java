@@ -81,7 +81,15 @@ final class Installer {
         pb.redirectErrorStream(true);
         Process p = pb.start();
         BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8));
-        for (String l; (l = r.readLine()) != null; ) ui.step(l);
+        for (String l; (l = r.readLine()) != null; ) {
+            // 脚本用 "@progress 已下 总量" 报进度：画进度条，不进日志
+            if (l.startsWith("@progress ")) {
+                String[] p2 = l.split(" ");
+                try { ui.bytes(Long.parseLong(p2[1]), Long.parseLong(p2[2])); } catch (Exception ignored) {}
+                continue;
+            }
+            ui.step(l);
+        }
         try { return p.waitFor(); } catch (InterruptedException e) { throw new IOException(e); }
     }
 
