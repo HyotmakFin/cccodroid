@@ -57,11 +57,13 @@ public class MainActivity extends Activity {
         env = new Env(this);
         getWindow().setStatusBarColor(Color.parseColor("#0d1117"));
         buildSetupUi();
+        java.util.List<String> want = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
-        } else {
-            boot();
+            want.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            want.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
+        if (want.isEmpty()) boot();
+        else requestPermissions(want.toArray(new String[0]), 1);
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) {
@@ -153,6 +155,30 @@ public class MainActivity extends Activity {
         });
     }
 
+    /**
+     * 通知被关时引导去设置页开。targetSdk 28 的应用不能自己弹通知权限框（requestPermissions 会被系统直接忽略），
+     * 本该由系统在"界面在前台时建第一个通知渠道"那一刻代问 —— 但我们的渠道由前台服务建，常常错过时机，
+     * 之后系统就再也不问，通知被整个屏蔽（实测 Android 14：发了 15 条、显示 0 条）。只问一次。
+     */
+    private void askNotifications() {
+        android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+        SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+        if (nm.areNotificationsEnabled() || sp.getBoolean("askedNotifySettings", false)) return;
+        sp.edit().putBoolean("askedNotifySettings", true).apply();
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("开启通知")
+            .setMessage("cccodroid 在后台跑任务时靠一条常驻通知保活；任务完成或需要你确认时也通过通知提醒。\n\n系统目前屏蔽了本应用的通知，去设置里打开吧。")
+            .setPositiveButton("去开启", (d, w) -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
+                } catch (Exception e) {
+                    startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                }
+            })
+            .setNegativeButton("以后再说", null)
+            .show();
+    }
+
     private boolean ping() {
         try {
             HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:" + Env.PORT + "/api/status").openConnection();
@@ -205,6 +231,7 @@ public class MainActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void showWeb() {
+        askNotifications();
         WebView.setWebContentsDebuggingEnabled(true);
         web = new WebView(this);
         WebSettings s = web.getSettings();
