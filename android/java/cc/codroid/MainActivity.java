@@ -37,8 +37,7 @@ import java.net.URL;
  * 每一步都能重入：装到一半被杀，下次打开从缺的那一步接着来。
  */
 public class MainActivity extends Activity {
-    /** 发布版的工具包下载地址（GitHub Releases）。开发期优先用 /sdcard/cccodroid/ 下的本地文件 */
-    static final String DEVKIT_URL = "https://github.com/greyoak111/cccodroid/releases/latest/download/devkit-cc.codroid.tar.gz";
+    /** 本地工具包（离线安装 / 开发期）：放在共享目录就优先用它；下载地址见 assets/devkit-sources.txt */
     static final String[] LOCAL_DEVKIT = {
         "/sdcard/cccodroid/devkit-cc.codroid.tar.gz", "/sdcard/cccodroid/devkit-cc.codroid.tar",
     };
@@ -81,10 +80,16 @@ public class MainActivity extends Activity {
                     public void bytes(long d, long t) { progress(t > 0 ? (int) (d * 100 / t) : -1); }
                 });
                 if (!env.devkitReady()) {
-                    String src = DEVKIT_URL;
+                    String src = null;
                     for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { src = l; break; }
-                    say("开发工具包来源：" + src);
-                    ins.installDevkit(src);
+                    if (src != null) {
+                        say("开发工具包来源：" + src);
+                        ins.installDevkit(src);
+                    } else {
+                        File gz = ins.downloadDevkit(readAsset("devkit-sources.txt").trim().split("\\s+"));
+                        ins.installDevkit(gz.getPath());
+                        gz.delete();      // 解完就删，腾出 600MB
+                    }
                     say("✓ 开发工具包就绪");
                 }
                 deployAssets();

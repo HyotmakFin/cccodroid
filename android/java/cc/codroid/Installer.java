@@ -13,7 +13,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.zip.GZIPInputStream;
+import org.json.JSONObject;
 
 /** 首次安装：把 devkit tar 解到 files/ 下、跑 first-run、再装官方 Claude Code。全程只写本应用私有目录。 */
 final class Installer {
@@ -23,6 +25,110 @@ final class Installer {
     private final Progress ui;
 
     Installer(Env env, Progress ui) { this.env = env; this.ui = ui; }
+
+    // ── devkit 下载 ────────────────────────────────────────────────────
+    /**
+     * 从 Release 取工具包：先读同一 Release 里的 devkit.lock.json（gz 的文件名、大小、sha256），
+     * 再把 .tar.gz 下到私有目录 —— 断点续传（Range）、失败重试、多个地址依次换，sha256 对上才交给 installDevkit。
+     * 先落盘再解压：边下边解的话网络一断就得从头来，600MB 在手机网络上经不起。
+     * @param bases Release 下载目录（…/releases/download/<tag>/），按顺序尝试
+     * @return 校验过的本地 .tar.gz
+     */
+    File downloadDevkit(String[] bases) throws IOException {
+        IOException last = null;
+        for (String base : bases) {
+            try {
+                ui.step("获取工具包清单：" + base);
+                JSONObject gz = new JSONObject(new String(httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8)).getJSONObject("gz");
+                String name = gz.getString("file"), sha = gz.getString("sha256");
+                long size = gz.getLong("bytes");
+                File done = new File(env.files, name), part = new File(env.files, name + ".part"), tag = new File(env.files, name + ".sha256");
+                if (done.isFile() && done.length() == size && sha.equals(sha256(done))) return done;
+                // .part 属于别的版本就作废，别把两个版本拼在一起
+                if (!tag.isFile() || !sha.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
+                    part.delete();
+                    write(tag, sha + "\n");
+                }
+                ui.step(String.format("下载开发工具包 %.0f MB%s…", size / 1048576.0, part.length() > 0 ? String.format("（续传，已有 %.0f MB）", part.length() / 1048576.0) : ""));
+                for (int attempt = 1; part.length() < size; attempt++) {
+                    try { fetchRange(base + name, part, size); }
+                    catch (IOException e) {
+                        if (attempt >= 8) throw e;
+                        ui.step("  网络中断（" + e.getMessage() + "），" + (attempt * 3) + " 秒后续传…");
+                        try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
+                    }
+                }
+                ui.step("校验 sha256…");
+                String got = sha256(part);
+                if (!sha.equals(got)) { part.delete(); throw new IOException("sha256 不符（期望 " + sha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…）"); }
+                if (!part.renameTo(done)) throw new IOException("换名失败: " + part);
+                tag.delete();
+                return done;
+            } catch (Exception e) {
+                last = e instanceof IOException ? (IOException) e : new IOException(e.getMessage(), e);
+                ui.step("  ✗ " + e.getMessage());
+            }
+        }
+        throw last != null ? last : new IOException("没有可用的下载地址");
+    }
+
+    private static byte[] httpGetSmall(String url) throws IOException {
+        HttpURLConnection c = open(url);
+        try {
+            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
+            try (InputStream in = c.getInputStream()) { return readAllBytes(in); }
+        } finally { c.disconnect(); }
+    }
+
+    /** 从 part 现有长度续传到结束；服务器不认 Range（回 200）就从头写 */
+    private void fetchRange(String url, File part, long size) throws IOException {
+        long have = part.length();
+        HttpURLConnection c = open(url);
+        if (have > 0) c.setRequestProperty("Range", "bytes=" + have + "-");
+        try {
+            int code = c.getResponseCode();
+            boolean append = code == 206;
+            if (code != 200 && code != 206) throw new IOException("HTTP " + code);
+            if (!append) have = 0;
+            try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 << 16);
+                 OutputStream out = new FileOutputStream(part, append)) {
+                byte[] buf = new byte[1 << 16];
+                long tick = 0;
+                for (int r; (r = in.read(buf)) > 0; ) {
+                    out.write(buf, 0, r);
+                    have += r;
+                    if (have - tick > (2 << 20)) { tick = have; ui.bytes(have, size); }
+                }
+            }
+            ui.bytes(have, size);
+        } finally { c.disconnect(); }
+    }
+
+    private static HttpURLConnection open(String url) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setInstanceFollowRedirects(true);      // GitHub Release 会 302 到 objects.githubusercontent.com
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(60000);                 // 60 秒没来一个字节就当断了，交给续传
+        return c;
+    }
+
+    static String sha256(File f) throws IOException {
+        try (InputStream in = new FileInputStream(f)) {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[1 << 20];
+            for (int r; (r = in.read(buf)) > 0; ) md.update(buf, 0, r);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md.digest()) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
+    }
+
+    private static byte[] readAllBytes(InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        for (int r; (r = in.read(buf)) > 0; ) b.write(buf, 0, r);
+        return b.toByteArray();
+    }
 
     // ── devkit ─────────────────────────────────────────────────────────
     void installDevkit(String source) throws IOException {
