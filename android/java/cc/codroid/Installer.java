@@ -52,6 +52,8 @@ final class Installer {
         ui.step("首次运行配置…");
         int rc = run(env.bin("bash").getPath(), new File(env.usr, "libexec/devkit/first-run.sh").getPath());
         if (rc != 0) ui.step("（first-run 返回 " + rc + "，不影响使用）");
+        // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
+        run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
         write(new File(env.usr, ".devkit-ok"), "ok\n");
     }
@@ -94,6 +96,7 @@ final class Installer {
             long size = octal(h, 124, 12);
             char type = (char) (h[156] == 0 ? '0' : h[156]);
             int mode = (int) octal(h, 100, 8);
+            long mtime = octal(h, 136, 12);
             if (type == 'L' || type == 'K' || type == 'x' || type == 'g') {
                 byte[] body = readBody(in, size);
                 if (type == 'L') longName = cstr(body, 0, body.length);
@@ -146,6 +149,10 @@ final class Installer {
                         try (OutputStream o = new FileOutputStream(f)) { copy(in, o, size); }
                         pad(in, size);
                         Os.chmod(f.getPath(), (mode & 0777) | 0600);
+                        // 保留包里的修改时间。不保留的话一律是解包那一刻，先后全凭解包顺序 ——
+                        // gdb 内嵌的 Guile 一看 .scm 比编译好的 .go 新，就逐个重编译（而编译器本身用不了），
+                        // 表现为 gdb 任何参数都无输出、原地空转烧 CPU。make 之类按时间戳判断的工具也会被搅乱。
+                        if (mtime > 0) f.setLastModified(mtime * 1000);
                         continue;
                     }
                     default:

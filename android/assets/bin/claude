@@ -1,0 +1,6 @@
+#!/system/bin/sh
+# 官方 Claude Code（原样二进制，经 devkit 的 glibc 加载器运行）。
+# 先清掉 LD_PRELOAD：shell 里的 termux-exec 是 bionic 库，glibc 进程继承到它会直接起不来。
+unset LD_PRELOAD
+exec "$PREFIX/glibc/lib/ld-linux-aarch64.so.1" --library-path "$PREFIX/glibc/lib" \
+  "$HOME/.local/share/cccodroid/claude/current/claude" "$@"

@@ -1,0 +1,96 @@
+#!/system/bin/sh
+# cccodroid 工具链自检：每项一行 PASS/FAIL；用法 cccodroid-selftest [-q 只看失败]
+[ -n "$BASH_VERSION" ] || exec bash "$0" "$@"
+W=$(mktemp -d "${TMPDIR:-$PREFIX/tmp}/st.XXXXXX") || { echo "FAIL mktemp"; exit 1; }
+cd "$W"
+Q=; [ "$1" = -q ] && Q=1
+NP=0; NF=0
+t() { # t 名称 命令… —— 每项限时 90 秒，卡住的算失败，不拖垮整个自检
+  local name=$1; shift
+  local out; out=$(timeout -k 5 90 bash -c "$*" 2>&1 </dev/null); local rc=$?
+  if [ $rc -eq 0 ]; then NP=$((NP+1)); [ -z "$Q" ] && echo "PASS $name :: $(echo "$out" | tail -1 | cut -c1-100)"
+  else NF=$((NF+1)); echo "FAIL $name (rc=$rc$([ $rc = 124 ] && echo ' 超时')) :: $(echo "$out" | tr '\n' ' ' | cut -c1-300)"; fi
+}
+echo "== 环境"; echo "PREFIX=$PREFIX TMPDIR=$TMPDIR"; echo "PATH=$PATH"; echo "LD_PRELOAD=${LD_PRELOAD:-（无）}"
+echo "== 工作区"
+t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf 'int main(){return 0;}' > .st.c && cc .st.c -o .st && ./.st && rm -f .st .st.c && echo ok"
+t "工作区符号链接" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && ln -sf /system .st-ln && rm .st-ln && echo ok"
+echo "== 基础路径"
+for p in /bin/sh /bin/bash /usr/bin/env /usr/bin/python3 /tmp /etc/resolv.conf /etc/ssl/certs; do [ -e $p ] && echo "有 $p" || echo "无 $p"; done
+echo "== shebang"
+printf '#!/usr/bin/env bash\necho ok-env\n' > s1; chmod +x s1; t "shebang /usr/bin/env" ./s1
+printf '#!/bin/sh\necho ok-binsh\n' > s2; chmod +x s2; t "shebang /bin/sh" ./s2
+printf '#!/bin/bash\necho ok-binbash\n' > s3; chmod +x s3; t "shebang /bin/bash" ./s3
+printf '#!/usr/bin/env python3\nprint("ok-py")\n' > s4; chmod +x s4; t "shebang env python3" ./s4
+printf '#!/usr/bin/env node\nconsole.log("ok-node")\n' > s5; chmod +x s5; t "shebang env node" ./s5
+echo "== C/C++"
+printf '#include <stdio.h>\nint main(){printf("hi-c\\n");return 0;}\n' > a.c
+t "cc" "cc a.c -o a && ./a"
+t "gcc 名字" "gcc --version | head -1"
+printf '#include <iostream>\n#include <ranges>\n#include <vector>\nint main(){std::vector v{1,2,3};for(int x: v|std::views::reverse)std::cout<<x;std::cout<<"\\n";}\n' > b.cpp
+t "c++20" "c++ -std=c++20 b.cpp -o b && ./b"
+t "-static 不可用（预期：没有静态 libc，只能动态链接）" "! cc a.c -static -o as 2>/dev/null && echo 如预期"
+t "pthread+math" "printf '#include <math.h>\n#include <pthread.h>\nvoid*f(void*a){return a;}int main(){pthread_t t;pthread_create(&t,0,f,0);pthread_join(t,0);return (int)sqrt(0);}' > p.c && cc p.c -o p -lm -lpthread && ./p"
+t "make" "printf 'all:\n\t@echo made-\$\$(uname -m)\n' > Makefile && make"
+mkdir -p cm && printf 'cmake_minimum_required(VERSION 3.10)\nproject(t C)\nadd_executable(t ../a.c)\n' > cm/CMakeLists.txt
+t "cmake+ninja" "cmake -S cm -B cm/b -G Ninja >/dev/null && ninja -C cm/b >/dev/null && ./cm/b/t"
+t "cmake 默认生成器" "cmake -S cm -B cm/b2 >/dev/null && make -C cm/b2 >/dev/null && ./cm/b2/t"
+t "pkg-config" "pkg-config --libs zlib openssl"
+t "autotools 风格 ./configure" "printf '#!/bin/sh\necho configured\n' > configure && chmod +x configure && ./configure"
+t "gdb" "gdb -batch -ex run -ex bt ./a 2>&1 | tail -2"
+t "strace" "strace -c -o /dev/null ./a"
+t "patchelf" "patchelf --print-interpreter ./a"
+echo "== Python"
+t "python3" "python3 -c 'import sys,ssl,sqlite3,zlib,ctypes;print(sys.version.split()[0],ssl.OPENSSL_VERSION)'"
+t "python https" "python3 -c 'import urllib.request;print(urllib.request.urlopen(\"https://pypi.org/simple/\",timeout=20).status)'"
+t "pip" "pip --version"
+t "venv" "python3 -m venv v && ./v/bin/python -c 'print(1)'"
+t "pip install(venv)" "./v/bin/pip install -q six && ./v/bin/python -c 'import six;print(six.__version__)'"
+t "pip install --user" "pip install -q --user six && python3 -c 'import six;print(six.__file__)'"
+t "subprocess shell" "python3 -c 'import subprocess;print(subprocess.check_output(\"echo sp\",shell=True).decode().strip())'"
+t "tempfile" "python3 -c 'import tempfile;print(tempfile.gettempdir())'"
+echo "== Node"
+t "node" "node -e 'console.log(process.version, require(\"os\").tmpdir())'"
+t "node https" "node -e 'fetch(\"https://registry.npmjs.org/\").then(r=>console.log(r.status))'"
+t "npm" "npm --version"
+t "npm install" "mkdir -p np && cd np && npm init -y >/dev/null && npm install --no-audit --no-fund -s is-number semver >/dev/null && node -e 'console.log(require(\"semver\").valid(\"1.2.3\"))'"
+t "npm bin (.bin 下的 env shebang)" "cd np && ./node_modules/.bin/semver 1.2.3"
+t "npx" "cd np && npx --no-install semver 2.0.0"
+t "npm exec shell" "cd np && npm pkg set scripts.t='echo script-ok' && npm run -s t"
+t "child_process.exec" "node -e 'require(\"child_process\").exec(\"echo cp\",(e,o)=>console.log(e?e.message:o.trim()))'"
+echo "== Java/Android"
+printf 'public class H{public static void main(String[] a){System.out.println("hi-java");}}\n' > H.java
+t "javac+java" "javac H.java && java H"
+t "java 单文件" "java H.java"
+t "jar" "jar cf h.jar H.class && ls h.jar"
+t "aapt2" "aapt2 version"
+t "d8" "d8 --version"
+t "apksigner" "apksigner --version"
+t "keytool" "keytool -genkeypair -alias a -keyalg RSA -keysize 2048 -dname CN=t -keystore k.p12 -storepass 123456 -validity 1 -storetype pkcs12 >/dev/null && ls k.p12"
+echo "== VCS/网络"
+t "git" "git init -q g && cd g && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git log --oneline | wc -l"
+t "git https clone" "git clone -q --depth 1 https://github.com/octocat/Hello-World.git hw && ls hw"
+t "curl https" "curl -sS -o /dev/null -w '%{http_code}' https://www.google.com/generate_204"
+t "ssh" "ssh -V"
+t "ssh-keygen" "ssh-keygen -q -t ed25519 -N '' -f kk && ls kk.pub"
+t "openssl" "openssl version"
+echo "== CLI"
+t "rg" "rg --version | head -1"; t "fd" "fd --version"; t "bat" "bat --version"; t "delta" "delta --version"
+t "hx" "hx --version"; t "yq" "yq --version"; t "jq" "echo '{\"a\":1}' | jq .a"; t "sqlite3" "sqlite3 :memory: 'select 1+1'"
+t "typst" "printf '= Hi\n' > d.typ && typst compile d.typ && ls d.pdf"
+t "duckdb" "duckdb -c 'select 42'"
+t "magick" "magick -size 8x8 xc:red r.png && magick identify r.png"
+t "grep -r" "grep -rc hi-c a.c"; t "find" "find . -maxdepth 1 -name 'a.c'"; t "sed/awk" "echo a | sed s/a/b/ | awk '{print \$1}'"
+t "tar/xz/zstd/zip" "tar cJf x.txz a.c && tar cf - a.c | zstd -q > x.zst && zip -q x.zip a.c && unzip -l x.zip | tail -1"
+t "less/file" "file a"
+t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
+t "pkg 是说明替身" "pkg install x 2>&1 | head -1 | grep -q 'pkg / apt' && echo 替身正常"
+t "su/sudo 不应存在" "! command -v sudo"
+echo "== 残留路径"
+t "残留 com.termux 文本" "n=\$(rg -l --no-messages -uu 'com\\.termux' \$PREFIX/bin \$PREFIX/etc \$PREFIX/lib/python3*/site-packages 2>/dev/null | head -20 | tee /dev/stderr | wc -l); echo \$n 个"
+t "/tmp 硬编码" "rg -l --no-messages -uu '\"/tmp' \$PREFIX/bin 2>/dev/null | head -5 | wc -l"
+cd /; rm -rf "$W"
+echo "== Claude Code"
+t "claude 命令" "claude --version"
+echo "== 完：通过 $NP 项，失败 $NF 项"
+[ $NF -eq 0 ]

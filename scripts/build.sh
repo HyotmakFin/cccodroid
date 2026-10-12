@@ -25,7 +25,8 @@ cp "$SRC/server.mjs" "$A/assets/app/"
 for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* | md5sum | cut -c1-12)
+cp "$A/assets/TOOLS.md" "$A/assets/app/"     # 给 claude 的工具说明（网关读进系统提示）
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 

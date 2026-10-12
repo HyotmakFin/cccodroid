@@ -27,14 +27,21 @@ final class Env {
 
     boolean claudeReady() { return claude().canExecute(); }
 
+    /**
+     * 工作区放在私有目录。/sdcard 是 FUSE：不能执行程序、不能建符号链接、git 嫌属主不对、
+     * npm install 建不了 .bin —— 实测在那里几乎干不了开发。私有目录里这些都正常，界面的文件浏览器也看得到。
+     */
     File workspace() {
-        File w = new File("/sdcard/cccodroid");
-        if (w.isDirectory() || w.mkdirs()) {
-            if (w.canWrite()) return w;
-        }
         File p = new File(home, "workspace");
         p.mkdirs();
         return p;
+    }
+
+    /** 与别的应用交换文件的地方（交付的 APK、截图之类）。拿不到存储权限时为 null */
+    File shared() {
+        File w = new File("/sdcard/cccodroid");
+        if ((w.isDirectory() || w.mkdirs()) && w.canWrite()) return w;
+        return null;
     }
 
     void apply(Map<String, String> e) {
@@ -52,6 +59,8 @@ final class Env {
         e.put("CCAPP_HOME", home.getPath());
         e.put("CCAPP_RUNTIME", files.getPath());
         e.put("CCAPP_WORKSPACE", workspace().getPath());
+        File sh = shared();
+        if (sh != null) e.put("CCAPP_SHARED", sh.getPath());
         e.put("CCAPP_PORT", String.valueOf(PORT));
         e.put("CCAPP_SHELL", bin("bash").getPath());
         e.put("CCAPP_LOADER", new File(usr, "glibc/lib/ld-linux-aarch64.so.1").getPath());
