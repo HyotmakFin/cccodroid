@@ -1,0 +1,4 @@
+dist/
+android/build/
+android/assets/app/
+*.apk
