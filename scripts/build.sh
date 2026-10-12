@@ -20,22 +20,25 @@ OUT=$ROOT/dist
 [ -f "$KEY" ] || { echo "✗ 找不到签名钥匙 $KEY（不会自动生成：换钥匙会让已装用户无法升级）"; exit 1; }
 
 echo "▸ assets"
-rm -rf "$A/assets/app"; mkdir -p "$A/assets/app/web" "$A/assets/app/scripts"
+rm -rf "$A/assets/app"; mkdir -p "$A/assets/app/web" "$A/assets/app/scripts" "$A/assets/app/bin"
 cp "$SRC/server.mjs" "$A/assets/app/"
 for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/web/"* "$A/assets/app/scripts/"* | md5sum | cut -c1-12)
+cp "$A/assets/bin/"* "$A/assets/app/bin/"
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 
+# 第三方库：Shizuku-API 13.1.5（MIT，Maven Central 原样，sha1 已核）
+LIBS=$(ls "$ROOT"/third_party/shizuku/*.jar | tr '\n' ':')
 echo "▸ javac"
 rm -rf "$A/build"; mkdir -p "$A/build/classes"
 LD_LIBRARY_PATH=$P/lib $J/javac -encoding UTF-8 --release 8 -nowarn \
-  -cp "$AJAR" -d "$A/build/classes" $(find "$A/java" -name '*.java')
+  -cp "$AJAR:$LIBS" -d "$A/build/classes" $(find "$A/java" -name '*.java')
 
 echo "▸ d8"
 LD_LIBRARY_PATH=$P/lib $J/java -cp $P/share/java/d8.jar com.android.tools.r8.D8 --release --min-api 26 \
-  --lib "$AJAR" --output "$A/build" $(find "$A/build/classes" -name '*.class')
+  --lib "$AJAR" --output "$A/build" $(find "$A/build/classes" -name '*.class') "$ROOT"/third_party/shizuku/*.jar
 
 echo "▸ aapt2 + 签名"
 mkdir -p "$OUT"

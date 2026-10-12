@@ -110,7 +110,10 @@ public class MainActivity extends Activity {
         say("部署界面与网关 " + want.trim());
         Installer.deleteTree(env.app);
         copyAssetDir("app", env.app);
-        for (File f : new File(env.app, "scripts").listFiles()) f.setExecutable(true, true);
+        for (String d : new String[]{"scripts", "bin"}) {
+            File[] fs = new File(env.app, d).listFiles();
+            if (fs != null) for (File f : fs) f.setExecutable(true, true);
+        }
     }
 
     private void copyAssetDir(String path, File dst) throws Exception {

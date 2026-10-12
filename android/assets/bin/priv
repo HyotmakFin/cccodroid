@@ -1,0 +1,3 @@
+#!/system/bin/sh
+# 以 shell 身份（uid 2000）执行命令，经 Shizuku。用法见 priv --help
+exec node "$(dirname "$0")/priv.mjs" "$@"

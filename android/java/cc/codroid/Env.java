@@ -43,7 +43,7 @@ final class Env {
         e.put("PREFIX", usr.getPath());
         e.put("HOME", home.getPath());
         e.put("TMPDIR", new File(usr, "tmp").getPath());
-        e.put("PATH", usr.getPath() + "/bin:/system/bin:/system/xbin");
+        e.put("PATH", usr.getPath() + "/bin:" + new File(app, "bin").getPath() + ":/system/bin:/system/xbin");
         e.put("LANG", "en_US.UTF-8");
         e.put("TERM", "xterm-256color");
         e.put("SHELL", bin("bash").getPath());
@@ -59,5 +59,6 @@ final class Env {
         e.put("CCAPP_CLAUDE", claude().getPath());
         e.put("CCAPP_LOG", log.getPath());
         e.put("CCAPP_SEED", new File(home, "seed.json").getPath());
+        e.put("CCAPP_BIN", new File(app, "bin").getPath());   // 应用自带的小工具（priv）
     }
 }

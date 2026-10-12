@@ -52,6 +52,9 @@ public class GatewayService extends Service {
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cccodroid:gateway");
         wake.setReferenceCounted(false);
         wake.acquire();
+
+        // 提权中转：和网关同寿命（priv 命令、设置页的 Shizuku 状态都靠它）
+        Priv.start(this);
     }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
