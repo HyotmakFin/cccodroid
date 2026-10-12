@@ -209,7 +209,20 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         web.setBackgroundColor(Color.parseColor("#0d1117"));
-        web.setWebViewClient(new WebViewClient());
+        // 本机网关之外的地址一律交给系统浏览器：登录授权页、"去官网创建 Key" 之类。
+        // 在 WebView 里打开登录页会被 Google 等拒绝，而且 OAuth 回调要回到浏览器才能跳 localhost。
+        web.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
+                if (url != null && url.startsWith("http://127.0.0.1:" + Env.PORT)) return false;
+                openExternal(url);
+                return true;
+            }
+        });
+        web.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface public void openUrl(String url) {
+                if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) ui.post(() -> openExternal(url));
+            }
+        }, "CCApp");
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
@@ -221,6 +234,11 @@ public class MainActivity extends Activity {
         web.loadUrl("http://127.0.0.1:" + Env.PORT + "/");
         root.removeAllViews();
         root.addView(web);
+    }
+
+    private void openExternal(String url) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+        catch (Exception e) { android.widget.Toast.makeText(this, "没有可用的浏览器：" + url, android.widget.Toast.LENGTH_LONG).show(); }
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
