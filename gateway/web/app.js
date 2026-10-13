@@ -1537,6 +1537,10 @@
   function renderProvCard() {
     const box = $("prov-card");
     const id = state.provView;
+    // 卡片容器是复用的：密钥卡 / 自定义卡会在它上面挂 onclick（闭包里记着那一家）。
+    // 换卡前必须摘掉，否则旧处理还在 —— 在登录卡上点「使用这个接口」，冒泡上来又把接口切回上一家
+    // （实测：同一毫秒发出 provider=anthropic 和 provider=deepseek，后者赢）。
+    box.onclick = null;
     if (id === "__new__") return renderCustomCard(box, null);
     const p = (state.providers || []).find((x) => x.id === id);
     if (!p) { box.innerHTML = ""; return; }
@@ -1633,7 +1637,7 @@
       try { st = await api("/api/login/status"); } catch { return; }
       if (st.pending) { if (state.provView === p.id) paintLoginState(st, p); return; }
       clearInterval(state.loginTimer);
-      if (st.loggedIn && (!st.last || st.last.ok)) toast("✓ 登录成功" + (st.email ? "：" + st.email : ""));
+      if (st.loggedIn) toast("✓ 已登录" + (st.email ? "：" + st.email : "") + (p.active ? "" : "，点「使用这个接口」切过去"));
       else if (st.last && !st.last.ok) toast("登录没有完成", true);
       if (state.provView === p.id) renderProvCard();
       refreshStatus();
@@ -1786,9 +1790,18 @@
         "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。";
       $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">去允许自启动</button>`);
     }
+    if (st.dev) {                                     // 开发端：Shizuku 由它自己的应用管理，这里只报实测状态
+      $("priv-actions").innerHTML = "";
+      if (st.state !== "ok") {
+        se.classList.remove("hidden");
+        se.className = "prov-state warn";
+        se.textContent = "在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。" + (st.message ? "（" + st.message + "）" : "");
+      }
+    }
     $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">刷新</button>`);
     $("priv-auto-row").classList.toggle("hidden", !(wl && st.paired));
     $("priv-auto").checked = st.autostart !== false;
+    $("priv-ka-row").classList.toggle("hidden", !!st.dev);
     $("priv-ka-row").style.opacity = st.state === "ok" ? "1" : ".45";
     $("priv-ka").disabled = st.state !== "ok";
     $("priv-ka").checked = !!st.keepalive;
