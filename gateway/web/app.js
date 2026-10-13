@@ -7,6 +7,9 @@
 //    拿出去  /api/file       ← 消息里的本地图片自动内联、点开大图
 //    看得见  openFiles()     ← 全屏文件浏览器，能预览能引用
 // ─────────────────────────────────────────────────────────────────────
+// 宿主 WebView 用 ?t=令牌 首次加载（网关据此种 Cookie）；令牌别留在地址里
+if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+
 (() => {
   "use strict";
 

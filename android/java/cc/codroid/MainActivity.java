@@ -257,7 +257,7 @@ public class MainActivity extends Activity {
 
     private boolean ping() {
         try {
-            HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:" + Env.PORT + "/api/status").openConnection();
+            HttpURLConnection c = Env.gateway("/api/status");
             c.setConnectTimeout(800); c.setReadTimeout(1500);
             return c.getResponseCode() == 200;
         } catch (Exception e) { return false; }
@@ -363,7 +363,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.loadUrl("http://127.0.0.1:" + Env.PORT + "/");
+        web.loadUrl(Env.uiUrl());
         root.removeAllViews();
         root.addView(web);
     }

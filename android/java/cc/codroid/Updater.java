@@ -401,7 +401,7 @@ final class Updater {
     // ── 小工具 ───────────────────────────────────────────────────────────
     static boolean pingGateway() {
         try {
-            HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:" + Env.PORT + "/api/status").openConnection();
+            HttpURLConnection c = Env.gateway("/api/status");
             c.setConnectTimeout(800); c.setReadTimeout(1500);
             return c.getResponseCode() == 200;
         } catch (Exception e) { return false; }
@@ -410,7 +410,7 @@ final class Updater {
     /** 网关在跑任务（或排着队）吗。问不到就当忙，宁可不打断 */
     static boolean gatewayBusy() {
         try {
-            HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:" + Env.PORT + "/api/status").openConnection();
+            HttpURLConnection c = Env.gateway("/api/status");
             c.setConnectTimeout(800); c.setReadTimeout(3000);
             if (c.getResponseCode() != 200) return true;
             JSONObject o = new JSONObject(new String(readAll(c.getInputStream()), StandardCharsets.UTF_8));
