@@ -361,4 +361,9 @@ window.I18N_DICT["fr"] = {
   "浅色": "Clair",
   "深色": "Sombre",
   "用时 {d}": "Durée {d}",
+  "校验中": "Vérification",
+  "已损坏": "Endommagé",
+  "修复": "Réparer",
+  "校验": "Vérifier",
+  "修复开发工具包？\n\n会重新下载当前这一版（约 600 MB，断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。": "Réparer le kit de développement ?\n\nLa version actuelle sera retéléchargée (environ 600 Mo, avec reprise) puis réinstallée ; le service est suspendu 1 à 2 minutes pendant l'installation.\nCe que vous avez installé avec pip / npm -g est conservé.",
 };

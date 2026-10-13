@@ -25,6 +25,7 @@ final class Installer {
     private final Progress ui;
 
     Installer(Env env, Progress ui) { this.env = env; this.ui = ui; }
+    void step(String m) { ui.step(m); }
 
     // ── devkit 下载 ────────────────────────────────────────────────────
     /**
@@ -39,11 +40,14 @@ final class Installer {
         for (String base : bases) {
             try {
                 ui.step("获取工具包清单：" + base);
-                JSONObject gz = new JSONObject(new String(httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8)).getJSONObject("gz");
+                JSONObject lock = new JSONObject(new String(httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
+                JSONObject gz = lock.getJSONObject("gz");
                 String name = gz.getString("file"), sha = gz.getString("sha256");
                 long size = gz.getLong("bytes");
                 File done = new File(env.files, name), part = new File(env.files, name + ".part"), tag = new File(env.files, name + ".sha256");
                 lastBase = base; lastSha = sha;
+                JSONObject tarInfo = lock.optJSONObject("tar");
+                lastTarSha = tarInfo != null ? tarInfo.optString("sha256", null) : null;
                 if (done.isFile() && done.length() == size && sha.equals(sha256(done))) return done;
                 // .part 属于别的版本就作废，别把两个版本拼在一起
                 if (!tag.isFile() || !sha.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
@@ -73,8 +77,8 @@ final class Installer {
         throw last != null ? last : new IOException("没有可用的下载地址");
     }
 
-    /** 最近一次 downloadDevkit 用的 Release 目录与 gz 的 sha256（installDevkit 记进 .devkit-ok，更新检查据此比对） */
-    String lastBase, lastSha;
+    /** 最近一次 downloadDevkit 用的 Release 目录、gz 与 tar 的 sha256（installDevkit 记进 .devkit-ok，更新检查据此比对） */
+    String lastBase, lastSha, lastTarSha;
 
     /**
      * 通用下载：断点续传 + 重试 + sha256（sha 为 null 则不校验）。.part 旁边的 .sha256 记着它属于哪个版本，
@@ -152,9 +156,7 @@ final class Installer {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] buf = new byte[1 << 20];
             for (int r; (r = in.read(buf)) > 0; ) md.update(buf, 0, r);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : md.digest()) sb.append(String.format("%02x", b));
-            return sb.toString();
+            return hex(md.digest());
         } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
     }
 
@@ -166,10 +168,23 @@ final class Installer {
     }
 
     // ── devkit ─────────────────────────────────────────────────────────
-    void installDevkit(String source) throws IOException { installDevkit(source, lastBase, lastSha); }
+    //
+    // 替换分四步，每一步被打断（进程被杀、APK 升级重启、没电）都能在下次启动时由 recover() 收拾干净：
+    //   1. 解到 usr.new/，边解边算 tar 的 sha256，和清单对不上就整个丢掉 —— 旧工具包一根毫毛不动
+    //   2. 校验通过后在 usr.new/ 里写 .devkit-pending（要装成哪一版）
+    //   3. usr → usr.old，usr.new → usr（两次换名）
+    //   4. finish()：搬用户自装的东西、first-run、写 .devkit-ok、删 usr.old
+    // .devkit-ok 是最后写的：没有它，网关不会启动，更新检查也不会把这份工具包当成装好了。
+    static final String PENDING = ".devkit-pending";
+    File usrNew() { return new File(env.files, "usr.new"); }
+    File usrOld() { return new File(env.files, "usr.old"); }
 
-    /** @param base/sha 这份工具包来自哪个 Release、gz 的 sha256（本地文件安装时可为 null）—— 写进 .devkit-ok，更新检查拿它比 */
-    void installDevkit(String source, String base, String sha) throws IOException {
+    void installDevkit(String source) throws IOException { installDevkit(source, lastBase, lastSha, lastTarSha); }
+
+    /** @param base/sha/tarSha 这份工具包来自哪个 Release、gz 与 tar 的 sha256（本地文件安装时可为 null）—— 写进 .devkit-ok，更新检查拿它比 */
+    void installDevkit(String source, String base, String sha, String tarSha) throws IOException {
+        // 本地文件没给 sha：自己算一个。已装记录里有了内容身份，更新检查才不会把它误认成别的版本
+        if (sha == null && !source.startsWith("http")) { ui.step("计算工具包校验和…"); sha = sha256(new File(source)); }
         ui.step("解包开发工具包…");
         InputStream raw; long total;
         if (source.startsWith("http")) {
@@ -181,16 +196,51 @@ final class Installer {
             raw = new FileInputStream(f); total = f.length();
         }
         Counting in = new Counting(new BufferedInputStream(raw, 1 << 20), total);
-        InputStream s = source.endsWith(".gz") ? new GZIPInputStream(in, 1 << 16) : in;
-        File tmp = new File(env.files, "usr.new");
+        MessageDigest md;
+        try { md = MessageDigest.getInstance("SHA-256"); } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
+        java.security.DigestInputStream s = new java.security.DigestInputStream(source.endsWith(".gz") ? new GZIPInputStream(in, 1 << 16) : in, md);
+        File tmp = usrNew();
         deleteTree(tmp);
         tmp.mkdirs();
-        // tar 里的条目都以 usr/ 开头：解到 files/usr.new/ 下再整体换名，失败不留半成品
-        untar(s, tmp, "usr/");
-        s.close();
-        if (env.usr.isDirectory()) carryOver(env.usr, tmp);
-        deleteTree(env.usr);
-        if (!tmp.renameTo(env.usr)) throw new IOException("换名失败: " + tmp);
+        try {
+            untar(s, tmp, "usr/");
+            byte[] sink = new byte[1 << 16];
+            while (s.read(sink) > 0) { }            // tar 末尾的填充块也算进校验和
+        } catch (IOException e) {
+            deleteTree(tmp);
+            throw new IOException("解包失败，旧工具包未改动：" + e.getMessage(), e);
+        } finally { s.close(); }
+        String got = hex(md.digest());
+        if (tarSha != null && !tarSha.isEmpty() && !tarSha.equals(got)) {
+            deleteTree(tmp);
+            throw new IOException("解出来的内容与清单不符（tar sha256 期望 " + tarSha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…），旧工具包未改动");
+        }
+        JSONObject p = new JSONObject();
+        try { p.put("base", base == null ? "" : base).put("sha256", sha == null ? "" : sha).put("tarSha256", got); }
+        catch (org.json.JSONException ignored) {}
+        write(new File(tmp, PENDING), p + "\n");
+        swapIn(tmp);
+        finish();
+    }
+
+    /** 两次换名把新版换上；第二次失败就把旧版换回来 */
+    private void swapIn(File tmp) throws IOException {
+        File old = usrOld();
+        deleteTree(old);
+        if (env.usr.exists() && !env.usr.renameTo(old)) throw new IOException("换名失败: " + env.usr);
+        if (!tmp.renameTo(env.usr)) {
+            if (old.exists()) old.renameTo(env.usr);
+            throw new IOException("换名失败: " + tmp);
+        }
+    }
+
+    /** 换名之后的几步。可重入：中途被打断，下次启动 recover() 会再跑一遍 */
+    private void finish() throws IOException {
+        File old = usrOld(), pend = new File(env.usr, PENDING);
+        JSONObject p;
+        try { p = new JSONObject(new String(java.nio.file.Files.readAllBytes(pend.toPath()), StandardCharsets.UTF_8)); }
+        catch (Exception e) { p = new JSONObject(); }
+        if (old.isDirectory()) carryOver(old, env.usr);
         new File(env.usr, "tmp").mkdirs();
         env.home.mkdirs();
 
@@ -200,10 +250,98 @@ final class Installer {
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
-        JSONObject ok = new JSONObject();
-        try { ok.put("base", base == null ? "" : base).put("sha256", sha == null ? "" : sha).put("at", System.currentTimeMillis()); }
-        catch (org.json.JSONException ignored) {}
-        write(new File(env.usr, ".devkit-ok"), ok + "\n");
+        pruneManifest();
+        try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
+        write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
+        pend.delete();
+        if (old.exists()) { ui.step("清理旧版本…"); deleteTree(old); }
+    }
+
+    /**
+     * 启动时先调：上次装工具包被打断的话，把目录收拾到一致状态。
+     * @return 动过东西（接着装完了，或者退回了旧版）
+     */
+    boolean recover() throws IOException {
+        File neu = usrNew(), old = usrOld();
+        boolean did = false;
+        // 断在两次换名之间：旧版已换下、新版（校验过的）还没换上
+        if (!env.usr.exists() && neu.isDirectory() && new File(neu, PENDING).isFile()) {
+            if (!neu.renameTo(env.usr)) throw new IOException("换名失败: " + neu);
+            did = true;
+        }
+        if (new File(env.usr, PENDING).isFile()) {
+            ui.step("上次的开发工具包更新被打断了，接着完成…");
+            finish();
+            return true;
+        }
+        if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; }   // 新版没成：退回旧版
+        if (neu.exists()) { deleteTree(neu); did = true; }                                      // 解到一半的残骸
+        if (old.exists() && new File(env.usr, ".devkit-ok").isFile()) deleteTree(old);
+        return did;
+    }
+
+    // ── 完整性：工具包里的 libexec/devkit/MANIFEST 记着每个文件的 sha256 与大小 ──
+    static final String MANIFEST = "libexec/devkit/MANIFEST", LOCAL_MANIFEST = ".devkit-manifest";
+
+    /** first-run 里的 postinst 可能删掉包里个别文件：装完以后按实际在的文件修剪一份本机基线，免得每次都报"缺失" */
+    private void pruneManifest() {
+        File man = new File(env.usr, MANIFEST);
+        if (!man.isFile()) return;
+        try {
+            StringBuilder sb = new StringBuilder();
+            int dropped = 0;
+            for (String l : java.nio.file.Files.readAllLines(man.toPath(), StandardCharsets.UTF_8)) {
+                String[] f = l.split(" ", 3);
+                if (f.length != 3) continue;
+                if (new File(env.usr, f[2]).isFile()) sb.append(l).append('\n'); else dropped++;
+            }
+            write(new File(env.usr, LOCAL_MANIFEST), sb.toString());
+            if (dropped > 0) ui.step("（首次配置去掉了 " + dropped + " 个文件，已从校验基线里剔除）");
+        } catch (IOException e) { ui.step("（校验基线没写成：" + e.getMessage() + "）"); }
+    }
+
+    /** 用户可能自己动的地方：配置、pip / npm 装的包。改了不算坏，只有"缺了"才算 */
+    private static boolean userTouchable(String rel) {
+        return rel.startsWith("etc/") || rel.startsWith("glibc/etc/") || rel.startsWith("var/")
+            || rel.matches("lib/python3\\.\\d+/site-packages/.*") || rel.startsWith("lib/node_modules/");
+    }
+
+    /**
+     * 核对已装工具包。full=false 只看文件在不在（几秒）；full=true 逐个算 sha256（一两分钟）。
+     * @return {manifest, total, missing, changed, samples[]}；manifest=false 表示这一版工具包没带清单
+     */
+    JSONObject verifyDevkit(boolean full) throws Exception {
+        JSONObject r = new JSONObject();
+        File man = new File(env.usr, LOCAL_MANIFEST);
+        if (!man.isFile()) man = new File(env.usr, MANIFEST);
+        if (!man.isFile()) return r.put("manifest", false);
+        java.util.List<String> lines = java.nio.file.Files.readAllLines(man.toPath(), StandardCharsets.UTF_8);
+        int missing = 0, changed = 0, i = 0;
+        long bytes = 0, doneBytes = 0;
+        for (String l : lines) { String[] f = l.split(" ", 3); if (f.length == 3) bytes += Long.parseLong(f[1]); }
+        org.json.JSONArray samples = new org.json.JSONArray();
+        for (String l : lines) {
+            String[] f = l.split(" ", 3);
+            if (f.length != 3) continue;
+            i++;
+            String rel = f[2];
+            long size = Long.parseLong(f[1]);
+            File file = new File(env.usr, rel);
+            boolean bad = false, gone = !file.isFile();
+            if (userTouchable(rel)) gone = false;
+            else if (gone) { missing++; bad = true; }
+            else if (full && !userTouchable(rel) && (file.length() != size || !f[0].equals(sha256(file)))) { changed++; bad = true; }
+            if (bad && samples.length() < 12) samples.put((gone ? "缺失 " : "改动 ") + rel);
+            doneBytes += full ? size : 0;
+            if ((i & 255) == 0) ui.bytes(full ? doneBytes : i, full ? bytes : lines.size());
+        }
+        return r.put("manifest", true).put("total", i).put("missing", missing).put("changed", changed).put("samples", samples);
+    }
+
+    static String hex(byte[] d) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : d) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     /**

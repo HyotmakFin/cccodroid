@@ -305,6 +305,8 @@ final class Priv {
                 case "upd_check": Updater.get(ctx).checkAsync(true); resp = Updater.get(ctx).status(); break;
                 case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true); break;
                 case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
+                case "upd_verify": resp = Updater.get(ctx).verifyAsync(req.optBoolean("full", true)); break;
+                case "upd_repair": resp = Updater.get(ctx).repair(); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
                 default: resp = new JSONObject().put("ok", false).put("message", "未知操作 " + op);
             }

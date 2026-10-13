@@ -1893,7 +1893,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("priv-auto").addEventListener("change", (e) => post("/api/app/shz_autostart", { enable: e.target.checked }).catch(() => {}));
 
   // ── 更新：应用本体 / 开发工具包 / Claude Code ──
-    const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查") };
+    const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查"), verifying: t("校验中"), damaged: t("已损坏") };
   let updPoll = null;
   async function loadUpd() {
     let st;
@@ -1904,19 +1904,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("upd-channel").value = st.channel || "stable";
     let moving = st.checking;
     $("upd-items").innerHTML = st.items.map((it) => {
-      const busy = it.state === "downloading" || it.state === "installing";
+      const busy = it.state === "downloading" || it.state === "installing" || it.state === "verifying";
       moving ||= busy;
       const ver = esc(it.current || "?") + (it.latest && it.latest !== it.current && it.state !== "uptodate" ? " → " + esc(it.latest) : "");
       const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done)} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
-        : it.state === "installing" && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
-      const cls = it.state === "error" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
+        : (it.state === "installing" || it.state === "verifying") && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
+      const cls = it.state === "error" || it.state === "damaged" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
       const btn = it.state === "available" ? (it.id === "claude" ? t("更新") : t("下载并安装"))
-        : it.state === "ready" ? t("安装") : it.state === "error" && it.latest ? t("重试") : "";
+        : it.state === "ready" ? t("安装") : it.state === "damaged" ? t("修复") : it.state === "error" && it.latest ? t("重试") : "";
+      // 工具包：随时可以逐个核对文件；坏了就「修复」（重装同一版本）
+      const act = it.state === "damaged" ? "repair" : "";
+      const verifyBtn = it.id === "devkit" && it.current && ["uptodate", "unknown", "error", "damaged"].includes(it.state)
+        ? `<button class="btn sm ghost" data-item="devkit" data-act="verify">${t("校验")}</button>` : "";
       return `<div class="row-actions" style="justify-content:space-between">
         <div><b>${esc(it.name)}</b> <span class="tiny">${ver}</span><br>
           <span class="prov-state ${cls}" style="margin:0">${UPD_TEXT[it.state] || esc(it.state)}${prog}${it.message ? " · " + esc(it.message) : ""}</span></div>
-        ${btn ? `<button class="btn sm" data-item="${esc(it.id)}">${btn}</button>` : ""}</div>`;
+        <div class="row-actions">${verifyBtn}${btn ? `<button class="btn sm" data-item="${esc(it.id)}"${act ? ` data-act="${act}"` : ""}>${btn}</button>` : ""}</div></div>`;
     }).join("");
+    const v = st.verify;
+    if (v && v.manifest && (v.missing || v.changed) && (v.samples || []).length)
+      $("upd-items").insertAdjacentHTML("beforeend", `<pre class="tiny mono" style="white-space:pre-wrap;margin:6px 0 0;color:var(--fg3)">${esc(v.samples.join("\n"))}${v.missing + v.changed > v.samples.length ? "\n…" : ""}</pre>`);
     $("upd-last").textContent = st.checking ? t("检查中…") : st.error ? "✗ " + st.error
       : st.lastCheck ? t("上次检查：{at}", { at: new Date(st.lastCheck).toLocaleString() }) : t("还没检查过");
     clearTimeout(updPoll);
@@ -1925,6 +1932,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("upd-items").addEventListener("click", async (e) => {
     const item = e.target.dataset && e.target.dataset.item;
     if (!item) return;
+    const act = e.target.dataset.act;
+    if (act === "verify" || act === "repair") {
+      if (act === "repair" && !confirm(t("修复开发工具包？\n\n会重新下载当前这一版（约 600 MB，断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
+      const r = await post(act === "verify" ? "/api/app/upd_verify" : "/api/app/upd_repair", { full: true }).catch((e2) => ({ ok: false, message: e2.message }));
+      toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
+      setTimeout(loadUpd, 500);
+      return;
+    }
     if (item === "devkit" && !confirm(t("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
     const r = await post("/api/app/upd_apply", { item }).catch((e2) => ({ ok: false, message: e2.message }));
     toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);

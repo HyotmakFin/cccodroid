@@ -2682,7 +2682,7 @@ const server = http.createServer(async (req, res) => {
     // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
     if (p.startsWith("/api/app/")) {
       const op = p.slice(9);
-      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
+      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
       if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: "未知操作" });
       const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
       if (!PREFIX) return sendJson(res, 200, await devApp(op, b));

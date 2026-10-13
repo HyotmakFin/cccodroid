@@ -31,6 +31,10 @@ import org.json.JSONObject;
  *           下次冷启动且没有任务在跑时替换（或用户在设置页点"安装"）。用户自装进 $PREFIX 的东西会搬过去。
  *
  * 版本来源：GitHub Releases（v* 是 APK，devkit-* 是工具包）；Claude Code 走官方 downloads.claude.ai。
+ *
+ * 先后顺序：工具包在下载或替换时，APK 不装（装 APK 会杀掉本进程，把工具包那边拦腰截断）——
+ * 等工具包下完（已落盘、已校验）或装完再装 APK。已下好的工具包在新进程启动时接着装。
+ * 已装版本只认 .devkit-ok 里记的内容哈希，绝不拿本 APK 内置的钉子去猜（新 APK 的钉子会把旧工具包"认成"新版）。
  */
 final class Updater {
     static final String TAG = "cccodroid-upd";
@@ -48,13 +52,17 @@ final class Updater {
     private final Item app = new Item("app", "cccodroid"), devkit = new Item("devkit", "开发工具包"), claude = new Item("claude", "Claude Code");
     private volatile boolean checking;
     private volatile String lastError = "";
+    /** APK 已下好但因为工具包在忙而推迟安装；user=用户点的（走系统确认），否则静默规则 */
+    private volatile boolean appWaiting, appWaitingUser;
+    /** 最近一次校验的结果（给界面看） */
+    private volatile JSONObject lastVerify;
 
     static final class Item {
         final String id, name;
         volatile String current = "", latest = "", state = "unknown", message = "";
         volatile long done, total;
         // 下载需要的东西
-        volatile String url, sha, base;
+        volatile String url, sha, base, tarSha;
         volatile long size, need;
         volatile File file;
         Item(String id, String name) { this.id = id; this.name = name; }
@@ -79,6 +87,7 @@ final class Updater {
             if (f.isFile() && f.length() == st.optLong("size")) {
                 devkit.file = f; devkit.base = st.getString("base"); devkit.sha = st.getString("sha256");
                 devkit.size = st.getLong("size"); devkit.url = devkit.base + f.getName(); devkit.latest = tagOf(devkit.base);
+                devkit.tarSha = st.optString("tarSha256", null);
                 devkit.set("ready", "");
             }
         } catch (Exception ignored) {}
@@ -96,7 +105,8 @@ final class Updater {
         JSONArray a = new JSONArray();
         for (Item i : new Item[]{app, devkit, claude}) a.put(i.json());
         return new JSONObject().put("ok", true).put("auto", auto()).put("channel", channel())
-            .put("lastCheck", prefs().getLong("lastCheck", 0)).put("checking", checking).put("error", lastError).put("items", a);
+            .put("lastCheck", prefs().getLong("lastCheck", 0)).put("checking", checking).put("error", lastError).put("items", a)
+            .put("verify", lastVerify == null ? JSONObject.NULL : lastVerify);
     }
 
     void set(JSONObject req) {
@@ -109,17 +119,17 @@ final class Updater {
 
     private void refreshCurrent() {
         try { app.current = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName; } catch (Exception ignored) {}
-        devkit.current = tagOf(installedDevkitBase());
+        String b = installedDevkitBase();
+        devkit.current = !b.isEmpty() ? tagOf(b) : !installedDevkitSha().isEmpty() ? "本地安装" : env.devkitReady() ? "未知" : "";
         try { claude.current = new File(Os.readlink(new File(env.home, ".local/share/cccodroid/claude/current").getPath())).getName(); }
         catch (Exception e) { claude.current = ""; }
     }
 
-    /** 已装工具包来自哪个 Release 目录。早期版本只写了 "ok"：那就是本 APK 内置地址里那一版 */
-    String installedDevkitBase() {
-        JSONObject o = env.devkitInfo();
-        String b = o.optString("base", "");
-        return b.isEmpty() ? pinnedDevkitBase() : b;
-    }
+    /**
+     * 已装工具包来自哪个 Release 目录；离线装的、早期版本装的没有记录，返回空串。
+     * 以前这里拿本 APK 内置的钉子兜底 —— 错的：APK 升级后钉子换成新版，旧工具包就被当成新版，显示"已是最新"而内容还是旧的。
+     */
+    String installedDevkitBase() { return env.devkitInfo().optString("base", ""); }
     private String installedDevkitSha() { return env.devkitInfo().optString("sha256", ""); }
     private String pinnedDevkitBase() {
         try (java.io.InputStream in = ctx.getAssets().open("devkit-sources.txt")) {
@@ -154,6 +164,7 @@ final class Updater {
         try { checkClaude(); } catch (Exception e) { claude.set("error", "连不上 downloads.claude.ai：" + e.getMessage()); }
         prefs().edit().putLong("lastCheck", System.currentTimeMillis()).apply();
         if (auto() && !manual) autoApply();
+        releaseApp();         // 工具包停在"已下载"没去装（比如有任务在跑）时，别让 APK 一直等着
     }
 
     private void checkApp(JSONArray rels) throws Exception {
@@ -192,6 +203,9 @@ final class Updater {
         }
         if (best == null) { devkit.set("uptodate", ""); return; }
         devkit.latest = best;
+        // 正在下、正在装、正在校验，或者已下好一份等着装：别动它的文件与哈希（文件名各版本相同，换了哈希就和落盘的那份对不上）
+        String st0 = devkit.state;
+        if ("downloading".equals(st0) || "installing".equals(st0) || "verifying".equals(st0) || "ready".equals(st0)) return;
         String base = "https://github.com/" + REPO + "/releases/download/" + best + "/";
         JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
         if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT) {
@@ -200,15 +214,19 @@ final class Updater {
         JSONObject gz = lock.getJSONObject("gz");
         String sha = gz.getString("sha256");
         String have = installedDevkitSha();
-        if (have.isEmpty() ? best.equals(devkit.current) : have.equals(sha)) { devkit.set("uptodate", ""); return; }
-        devkit.base = base; devkit.sha = sha; devkit.size = gz.getLong("bytes");
+        if (!have.isEmpty() && have.equals(sha)) {
+            devkit.current = best;
+            if (!"damaged".equals(devkit.state)) devkit.set("uptodate", "");     // 自检查出坏了：同一版本，等用户点修复
+            return;
+        }
         JSONObject tar = lock.optJSONObject("tar");
+        devkit.base = base; devkit.sha = sha; devkit.size = gz.getLong("bytes");
+        devkit.tarSha = tar != null ? tar.optString("sha256", null) : null;
         devkit.need = tar != null ? tar.optLong("bytes") : devkit.size * 4;
         devkit.url = base + gz.getString("file");
         devkit.file = new File(env.files, gz.getString("file"));
-        if (!"downloading".equals(devkit.state) && !"installing".equals(devkit.state))
-            devkit.set(devkit.file.isFile() && devkit.file.length() == devkit.size ? "ready" : "available",
-                String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0));
+        String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
+        devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + " · 无法确认已装的是哪一版，建议更新一次" : mb);
     }
 
     private void checkClaude() throws Exception {
@@ -294,14 +312,15 @@ final class Updater {
             installer(it).download(it.url, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
             if (it == devkit) prefs().edit().putString("devkitStaged", new JSONObject().put("file", it.file.getPath())
-                .put("base", it.base).put("sha256", it.sha).put("size", it.size).toString()).apply();
+                .put("base", it.base).put("sha256", it.sha).put("size", it.size).put("tarSha256", it.tarSha == null ? "" : it.tarSha).toString()).apply();
             it.set("ready", "");
             if (it == app) { if (user) installApp(); else maybeSilentInstallApp(); }
             else if (user) startDevkitApply();
-            else notifyReady(it);
+            else { notifyReady(it); releaseApp(); }
         } catch (Exception e) {
             if (it == app && it.file != null) it.file.delete();
             it.set("error", e.getMessage());
+            if (it == devkit) releaseApp();
         }
     }
 
@@ -314,8 +333,29 @@ final class Updater {
             throw new IOException("安装包签名与本应用不一致，拒绝安装");
     }
 
+    /** 工具包正在下载 / 替换：这时装 APK 会把它拦腰截断 */
+    boolean devkitMoving() { return "downloading".equals(devkit.state) || "installing".equals(devkit.state); }
+
+    /** 推迟 APK，等工具包这一步走完 */
+    private boolean deferApp(boolean user) {
+        if (!devkitMoving()) return false;
+        appWaiting = true; appWaitingUser |= user;
+        app.set("ready", "等开发工具包" + ("installing".equals(devkit.state) ? "装完" : "下完") + "再装，免得把它打断");
+        return true;
+    }
+    /** 工具包这一步走完（下完 / 装完 / 出错）：放行等着的 APK */
+    private void releaseApp() {
+        if (!appWaiting || devkitMoving()) return;
+        boolean user = appWaitingUser;
+        appWaiting = false; appWaitingUser = false;
+        if (!"ready".equals(app.state)) return;
+        app.set("ready", "");
+        if (user) installApp(); else maybeSilentInstallApp();
+    }
+
     void installApp() {
         if (app.file == null || !app.file.isFile()) { app.set("error", "安装包不见了，重新检查更新"); return; }
+        if (deferApp(true)) return;
         app.set("installing", "");
         // 有 Shizuku 就静默装（进程会被系统替换掉，服务由 MY_PACKAGE_REPLACED 拉起）；否则走系统安装确认
         if (Priv.granted() && !gatewayBusy()) {
@@ -330,6 +370,7 @@ final class Updater {
 
     /** 自动模式：Shizuku 可用、没有任务在跑、界面不在前台 —— 静默装；否则通知用户 */
     private void maybeSilentInstallApp() {
+        if (deferApp(false)) return;
         if (Priv.granted() && !gatewayBusy() && !MainActivity.visible) installApp();
         else notifyReady(app);
     }
@@ -356,17 +397,26 @@ final class Updater {
 
     /** 交给界面做：替换期间网关要停，界面切回安装进度页 */
     private void startDevkitApply() {
-        if (gatewayBusy()) { devkit.set("ready", "有任务正在跑，等它结束再装"); return; }
+        if (gatewayBusy()) { devkit.set("ready", "有任务正在跑，等它结束再装"); releaseApp(); return; }
         ctx.startActivity(new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_APPLY_DEVKIT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     /** 在 MainActivity 的线程里调。ins 的进度打到安装界面 */
     void applyDevkit(Installer ins) throws Exception {
         devkit.set("installing", "");
+        try {
+            // 落盘以后可能过了好几天、经历过 APK 升级：装之前再核一遍，坏了就删掉重下，不拿它去换掉能用的旧版
+            ins.step("核对已下载的工具包…");
+            if (devkit.sha != null && !devkit.sha.equals(Installer.sha256(devkit.file))) {
+                devkit.file.delete();
+                prefs().edit().remove("devkitStaged").apply();
+                throw new IOException("已下载的工具包校验不通过，已删除；重新检查更新会再下一次");
+            }
+        } catch (Exception e) { devkit.set("error", e.getMessage()); releaseApp(); throw e; }
         GatewayService.pause(true);
         try {
             for (int i = 0; i < 40 && pingGateway(); i++) Thread.sleep(250);
-            ins.installDevkit(devkit.file.getPath(), devkit.base, devkit.sha);
+            ins.installDevkit(devkit.file.getPath(), devkit.base, devkit.sha, devkit.tarSha);
             devkit.file.delete();
             prefs().edit().remove("devkitStaged").apply();
             refreshCurrent();
@@ -377,7 +427,81 @@ final class Updater {
             throw e;
         } finally {
             GatewayService.pause(false);
+            releaseApp();
         }
+    }
+
+    // ── 校验与修复 ─────────────────────────────────────────────────────────
+    /** 后台核对已装工具包。full=false：只看文件在不在（启动时自动跑）；full=true：逐个算哈希（用户点的） */
+    JSONObject verifyAsync(boolean full) {
+        JSONObject r = new JSONObject();
+        try {
+            if (!env.devkitReady()) return r.put("ok", false).put("message", "开发工具包还没装好");
+            if (devkitMoving() || "verifying".equals(devkit.state)) return r.put("ok", true).put("message", "进行中");
+            String prev = devkit.state, prevMsg = devkit.message;
+            devkit.set("verifying", full ? "逐个文件核对哈希" : "");
+            devkit.done = 0; devkit.total = 0;
+            new Thread(() -> {
+                try {
+                    JSONObject v = installer(devkit).verifyDevkit(full);
+                    v.put("full", full).put("at", System.currentTimeMillis());
+                    lastVerify = v;
+                    if (!v.optBoolean("manifest")) {
+                        devkit.set(full ? "damaged" : prev, full ? "这一版工具包没带文件清单，没法逐个核对；可以修复（重装同一版本）" : prevMsg);
+                        return;
+                    }
+                    int bad = v.optInt("missing") + v.optInt("changed");
+                    if (bad == 0) { devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? "已核对 " + v.optInt("total") + " 个文件，全部完好" : prevMsg); return; }
+                    devkit.set("damaged", (v.optInt("missing") > 0 ? "缺 " + v.optInt("missing") + " 个文件" : "")
+                        + (v.optInt("missing") > 0 && v.optInt("changed") > 0 ? "、" : "")
+                        + (v.optInt("changed") > 0 ? v.optInt("changed") + " 个文件内容不对" : "") + "，点修复重装同一版本");
+                    if (!full) notifyDamaged(v);
+                } catch (Exception e) { devkit.set("error", "校验失败：" + e.getMessage()); }
+            }, "upd-verify").start();
+            return r.put("ok", true).put("message", full ? "开始逐个核对（一两分钟）" : "开始核对");
+        } catch (Exception e) {
+            try { r.put("ok", false).put("message", e.getMessage()); } catch (Exception ignored) {}
+            return r;
+        }
+    }
+
+    /** 修复：把已装的那一版（不知道是哪版就用本 APK 内置的那版）重新下载、重装。用户自装的 pip / npm 包照常保留 */
+    JSONObject repair() {
+        JSONObject r = new JSONObject();
+        try {
+            if (devkitMoving()) return r.put("ok", true).put("message", "进行中");
+            String base = installedDevkitBase();
+            if (base.isEmpty()) base = pinnedDevkitBase();
+            JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
+            if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT)
+                return r.put("ok", false).put("message", tagOf(base) + " 与本版 cccodroid 不兼容");
+            JSONObject gz = lock.getJSONObject("gz"), tar = lock.optJSONObject("tar");
+            devkit.base = base; devkit.latest = tagOf(base);
+            devkit.sha = gz.getString("sha256"); devkit.size = gz.getLong("bytes");
+            devkit.tarSha = tar != null ? tar.optString("sha256", null) : null;
+            devkit.need = tar != null ? tar.optLong("bytes") : devkit.size * 4;
+            devkit.url = base + gz.getString("file");
+            devkit.file = new File(env.files, gz.getString("file"));
+            devkit.set("available", "修复：重装 " + devkit.latest);
+            new Thread(() -> download(devkit, true), "upd-dl-devkit").start();
+            return r.put("ok", true).put("message", "开始下载 " + devkit.latest + " 用于修复");
+        } catch (Exception e) {
+            try { r.put("ok", false).put("message", "修复没开始：" + e.getMessage()); } catch (Exception ignored) {}
+            return r;
+        }
+    }
+
+    private void notifyDamaged(JSONObject v) {
+        String text = "开发工具包缺了 " + v.optInt("missing") + " 个文件。点此打开设置修复（重装同一版本，你自己装的 pip / npm 包会保留）";
+        PendingIntent pi = PendingIntent.getActivity(ctx, 23,
+            new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        ctx.getSystemService(NotificationManager.class).notify(20, new Notification.Builder(ctx, CH)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentTitle("开发工具包不完整")
+            .setContentText(text)
+            .setStyle(new Notification.BigTextStyle().bigText(text))
+            .setContentIntent(pi).setAutoCancel(true).build());
     }
 
     // ── 通知 ───────────────────────────────────────────────────────────

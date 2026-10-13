@@ -92,6 +92,10 @@ public class MainActivity extends Activity {
                     public void step(String m) { say(m); }
                     public void bytes(long d, long t) { progress(d, t); }
                 });
+                // 上次换工具包被打断（APK 升级重启、进程被杀）：先收拾到一致状态，再判断装没装好
+                GatewayService.pause(true);
+                try { if (ins.recover()) say("✓ 开发工具包已恢复到一致状态"); }
+                finally { GatewayService.pause(false); }
                 if (!env.devkitReady()) {
                     String src = null;
                     for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { src = l; break; }
@@ -121,6 +125,8 @@ public class MainActivity extends Activity {
                 say("等待网关…");
                 for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500);
                 ui.post(() -> { showWeb(); booted = true; handle(pending); pending = null; });
+                // 后台快速自检：只看文件在不在，缺了就提示修复
+                if (!upd.devkitMoving() && !upd.devkitStaged()) upd.verifyAsync(false);
             } catch (Exception e) {
                 say("✗ " + e.getMessage());
                 say("（修好网络或文件后，划掉应用重新打开即可从这一步继续）");

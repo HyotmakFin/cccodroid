@@ -510,6 +510,19 @@ if (cmd === "build") {
   fs.mkdirSync(OUT, { recursive: true });
   const tarFile = path.join(OUT, `devkit-${target}.tar`);
   const tw = new TarWriter(tarFile + ".part");
+  // 逐文件清单（libexec/devkit/MANIFEST）："sha256 大小 相对 usr/ 的路径"。App 装完拿它核对缺没缺、坏没坏。
+  // 同名条目以最后写入的为准（tar 解包也是后来的覆盖前面的）；被软链盖掉的不算文件
+  const manifest = new Map();
+  const twAdd = tw.add.bind(tw);
+  tw.add = (e) => {
+    const rel = e.name.startsWith("usr/") ? e.name.slice(4) : null;
+    if (rel) {
+      if ((e.type === "0" || e.type === "7") && e.data) manifest.set(rel, [sha256(e.data), e.data.length]);
+      else if (e.type === "1") { const t = (e.link || "").replace(/^usr\//, ""); if (manifest.has(t)) manifest.set(rel, manifest.get(t)); }
+      else manifest.delete(rel.replace(/\/$/, ""));
+    }
+    return twAdd(e);
+  };
   const lock = [], seenDirs = new Set();
   const alts = new Map();          // 组名 → 优先级最高的那组链接
   const firstRun = [];             // 除 alternatives 外仍要在设备上跑的 postinst
@@ -603,6 +616,9 @@ if (cmd === "build") {
   const py = R.to + "files/usr/bin/python3";
   fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
   tw.add({ name: "usr/libexec/devkit/first-run.sh", type: "0", mode: 0o755, mtime: 0, data: Buffer.from(fr.join("\n") + "\n") });
+  const manText = [...manifest].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([p, [h, n]]) => `${h} ${n} ${p}`).join("\n") + "\n";
+  twAdd({ name: "usr/libexec/devkit/MANIFEST", type: "0", mode: 0o644, mtime: 0, data: Buffer.from(manText) });
+  console.log(`  文件清单：${manifest.size} 个文件`);
   console.log(`  alternatives：${[...alts.values()].map((a) => a.group + "←" + a.pkg).join(" ")}`);
   console.log(`  首次运行脚本：${firstRun.map((f) => f.pkg).join(" ") || "无"}`);
   tw.close();

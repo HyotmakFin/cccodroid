@@ -382,4 +382,9 @@ window.I18N_DICT.en = {
   "浅色": "Light",
   "深色": "Dark",
   "用时 {d}": "Took {d}",
+  "校验中": "Verifying",
+  "已损坏": "Damaged",
+  "修复": "Repair",
+  "校验": "Verify",
+  "修复开发工具包？\n\n会重新下载当前这一版（约 600 MB，断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。": "Repair the development kit?\n\nThe current version will be downloaded again (about 600 MB, resumable) and reinstalled; the service pauses for 1–2 minutes while it installs.\nAnything you installed into the development kit with pip / npm -g is kept.",
 };
