@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "cccodroid 运行时架构",
+    "output": "architecture.zh-CN.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": { "url": "https://github.com/greyoak111/cccodroid", "provider": "github", "link_mode": "web", "revision": "1f3fd447a3f34f5e93780168fd2a2bb092ea7b32" }
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "用户", "sublabel": "手机 / 平板", "pos": [40, 200], "size": [120, 64] },
+    { "id": "ui", "type": "frontend", "label": "界面", "sublabel": "WebView + app.js", "tag": "8 种语言", "pos": [220, 196], "size": [160, 72],
+      "sources": [ { "path": "android/java/cc/codroid/MainActivity.java", "line": 354, "end_line": 367 }, { "path": "android/java/cc/codroid/Env.java", "line": 26, "end_line": 30 }, { "path": "gateway/web/app.js", "line": 116, "end_line": 116 } ] },
+    { "id": "svc", "type": "backend", "label": "GatewayService", "sublabel": "前台服务 · 冻结检测", "pos": [460, 40], "size": [170, 64],
+      "sources": [ { "path": "android/java/cc/codroid/GatewayService.java", "line": 59, "end_line": 72 }, { "path": "android/java/cc/codroid/GatewayService.java", "line": 150, "end_line": 151 } ] },
+    { "id": "gw", "type": "backend", "label": "网关 server.mjs", "sublabel": "Node · 127.0.0.1:8791", "tag": "令牌 · 队列", "pos": [460, 196], "size": [170, 72],
+      "sources": [ { "path": "gateway/server.mjs", "line": 2273, "end_line": 2310 }, { "path": "gateway/server.mjs", "line": 1493, "end_line": 1520 }, { "path": "gateway/server.mjs", "line": 2625, "end_line": 2630 } ] },
+    { "id": "claude", "type": "backend", "label": "Claude Code", "sublabel": "官方原版二进制", "tag": "seccomp 垫片", "pos": [740, 196], "size": [160, 72],
+      "sources": [ { "path": "gateway/server.mjs", "line": 1812, "end_line": 1815 }, { "path": "android/java/cc/codroid/Env.java", "line": 98, "end_line": 99 } ] },
+    { "id": "api", "type": "cloud", "label": "模型 API", "sublabel": "官方账户或第三方厂商", "pos": [990, 196], "size": [170, 72],
+      "sources": [ { "path": "gateway/server.mjs", "line": 780, "end_line": 790 }, { "path": "gateway/server.mjs", "line": 72, "end_line": 74 } ] },
+    { "id": "upd", "type": "backend", "label": "Updater / Installer", "sublabel": "首装与更新", "pos": [740, 40], "size": [160, 64],
+      "sources": [ { "path": "android/java/cc/codroid/Updater.java", "line": 33, "end_line": 35 }, { "path": "android/java/cc/codroid/Updater.java", "line": 215, "end_line": 215 }, { "path": "android/java/cc/codroid/Installer.java", "line": 20, "end_line": 42 } ] },
+    { "id": "dl", "type": "cloud", "label": "发布源", "sublabel": "GitHub Releases · downloads.claude.ai", "pos": [990, 40], "size": [170, 64],
+      "sources": [ { "path": "android/java/cc/codroid/Updater.java", "line": 33, "end_line": 33 } ] },
+    { "id": "priv", "type": "security", "label": "Priv 提权中转", "sublabel": "核对对端 uid", "pos": [220, 380], "size": [160, 64],
+      "sources": [ { "path": "android/java/cc/codroid/Priv.java", "line": 30, "end_line": 44 }, { "path": "gateway/server.mjs", "line": 1952, "end_line": 1960 } ] },
+    { "id": "home", "type": "database", "label": "home/", "sublabel": "会话 · 设置 · 令牌", "pos": [470, 380], "size": [150, 64],
+      "sources": [ { "path": "gateway/server.mjs", "line": 58, "end_line": 58 }, { "path": "gateway/server.mjs", "line": 2273, "end_line": 2273 } ] },
+    { "id": "devkit", "type": "database", "label": "devkit 工具链", "sublabel": "$PREFIX · Termux 包等长改前缀", "pos": [740, 380], "size": [160, 64],
+      "sources": [ { "path": "devkit/devkit.mjs", "line": 1, "end_line": 16 }, { "path": "android/java/cc/codroid/Installer.java", "line": 168, "end_line": 198 } ] },
+    { "id": "shz", "type": "external", "label": "Shizuku", "sublabel": "shell 身份 uid 2000", "pos": [220, 540], "size": [160, 60],
+      "sources": [ { "path": "android/java/cc/codroid/ShizukuSetup.java", "line": 43, "end_line": 50 } ] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "cc.codroid 应用沙箱（只写私有目录）", "wraps": ["ui", "svc", "gw", "claude", "upd", "priv", "home", "devkit"] }
+  ],
+  "connections": [
+    { "id": "touch", "from": "user", "to": "ui", "label": "操作", "variant": "emphasis" },
+    { "id": "ui-gw", "from": "ui", "to": "gw", "label": "HTTP+SSE", "variant": "emphasis" },
+    { "id": "gw-claude", "from": "gw", "to": "claude", "label": "stream-json", "variant": "emphasis" },
+    { "id": "claude-api", "from": "claude", "to": "api", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "svc-gw", "from": "svc", "to": "gw", "label": "拉起 · 崩溃重启" },
+    { "id": "upd-dl", "from": "upd", "to": "dl", "label": "下载", "variant": "dashed" },
+    { "id": "upd-claude", "from": "upd", "to": "claude", "label": "安装 / 升级" },
+    { "id": "gw-home", "from": "gw", "to": "home", "label": "读写" },
+    { "id": "claude-devkit", "from": "claude", "to": "devkit", "label": "Bash 工具" },
+    { "id": "gw-priv", "from": "gw", "to": "priv", "label": "本地套接字", "variant": "security" },
+    { "id": "priv-shz", "from": "priv", "to": "shz", "label": "binder", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "主路径", "items": ["界面只是订阅者：生成归网关管，刷新、切后台都不断", "排队消息停在对话末尾，停止只管停止", "Claude Code 是官方原版，不改一个字节"] },
+    { "dot": "rose", "title": "安全", "items": ["网关 /api/* 必须带 256 位令牌，校验 Host 与 Origin", "登录态直连官方，令牌不经本地桥", "priv 只接受本应用 uid 的调用"] },
+    { "dot": "cyan", "title": "工具链", "items": ["devkit 由 Termux 官方仓库组装，等长改前缀原生运行", "zip/jmod 归档内部同样改写"] }
+  ]
+}
