@@ -74,7 +74,11 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `devkit/` | 开发工具包构建脚本与清单 |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
 
-## 第三方组件与许可
+## 许可
+
+cccodroid 本身以 [Apache License 2.0](LICENSE) 发布（另见 [NOTICE](NOTICE)）。
+
+### 第三方组件
 
 - **Claude Code**：Anthropic 的专有软件，**不随本项目分发**。使用时须遵守 [Anthropic 的条款](https://code.claude.com/docs/en/legal-and-compliance)。
 - **开发工具包**：取自 Termux 官方仓库，各组件按各自的许可证分发（含 GPL 等）。版本、哈希与构建配方见每个 Release 附带的 `devkit.lock.json` / `SBOM.tsv`。需要源码副本的，请在 Issues 中提出。

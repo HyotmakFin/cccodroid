@@ -1,0 +1,17 @@
+cccodroid
+Copyright 2026 greyoak111 and contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It is a third-party launcher and is not affiliated with or endorsed by Anthropic.
+Claude Code is proprietary software of Anthropic PBC; it is NOT distributed with
+this product. It is downloaded by the user from Anthropic's official channel and
+run unmodified, subject to Anthropic's terms.
+
+Bundled third-party components:
+  - Shizuku-API 13.1.5 (MIT) — third_party/shizuku/LICENSE
+  - xz-decompress 0.2.3 (MIT) — devkit/vendor/xz-decompress (build-time only)
+
+The developer toolkit (devkit) released alongside this project consists of
+unmodified Termux packages (path prefix rewritten in place), each distributed
+under its own license; see devkit.lock.json / SBOM.tsv in each devkit release.
