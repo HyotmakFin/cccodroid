@@ -4,11 +4,11 @@
 #
 #  钥匙：发布签名钥匙在构建机私有目录（KEY），绝不进仓库。
 #        换钥匙 = 用户必须卸载重装，所以它丢了就再也发不了更新 —— 要另做离线备份。
-#  网关与界面的源码来自 claude-apk/src（与旧版共用一份）。
+#  网关与界面的源码在 gateway/（由 scripts/sync-shared.sh 从 claude-apk 同步）。
 # ─────────────────────────────────────────────────────────────────────
 set -e
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRC=${SRC:-/sdcard/DeepSeekHarness/claude-apk/src}
+SRC=${SRC:-$ROOT/gateway}
 F=/data/user/0/li.dsh.claudecli/files
 B=$F/bldtools
 KEY=${KEY:-$B/cccodroid-release.json}

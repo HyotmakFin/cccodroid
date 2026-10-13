@@ -1,0 +1,150 @@
+{
+  "_doc": "开发工具包清单。全部取自 Termux 官方仓库（构建配方公开：github.com/termux/termux-packages），由 devkit.mjs 校验哈希、改前缀、打成一个 tar。",
+  "groups": {
+    "core": [
+      "bash",
+      "coreutils",
+      "grep",
+      "sed",
+      "gawk",
+      "findutils",
+      "diffutils",
+      "less",
+      "procps",
+      "file",
+      "tar",
+      "gzip",
+      "xz-utils",
+      "zstd",
+      "unzip",
+      "zip",
+      "curl",
+      "ca-certificates",
+      "openssl",
+      "openssl-tool"
+    ],
+    "build": [
+      "clang",
+      "lld",
+      "make",
+      "cmake",
+      "ninja",
+      "pkg-config",
+      "gdb",
+      "strace",
+      "patchelf"
+    ],
+    "vcs": [
+      "git",
+      "openssh"
+    ],
+    "lang": [
+      "python",
+      "nodejs",
+      "npm",
+      "python-pip"
+    ],
+    "android": [
+      "openjdk-21",
+      "aapt2",
+      "d8",
+      "apksigner",
+      "android-tools"
+    ],
+    "cli": [
+      "ripgrep",
+      "fd",
+      "bat",
+      "git-delta",
+      "helix",
+      "yq",
+      "jq",
+      "sqlite",
+      "man"
+    ],
+    "extra": [
+      "typst",
+      "duckdb",
+      "imagemagick"
+    ],
+    "claude": [
+      "glibc"
+    ]
+  },
+  "exclude": [
+    "termux-am",
+    "termux-am-socket"
+  ],
+  "base": [
+    "core",
+    "build",
+    "vcs",
+    "lang",
+    "android",
+    "cli",
+    "claude"
+  ],
+  "external": [
+    {
+      "id": "android-platform-36",
+      "why": "aapt2/javac/d8 编译 APK 需要的平台存根 android.jar",
+      "url": "https://dl.google.com/android/repository/platform-36_r02.zip",
+      "sha1": "2c1a80dd4d9f7d0e6dd336ec603d9b5c55a6f576",
+      "size": 65878410,
+      "license": "android-sdk-license（Google Android SDK 许可协议：不可再分发，须用户在设备上自行下载并同意）",
+      "extract": "android-36/android.jar",
+      "dest": "usr/share/android-sdk/platforms/android-36/android.jar"
+    }
+  ],
+  "repos": [
+    {
+      "name": "main",
+      "base": "https://packages-cf.termux.dev/apt/termux-main/",
+      "dist": "stable",
+      "component": "main",
+      "arch": "aarch64",
+      "mirrors": [
+        "https://packages.termux.dev/apt/termux-main/",
+        "https://grimler.se/termux/termux-main/"
+      ]
+    },
+    {
+      "name": "glibc",
+      "base": "https://packages-cf.termux.dev/apt/termux-glibc/",
+      "dist": "glibc",
+      "component": "stable",
+      "arch": "aarch64",
+      "mirrors": [
+        "https://packages.termux.dev/apt/termux-glibc/"
+      ]
+    }
+  ],
+  "drop": [
+    "usr/bin/termux-wake-lock",
+    "usr/bin/termux-wake-unlock",
+    "usr/bin/termux-open",
+    "usr/bin/termux-open-url",
+    "usr/bin/termux-reload-settings",
+    "usr/bin/termux-setup-storage",
+    "usr/bin/termux-reset",
+    "usr/bin/termux-backup",
+    "usr/bin/termux-restore",
+    "usr/bin/termux-change-repo",
+    "usr/bin/termux-setup-package-manager",
+    "usr/bin/termux-info"
+  ],
+  "stubs": {
+    "usr/bin/pkg": "echo \"cccodroid 里没有 pkg / apt：Termux 仓库的包把路径写死成 /data/data/com.termux，装到这里也跑不起来。\" >&2\necho \"开发工具由 cccodroid 的工具包统一提供（已按本应用路径改写）；缺的工具请到 cccodroid 项目提需求。\" >&2\necho \"Python / Node 的库照常用：pip install --user <包>，npm install <包>。\" >&2\nexit 1",
+    "usr/bin/apt": "echo \"cccodroid 里没有 pkg / apt：Termux 仓库的包把路径写死成 /data/data/com.termux，装到这里也跑不起来。\" >&2\necho \"开发工具由 cccodroid 的工具包统一提供（已按本应用路径改写）；缺的工具请到 cccodroid 项目提需求。\" >&2\necho \"Python / Node 的库照常用：pip install --user <包>，npm install <包>。\" >&2\nexit 1",
+    "usr/bin/apt-get": "echo \"cccodroid 里没有 pkg / apt：Termux 仓库的包把路径写死成 /data/data/com.termux，装到这里也跑不起来。\" >&2\necho \"开发工具由 cccodroid 的工具包统一提供（已按本应用路径改写）；缺的工具请到 cccodroid 项目提需求。\" >&2\necho \"Python / Node 的库照常用：pip install --user <包>，npm install <包>。\" >&2\nexit 1"
+  },
+  "fetch": {
+    "usr/lib/python3.14/ensurepip/_bundled/pip-26.1.2-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl",
+      "sha256": "382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab",
+      "why": "Termux 的 python 删了 ensurepip 自带的 wheel（指望 pkg 装 python-pip），没有它 python -m venv 建不出带 pip 的环境。版本须与 ensurepip/__init__.py 的 _PIP_VERSION 一致"
+    }
+  },
+  "_doc_fetch": "fetch：仓库之外的上游原件，按哈希核对后放进包里",
+  "_doc_drop": "drop：解包时丢掉的文件（Termux App 专属脚本）；stubs：替换成说明脚本的命令"
+}
