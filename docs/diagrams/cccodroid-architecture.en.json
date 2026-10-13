@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "cccodroid runtime architecture",
-    "output": "architecture.en.html",
+    "output": "cccodroid-architecture.en.html",
     "quality_profile": "showcase",
     "locale": "en",
     "repository": {

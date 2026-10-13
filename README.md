@@ -10,16 +10,12 @@ write code, compile C/C++, run Python / Node, build APKs and push with git — a
 > cccodroid is a third-party project and is not affiliated with Anthropic. It runs the **official, unmodified Claude Code**:
 > downloaded from Anthropic's official channel at install time, verified against the official sha256 manifest, never modified.
 
-![cccodroid runtime architecture](docs/diagrams/architecture.en.svg)
-
-<sub>Interactive version (zoom, search, focus, path tracing): [docs/diagrams/architecture.en.html](docs/diagrams/architecture.en.html) — see [docs/diagrams](docs/diagrams/README.md).</sub>
-
 ## Features
 
 - **Official Claude Code with a GUI**: chat, streaming output, thinking, tool calls, file browser, session history.
   - Messages sent while Claude is working wait at the end of the chat marked *Queued*; **Send now** delivers one into the running turn without interrupting it. **Stop only stops** — queued messages are paused, never sent automatically.
   - `/compact`, `/context` and other built-in commands show their results immediately.
-  - UI in 8 languages: 简体中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
+  - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically.
   - Claude API key.
@@ -59,6 +55,16 @@ RedMagic / ZTE: App info → App battery usage → Battery optimization → **Ba
 
 **Offline install**: put `devkit-cc.codroid.tar.gz` in `/sdcard/cccodroid/`; the first launch uses it instead of downloading.
 
+## Architecture
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/cccodroid-architecture.en-dark.png">
+  <img alt="cccodroid architecture: the user works in the UI (a WebView running app.js), which talks to the Node gateway on 127.0.0.1 over HTTP and SSE; the gateway is started and restarted by the GatewayService foreground service, reads and writes sessions, settings and its token under home/, reaches Shizuku through the Priv relay over a local socket, and drives the official Claude Code over stream-json; Claude Code calls the model API over HTTPS and runs the devkit toolchain through its Bash tool; the Updater / Installer downloads from GitHub Releases and downloads.claude.ai and installs or upgrades Claude Code" src="docs/diagrams/cccodroid-architecture.en-light.png">
+</picture>
+
+Interactive version (guided views, light/dark, export): download [`docs/diagrams/cccodroid-architecture.en.html`](docs/diagrams/cccodroid-architecture.en.html) and open it in a browser;
+the source is `cccodroid-architecture.en.json` in the same directory, with every component tied to the source lines it describes. Generated with [Archify](https://github.com/tt-a1i/archify).
+
 ## How it works
 
 ```
@@ -95,6 +101,13 @@ Layout:
 | `devkit/` | Toolchain build script and manifests |
 | `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → static SVG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |
+
+## Special thanks
+
+- **[Archify](https://github.com/tt-a1i/archify)** (tt-a1i, MIT): the architecture diagram above was made with it and passed its layout checks; license in [ThirdPartyLicenses/Archify](ThirdPartyLicenses/Archify/LICENSE).
+- **[Termux](https://termux.dev)**: the toolchain is assembled from its official packages.
+- **[Shizuku](https://shizuku.rikka.app)** (RikkaApps): system privileges without root.
+- **[OpenCC](https://github.com/BYVoid/OpenCC)** / [opencc-js](https://github.com/nk2028/opencc-js): the Traditional Chinese UI strings were converted with it, then reviewed by hand.
 
 ## License
 

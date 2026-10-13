@@ -3,7 +3,7 @@
   "diagram_type": "architecture",
   "meta": {
     "title": "cccodroid 运行时架构",
-    "output": "architecture.zh-CN.html",
+    "output": "cccodroid-architecture.zh-CN.html",
     "quality_profile": "showcase",
     "locale": "zh-CN",
     "repository": { "url": "https://github.com/greyoak111/cccodroid", "provider": "github", "link_mode": "web", "revision": "1f3fd447a3f34f5e93780168fd2a2bb092ea7b32" }

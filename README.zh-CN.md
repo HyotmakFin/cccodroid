@@ -10,16 +10,13 @@
 > cccodroid 是第三方项目，与 Anthropic 无关。它运行的是 **官方原版 Claude Code**：
 > 安装时从 Anthropic 官方渠道下载，按官方清单校验 sha256，不做任何修改。
 
-![cccodroid 运行时架构](docs/diagrams/architecture.zh-CN.svg)
-
-<sub>可交互版（缩放、搜索、聚焦、路径追踪）：[docs/diagrams/architecture.zh-CN.html](docs/diagrams/architecture.zh-CN.html) —— 说明见 [docs/diagrams](docs/diagrams/README.md)。</sub>
 
 ## 能做什么
 
 - **官方 Claude Code + 图形界面**：对话、流式输出、思考过程、工具调用、文件浏览器、历史会话。
   - 生成中发的消息停在对话末尾、标「排队中」；点「立即发送」递进正在跑的这一轮，不打断。**停止键只管停止**：排队的消息挂起，不会自动发出。
   - `/compact`、`/context` 等内置命令的结果当场显示。
-  - 界面 8 种语言：简体中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
+  - 界面 9 种语言：简体中文、繁體中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
 - **多种接入方式**：
   - Claude 账户登录：应用内完成，浏览器授权后自动回到应用。
   - Claude API Key。
@@ -59,6 +56,16 @@
 
 **离线安装**：把 `devkit-cc.codroid.tar.gz` 放到 `/sdcard/cccodroid/` 下，首次启动会直接用它，不再下载。
 
+## 架构
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/cccodroid-architecture.zh-CN-dark.png">
+  <img alt="cccodroid 架构：用户在界面（WebView 里的 app.js）上操作，界面经 HTTP 与 SSE 连 127.0.0.1 上的 Node 网关；网关由前台服务 GatewayService 拉起和崩溃重启，读写 home/ 下的会话、设置与令牌，经本地套接字通过 Priv 提权中转调用 Shizuku，并以 stream-json 驱动官方原版 Claude Code；Claude Code 经 HTTPS 调用模型 API，用 Bash 工具调用 devkit 工具链；Updater / Installer 从 GitHub Releases 与 downloads.claude.ai 下载，安装和升级 Claude Code" src="docs/diagrams/cccodroid-architecture.zh-CN-light.png">
+</picture>
+
+可交互版本（引导视图、深浅色、导出）：下载 [`docs/diagrams/cccodroid-architecture.zh-CN.html`](docs/diagrams/cccodroid-architecture.zh-CN.html) 用浏览器打开；
+图的源文件是同目录的 `cccodroid-architecture.zh-CN.json`，每个组件都标注了对应的源码行。图由 [Archify](https://github.com/tt-a1i/archify) 生成。
+
 ## 工作原理
 
 ```
@@ -95,6 +102,13 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `devkit/` | 开发工具包构建脚本与清单 |
 | `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 静态 SVG） |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
+
+## 特别鸣谢
+
+- **[Archify](https://github.com/tt-a1i/archify)**（tt-a1i，MIT）：上面的架构图用它生成，经过它的布局校验；许可证见 [ThirdPartyLicenses/Archify](ThirdPartyLicenses/Archify/LICENSE)。
+- **[Termux](https://termux.dev)**：开发工具包由它的官方软件包组装。
+- **[Shizuku](https://shizuku.rikka.app)**（RikkaApps）：不 root 也能拿到系统权限。
+- **[OpenCC](https://github.com/BYVoid/OpenCC)** / [opencc-js](https://github.com/nk2028/opencc-js)：繁体中文界面文案用它从简体转换，再人工校对。
 
 ## 许可
 

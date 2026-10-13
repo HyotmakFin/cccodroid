@@ -1,0 +1,5 @@
+<!doctype html><meta charset="utf-8"><body><script>
+async function one(name){const img=new Image();img.src=name+".svg";await img.decode();const S=2;const c=document.createElement("canvas");c.width=1200*S;c.height=668*S;const g=c.getContext("2d");g.drawImage(img,0,0,c.width,c.height);
+const b=await new Promise(r=>c.toBlob(r,"image/png"));await fetch("/save/"+name+".png",{method:"POST",body:b});return name+":"+b.size}
+window.go=async()=>{const out=[];for(const n of ["zh-CN-light","zh-CN-dark","en-light","en-dark"])out.push(await one(n));document.title=out.join(" ")};
+</script>

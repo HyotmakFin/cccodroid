@@ -6,9 +6,10 @@
 //   dir    "rtl" 用于阿拉伯语 / 希伯来语等，默认 ltr
 // 「跟随系统」找不到匹配时用英文。缺译的键先回退英文，再回退中文原文。
 //
-// 已接入：联合国另外五种官方语言（英/法/西/俄/阿）+ 日语、韩语（中文是源语言）。
+// 已接入：联合国另外五种官方语言（英/法/西/俄/阿）+ 日语、韩语 + 繁体中文（简体中文是源语言）。
 window.I18N_LANGS = [
   { code: "zh", name: "简体中文", match: ["zh-cn", "zh-sg", "zh-hans", "zh"] },
+  { code: "zh-Hant", name: "繁體中文", match: ["zh-tw", "zh-hk", "zh-mo", "zh-hant"] },
   { code: "en", name: "English", match: ["en"] },
   { code: "fr", name: "Français", match: ["fr"] },
   { code: "es", name: "Español", match: ["es"] },
@@ -17,7 +18,5 @@ window.I18N_LANGS = [
   { code: "ja", name: "日本語", match: ["ja"] },
   { code: "ko", name: "한국어", match: ["ko"] },
   // 待补的语言照这个格式往下加，例如：
-  // { code: "zh-Hant", name: "繁體中文", match: ["zh-tw", "zh-hk", "zh-mo", "zh-hant"] },
-  // { code: "ja", name: "日本語", match: ["ja"] },
   // { code: "de", name: "Deutsch", match: ["de"] },
 ];
