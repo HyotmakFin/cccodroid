@@ -1322,11 +1322,13 @@ function fileRoots() {
   return out;
 }
 
-/** 前端三个文件的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
+/** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
 function uiTag() {
   let t = 0;
-  for (const f of ["index.html", "app.js", "style.css"]) {
+  let files = [];
+  try { files = fs.readdirSync(PATHS.web); } catch {}
+  for (const f of files) {
     try { t = Math.max(t, fs.statSync(path.join(PATHS.web, f)).mtimeMs); } catch {}
   }
   return Math.round(t);

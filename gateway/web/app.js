@@ -12,16 +12,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
 (() => {
   "use strict";
+  // 界面文字一律过 t()（中文原文即键，见 i18n.js）；i18n.js 没加载时退化成原样返回
+  const I18N = window.I18N || { lang: "zh", t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s) };
+  const t = I18N.t;
 
   // 出错要看得见：脚本一挂界面就是死的，把原因写到顶栏副标题上，
   // 而不是让人对着一个不动的东西猜。
   window.addEventListener("error", (e) => {
     const el = document.getElementById("sub-title");
-    if (el) { el.textContent = "界面脚本出错：" + (e.message || String(e.error)); el.className = "err"; }
+    if (el) { el.textContent = t("界面脚本出错：{msg}", { msg: e.message || String(e.error) }); el.className = "err"; }
   });
   window.addEventListener("unhandledrejection", (e) => {
     const el = document.getElementById("sub-title");
-    if (el) { el.textContent = "界面脚本出错：" + (e.reason?.message || String(e.reason)); el.className = "err"; }
+    if (el) { el.textContent = t("界面脚本出错：{msg}", { msg: e.reason?.message || String(e.reason) }); el.className = "err"; }
   });
 
   const $ = (id) => document.getElementById(id);
@@ -96,10 +99,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   function relTime(ms) {
     const d = Date.now() - ms;
-    if (d < 60000) return "刚刚";
-    if (d < 3600000) return Math.floor(d / 60000) + " 分钟前";
-    if (d < 86400000) return Math.floor(d / 3600000) + " 小时前";
-    if (d < 2592000000) return Math.floor(d / 86400000) + " 天前";
+    if (d < 60000) return t("刚刚");
+    if (d < 3600000) return t("{n} 分钟前", { n: Math.floor(d / 60000) });
+    if (d < 86400000) return t("{n} 小时前", { n: Math.floor(d / 3600000) });
+    if (d < 2592000000) return t("{n} 天前", { n: Math.floor(d / 86400000) });
     return new Date(ms).toLocaleDateString();
   }
   function fmtSize(n) {
@@ -110,6 +113,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return (n / 1073741824).toFixed(2) + " GB";
   }
   async function api(path, opts) {
+    // X-CC-Lang：网关据此选提示语的语言（网关侧本地化见 claude-apk/i18n/HANDOFF.md）
+    opts = Object.assign({}, opts);
+    opts.headers = Object.assign({ "X-CC-Lang": I18N.lang }, opts.headers);
     const r = await fetch(path, opts);
     if (!r.ok) {
       // 服务端带出来的 message 比光秃秃的 "HTTP 409" 有用得多
