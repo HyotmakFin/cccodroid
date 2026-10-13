@@ -37,7 +37,7 @@ Claude Code 从 Anthropic 官方渠道下载，按官方 sha256 清单校验，�
 ### 2. 贴着平台的原生能力走
 不 root、不刷机、不用 chroot / proot / 虚拟机。
 
-- **等长前缀改写**：Termux 的二进制在编译期写死了 `/data/data/com.termux/`。包名 `cc.codroid` 是为此**特意选定**的，和 `com.termux` 一样是 10 个字符，于是逐字节替换就能让所有 RUNPATH、shebang、配置路径直接指对，不需要 `LD_LIBRARY_PATH`、包装脚本或二进制补丁。
+- **等长前缀改写**：Termux 的二进制在编译期写死了 `/data/data/com.termux/`。这里有一点无心插柳：产品名 `cccodroid` 是随手起的，正好 9 个字符，中间加一个点就成了 `cc.codroid`，和 `com.termux` 一样是 10 个字符。看到这个巧合之后，我们**有意把它定成了包名**，于是逐字节替换就能让所有 RUNPATH、shebang、配置路径直接指对，不需要 `LD_LIBRARY_PATH`、包装脚本或二进制补丁。
 - **系统调用兼容**：安卓给应用进程装了系统调用白名单，名单外的调用会被 SIGSYS 杀掉（Android 14 不允许 `epoll_pwait2`）。cccodroid 不放宽这层限制，被禁止的调用依然被禁止；只是把"被禁就杀进程"变成"返回 ENOSYS"，让程序走它本来就有的兼容路径。**安全边界不动，只让失败变得体面。**
 - 提权借 [Shizuku](https://shizuku.rikka.app)（可选），后台靠前台服务。
 

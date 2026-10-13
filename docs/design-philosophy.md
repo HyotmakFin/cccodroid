@@ -37,7 +37,7 @@ Build on other people's work without tampering with it. That is engineering rest
 ### 2. Work with the platform's native capabilities
 No root, no custom ROM, no chroot / proot / virtual machine.
 
-- **Same-length prefix relocation.** Termux binaries have `/data/data/com.termux/` baked in at build time. The package name `cc.codroid` was **chosen deliberately** to be 10 characters, the same length as `com.termux`, so a byte-for-byte replacement fixes every RUNPATH, shebang and config path — no `LD_LIBRARY_PATH`, wrapper scripts or binary patching.
+- **Same-length prefix relocation.** Termux binaries have `/data/data/com.termux/` baked in at build time. This one was a happy accident: the product name `cccodroid` was picked on a whim and happens to be 9 characters; add a dot and `cc.codroid` is 10, exactly the length of `com.termux`. Once we noticed, we **deliberately made it the package name**, so a byte-for-byte replacement fixes every RUNPATH, shebang and config path — no `LD_LIBRARY_PATH`, wrapper scripts or binary patching.
 - **System-call compatibility.** Android installs a system-call allow-list on app processes and kills anything outside it with SIGSYS (Android 14 does not allow `epoll_pwait2`). cccodroid does not loosen that restriction — a blocked call is still blocked. It only turns "blocked means killed" into "returns ENOSYS", so the program takes the fallback path it already has. **The security boundary stays where it is; failures just become graceful.**
 - Elevated privileges come from [Shizuku](https://shizuku.rikka.app) (optional); background work relies on a foreground service.
 
