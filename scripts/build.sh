@@ -29,6 +29,7 @@ cp "$A/assets/TOOLS.md" "$A/assets/app/"     # 给 claude 的工具说明（网�
 # 工具包下载地址（Release 目录，按序尝试）。测试时可用 DEVKIT_BASES="http://… https://…" 覆盖
 if [ -n "$DEVKIT_BASES" ]; then echo "$DEVKIT_BASES" | tr " " "\n" > "$A/assets/devkit-sources.txt"
 else cp "$ROOT/devkit-sources.txt" "$A/assets/devkit-sources.txt"; fi
+[ -s "$A/assets/devkit-sources.txt" ] || { echo "✗ devkit-sources.txt 为空（/sdcard 的 FUSE 有时报过时的大小 0，cp 会拷出空文件：rm 后重写源文件）"; exit 1; }
 echo "  工具包来源：$(tr "\n" " " < "$A/assets/devkit-sources.txt")"
 # 原生小库：seccomp 拦截 → ENOSYS（不依赖 libc，见源码注释）。Android 14 上没有它 claude 起不来
 mkdir -p "$A/assets/app/lib"
