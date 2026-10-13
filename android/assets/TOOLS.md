@@ -42,7 +42,7 @@ priv 'sh /sdcard/cccodroid/脚本.sh'      # 再执行
 
 | 场景 | 现象 | 怎么办 |
 |---|---|---|
-| Java 任何程序 | 默认时区是 GMT（设备是 Asia/Shanghai），差 8 小时 | `TZ=Asia/Shanghai` 或 `-Duser.timezone=Asia/Shanghai` |
+| Java 任何程序 | 默认时区是 GMT，不跟设备时区，时间差几个小时 | `TZ=$(getprop persist.sys.timezone)`（或 `-Duser.timezone=…`） |
 | Python `zoneinfo` | 598 个时区全部 `ZoneInfoNotFoundError`；但 `time.tzset()` 正常，会掩盖它 | `pip install tzdata` |
 | `npm install` 原生包 | 原生模块根本没编译（`.node` 不存在），真用到时才炸 | `npm rebuild <包>` |
 | typst 编译中文 | PDF 里中文全是空白方框 | `TYPST_FONT_PATHS=/system/fonts typst compile …` |
@@ -82,9 +82,9 @@ clang -O2 -mcpu=native+nosve prog.c     # ✓ 保留原生调优，只是不用 
 clang -O2 -march=armv8.6-a+dotprod+i8mm+bf16 prog.c   # ✓ 显式基线
 ```
 
-骁龙 8 Gen 3 的核都是 Armv9，clang 按 CPU 型号就认定有 SVE2。它确实也读了 `/proc/cpuinfo`，
+Armv9 的核（骁龙 8 Gen 2/3、天玑 9200+ 等）上，clang 按 CPU 型号就认定有 SVE2。它确实也读了 `/proc/cpuinfo`，
 但 `llvm::sys::getHostCPUFeatures()` 只会把「看到的」特性置为开，**从不把「没看到的」置为关**，
-于是型号自带的 SVE2 就留了下来。这台机器上内核报的能力到处都是「没有」：
+于是型号自带的 SVE2 就留了下来。而多数安卓内核根本没给用户态开 SVE，能力报的到处都是「没有」：
 Features 行里没有 `sve`，`HWCAP_SVE` 是 0，EL0 能读到的 `ID_AA64PFR0_EL1` 里 SVE 段也是 0。
 
 **不止 `native`：`-mcpu=cortex-x4` / `cortex-a720` / `cortex-a520`、`-march=armv9-a` / `armv9.2-a`

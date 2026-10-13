@@ -442,8 +442,12 @@ function rewriteZip(buf, swap) {
     if (lo + 30 > buf.length || buf.readUInt32LE(lo) !== SIG_LOC) return [buf, 0];
     const lnlen = buf.readUInt16LE(lo + 26), lelen = buf.readUInt16LE(lo + 28);
     const lhOut = Buffer.from(buf.subarray(lo, lo + 30));
+    // 本地头有自己的名字与 extra（jar 首条常带 0xCAFE extra），长度未必与中央目录相同，必须原样带上
+    const lname = Buffer.from(buf.subarray(lo + 30, lo + 30 + lnlen));
+    const lextra = buf.subarray(lo + 30 + lnlen, lo + 30 + lnlen + lelen);
 
     const [nameOut, kn] = swap(name);                       // 条目名（等长，长度不变）
+    const [lnameOut] = swap(lname);
     hits += kn;
 
     let data = Buffer.from(buf.subarray(lo + 30 + lnlen + lelen, lo + 30 + lnlen + lelen + csize));
@@ -465,9 +469,11 @@ function rewriteZip(buf, swap) {
       return [buf, 0];                                      // 不认识的压缩方式，别乱动
     }
 
-    cen.writeUInt32LE(pos, 42);                             // 新的本地头偏移
+    // 大小与 CRC 已写进本地头，数据描述符不再搬运 —— 清掉标志位 3，否则流式读取会去找它
+    lhOut.writeUInt16LE(lhOut.readUInt16LE(6) & ~8, 6); cen.writeUInt16LE(cen.readUInt16LE(8) & ~8, 8);
+    cen.writeUInt32LE(pos - base, 42);                      // 新的本地头偏移（与原档一样相对 zip 起点）
     lhOut.writeUInt32LE(data.length, 18); lhOut.writeUInt32LE(usize, 22); lhOut.writeUInt32LE(crc, 14);
-    locals.push(lhOut, nameOut, data);
+    locals.push(lhOut, lnameOut, lextra, data);
     cens.push(cen, nameOut, extra, comment);
     pos += 30 + lnlen + lelen + data.length;
   }
@@ -475,7 +481,7 @@ function rewriteZip(buf, swap) {
   const cdBuf = Buffer.concat(cens);
   const eocdOut = Buffer.from(buf.subarray(eocd, eocd + 22));
   eocdOut.writeUInt32LE(cdBuf.length, 12);
-  eocdOut.writeUInt32LE(pos, 16);
+  eocdOut.writeUInt32LE(pos - base, 16);
   return [Buffer.concat([buf.subarray(0, base), ...locals, cdBuf, eocdOut, buf.subarray(eocd + 22)]), hits];
 }
 
