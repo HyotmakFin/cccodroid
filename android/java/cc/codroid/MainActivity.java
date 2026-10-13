@@ -187,7 +187,8 @@ public class MainActivity extends Activity {
         say("部署界面与网关 " + want.trim());
         Installer.deleteTree(env.app);
         copyAssetDir("app", env.app);
-        for (String d : new String[]{"scripts", "bin"}) {
+        // lib/ 里除了 .so 还有可执行的 seccomp-enosys-run（enosys-run 的本体）
+        for (String d : new String[]{"scripts", "bin", "lib"}) {
             File[] fs = new File(env.app, d).listFiles();
             if (fs != null) for (File f : fs) f.setExecutable(true, true);
         }
