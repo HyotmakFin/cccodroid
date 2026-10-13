@@ -72,13 +72,32 @@ final class ShizukuSetup {
         NotificationChannel ch = new NotificationChannel(CH, "Shizuku 激活", NotificationManager.IMPORTANCE_HIGH);
         ch.setDescription("无线调试配对码输入框、激活结果");
         c.getSystemService(NotificationManager.class).createNotificationChannel(ch);
-        // 进程刚起来不可能有配对线程在跑：上个进程（被杀 / 崩了）留下的「配对中…」这类进度通知是孤儿，
-        // 它是常驻的、用户划不掉，必须这里收掉。带输入框的那种留着 —— 它的广播会把流程重新拉起来
+        flushStaleNote(c);
+    }
+
+    /**
+     * 进程刚起来不可能有配对线程在跑，上个进程留下的「配对中…」都是孤儿。
+     * 光 cancel 不够：实测（联想 ZUI，Android 15）通知服务里早就没有这条了，下拉栏里却还挂着、划不掉 ——
+     * 是 SystemUI 自己留的残影（以前用 CATEGORY_CALL + fullScreenIntent，应用被升级 / 杀掉时取消没传到它那份）。
+     * 对同一个键先发一条静默的再取消，SystemUI 收到「更新→删除」才会把残影丢掉。
+     * 带输入框、还在等配对码的那条（通知服务里真实存在、没有进度标记）留着，它的广播会把流程重新拉起来。
+     */
+    private void flushStaleNote(Context c) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
         try {
-            for (android.service.notification.StatusBarNotification n : c.getSystemService(NotificationManager.class).getActiveNotifications())
-                if (n.getId() == NOTE && n.getNotification().extras.getBoolean(EXTRA_PROGRESS)) cancelNote();
+            for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications())
+                if (n.getId() == NOTE && !n.getNotification().extras.getBoolean(EXTRA_PROGRESS)) return;
+            NotificationChannel q = new NotificationChannel(CH_QUIET, "Shizuku（静默）", NotificationManager.IMPORTANCE_MIN);
+            nm.createNotificationChannel(q);
+            nm.notify(NOTE, new Notification.Builder(c, CH_QUIET).setSmallIcon(android.R.drawable.ic_secure)
+                .setContentTitle("Shizuku").setOnlyAlertOnce(true).build());
+            // 通知服务的 notify 是异步入队的：紧跟着 cancel 会把还在队里的那条直接撤掉，SystemUI 根本收不到更新。
+            // 隔一会儿再撤（实测立即撤残影不消失）
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> nm.cancel(NOTE), 1500);
         } catch (Exception ignored) {}
     }
+
+    private static final String CH_QUIET = "shizuku_quiet";
 
     private static final String EXTRA_PROGRESS = "cc.codroid.progress";
 
@@ -577,7 +596,8 @@ final class ShizukuSetup {
             .setContentText(text)
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setOnlyAlertOnce(false)
-            .setCategory(Notification.CATEGORY_CALL)
+            // 不能用 CATEGORY_CALL：「来电」类通知在部分 ROM 的 SystemUI 里被特殊钉住，取消传不到，留下划不掉的残影
+            .setCategory(withInput ? Notification.CATEGORY_REMINDER : Notification.CATEGORY_PROGRESS)
             // 过期由系统收：进程被厂商冻结器冻住 / 被杀时我们的代码根本跑不了，常驻通知会一直挂着「配对中…」。
             // 进度类通知允许划掉、90 秒过期；等填码的那条给 10 分钟（配对码本身几分钟就失效）
             .setOngoing(withInput)
