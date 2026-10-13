@@ -42,3 +42,25 @@ enosys-run -v <程序> ...        # 打印每次拦截，确认是不是这个�
 
 判断特征：**同一个程序里有的子命令崩、有的正常** —— 比如 `gh api` 一直好使而
 `gh pr create` 必崩（前者不查找可执行文件，后者要找 `git`）。别据此以为"只是个别命令有 bug"。
+
+**如果刚编出来的程序一跑就 `Illegal instruction`（退出码 132）**，先看是不是用了 `-march=native` / `-mcpu=native`：
+
+```sh
+clang -O2 -march=native prog.c          # ✗ 编译器生成 SVE 指令，本机执行必崩
+clang -O2 -mcpu=native+nosve prog.c     # ✓ 保留原生调优，只是不用 SVE
+clang -O2 -march=armv8.6-a+dotprod+i8mm+bf16 prog.c   # ✓ 显式基线
+```
+
+骁龙 8 Gen 3 的核都是 Armv9，clang 按 CPU 型号就认定有 SVE2。它确实也读了 `/proc/cpuinfo`，
+但 `llvm::sys::getHostCPUFeatures()` 只会把「看到的」特性置为开，**从不把「没看到的」置为关**，
+于是型号自带的 SVE2 就留了下来。这台机器上内核报的能力到处都是「没有」：
+Features 行里没有 `sve`，`HWCAP_SVE` 是 0，EL0 能读到的 `ID_AA64PFR0_EL1` 里 SVE 段也是 0。
+
+**不止 `native`：`-mcpu=cortex-x4` / `cortex-a720` / `cortex-a520`、`-march=armv9-a` / `armv9.2-a`
+同样会开 SVE，一样崩。**
+
+上游已在 LLVM 22 修复（[`9458d2a0f403`](https://github.com/llvm/llvm-project/commit/9458d2a0f403)，PR #176340），
+release/21.x 没有回溯，本应用自带的 clang 21.1.8 在这个修复之前 —— 工具链升到 22+ 之后这段可以删掉。
+
+确认是不是它：`gdb -batch -ex run -ex 'x/i $pc' ./程序`，若停在 `index z0.s, #0, #1` 这类
+带 `z` 寄存器的指令、或 `ptrue` / `whilelt` 上，就是 SVE。
