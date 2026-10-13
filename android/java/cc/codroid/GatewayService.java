@@ -24,6 +24,16 @@ public class GatewayService extends Service {
     static final String TAG = "cccodroid";
     static final String CH = "gateway";
     static final String ACTION_STOP = "cc.codroid.STOP";
+    static final String ACTION_BOOT = "cc.codroid.BOOT";
+
+    /** 替换工具包期间停住网关（它跑的 node 就在要被换掉的目录里） */
+    private static volatile boolean paused;
+    private static volatile GatewayService self;
+    static void pause(boolean on) {
+        paused = on;
+        GatewayService s = self;
+        if (on && s != null) s.killGateway();
+    }
 
     private Env env;
     private Process proc;
@@ -55,6 +65,34 @@ public class GatewayService extends Service {
 
         // 提权中转：和网关同寿命（priv 命令、设置页的 Shizuku 状态都靠它）
         Priv.start(this);
+        self = this;
+        Updater.get(this).loop();
+        // Shizuku 掉了（重启、被杀）而用户开着自动激活：自己重新拉起来
+        ShizukuSetup.get(this).reactivateAsync(false);
+        watchFreeze();
+    }
+
+    /**
+     * 冻结检测：每 2 秒醒一次，uptime 跳得远说明 CPU 醒着而我们没在跑 —— 被系统冻住了
+     * （深睡时 uptime 不走，不会误报）。前台服务挡不住厂商冻结器：实测红魔在后台 90 秒冻结整个进程组，
+     * 网关和正在跑的任务全停。记下来，设置页据此提示用户去系统里允许后台运行。
+     */
+    private void watchFreeze() {
+        Thread t = new Thread(() -> {
+            android.content.SharedPreferences sp = getSharedPreferences("bg", MODE_PRIVATE);
+            while (!stopping) {
+                long t0 = android.os.SystemClock.uptimeMillis();
+                sleep(2000);
+                long gap = android.os.SystemClock.uptimeMillis() - t0 - 2000;
+                if (gap > 15_000) {
+                    Log.w(TAG, "被冻结了约 " + gap / 1000 + " 秒");
+                    sp.edit().putLong("frozenAt", System.currentTimeMillis()).putLong("frozenMs", gap)
+                        .putInt("frozenCount", sp.getInt("frozenCount", 0) + 1).apply();
+                }
+            }
+        }, "freeze-watch");
+        t.setDaemon(true);
+        t.start();
     }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
@@ -65,6 +103,7 @@ public class GatewayService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (i != null && ACTION_BOOT.equals(i.getAction())) ShizukuSetup.get(this).reactivateAsync(true);
         if (supervisor == null || !supervisor.isAlive()) {
             supervisor = new Thread(this::supervise, "gateway-supervisor");
             supervisor.start();
@@ -74,6 +113,7 @@ public class GatewayService extends Service {
     }
 
     @Override public void onDestroy() {
+        if (self == this) self = null;
         stopping = true;
         killGateway();
         if (wake != null && wake.isHeld()) wake.release();
@@ -84,6 +124,7 @@ public class GatewayService extends Service {
     private void supervise() {
         long backoff = 1000;
         while (!stopping) {
+            if (paused) { update("正在更新开发工具包…"); sleep(1000); continue; }
             if (!env.devkitReady()) { update("工具链未安装"); sleep(3000); continue; }
             if (alive()) { update("运行中 · 127.0.0.1:" + Env.PORT); sleep(5000); continue; }
             long t0 = System.currentTimeMillis();

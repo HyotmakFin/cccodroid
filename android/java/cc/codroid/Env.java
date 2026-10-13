@@ -22,6 +22,12 @@ final class Env {
 
     boolean devkitReady() { return new File(usr, ".devkit-ok").isFile() && bin("node").canExecute(); }
 
+    /** 已装工具包的来历（Installer 写的 JSON：base、sha256）。早期版本里只有一行 "ok" → 空对象 */
+    org.json.JSONObject devkitInfo() {
+        try { return new org.json.JSONObject(new String(java.nio.file.Files.readAllBytes(new File(usr, ".devkit-ok").toPath()), "UTF-8")); }
+        catch (Exception e) { return new org.json.JSONObject(); }
+    }
+
     /** 官方 Claude Code：install-claude.sh 装好后写下的版本指针 */
     File claude() { return new File(home, ".local/share/cccodroid/claude/current/claude"); }
 

@@ -499,7 +499,8 @@ if (cmd === "build") {
   const gzInfo = await gzipFile(tarFile, tarFile + ".gz");
 
   fs.writeFileSync(path.join(OUT, "devkit.lock.json"), JSON.stringify({
-    target, prefix: R.to + "files/usr", repos: REPOS, snapshot: idx.date,
+    // compat：工具包与 App 外壳的接口版本。改了外壳依赖的布局（路径、first-run 约定…）就加一，旧 App 会拒装新工具包
+    target, compat: 1, prefix: R.to + "files/usr", repos: REPOS, snapshot: idx.date,
     tar: { file: path.basename(tarFile), ...tarInfo },
     gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
     packages: lock,

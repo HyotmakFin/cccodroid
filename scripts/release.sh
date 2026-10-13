@@ -6,6 +6,7 @@
 #  token：fine-grained，只对本仓库有 Contents 读写，放在构建机私有目录（TOKEN），绝不进仓库。
 #  用法:  sh scripts/release.sh            先跑 build.sh；版本取自 AndroidManifest 的 versionName
 #         NOTES=说明.md sh scripts/release.sh
+#  正式版直接发；tag 带后缀（v0.2.0-beta1）的标成预发布，App 内更新检查只认正式版
 # ─────────────────────────────────────────────────────────────────────
 set -e
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -44,7 +45,7 @@ const body = extra + [
 ].join("\n");
 let rel;
 try { rel = await api("GET", `https://api.github.com/repos/${REPO}/releases/tags/${TAG}`); console.log("  已有 Release " + TAG + "，更新附件"); }
-catch { rel = await api("POST", `https://api.github.com/repos/${REPO}/releases`, JSON.stringify({ tag_name: TAG, target_commitish: COMMIT, name: "cccodroid " + TAG, body, prerelease: TAG.startsWith("v0.") })); console.log("  已建 Release " + TAG); }
+catch { rel = await api("POST", `https://api.github.com/repos/${REPO}/releases`, JSON.stringify({ tag_name: TAG, target_commitish: COMMIT, name: "cccodroid " + TAG, body, prerelease: TAG.includes("-") })); console.log("  已建 Release " + TAG); }
 for (const a of rel.assets || []) if (a.name === "cccodroid.apk") await api("DELETE", a.url);
 const up = rel.upload_url.replace(/\{.*\}$/, "") + "?name=cccodroid.apk";
 const asset = await api("POST", up, fs.readFileSync(APK), { "content-type": "application/vnd.android.package-archive" });

@@ -43,6 +43,7 @@ final class Installer {
                 String name = gz.getString("file"), sha = gz.getString("sha256");
                 long size = gz.getLong("bytes");
                 File done = new File(env.files, name), part = new File(env.files, name + ".part"), tag = new File(env.files, name + ".sha256");
+                lastBase = base; lastSha = sha;
                 if (done.isFile() && done.length() == size && sha.equals(sha256(done))) return done;
                 // .part 属于别的版本就作废，别把两个版本拼在一起
                 if (!tag.isFile() || !sha.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
@@ -72,7 +73,41 @@ final class Installer {
         throw last != null ? last : new IOException("没有可用的下载地址");
     }
 
-    private static byte[] httpGetSmall(String url) throws IOException {
+    /** 最近一次 downloadDevkit 用的 Release 目录与 gz 的 sha256（installDevkit 记进 .devkit-ok，更新检查据此比对） */
+    String lastBase, lastSha;
+
+    /**
+     * 通用下载：断点续传 + 重试 + sha256（sha 为 null 则不校验）。.part 旁边的 .sha256 记着它属于哪个版本，
+     * 换了版本就作废重下，别把两个版本拼在一起。
+     */
+    File download(String url, File done, long size, String sha) throws IOException {
+        if (done.isFile() && (size <= 0 || done.length() == size) && (sha == null || sha.equals(sha256(done)))) return done;
+        File part = new File(done.getPath() + ".part"), tag = new File(done.getPath() + ".sha256");
+        done.getParentFile().mkdirs();
+        String id = sha != null ? sha : url;
+        if (!tag.isFile() || !id.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
+            part.delete();
+            write(tag, id + "\n");
+        }
+        for (int attempt = 1; size <= 0 || part.length() < size; attempt++) {
+            try { fetchRange(url, part, size); if (size <= 0) break; }
+            catch (IOException e) {
+                if (attempt >= 8) throw e;
+                ui.step("  网络中断（" + e.getMessage() + "），" + (attempt * 3) + " 秒后续传…");
+                try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
+            }
+        }
+        if (sha != null) {
+            String got = sha256(part);
+            if (!sha.equals(got)) { part.delete(); throw new IOException("sha256 不符（期望 " + sha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…）"); }
+        }
+        done.delete();
+        if (!part.renameTo(done)) throw new IOException("换名失败: " + part);
+        tag.delete();
+        return done;
+    }
+
+    static byte[] httpGetSmall(String url) throws IOException {
         HttpURLConnection c = open(url);
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
@@ -104,7 +139,7 @@ final class Installer {
         } finally { c.disconnect(); }
     }
 
-    private static HttpURLConnection open(String url) throws IOException {
+    static HttpURLConnection open(String url) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setInstanceFollowRedirects(true);      // GitHub Release 会 302 到 objects.githubusercontent.com
         c.setConnectTimeout(20000);
@@ -131,7 +166,10 @@ final class Installer {
     }
 
     // ── devkit ─────────────────────────────────────────────────────────
-    void installDevkit(String source) throws IOException {
+    void installDevkit(String source) throws IOException { installDevkit(source, lastBase, lastSha); }
+
+    /** @param base/sha 这份工具包来自哪个 Release、gz 的 sha256（本地文件安装时可为 null）—— 写进 .devkit-ok，更新检查拿它比 */
+    void installDevkit(String source, String base, String sha) throws IOException {
         ui.step("解包开发工具包…");
         InputStream raw; long total;
         if (source.startsWith("http")) {
@@ -150,6 +188,7 @@ final class Installer {
         // tar 里的条目都以 usr/ 开头：解到 files/usr.new/ 下再整体换名，失败不留半成品
         untar(s, tmp, "usr/");
         s.close();
+        if (env.usr.isDirectory()) carryOver(env.usr, tmp);
         deleteTree(env.usr);
         if (!tmp.renameTo(env.usr)) throw new IOException("换名失败: " + tmp);
         new File(env.usr, "tmp").mkdirs();
@@ -161,7 +200,42 @@ final class Installer {
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
-        write(new File(env.usr, ".devkit-ok"), "ok\n");
+        JSONObject ok = new JSONObject();
+        try { ok.put("base", base == null ? "" : base).put("sha256", sha == null ? "" : sha).put("at", System.currentTimeMillis()); }
+        catch (org.json.JSONException ignored) {}
+        write(new File(env.usr, ".devkit-ok"), ok + "\n");
+    }
+
+    /**
+     * 更新工具包时，把用户自己装进 $PREFIX 的东西搬到新目录：pip（不带 --user）、npm -g 装的包和它们的命令。
+     * 判断"用户自己装的"：不在旧工具包任何一个包的文件清单（var/lib/dpkg/info/*.list）里，且新工具包里没有同名的。
+     * Python 小版本变了就不搬 site-packages（编译过的扩展对不上新解释器）。
+     */
+    private void carryOver(File old, File neu) {
+        java.util.Set<String> owned = new java.util.HashSet<>();
+        File[] lists = new File(old, "var/lib/dpkg/info").listFiles((d, n) -> n.endsWith(".list"));
+        if (lists != null) for (File l : lists) {
+            try { for (String line : java.nio.file.Files.readAllLines(l.toPath())) owned.add(line.trim()); }
+            catch (IOException ignored) {}
+        }
+        String pre = env.usr.getPath() + "/";
+        java.util.List<String> dirs = new java.util.ArrayList<>(java.util.Arrays.asList("bin", "lib/node_modules"));
+        File[] py = new File(old, "lib").listFiles((d, n) -> n.matches("python3\\.\\d+"));
+        if (py != null) for (File p : py) if (new File(neu, "lib/" + p.getName()).isDirectory()) dirs.add("lib/" + p.getName() + "/site-packages");
+        int n = 0;
+        for (String d : dirs) {
+            File[] kids = new File(old, d).listFiles();
+            if (kids == null) continue;
+            for (File k : kids) {
+                String rel = d + "/" + k.getName();
+                if (owned.contains(pre + rel) || owned.contains("/" + rel)) continue;
+                File to = new File(neu, rel);
+                if (to.exists() || isSymlink(to)) continue;
+                to.getParentFile().mkdirs();
+                if (k.renameTo(to)) n++;
+            }
+        }
+        if (n > 0) ui.step("保留了你自己装进工具包的 " + n + " 项（pip / npm -g 等）");
     }
 
     /** glibc 版程序（官方 Claude Code）解析域名靠它；安卓没有 /etc/resolv.conf */
@@ -180,7 +254,7 @@ final class Installer {
         if (rc != 0 || !env.claudeReady()) throw new IOException("Claude Code 安装失败（rc=" + rc + "）");
     }
 
-    private int run(String... cmd) throws IOException {
+    int run(String... cmd) throws IOException {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         env.apply(pb.environment());
         pb.directory(env.home);

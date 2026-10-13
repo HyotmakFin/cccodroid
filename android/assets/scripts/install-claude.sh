@@ -49,7 +49,13 @@ else
   echo "✓ sha256 与官方清单一致"
 fi
 chmod 755 "$OUT/claude"
+PREV=$(readlink "$DEST/current" 2>/dev/null || true)
 ln -sfn "$OUT" "$DEST/current"
+# 只留当前版和上一版（每版约 230 MB）。正在跑的旧 claude 已经映射进内存，删文件不影响它
+for d in "$DEST"/*; do
+  [ -L "$d" ] && continue
+  [ "$d" = "$OUT" ] || [ "$d" = "$PREV" ] || rm -rf "$d"
+done
 
 # 试跑一次（只读版本号）
 P=${CCAPP_CLAUDE_PRELOAD:-}; [ -f "$P" ] || P=""

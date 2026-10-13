@@ -589,7 +589,11 @@ function saveNames() {
 let SHELL_PATH = null;
 function ensureShell() {
   if (SHELL_PATH) return SHELL_PATH;
-  const want = process.env.CCAPP_SHELL;
+  // 开发端（旧布局）没有 CCAPP_SHELL：有 files/cbash/bash（glibc 版真 bash）就用它。
+  // /system/bin/sh 是 mksh —— claude 的 shell 快照开头 unalias -a，会把 mksh 靠别名实现的 local 一起删掉，
+  // 快照里的 grep/find/pkill 函数于是每次都报 "local: inaccessible or not found"。
+  const cbash = path.join(CFG.runtime, "..", "cbash", "bash");
+  const want = process.env.CCAPP_SHELL || (!PREFIX && fs.existsSync(cbash) ? cbash : "");
   const real = want && fs.existsSync(want) ? want : "/system/bin/sh";
 
   // 包一层再交给 claude，顺手卸掉 CLAUDE_CODE_EXECPATH：
@@ -744,6 +748,8 @@ function claudeEnv() {
     // 工具链在前：这样 claude 调 git/gcc/rg/magick… 命中的是我们搬过来的包装脚本
     PATH: PREFIX ? [path.join(PREFIX, "bin"), process.env.CCAPP_BIN, "/system/bin", "/system/xbin"].filter(Boolean).join(":") : [
       path.join(PATHS.toolchain, "payload", "bin"),
+      // 开发端自己加的工具（python3/pip、java/javac/d8/apksigner、strace、adb…）：放在 tc.tar 之外，启动重新部署时不会被冲掉
+      path.join(CFG.runtime, "..", "devbin"),
       path.join(CFG.runtime, "node"),
       "/system/bin", "/system/xbin",
     ].join(":"),
@@ -1950,6 +1956,11 @@ function toolsHint() {
       "工具链出问题先跑 cccodroid-selftest（逐项检查编译器、Python、Node、Java、Git 等是否可用）。",
     ].join(" ");
   }
+  // 开发端：TOOLS-dev.md 是按本机实测写的工具清单与用法（比公开版多 Blender/Godot/Wine/priv 等）
+  try {
+    const t = fs.readFileSync(path.join(HERE, "TOOLS-dev.md"), "utf8").replaceAll("{{WORKSPACE}}", CFG.workspace);
+    if (t.trim()) return t.trim();
+  } catch {}
   return [
     "本机（安卓）已接入一套命令行工具链，已加入 PATH：",
     "git/ssh、gcc(cc4)/g++(cxx4)/make(mk4)、rg/fd/bat/yq/typst、",
@@ -2418,6 +2429,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/priv/keepalive") {
       const b = JSON.parse((await readBody(req)) || "{}");
       return sendJson(res, 200, await privCall({ op: "keepalive", enable: b.enable !== false }, 60000));
+    }
+    // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
+    if (p.startsWith("/api/app/")) {
+      const op = p.slice(9);
+      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
+      if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: "未知操作" });
+      const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
+      return sendJson(res, 200, await privCall({ ...b, op }));
     }
 
     if (req.method === "POST" && p === "/api/login/start") {

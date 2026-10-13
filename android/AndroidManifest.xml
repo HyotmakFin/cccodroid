@@ -17,6 +17,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Shizuku：调试提权（以 shell 身份执行），见 Priv.java -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+    <!-- 自更新、一键装 Shizuku：PackageInstaller 会话（每次仍由用户在系统弹窗里确认），见 Apk.java -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 大件更新只在不计流量的网络上自动下；Shizuku 无线调试激活要知道连没连 Wi‑Fi -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 开机后自动重新激活 Shizuku（用户可在设置页关掉），见 SysEvents.java -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 普通应用拿不到；Shizuku 激活后由 shell 授予，用来在重启后自己打开无线调试，见 ShizukuSetup.java -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- 无线调试配对：让带输入框的通知常驻屏幕顶部（配对码对话框一切走就作废），见 ShizukuSetup.pairNote -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:label="cccodroid"
@@ -52,9 +62,22 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!-- 应用内部回调：安装结果、通知栏填的配对码。不导出 -->
+        <receiver android:name=".Events" android:exported="false" />
+        <!-- 系统广播：自更新装完、开机 -->
+        <receiver android:name=".SysEvents" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- 网关的宿主：前台服务。界面关了、切后台、锁屏，正在跑的任务都不断 -->
+        <!-- 导出但要求 INTERACT_ACROSS_USERS_FULL：只有 shell / 系统能启动（静默自更新装完由 shell 拉起服务，
+             国产 ROM 会拦掉 MY_PACKAGE_REPLACED）。普通应用拿不到这个权限 -->
         <service
             android:name=".GatewayService"
-            android:exported="false" />
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

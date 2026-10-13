@@ -62,6 +62,7 @@ final class Priv {
         Shizuku.addBinderDeadListener(() -> Log.w(TAG, "Shizuku binder 断了"));
         Shizuku.addRequestPermissionResultListener((code, result) -> {
             lastPermission = result == PackageManager.PERMISSION_GRANTED ? "granted" : "denied";
+            ShizukuSetup.get(ctx).onPermission(result == PackageManager.PERMISSION_GRANTED);
             if (result == PackageManager.PERMISSION_GRANTED && prefs().getBoolean("keepalive", false)) {
                 new Thread(() -> keepAlive(true), "keepalive").start();
             }
@@ -83,11 +84,31 @@ final class Priv {
         try { return running() && !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED; }
         catch (Throwable t) { return false; }
     }
+    /**
+     * 实测：真起一个进程跑 id -u。Shizuku 客户端库会缓存"已授权"（在 Shizuku 里撤销后我们这边不刷新），
+     * 设置页显示的"已就绪"以它为准。结果缓存 10 秒，设置页 1.5 秒一轮的刷新不至于狂起进程。
+     */
+    private static volatile long verifiedAt;
+    private static volatile boolean verifiedOk;
+    static boolean verified() {
+        if (!granted()) return false;
+        if (System.currentTimeMillis() - verifiedAt < 10_000) return verifiedOk;
+        boolean ok;
+        try {
+            java.lang.Process p = newProcess(new String[]{"id", "-u"}, null, "/");
+            p.getOutputStream().close();
+            String out = new String(readAll(p.getInputStream()), StandardCharsets.UTF_8).trim();
+            ok = p.waitFor() == 0 && (out.equals("2000") || out.equals("0"));
+        } catch (Throwable t) { ok = false; }
+        verifiedOk = ok; verifiedAt = System.currentTimeMillis();
+        return ok;
+    }
+
     private static int safeUid() { try { return Shizuku.getUid(); } catch (Throwable t) { return -1; } }
 
     static JSONObject status() throws Exception {
         JSONObject o = new JSONObject();
-        boolean ins = installed(), run = ins && running(), ok = run && granted();
+        boolean ins = installed(), run = ins && running(), ok = run && verified();
         o.put("state", !ins ? "not_installed" : !run ? "not_running" : !ok ? "no_permission" : "ok");
         o.put("installed", ins);
         o.put("running", run);
@@ -98,6 +119,10 @@ final class Priv {
         }
         o.put("keepalive", prefs().getBoolean("keepalive", false));
         o.put("lastPermission", lastPermission);
+        ShizukuSetup.get(ctx).put(o);
+        SharedPreferences bg = ctx.getSharedPreferences("bg", Context.MODE_PRIVATE);
+        o.put("frozen", new JSONObject().put("at", bg.getLong("frozenAt", 0)).put("ms", bg.getLong("frozenMs", 0))
+            .put("count", bg.getInt("frozenCount", 0)).put("vendor", Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT)));
         return o;
     }
 
@@ -118,6 +143,40 @@ final class Priv {
             String out = new String(readAll(p.getInputStream()), StandardCharsets.UTF_8).trim();
             int rc = p.waitFor();
             return (rc == 0 ? "" : "[rc=" + rc + "] ") + out;
+        } catch (Throwable t) {
+            return "[失败] " + t;
+        }
+    }
+
+    static final String STAGE = "/data/local/tmp/cccodroid-update.apk", STAGE_LOG = "/data/local/tmp/cccodroid-update.log";
+
+    /**
+     * 静默装自己的新版本。两步走，因为 pm 替换本应用时会杀掉本进程，而 Shizuku 会跟着杀掉本进程开的子进程：
+     *   1. 把 APK 流式写到 /data/local/tmp（shell 读不到本应用私有目录，那里它能读写）；
+     *   2. setsid 起一个脱离的 shell 去 pm install，装完由它把后台服务拉起来（不靠 MY_PACKAGE_REPLACED ——
+     *      国产 ROM 的自启动管理会把这条广播拦掉，实测红魔 SKIPPED）；界面原本开着就把界面也拉起来。
+     *      红魔连 shell 起服务都拦（"Blocked by AutoLaunch"），但拉界面不拦：服务起不来时由 shell 发一条通知，点开即恢复。
+     * @return 走到返回说明还活着：多半没装上，返回 pm 的输出
+     */
+    static String pipeInstall(java.io.File apk, boolean reopenUi, String version) {
+        try {
+            java.lang.Process p = newProcess(new String[]{"sh", "-c", "cat > " + STAGE + " && chmod 644 " + STAGE}, null, "/");
+            try (InputStream in = new java.io.FileInputStream(apk); OutputStream o = p.getOutputStream()) {
+                byte[] buf = new byte[1 << 16];
+                for (int n; (n = in.read(buf)) > 0; ) o.write(buf, 0, n);
+            }
+            if (p.waitFor() != 0) return "[失败] 写不进 " + STAGE;
+            String pkg = ctx.getPackageName();
+            // 带点击动作的通知有的 ROM 不让 shell 发（红魔：getIntentSender 权限不足），失败就发纯文字的
+            String note = "cmd notification post -t \"cccodroid 已更新到 v" + version + "（系统不让它在后台自己启动）\"";
+            String job = "pm install -r " + STAGE + " > " + STAGE_LOG + " 2>&1; rm -f " + STAGE + "; "
+                + "am start-foreground-service -n " + pkg + "/.GatewayService >> " + STAGE_LOG + " 2>&1"
+                + (reopenUi ? "; am start -n " + pkg + "/.MainActivity >> " + STAGE_LOG + " 2>&1"
+                   : "; grep -q Error " + STAGE_LOG + " && { " + note + " -c \"activity -n " + pkg + "/.MainActivity\" cccodroid-updated \"点此打开即可继续使用\""
+                     + " || " + note + " cccodroid-updated \"打开 cccodroid 即可继续使用\"; } >> " + STAGE_LOG + " 2>&1");
+            run("setsid sh -c '" + job + "' < /dev/null > /dev/null 2>&1 &");
+            Thread.sleep(60_000);       // 装上的话本进程在这期间就没了
+            return run("cat " + STAGE_LOG);
         } catch (Throwable t) {
             return "[失败] " + t;
         }
@@ -206,7 +265,24 @@ final class Priv {
                     break;
                 }
                 case "keepalive": resp = keepAlive(req.optBoolean("enable", true)); break;
+                case "freeze_ack": ctx.getSharedPreferences("bg", Context.MODE_PRIVATE).edit().clear().apply(); resp = status(); break;
+                case "open_app_settings": {      // 自启动、悬浮窗之类的开关都在应用详情页里
+                    ctx.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    resp = new JSONObject().put("ok", true);
+                    break;
+                }
                 case "usb_list": resp = Usb.list(ctx); break;
+                // 一键安装 / 激活 Shizuku（ShizukuSetup），进度在 status 的 setup 字段里
+                case "shz_install": ShizukuSetup.get(ctx).install(false); resp = status(); break;
+                case "shz_activate": ShizukuSetup.get(ctx).activate(); resp = status(); break;
+                case "shz_pair": ShizukuSetup.get(ctx).onCode(req.optString("code")); resp = status(); break;
+                case "shz_repair": ShizukuSetup.get(ctx).repair(); resp = status(); break;
+                case "shz_autostart": ShizukuSetup.get(ctx).setAutostart(req.optBoolean("enable", true)); resp = status(); break;
+                // 更新（Updater）
+                case "upd_status": resp = Updater.get(ctx).status(); break;
+                case "upd_check": Updater.get(ctx).checkAsync(true); resp = Updater.get(ctx).status(); break;
+                case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true); break;
+                case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
                 default: resp = new JSONObject().put("ok", false).put("message", "未知操作 " + op);
             }

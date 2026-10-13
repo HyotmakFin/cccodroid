@@ -31,6 +31,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * 启动流程：存储权限 → 开发工具包 → 官方 Claude Code → 网关代码 → 前台服务 → 界面。
@@ -42,7 +43,17 @@ public class MainActivity extends Activity {
         "/sdcard/cccodroid/devkit-cc.codroid.tar.gz", "/sdcard/cccodroid/devkit-cc.codroid.tar",
     };
 
+    static final String ACTION_APPLY_DEVKIT = "cc.codroid.APPLY_DEVKIT";
+    static final String ACTION_UPDATE = "cc.codroid.UPDATE";
+    static final String ACTION_SHIZUKU = "cc.codroid.SHIZUKU";
+    /** 配对通知的 fullScreenIntent：只为让通知常驻顶部，真被拉起（锁屏时）也什么都不做 */
+    static final String ACTION_SHIZUKU_NOOP = "cc.codroid.SHIZUKU_NOOP";
+    /** 界面在前台吗：自动静默更新只在用户没盯着界面时做 */
+    static volatile boolean visible;
+
     private Env env;
+    private volatile boolean booted;
+    private Intent pending;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private FrameLayout root;
     private TextView log;
@@ -57,6 +68,7 @@ public class MainActivity extends Activity {
         env = new Env(this);
         getWindow().setStatusBarColor(Color.parseColor("#0d1117"));
         buildSetupUi();
+        pending = getIntent();
         java.util.List<String> want = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             want.add(Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -98,15 +110,72 @@ public class MainActivity extends Activity {
                     ins.installClaude(new File(env.app, "scripts/install-claude.sh"));
                     say("✓ Claude Code 就绪");
                 }
+                // 上次自动下好的工具包更新：趁现在（刚打开、没有任务）装上
+                Updater upd = Updater.get(this);
+                if (upd.auto() && upd.devkitStaged() && !Updater.gatewayBusy()) {
+                    say("安装已下载的开发工具包更新…");
+                    upd.applyDevkit(ins);
+                    say("✓ 开发工具包已更新");
+                }
                 askBatteryExemption();
                 say("等待网关…");
                 for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500);
-                ui.post(this::showWeb);
+                ui.post(() -> { showWeb(); booted = true; handle(pending); pending = null; });
             } catch (Exception e) {
                 say("✗ " + e.getMessage());
                 say("（修好网络或文件后，划掉应用重新打开即可从这一步继续）");
             }
         }, "boot").start();
+    }
+
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        if (booted) handle(i); else pending = i;
+    }
+
+    @Override protected void onResume() { super.onResume(); visible = true; }
+    @Override protected void onPause() { visible = false; super.onPause(); }
+
+    /** 通知或设置页递过来的动作 */
+    private void handle(Intent i) {
+        String a = i == null ? null : i.getAction();
+        if (a == null) return;
+        if (ACTION_APPLY_DEVKIT.equals(a) || ACTION_UPDATE.equals(a) && "devkit".equals(i.getStringExtra("item"))) applyDevkitUi();
+        else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
+        else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
+    }
+
+    /** 替换工具包：网关要停，界面切回进度页，装完再回来 */
+    private void applyDevkitUi() {
+        Updater upd = Updater.get(this);
+        if (!upd.devkitStaged()) { upd.apply("devkit", true); return; }     // 还没下：先下，下完会再走到这里
+        new Thread(() -> {
+            if (Updater.gatewayBusy()) {
+                ui.post(() -> android.widget.Toast.makeText(this, "有任务正在跑，等它结束再更新开发工具包", android.widget.Toast.LENGTH_LONG).show());
+                return;
+            }
+            CountDownLatch shown = new CountDownLatch(1);
+            ui.post(() -> {
+                if (web != null) { web.destroy(); web = null; }
+                booted = false;
+                buildSetupUi();
+                shown.countDown();
+            });
+            try {
+                shown.await();
+                say("更新开发工具包…");
+                upd.applyDevkit(new Installer(env, new Installer.Progress() {
+                    public void step(String m) { say(m); }
+                    public void bytes(long d, long t) { progress(d, t); }
+                }));
+                say("✓ 开发工具包已更新，等待网关…");
+            } catch (Exception e) {
+                say("✗ " + e.getMessage());
+                say("（旧的工具包已经不在了的话，划掉应用重新打开会重新安装）");
+            }
+            try { for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500); } catch (InterruptedException ignored) {}
+            ui.post(() -> { showWeb(); booted = true; });
+        }, "devkit-apply").start();
     }
 
     /** assets/app → files/app。内容哈希写在 .tag 里，没变就不动 */

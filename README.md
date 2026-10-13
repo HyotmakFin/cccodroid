@@ -23,6 +23,13 @@
   - 版本控制与网络：git、ssh、curl。
   - 命令行工具：rg / fd / bat / jq / sqlite3 / typst / ImageMagick…
 - **系统权限（可选）**：集成 [Shizuku](https://shizuku.rikka.app)。终端里用 `priv '<命令>'` 以 shell 身份执行 pm / am / settings / logcat / screencap 等。
+  - 设置页一键安装并激活：从 Shizuku 官方 Release 下载（核对官方签名证书），用系统安装器装好；
+    再经「无线调试」激活，不用电脑。配对码在常驻屏幕顶部的通知里填，配对框不用关。
+  - 激活后重启手机，cccodroid 会自己打开无线调试、重新激活 Shizuku（需连着 Wi‑Fi）。
+- **自动更新**（默认开，设置页可关、可手动检查）：
+  - Claude Code：从官方渠道静默更新（stable / latest 可选），正在跑的对话不受影响；
+  - cccodroid 本体：下载后核对签名，提醒安装；有 Shizuku 时空闲自动静默安装；
+  - 开发工具包：只在 Wi‑Fi 下预先下载，下次打开应用时替换；你用 pip / npm -g 装进去的东西会保留。
 - **USB 调试另一台设备**：OTG 线连上后运行 `usb-adb`，就能照常 `adb devices / install / shell`。
 - **自检**：`cccodroid-selftest` 逐项实测 71 个工具与用法；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
 
@@ -36,6 +43,10 @@
 4. （可选）装好并启动 Shizuku，在设置页授权，即可使用 `priv` 和保活增强。
 
 要求：Android 8.0+（实测 Android 14 / 15），arm64，可用空间约 4 GB。
+
+**国产系统请允许后台运行**：部分厂商的省电机制会无视前台服务，把后台应用整个冻住（实测红魔：切到后台约 90 秒冻结），
+冻结期间正在跑的任务全部停住。cccodroid 测到冻结时会在设置页提示具体去哪里开。红魔 / 中兴：应用信息 → 应用的电池用量 → 电池优化 →
+**后台运行：允许**、**自启动：允许**。
 
 **离线安装**：把 `devkit-cc.codroid.tar.gz` 放到 `/sdcard/cccodroid/` 下，首次启动会直接用它，不再下载。
 

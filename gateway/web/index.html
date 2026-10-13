@@ -109,12 +109,35 @@
       <!-- 选中那一家的配置卡：账户登录 / 密钥 / 自定义接口，由 app.js 按类型渲染 -->
       <div class="field prov-card" id="prov-card"></div>
 
+      <!-- 后台被冻结的提示：GatewayService 测到冻结才出现（前台服务挡不住部分厂商的冻结器） -->
+      <div class="field hidden" id="bg-field">
+        <label>后台运行</label>
+        <div class="prov-card">
+          <div class="prov-state warn" id="bg-state"></div>
+          <div class="tiny" id="bg-how"></div>
+          <div class="row-actions" id="bg-actions">
+            <button class="btn sm" data-act="appsettings">去系统设置</button>
+            <button class="btn sm ghost" data-act="ack">已设置好，清除提示</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Shizuku：调试提权。只有 cccodroid 带这项集成，旧版里整块隐藏 -->
       <div class="field hidden" id="priv-field">
         <label>Shizuku（调试提权）</label>
         <div class="prov-card">
           <div class="prov-state" id="priv-state">查询中…</div>
+          <div class="prov-state hidden" id="priv-setup"></div>
+          <div class="row-actions hidden" id="priv-pair">
+            <input id="priv-code" inputmode="numeric" maxlength="6" placeholder="6 位配对码" style="width:8em;margin:0">
+            <input id="priv-port" inputmode="numeric" maxlength="5" placeholder="端口（可不填）" style="width:8em;margin:0">
+            <button class="btn sm" data-act="pair">配对</button>
+          </div>
           <div class="row-actions" id="priv-actions"></div>
+          <label class="tiny hidden" id="priv-auto-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <input type="checkbox" id="priv-auto" style="width:auto;margin:0">
+            <span>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</span>
+          </label>
           <label class="tiny" id="priv-ka-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
             <input type="checkbox" id="priv-ka" style="width:auto;margin:0">
             <span>后台保活增强：放宽安卓的"幽灵进程"上限（防止并行编译时子进程被系统杀掉）、加入电池白名单、允许后台运行</span>
@@ -122,6 +145,27 @@
           <div class="prov-state" id="priv-ka-result"></div>
           <div class="tiny">开启后，终端里可用 <code>priv '命令'</code> 以 shell 身份执行（pm / am / settings / dumpsys / logcat / screencap…），Claude 也会用它。
             没有 Shizuku 时基础开发功能照常，只是这些调试能力用不了。</div>
+        </div>
+      </div>
+
+      <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
+      <div class="field hidden" id="upd-field">
+        <label>更新</label>
+        <div class="prov-card">
+          <div id="upd-items"></div>
+          <div class="row-actions">
+            <button class="btn sm" id="upd-check">检查更新</button>
+            <select id="upd-channel" style="width:auto;margin:0">
+              <option value="stable">CLI：stable</option>
+              <option value="latest">CLI：latest</option>
+            </select>
+          </div>
+          <label class="tiny" style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="upd-auto" style="width:auto;margin:0">
+            <span>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；
+              开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</span>
+          </label>
+          <div class="tiny" id="upd-last"></div>
         </div>
       </div>
 

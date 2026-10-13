@@ -1708,10 +1708,40 @@
     no_permission: ["warn", "Shizuku 在运行，还没授权给 cccodroid"],
     unreachable: ["err", "连不上应用的后台服务"],
   };
+  const SETUP_BUSY = ["downloading", "installing", "connecting", "pairing", "starting", "permission"];
+  let privPoll = null;
+  // 各家系统里"允许后台运行"的位置。红魔/中兴为实测，其余是常见路径
+  const BG_HOW = {
+    nubia: "红魔 / 努比亚：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>（<b>自启动</b>也选允许，开机激活 Shizuku、更新后自动恢复都靠它）",
+    zte: "中兴：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>，<b>自启动：允许</b>",
+    xiaomi: "小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）",
+    redmi: "小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）",
+    oppo: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
+    oneplus: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
+    realme: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
+    vivo: "vivo / iQOO：设置 → 电池 → 后台耗电管理 → cccodroid <b>允许后台高耗电</b>；i管家里允许<b>自启动</b>（常见路径）",
+    huawei: "华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）",
+    honor: "华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）",
+  };
+  function renderBg(fz) {
+    const show = fz && fz.count > 0;
+    $("bg-field").classList.toggle("hidden", !show);
+    if (!show) return;
+    $("bg-state").textContent = `检测到 cccodroid 在后台被系统冻结过 ${fz.count} 次（最近一次约 ${Math.round(fz.ms / 1000)} 秒，${new Date(fz.at).toLocaleString()}）。` +
+      "冻结期间网关和正在跑的任务全部停住，回到前台才继续。前台服务挡不住这类厂商冻结器。";
+    $("bg-how").innerHTML = BG_HOW[fz.vendor] || "在系统设置里给 cccodroid 允许后台运行、关闭电池优化、允许自启动（各家叫法不同）。";
+  }
+  $("bg-actions").addEventListener("click", async (e) => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (act === "appsettings") post("/api/app/open_app_settings").catch(() => {});
+    if (act === "ack") { const st = await post("/api/app/freeze_ack").catch(() => null); if (st) renderBg(st.frozen); }
+  });
+
   async function loadPriv() {
     let st;
     try { st = await api("/api/priv/status"); } catch { return; }
     if (st.state === "unsupported") return;          // 旧版：没有这项集成
+    renderBg(st.frozen);
     $("priv-field").classList.remove("hidden");
     const el = $("priv-state");
     if (st.state === "ok") {
@@ -1722,19 +1752,57 @@
       el.className = "prov-state " + cls;
       el.textContent = txt + (st.lastPermission === "denied" ? "（上次被拒绝了）" : "");
     }
+    // 一键安装 / 激活的进度
+    const su = st.setup || { phase: "idle" };
+    const busy = SETUP_BUSY.includes(su.phase);
+    const se = $("priv-setup");
+    const showSetup = su.message && !(st.state === "ok" && su.phase !== "done");
+    se.classList.toggle("hidden", !showSetup);
+    if (showSetup) {
+      se.className = "prov-state " + (su.phase === "error" ? "err" : su.phase === "done" ? "ok" : "warn");
+      se.textContent = su.message + (su.phase === "downloading" && su.total ? `（${fmtSize(su.done)} / ${fmtSize(su.total)}）` : "");
+    }
+    $("priv-pair").classList.toggle("hidden", su.phase !== "pairing");
+    const wl = st.wireless !== false;
     $("priv-actions").innerHTML =
-      st.state === "not_installed" ? `<a class="btn sm" href="https://shizuku.rikka.app/download/" target="_blank" rel="noopener">下载 Shizuku ↗</a>` :
-      st.state === "not_running" ? `<button class="btn sm" data-act="open">打开 Shizuku</button>` :
+      st.state === "not_installed" ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>一键安装并激活</button>
+        <a class="btn sm ghost" href="https://shizuku.rikka.app/download/" target="_blank" rel="noopener">手动下载 ↗</a>` :
+      st.state === "not_running" ? (wl ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>一键激活（无线调试）</button>` : "") +
+        `<button class="btn sm ghost" data-act="open">打开 Shizuku</button>` :
       st.state === "no_permission" ? `<button class="btn sm" data-act="request">授权给 cccodroid</button>` : "";
+    // Shizuku 在跑，但没有（或已失效的）无线调试配对：重启后就没法自动激活。这种情况平时看不出来，主动提示
+    if (st.state === "ok" && wl && !st.paired && !busy) {
+      se.classList.remove("hidden");
+      se.className = "prov-state warn";
+      se.textContent = st.pairOk === 0
+        ? "无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。"
+        : "Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。";
+      $("priv-actions").insertAdjacentHTML("afterbegin", `<button class="btn sm" data-act="repair">${st.pairOk === 0 ? "重新配对" : "配对"}</button>`);
+    }
+    if (st.bootMissed) {
+      se.classList.remove("hidden");
+      se.className = "prov-state warn";
+      se.textContent = "这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。" +
+        "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。";
+      $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">去允许自启动</button>`);
+    }
     $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">刷新</button>`);
+    $("priv-auto-row").classList.toggle("hidden", !(wl && st.paired));
+    $("priv-auto").checked = st.autostart !== false;
     $("priv-ka-row").style.opacity = st.state === "ok" ? "1" : ".45";
     $("priv-ka").disabled = st.state !== "ok";
     $("priv-ka").checked = !!st.keepalive;
+    // 安装、配对、启动都在进行时自己刷新（设置页开着才刷）
+    clearTimeout(privPoll);
+    if (busy && !$("tab-settings").classList.contains("hidden")) privPoll = setTimeout(loadPriv, 1500);
   }
   $("priv-actions").addEventListener("click", async (e) => {
     const act = e.target.dataset && e.target.dataset.act;
     if (!act) return;
     if (act === "open") await post("/api/priv/open").catch(() => {});
+    if (act === "appsettings") return post("/api/app/open_app_settings").catch(() => {});
+    if (act === "repair") { await post("/api/app/shz_repair").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
+    if (act === "activate") { await post("/api/app/shz_activate").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
     if (act === "request") {
       const r = await post("/api/priv/request").catch((e2) => ({ message: e2.message }));
       toast(r.message || "已请求");
@@ -1744,6 +1812,61 @@
     }
     loadPriv();
   });
+  $("priv-pair").addEventListener("click", async (e) => {
+    if (!(e.target.dataset && e.target.dataset.act === "pair")) return;
+    const code = $("priv-code").value.replace(/\D/g, "");
+    if (code.length !== 6) return toast("配对码是 6 位数字", true);
+    const port = $("priv-port").value.replace(/\D/g, "");
+    $("priv-code").value = "";
+    await post("/api/app/shz_pair", { code: port ? code + " " + port : code }).catch((e2) => toast(e2.message, true));
+    setTimeout(loadPriv, 500);
+  });
+  $("priv-auto").addEventListener("change", (e) => post("/api/app/shz_autostart", { enable: e.target.checked }).catch(() => {}));
+
+  // ── 更新：应用本体 / 开发工具包 / Claude Code ──
+  const UPD_TEXT = { uptodate: "已是最新", available: "有新版本", downloading: "下载中", ready: "已下载，待安装", installing: "安装中", error: "出错", unknown: "未检查" };
+  let updPoll = null;
+  async function loadUpd() {
+    let st;
+    try { st = await api("/api/app/upd_status"); } catch { return; }
+    if (!st.ok || !st.items) return;                 // 旧版 / 开发端：没有这项
+    $("upd-field").classList.remove("hidden");
+    $("upd-auto").checked = !!st.auto;
+    $("upd-channel").value = st.channel || "stable";
+    let moving = st.checking;
+    $("upd-items").innerHTML = st.items.map((it) => {
+      const busy = it.state === "downloading" || it.state === "installing";
+      moving ||= busy;
+      const ver = esc(it.current || "?") + (it.latest && it.latest !== it.current && it.state !== "uptodate" ? " → " + esc(it.latest) : "");
+      const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done)} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
+        : it.state === "installing" && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
+      const cls = it.state === "error" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
+      const btn = it.state === "available" ? (it.id === "claude" ? "更新" : "下载并安装")
+        : it.state === "ready" ? "安装" : it.state === "error" && it.latest ? "重试" : "";
+      return `<div class="row-actions" style="justify-content:space-between">
+        <div><b>${esc(it.name)}</b> <span class="tiny">${ver}</span><br>
+          <span class="prov-state ${cls}" style="margin:0">${UPD_TEXT[it.state] || esc(it.state)}${prog}${it.message ? " · " + esc(it.message) : ""}</span></div>
+        ${btn ? `<button class="btn sm" data-item="${esc(it.id)}">${btn}</button>` : ""}</div>`;
+    }).join("");
+    $("upd-last").textContent = st.checking ? "检查中…" : st.error ? "✗ " + st.error
+      : st.lastCheck ? "上次检查：" + new Date(st.lastCheck).toLocaleString() : "还没检查过";
+    clearTimeout(updPoll);
+    if (moving && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
+  }
+  $("upd-items").addEventListener("click", async (e) => {
+    const item = e.target.dataset && e.target.dataset.item;
+    if (!item) return;
+    if (item === "devkit" && !confirm("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。")) return;
+    const r = await post("/api/app/upd_apply", { item }).catch((e2) => ({ ok: false, message: e2.message }));
+    toast(r.message || (r.ok ? "开始" : "失败"), !r.ok);
+    setTimeout(loadUpd, 500);
+  });
+  $("upd-check").addEventListener("click", async () => {
+    await post("/api/app/upd_check").catch((e2) => toast(e2.message, true));
+    setTimeout(loadUpd, 300);
+  });
+  $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch(() => {}));
+  $("upd-channel").addEventListener("change", (e) => post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {}));
   $("priv-ka").addEventListener("change", async (e) => {
     const on = e.target.checked;
     if (on && !confirm("开启后台保活增强？\n\n会改几项系统设置：幽灵进程上限（影响所有应用）、本应用的电池白名单与后台运行限制。关掉开关会恢复前两项。")) {
@@ -2009,14 +2132,17 @@
     drawerEl.classList.remove("hidden");
     if (tab) switchTab(tab);
     refreshStatus();
-    if (!tab || tab === "sessions") loadSessions();
-    if (!tab || tab === "caps") loadCaps();
-    if (tab === "settings") { loadProviders(); loadPriv(); }
+    if (!tab) { loadSessions(); loadCaps(); }
   }
   function closeDrawer() { drawerEl.classList.add("hidden"); }
+  // 切到哪个标签就加载哪个的数据 —— 点标签和 openDrawer 都走这里
+  // （以前加载只写在 openDrawer 里，点"设置"标签进去 Shizuku / 更新几块永远不出来）
   function switchTab(name) {
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
     document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
+    if (name === "sessions") loadSessions();
+    if (name === "caps") loadCaps();
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
   $("btn-menu").addEventListener("click", () => openDrawer("sessions"));
