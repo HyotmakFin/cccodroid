@@ -377,4 +377,9 @@ window.I18N_DICT.en = {
   "已暂停": "Paused",
   "立即发送": "Send now",
   "撤销": "Cancel",
+  "外观": "Appearance",
+  "跟随系统": "System",
+  "浅色": "Light",
+  "深色": "Dark",
+  "用时 {d}": "Took {d}",
 };

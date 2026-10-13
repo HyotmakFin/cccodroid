@@ -356,4 +356,9 @@ window.I18N_DICT["fr"] = {
   "已暂停": "En pause",
   "立即发送": "Envoyer maintenant",
   "撤销": "Annuler",
+  "外观": "Apparence",
+  "跟随系统": "Système",
+  "浅色": "Clair",
+  "深色": "Sombre",
+  "用时 {d}": "Durée {d}",
 };

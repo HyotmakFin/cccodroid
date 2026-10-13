@@ -137,6 +137,34 @@ public class MainActivity extends Activity {
         getSystemService(android.app.NotificationManager.class).cancel(41); }   // Priv.toFront 的「点此回来」
     @Override protected void onPause() { visible = false; super.onPause(); }
 
+    // ── 外观：界面（theme.js）定浅 / 深，系统夜间模式只有原生层知道 ──
+    private boolean systemNight() {
+        return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+            == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+    /** 状态栏 / 导航栏跟着界面换色；浅色时图标改深色 */
+    private void applyBars(boolean dark) {
+        android.view.Window w = getWindow();
+        int bg = dark ? Color.parseColor("#0d1117") : Color.WHITE;
+        w.setStatusBarColor(bg);
+        w.setNavigationBarColor(bg);
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            int m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                  | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            android.view.WindowInsetsController c = w.getInsetsController();
+            if (c != null) c.setSystemBarsAppearance(dark ? 0 : m, m);
+        } else {
+            View d = w.getDecorView();
+            int f = d.getSystemUiVisibility();
+            int m = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            d.setSystemUiVisibility(dark ? f & ~m : f | m);
+        }
+    }
+    @Override public void onConfigurationChanged(android.content.res.Configuration cfg) {
+        super.onConfigurationChanged(cfg);
+        if (web != null) web.evaluateJavascript("window.Theme&&Theme.system(" + systemNight() + ")", null);
+    }
+
     /** 通知或设置页递过来的动作 */
     private void handle(Intent i) {
         String a = i == null ? null : i.getAction();
@@ -355,6 +383,8 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void openUrl(String url) {
                 if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) ui.post(() -> openExternal(url));
             }
+            @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
+            @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
         }, "CCApp");
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {

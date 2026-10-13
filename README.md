@@ -15,6 +15,8 @@ write code, compile C/C++, run Python / Node, build APKs and push with git — a
 - **Official Claude Code with a GUI**: chat, streaming output, thinking, tool calls, file browser, session history.
   - Messages sent while Claude is working wait at the end of the chat marked *Queued*; **Send now** delivers one into the running turn without interrupting it. **Stop only stops** — queued messages are paused, never sent automatically.
   - `/compact`, `/context` and other built-in commands show their results immediately.
+  - Each reply shows a live generation timer that settles to the total time when it finishes.
+  - Light / dark appearance, or follow the system (status bar included).
   - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically.

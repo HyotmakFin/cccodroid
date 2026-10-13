@@ -588,6 +588,32 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
   }
 
+  // ── 生成计时：从网关记下的开始时刻算（同一台机器的时钟），断线重连接上的那一轮也对得上 ──
+  function fmtDur(ms, fine) {
+    const s = Math.max(0, ms / 1000);
+    if (s < 60) return (fine ? s.toFixed(1) : Math.floor(s)) + "s";
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + "m " + String(Math.floor(s % 60)).padStart(2, "0") + "s";
+    return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+  }
+  function RunTimer(startedAt) {
+    const el = document.createElement("span");
+    el.className = "tag run-timer live";
+    const t0 = startedAt || Date.now();
+    const tick = () => { el.textContent = fmtDur(Date.now() - t0); };
+    tick();
+    let iv = setInterval(tick, 1000);
+    return {
+      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); },
+      stop() {
+        if (!iv) return;
+        clearInterval(iv); iv = 0;
+        el.classList.remove("live");
+        el.textContent = t("用时 {d}", { d: fmtDur(Date.now() - t0, true) });
+      },
+    };
+  }
+
   /** 历史页：一段 transcript 条目 → 一个 .page 容器 */
   function renderItems(items) {
     const page = document.createElement("div");
@@ -662,6 +688,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.title = "";
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
+    for (const rv of runViews.values()) rv.timer?.stop();
     runViews.clear();
     TOOL_CARDS.clear();
     PENDING_RESULTS.clear();
@@ -800,7 +827,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         renderUser(ev.text, liveEl);
         const av = AssistantView(liveEl, true);
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
-        runViews.set(ev.runId, { av, startedAt: ev.startedAt });
+        const timer = RunTimer(ev.startedAt);
+        timer.attach(av);
+        runViews.set(ev.runId, { av, startedAt: ev.startedAt, timer });
         scrollDown(true);
         return;
       }
@@ -813,6 +842,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (rv.av.empty) rv.av.remove();
         renderUser(ev.text, liveEl);
         rv.av = AssistantView(liveEl, true);
+        rv.timer?.attach(rv.av);          // 计时算整轮的，跟着最新的气泡走
         scrollDown(true);
         return;
       }
@@ -881,6 +911,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const rv = runViews.get(ev.runId);
     if (!rv) { if (belongs(ev)) loadSessions(); return; }
     const av = rv.av;
+    rv.timer?.stop();
     if (ev.sessionId && !view.sessionId && view.runIds.has(ev.runId)) { view.sessionId = ev.sessionId; saveUiState(); }
     if (ev.usage?.context_tokens) updateCtx(ev.usage.context_tokens, ev.usage.context_window || state.ctxTotal);
 

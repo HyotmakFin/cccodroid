@@ -4,9 +4,30 @@
   --fg:#e6edf3; --fg2:#9198a1; --fg3:#6e7681;
   --accent:#d97757; --accent-dim:#a85a3f;
   --ok:#3fb950; --err:#f85149; --warn:#d29922; --tool:#58a6ff; --purple:#bc8cff;
+  --bar-bg:rgba(13,17,23,.94); --bar-bg2:rgba(13,17,23,.96); --veil:rgba(13,17,23,.82);
+  --strong:#fff; --code-bg:#0b0f14; --think-bg:#12171e; --more-bg:#1b2635; --more-line:#2a3a52;
+  --user-bg:#1a2332; --user-line:#24344d; --sys-bg:#1a1526; --sys-line:#332a4d;
+  --tool-bg:#111a26; --tool-line:#24344d; --tool-sep:#1d2836; --cmd-bg:#16121f;
+  --err-bg:#2a1416; --err-line:#6e2b2f; --err-fg:#ffb3ae; --active-bg:#1c1613;
+  --shadow:rgba(0,0,0,.55); --scrim:rgba(0,0,0,.55);
+  color-scheme:dark;
   --radius:14px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
+}
+/* 浅色外观（theme.js 设 html[data-theme]）；没列出的变量沿用上面 */
+html[data-theme="light"]{
+  --bg:#ffffff; --bg2:#f6f8fa; --bg3:#eff2f5; --bg4:#e6eaef; --line:#d0d7de;
+  --fg:#1f2328; --fg2:#59636e; --fg3:#818b98;
+  --accent:#c96442; --accent-dim:#e2a68d;
+  --ok:#1a7f37; --err:#cf222e; --warn:#9a6700; --tool:#0969da; --purple:#8250df;
+  --bar-bg:rgba(255,255,255,.94); --bar-bg2:rgba(255,255,255,.96); --veil:rgba(255,255,255,.85);
+  --strong:#1f2328; --code-bg:#f6f8fa; --think-bg:#f8f9fb; --more-bg:#eef4fb; --more-line:#c8d8ec;
+  --user-bg:#eaf3fe; --user-line:#c3dbf7; --sys-bg:#f7f1ff; --sys-line:#dccbf7;
+  --tool-bg:#f5f9fe; --tool-line:#cfdff2; --tool-sep:#dde7f3; --cmd-bg:#fbf8ff;
+  --err-bg:#fff1f0; --err-line:#f5b8b4; --err-fg:#a40e26; --active-bg:#fcf0ea;
+  --shadow:rgba(31,35,40,.16); --scrim:rgba(31,35,40,.35);
+  color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overscroll-behavior:none}
@@ -21,7 +42,7 @@ body{
 #topbar{
   display:flex;align-items:center;gap:6px;
   padding:calc(var(--safe-t) + 10px) 10px 10px;
-  background:rgba(13,17,23,.94);backdrop-filter:blur(12px);
+  background:var(--bar-bg);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
 }
 #title-block{flex:1;min-width:0}
@@ -64,8 +85,8 @@ body{
   background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
   padding:11px 13px;word-break:break-word;overflow-wrap:anywhere;
 }
-.msg.user .bubble{background:#1a2332;border-color:#24344d}
-.msg.sys  .bubble{background:#1a1526;border-color:#332a4d}
+.msg.user .bubble{background:var(--user-bg);border-color:var(--user-line)}
+.msg.sys  .bubble{background:var(--sys-bg);border-color:var(--sys-line)}
 
 .bubble p{margin:0 0 9px} .bubble p:last-child{margin-bottom:0}
 .bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:13px 0 7px;font-size:15.5px;line-height:1.35}
@@ -73,16 +94,16 @@ body{
 .bubble ul,.bubble ol{margin:6px 0;padding-inline-start:21px}
 .bubble li{margin:3px 0}
 .bubble a{color:var(--tool)}
-.bubble strong{color:#fff;font-weight:600}
+.bubble strong{color:var(--strong);font-weight:600}
 .bubble hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 .bubble blockquote{margin:8px 0;padding:2px 0;padding-inline-start:11px;border-inline-start:3px solid var(--line);color:var(--fg2)}
 
 code{
-  background:#0b0f14;border:1px solid var(--line);border-radius:6px;
+  background:var(--code-bg);border:1px solid var(--line);border-radius:6px;
   padding:1.5px 5px;font-size:12.6px;font-family:"SF Mono",Menlo,Consolas,monospace;
 }
 pre{
-  background:#0b0f14;border:1px solid var(--line);border-radius:10px;
+  background:var(--code-bg);border:1px solid var(--line);border-radius:10px;
   padding:10px 12px;overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch;position:relative;
 }
 pre code{background:none;border:0;padding:0;font-size:12.3px;line-height:1.55}
@@ -99,7 +120,7 @@ th{background:var(--bg3);color:var(--fg);font-weight:600}
 td{color:var(--fg2)}
 
 /* 思考块 */
-.think{border:1px dashed var(--line);border-radius:10px;margin:8px 0;background:#12171e}
+.think{border:1px dashed var(--line);border-radius:10px;margin:8px 0;background:var(--think-bg)}
 .think summary{cursor:pointer;padding:6px 11px;font-size:12px;color:var(--fg3);list-style:none;display:flex;gap:6px;align-items:center;user-select:none}
 .think summary::-webkit-details-marker{display:none}
 .think summary::before{content:"▸";transition:transform .15s}
@@ -109,12 +130,12 @@ td{color:var(--fg2)}
   content-visibility:auto;                    /* 滚出去的正文不排版（Chromium 85+）*/
   contain-intrinsic-size:auto 240px}
 .think summary .think-size{color:var(--fg3);opacity:.7;font-size:11px;font-weight:400}
-.think .think-more{margin:0 12px 10px;background:#1b2635;border:1px solid #2a3a52;color:var(--fg2);
+.think .think-more{margin:0 12px 10px;background:var(--more-bg);border:1px solid var(--more-line);color:var(--fg2);
   border-radius:8px;padding:5px 10px;font-size:12px}
 .txt{min-width:0}
 
 /* 工具卡片 */
-.tool{border:1px solid #24344d;border-radius:10px;margin:8px 0;background:#111a26;overflow:hidden}
+.tool{border:1px solid var(--tool-line);border-radius:10px;margin:8px 0;background:var(--tool-bg);overflow:hidden}
 .tool-head{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px;cursor:pointer;user-select:none}
 .tool-name{color:var(--tool);font-weight:600;font-family:"SF Mono",Menlo,monospace;font-size:12px}
 .tool-arg{color:var(--fg3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"SF Mono",Menlo,monospace;font-size:11.5px}
@@ -122,16 +143,16 @@ td{color:var(--fg2)}
 .tool-state.run{color:var(--warn)} .tool-state.ok{color:var(--ok)} .tool-state.err{color:var(--err)}
 .tool-head .chev{color:var(--fg3);font-size:10px;transition:transform .15s}
 .tool.open .chev{transform:rotate(90deg)}
-.tool-body{display:none;border-top:1px solid #1d2836;padding:8px 10px;background:#0b0f14}
+.tool-body{display:none;border-top:1px solid var(--tool-sep);padding:8px 10px;background:var(--code-bg)}
 .tool.open .tool-body{display:block}
 .tool-body pre{margin:0;background:transparent;border:0;padding:0;max-height:340px;overflow:auto}
 .tool-body .lbl{font-size:10.5px;color:var(--fg3);margin:6px 0 3px;letter-spacing:.4px}
 
 /* 系统/命令结果 */
-.cmd-card{border:1px solid #332a4d;border-radius:10px;background:#16121f;padding:10px 12px}
+.cmd-card{border:1px solid var(--sys-line);border-radius:10px;background:var(--cmd-bg);padding:10px 12px}
 .cmd-name{color:var(--purple);font-weight:600;font-family:"SF Mono",Menlo,monospace;font-size:12.5px;margin-bottom:7px}
 
-.err-box{background:#2a1416;border:1px solid #6e2b2f;color:#ffb3ae;border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
+.err-box{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-fg);border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
 
 .cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;animation:blink 1s steps(2) infinite;border-radius:1px}
 @keyframes blink{50%{opacity:0}}
@@ -149,7 +170,7 @@ td{color:var(--fg2)}
 
 /* ── 输入区 ── */
 #composer{
-  border-top:1px solid var(--line);background:rgba(13,17,23,.96);
+  border-top:1px solid var(--line);background:var(--bar-bg2);
   backdrop-filter:blur(12px);padding:8px 10px calc(var(--safe-b) + 8px);
   position:sticky;bottom:0;z-index:20;
 }
@@ -197,7 +218,7 @@ td{color:var(--fg2)}
   position:fixed;left:10px;right:10px;bottom:calc(var(--safe-b) + 78px);
   max-height:46vh;background:var(--bg2);border:1px solid var(--line);
   border-radius:14px;z-index:60;display:flex;flex-direction:column;overflow:hidden;
-  box-shadow:0 -8px 30px rgba(0,0,0,.55);animation:fade .14s;
+  box-shadow:0 -8px 30px var(--shadow);animation:fade .14s;
 }
 #popup-head{
   padding:8px 12px;font-size:11px;color:var(--fg3);border-bottom:1px solid var(--line);
@@ -213,7 +234,7 @@ td{color:var(--fg2)}
 .pgroup{padding:7px 10px 3px;font-size:10.5px;color:var(--fg3);letter-spacing:.5px}
 
 /* ── 抽屉 ── */
-#drawer{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+#drawer{position:fixed;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(2px)}
 .drawer-panel{
     position:absolute;top:0;inset-inline-end:0;bottom:0;width:min(440px,92vw);
   background:var(--bg2);border-inline-start:1px solid var(--line);
@@ -250,7 +271,7 @@ td{color:var(--fg2)}
 .btn:active{opacity:.85}
 .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg2)}
 .btn.sm{padding:7px 12px;font-size:12.5px;width:auto;margin-top:0}
-.btn.danger{border-color:#6e2b2f;color:#ffb3ae}
+.btn.danger{border-color:var(--err-line);color:var(--err-fg)}
 
 .row-actions{display:flex;gap:8px;margin-bottom:10px;align-items:center}
 #status-box{
@@ -268,7 +289,7 @@ td{color:var(--fg2)}
   background:var(--bg);border:1px solid var(--line);border-radius:10px;
   padding:9px 11px;display:flex;flex-direction:column;gap:3px;
 }
-.item.active{border-color:var(--accent-dim);background:#1c1613}
+.item.active{border-color:var(--accent-dim);background:var(--active-bg)}
 .item .it-title{font-size:13.5px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .it-meta{font-size:10.5px;color:var(--fg3);display:flex;gap:8px;flex-wrap:wrap}
 .item .it-acts{display:flex;gap:6px;margin-top:4px}
@@ -286,11 +307,11 @@ td{color:var(--fg2)}
   padding:4px 9px;font-size:11.5px;color:var(--fg2);
   font-family:"SF Mono",Menlo,monospace;
 }
-.chip.hl{color:var(--purple);border-color:#332a4d}
+.chip.hl{color:var(--purple);border-color:var(--sys-line)}
 .pill{font-size:10px;background:var(--bg4);border-radius:9px;padding:1px 7px;color:var(--fg3);margin-inline-start:4px}
 
 /* 快捷面板 */
-#sheet{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+#sheet{position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:flex-end}
 .sheet-panel{
   width:100%;background:var(--bg2);border-top-left-radius:18px;border-top-right-radius:18px;
   padding:10px 12px calc(var(--safe-b) + 14px);animation:up .18s ease;
@@ -307,9 +328,9 @@ td{color:var(--fg2)}
   position:fixed;left:50%;bottom:calc(var(--safe-b) + 88px);transform:translateX(-50%);
   background:var(--bg3);border:1px solid var(--line);color:var(--fg);
   padding:9px 16px;border-radius:11px;font-size:13.5px;z-index:80;
-  box-shadow:0 6px 26px rgba(0,0,0,.5);animation:fade .18s;max-width:86vw;text-align:center;
+  box-shadow:0 6px 26px var(--shadow);animation:fade .18s;max-width:86vw;text-align:center;
 }
-#toast.err{border-color:#6e2b2f;color:#ffb3ae}
+#toast.err{border-color:var(--err-line);color:var(--err-fg)}
 
 /* ═══════════════════════════════════════════════════════════════════
    家具三件套：递进来 / 拿出去 / 看得见
@@ -362,7 +383,7 @@ td{color:var(--fg2)}
 
 /* 拖放提示 */
 #dropzone{
-  position:fixed;inset:0;z-index:85;background:rgba(13,17,23,.82);
+  position:fixed;inset:0;z-index:85;background:var(--veil);
   backdrop-filter:blur(3px);display:grid;place-items:center;pointer-events:none;
 }
 #dropzone>div{
@@ -416,7 +437,7 @@ td{color:var(--fg2)}
 .fs-prev-body video{max-width:100%;max-height:38vh;display:block;margin:0 auto;border-radius:8px}
 .fs-prev-body audio{width:100%}
 .fs-pre{
-  margin:0;background:#0b0f14;border:1px solid var(--line);border-radius:8px;
+  margin:0;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;
   padding:9px;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:34vh;
 }
 
@@ -477,7 +498,7 @@ td{color:var(--fg2)}
 .tool-peek .inline-img img{max-width:100%}
 
 /* ── 接口配置卡 ── */
-.prov-card{background:var(--bg2,#161b22);border:1px solid var(--line);border-radius:12px;padding:12px}
+.prov-card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px}
 .prov-card:empty{display:none}
 .prov-card .sub{font-size:12px;color:var(--fg2);margin:10px 0 6px;font-weight:600}
 .prov-card .sub:first-child{margin-top:0}
@@ -495,3 +516,7 @@ td{color:var(--fg2)}
    这里只补两处物理位置无法自动翻转的地方。 */
 html[dir="rtl"] #dropzone{right:12px;left:12px}
 html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{direction:ltr;text-align:left}
+
+/* 生成计时：生成中每秒跳，结束后定格为「用时」 */
+.who .run-timer{font-variant-numeric:tabular-nums}
+.who .run-timer.live{color:var(--accent)}
