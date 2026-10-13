@@ -86,6 +86,8 @@ public class GatewayService extends Service {
                 long gap = android.os.SystemClock.uptimeMillis() - t0 - 2000;
                 if (gap > 15_000) {
                     Log.w(TAG, "被冻结了约 " + gap / 1000 + " 秒");
+                    // 空闲时被冻无害，只记跑任务时的那种（标记文件由网关在任务开始/结束时增删）
+                    if (!new File(env.home, ".run-active").exists()) continue;
                     sp.edit().putLong("frozenAt", System.currentTimeMillis()).putLong("frozenMs", gap)
                         .putInt("frozenCount", sp.getInt("frozenCount", 0) + 1).apply();
                 }
@@ -99,6 +101,7 @@ public class GatewayService extends Service {
         if (i != null && ACTION_STOP.equals(i.getAction())) {
             stopping = true;
             killGateway();
+            ShizukuSetup.get(this).onExit();
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;

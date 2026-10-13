@@ -368,4 +368,9 @@ window.I18N_DICT.en = {
   "空闲": "idle",
   " · 排队 {n} 条": " · {n} queued",
   "工作区": "Workspace",
+  "正在压缩上下文…": "Compacting context…",
+  "上下文已压缩：{pre} → {post} tokens": "Context compacted: {pre} → {post} tokens",
+  "上下文已压缩": "Context compacted",
+  "点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出": "Stopped — {n} held, won't send automatically · tap ⚡ to send",
+  "发出这条": "Send this one",
 };

@@ -131,7 +131,7 @@ td{color:var(--fg2)}
 .cmd-card{border:1px solid #332a4d;border-radius:10px;background:#16121f;padding:10px 12px}
 .cmd-name{color:var(--purple);font-weight:600;font-family:"SF Mono",Menlo,monospace;font-size:12.5px;margin-bottom:7px}
 
-.err-box{background:#2a1416;border:1px solid #6e2b2f;color:#ffb3ae;border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap}
+.err-box{background:#2a1416;border:1px solid #6e2b2f;color:#ffb3ae;border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
 
 .cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;animation:blink 1s steps(2) infinite;border-radius:1px}
 @keyframes blink{50%{opacity:0}}
@@ -508,3 +508,4 @@ td{color:var(--fg2)}
    这里只补两处物理位置无法自动翻转的地方。 */
 html[dir="rtl"] #dropzone{right:12px;left:12px}
 html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{direction:ltr;text-align:left}
+.qitem.held .q-text{opacity:.55}

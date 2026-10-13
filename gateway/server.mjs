@@ -1200,6 +1200,11 @@ function capabilities() {
 // ── 会话进程状态 ──────────────────────────────────────────────────────
 const SESSIONS = new Map();   // 内存里记录本次运行见过的会话
 let activeRun = null;
+// 有任务在跑时落一个标记文件：cccodroid 的冻结检测只把「跑任务时被冻」算数 ——
+// 空闲时被厂商冻结器冻住无害，以前每次都记，设置页的提醒就老是弹
+const RUN_FLAG = path.join(CFG.home, ".run-active");
+const runFlag = (on) => { try { on ? fs.writeFileSync(RUN_FLAG, String(process.pid)) : fs.rmSync(RUN_FLAG, { force: true }); } catch {} };
+runFlag(false);
 
 // 最近真正跑过的会话。落盘保存 —— 网关重启（热替换/重开 App）后前端还能接回原来的对话。
 const LAST_SESSION_FILE = path.join(CFG.home, "ccapp-last-session.json");
@@ -1413,7 +1418,7 @@ const runInfo = (r) => r && {
 function snapshot() {
   return {
     run: runInfo(activeRun),
-    queue: QUEUE.map((q) => ({ id: q.id, cid: q.cid, text: q.message.slice(0, 500), sessionId: q.sessionId, follow: q.follow, at: q.at })),
+    queue: QUEUE.map((q) => ({ id: q.id, cid: q.cid, text: q.message.slice(0, 500), sessionId: q.sessionId, follow: q.follow, at: q.at, held: !!q.held })),
     provider: PROVIDER.id,
     model: SETTINGS.model || PROVIDER.defaultModel || null,
     lastSessionId: LAST_SESSION ? LAST_SESSION.id : null,
@@ -1454,6 +1459,7 @@ function endRun(run, fields = {}) {
   flushPend(run);
   run.ended = true;
   if (activeRun === run) activeRun = null;
+  if (!activeRun) runFlag(false);
   publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...fields });
   run.log = [];
   publishState();
@@ -1463,13 +1469,18 @@ function endRun(run, fields = {}) {
 function abortRun(run) {
   if (!run || run.ended) return false;
   run.aborted = true;
+  // 停止要和排队的消息严格隔开：此刻排着的一律挂起，不许这一轮一结束就自动发出去
+  // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
+  for (const q of QUEUE) q.held = true;
   if (run.child) killTree(run.child);
   return true;
 }
 
 function pump() {
-  if (activeRun || !QUEUE.length) return;
-  const item = QUEUE.shift();
+  if (activeRun) return;
+  const qi = QUEUE.findIndex((q) => !q.held);     // 停止时挂起的不自动发
+  if (qi < 0) return;
+  const item = QUEUE.splice(qi, 1)[0];
   startRun(item).catch((e) => {
     log(`run 异常: ${e.stack || e.message}`);
     if (activeRun && activeRun.id === item.id) {
@@ -1548,6 +1559,8 @@ function loginStart(flag) {
     L.done = true;
     L.ok = code === 0 && /success/i.test(L.out);
     log("登录：" + (L.ok ? "成功" : "结束（退出码 " + code + "）"));
+    // 浏览器授权完停在 claude 的托管成功页上，用户不知道怎么回来 —— 主动把界面叫回前台
+    if (L.ok) toFront("登录成功").then((r) => log("登录：回到前台 → " + (r.via || r.message || "?")));
   });
   log("登录：已启动 claude auth login " + flag);
   return new Promise((resolve) => {
@@ -1729,6 +1742,7 @@ async function startRun(item) {
     log: [], pend: null, pendTimer: null,
   };
   activeRun = run;                       // 同步占槽，中间不许有 await
+  runFlag(true);
   if (run.sessionId) RUN_SESSIONS.set(run.id, run.sessionId);
   const emit = (ev) => runEmit(run, ev);
   emit({ type: "run_start", text: run.text, sessionId: run.sessionId, follow: run.follow, cid: run.cid, startedAt: run.startedAt });
@@ -1824,7 +1838,7 @@ async function startRun(item) {
 
   let buf = "", stderr = "", lastResult = null;
   // 开了 --include-partial-messages，正文已经逐字发过，assistant 事件别重复整段
-  const flags = { gotDelta: false };
+  const flags = { gotDelta: false, isCmd };
   const onInit = (init) => {
     LAST_INIT = init;
     run.sessionId = init.session_id;
@@ -1882,7 +1896,7 @@ async function startRun(item) {
     run.inputOpen = false;
     if (run.pendingInject.length) {
       log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
-      QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false })));
+      QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));
       run.pendingInject = [];
     }
     const ms = Date.now() - t0;
@@ -1925,6 +1939,13 @@ async function startRun(item) {
     endRun(run, { failed: true });
   });
   child.on("close", finish);
+}
+
+/** 把应用界面叫回前台。cccodroid 由 App 进程做（Shizuku 或通知）；开发端直接 priv am start */
+function toFront(text) {
+  if (PREFIX) return privCall({ op: "to_front", text }, 8000);
+  return new Promise((ok) => execFile("priv", ["am start --activity-reorder-to-front -n li.dsh.claudecli/.MainActivity"],
+    { timeout: 8000, env: process.env }, (e) => ok(e ? { message: e.message.slice(0, 120) } : { via: "priv" })));
 }
 
 /** 问应用进程里的提权中转（Priv.java）。只在 cccodroid 布局下存在 */
@@ -2163,6 +2184,14 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
   switch (ev.type) {
     case "system":
       if (ev.subtype === "init") onInit(ev);
+      else if (ev.subtype === "status" && ev.status === "compacting") sse({ type: "compacting" });
+      else if (ev.subtype === "compact_boundary") {
+        // 压缩（手动 /compact 或自动）完成。以前不认这条：界面显示「无输出」，上下文条要等下一轮才变
+        const m = ev.compact_metadata || ev.compactMetadata || {};
+        const pre = m.pre_tokens ?? m.preTokens, post = m.post_tokens ?? m.postTokens;
+        if (flags && post != null) flags.contextTokens = post;
+        sse({ type: "compacted", trigger: m.trigger || "", pre: pre ?? null, post: post ?? null });
+      }
       break;
 
     case "stream_event": {
@@ -2190,6 +2219,9 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
       // 逐字增量已发过就别重复整段文本
       const content = ev.message?.content || [];
       for (const c of content) {
+        // 本地命令（/context /cost /compact …）的正文 claude 会发两遍：一条合成的 assistant 消息 + result。
+        // 界面拿 result 画命令卡片，这里再发就重复了（以前 /context 显示两次）
+        if (c.type === "text" && flags?.isCmd && ev.message?.model === "<synthetic>") continue;
         if (c.type === "text" && c.text) {
           // 逐字增量发过就不重复整段；没发过（增量没到）才补完整文本
           if (!flags || !flags.gotDelta) sse({ type: "assistant_text", text: c.text });
@@ -2702,6 +2734,7 @@ const server = http.createServer(async (req, res) => {
       else if (act === "remove") QUEUE.splice(i, 1);
       else if (act === "promote") {          // ⚡ 插话：塞进正在跑的这一轮（不打断）；塞不进就挪到队首
         const it = QUEUE.splice(i, 1)[0];
+        it.held = false;                      // 挂起的消息靠这个放行
         if (!(activeRun && tryInject(activeRun, it))) QUEUE.unshift(it);
       } else if (act === "edit") {
         const t = String(b.text || "").trim();

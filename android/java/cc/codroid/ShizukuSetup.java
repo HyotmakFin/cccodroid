@@ -72,7 +72,18 @@ final class ShizukuSetup {
         NotificationChannel ch = new NotificationChannel(CH, "Shizuku 激活", NotificationManager.IMPORTANCE_HIGH);
         ch.setDescription("无线调试配对码输入框、激活结果");
         c.getSystemService(NotificationManager.class).createNotificationChannel(ch);
+        // 进程刚起来不可能有配对线程在跑：上个进程（被杀 / 崩了）留下的「配对中…」这类进度通知是孤儿，
+        // 它是常驻的、用户划不掉，必须这里收掉。带输入框的那种留着 —— 它的广播会把流程重新拉起来
+        try {
+            for (android.service.notification.StatusBarNotification n : c.getSystemService(NotificationManager.class).getActiveNotifications())
+                if (n.getId() == NOTE && n.getNotification().extras.getBoolean(EXTRA_PROGRESS)) cancelNote();
+        } catch (Exception ignored) {}
     }
+
+    private static final String EXTRA_PROGRESS = "cc.codroid.progress";
+
+    /** 用户退出应用：收起配对 / 激活通知，不然常驻通知会一直挂着 */
+    void onExit() { cancelNote(); }
 
     SharedPreferences prefs() { return ctx.getSharedPreferences("shz", Context.MODE_PRIVATE); }
     boolean hasWss() { return ctx.checkSelfPermission(WSS) == PackageManager.PERMISSION_GRANTED; }
@@ -282,9 +293,10 @@ final class ShizukuSetup {
                 }
                 pairNote("✓ 配对成功，正在启动 Shizuku…", false);
                 Thread.sleep(1500);
-                if (!connectAndStart()) set("error", "已配对，但连不上无线调试：确认「无线调试」开关开着，再点「激活」");
+                if (!connectAndStart()) failNote("已配对，但连不上无线调试：确认「无线调试」开关开着，再点「激活」");
             } catch (Exception e) {
-                set("error", e.getMessage());
+                // 别只改状态：通知还停在常驻的「配对中…」，用户划不掉
+                failNote("配对出错：" + e.getMessage());
             } finally { idle(); fin.run(); }
         }, "shz-pair").start();
     }
@@ -567,6 +579,7 @@ final class ShizukuSetup {
             .setOnlyAlertOnce(false)
             .setCategory(Notification.CATEGORY_CALL)
             .setOngoing(true);
+        if (!withInput) { Bundle x = new Bundle(); x.putBoolean(EXTRA_PROGRESS, true); b.addExtras(x); }
         if (withInput) {
             RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel("6 位配对码（必要时空格后加端口）").build();
             int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);

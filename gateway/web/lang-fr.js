@@ -347,4 +347,9 @@ window.I18N_DICT["fr"] = {
   "空闲": "inactif",
   " · 排队 {n} 条": " · {n} en attente",
   "工作区": "Espace de travail",
+  "正在压缩上下文…": "Compactage du contexte…",
+  "上下文已压缩：{pre} → {post} tokens": "Contexte compacté : {pre} → {post} jetons",
+  "上下文已压缩": "Contexte compacté",
+  "点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出": "Arrêté — {n} en attente, pas d'envoi automatique · touchez ⚡ pour envoyer",
+  "发出这条": "Envoyer celui-ci",
 };

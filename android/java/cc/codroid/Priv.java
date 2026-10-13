@@ -135,6 +135,27 @@ final class Priv {
         return (java.lang.Process) m.invoke(null, argv, envp, dir);
     }
 
+    /**
+     * 把界面叫回前台（官方账户登录在浏览器里授权完，回调落在 claude 的托管页上，用户不知道该回哪）。
+     * 安卓 10 起后台不许直接起 Activity：有 Shizuku 就以 shell 身份 am start（不受这条限制）；
+     * 没有就弹一条高优先级通知，点一下回来。返回走的是哪条路
+     */
+    static String toFront(Context ctx, String text) {
+        String cmp = ctx.getPackageName() + "/" + MainActivity.class.getName();
+        if (running() && granted() && run("am start --activity-reorder-to-front -n " + cmp).isEmpty()) return "shizuku";
+        android.app.NotificationManager nm = ctx.getSystemService(android.app.NotificationManager.class);
+        nm.createNotificationChannel(new android.app.NotificationChannel("front", "回到应用", android.app.NotificationManager.IMPORTANCE_HIGH));
+        android.app.PendingIntent pi = android.app.PendingIntent.getActivity(ctx, 41,
+            new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+            android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+        nm.notify(41, new android.app.Notification.Builder(ctx, "front")
+            .setSmallIcon(android.R.drawable.ic_secure)
+            .setContentTitle(text == null || text.isEmpty() ? "cccodroid" : text)
+            .setContentText("点此回到 cccodroid")
+            .setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(120_000).build());
+        return "notification";
+    }
+
     /** 跑一条命令拿全部输出（内部用：保活设置） */
     static String run(String cmd) {
         try {
@@ -265,6 +286,7 @@ final class Priv {
                     break;
                 }
                 case "keepalive": resp = keepAlive(req.optBoolean("enable", true)); break;
+                case "to_front": resp = new JSONObject().put("ok", true).put("via", toFront(ctx, req.optString("text"))); break;
                 case "freeze_ack": ctx.getSharedPreferences("bg", Context.MODE_PRIVATE).edit().clear().apply(); resp = status(); break;
                 case "open_app_settings": {      // 自启动、悬浮窗之类的开关都在应用详情页里
                     ctx.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

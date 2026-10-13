@@ -133,7 +133,8 @@ public class MainActivity extends Activity {
         if (booted) handle(i); else pending = i;
     }
 
-    @Override protected void onResume() { super.onResume(); visible = true; }
+    @Override protected void onResume() { super.onResume(); visible = true;
+        getSystemService(android.app.NotificationManager.class).cancel(41); }   // Priv.toFront 的「点此回来」
     @Override protected void onPause() { visible = false; super.onPause(); }
 
     /** 通知或设置页递过来的动作 */

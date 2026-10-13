@@ -572,7 +572,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         bubble.insertAdjacentHTML("beforeend", `<div class="err-box">${esc(msg)}</div>`);
         scrollDown();
       },
-      note(t) { undot(); last = null; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); },
+      note(t, solid) { undot(); last = null; if (solid) any = true; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); },
       finish(aborted) {
         if (ended) return;
         ended = true;
@@ -834,6 +834,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "thinking":       av.thinking(ev.text); break;
       case "tool_use":       av.tool(ev.id, ev.name, ev.input); break;
       case "tool_result":    toolResult(ev.id, ev.ok, ev.text); scrollDown(); break;
+      case "compacting":     av.note(t("正在压缩上下文…")); scrollDown(); break;
+      case "compacted":
+        av.note(ev.pre != null && ev.post != null
+          ? t("上下文已压缩：{pre} → {post} tokens", { pre: ev.pre.toLocaleString(), post: ev.post.toLocaleString() })
+          : t("上下文已压缩"), true);
+        if (ev.post != null) updateCtx(ev.post, state.ctxTotal);
+        scrollDown(); break;
       case "error":          av.error(ev.message + (ev.detail ? "\n\n" + ev.detail : "")); break;
     }
   }
@@ -927,12 +934,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     queueStrip.classList.toggle("hidden", !q.length);
     queueStrip.innerHTML = q.length ? `
       <div class="q-head">
-        <span>${t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })}</span>
+        <span>${q.some((it) => it.held)
+          ? t("点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
+          : t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })}</span>
         <button class="q-clear">${t("全部清除")}</button>
       </div>
       ${q.map((it) => `
-        <div class="qitem" data-id="${esc(it.id)}">
-          <button class="q-now" title="${t("插话：递进正在跑的这一轮，不打断")}">⚡</button>
+        <div class="qitem${it.held ? " held" : ""}" data-id="${esc(it.id)}">
+          <button class="q-now" title="${it.held ? t("发出这条") : t("插话：递进正在跑的这一轮，不打断")}">⚡</button>
           <span class="q-text">${esc(it.text)}</span>
           <button class="q-x" title="${t("撤销这条")}">✕</button>
         </div>`).join("")}` : "";
