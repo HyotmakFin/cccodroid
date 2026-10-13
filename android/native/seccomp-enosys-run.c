@@ -31,7 +31,14 @@
  *   seccomp-enosys-run <程序> [参数...]
  *   seccomp-enosys-run -v <程序> [参数...]     # 把每次拦截打到 stderr（排查用）
  *
- * 退出码：目标程序的退出码原样传递。
+ * 退出码：目标程序的退出码原样传递；被信号杀死时为 128+信号号。
+ *
+ * 已知限制：
+ *   - 只接管目标的线程（TRACECLONE）。它 fork/exec 出来的子进程不在监督下（Go 的 os/exec 走 vfork 式 clone），
+ *     那些子进程要是也是静态二进制、也撞 seccomp，得自己再套一层。
+ *   - 别的程序向整个进程组发的信号（kill -INT -pgid）目标会收到两次：一次直接收，一次经监督器转发。
+ *     监督器分不出"只发给我"和"发给整组"。终端 Ctrl-C 由内核发（SI_KERNEL），不重复。
+ *   - 发给目标的 SIGSTOP 不会让它真停住（无 PTRACE_SEIZE/LISTEN，组停会被监督循环放行）。
  */
 
 #include <errno.h>
@@ -47,8 +54,8 @@
 #ifndef __WALL
 #define __WALL 0x40000000
 #endif
-#ifndef SI_TKILL
-#define SI_TKILL (-6)
+#ifndef SI_KERNEL
+#define SI_KERNEL 0x80
 #endif
 #ifndef PTRACE_O_TRACECLONE
 #define PTRACE_O_TRACECLONE 0x00000008
@@ -58,6 +65,9 @@
 #endif
 #ifndef PTRACE_EVENT_CLONE
 #define PTRACE_EVENT_CLONE 3
+#endif
+#ifndef PTRACE_O_TRACEEXEC
+#define PTRACE_O_TRACEEXEC 0x00000010
 #endif
 #ifndef PTRACE_GETREGSET
 #define PTRACE_GETREGSET 0x4204
@@ -82,6 +92,41 @@ struct arm64_regs {
 };
 
 static int verbose = 0;
+static volatile pid_t g_leader = 0;
+
+/* 已经接管过的线程号。PTRACE_O_TRACECLONE 带进来的新线程，内核保证它报上来的第一次停就是那次
+   初始 SIGSTOP —— 这次停的 siginfo 是 si_code=SI_USER、si_pid=0（实测，Android 15 / 5.10），
+   跟外面发来的 SIGSTOP 从 siginfo 上分不出来，只能靠「这个线程号是不是头一回见」认。
+   不吞掉的话，每建一个线程都会让整个进程组停一次再被逐个放行（8 个线程实测 34 次停顿）。
+   线程退出时移除：线程号会被复用。 */
+static pid_t *known = NULL;
+static size_t nknown = 0, capknown = 0;
+static int is_known(pid_t p) {
+    for (size_t i = 0; i < nknown; i++) if (known[i] == p) return 1;
+    return 0;
+}
+static void add_known(pid_t p) {
+    if (nknown == capknown) {
+        size_t n = capknown ? capknown * 2 : 64;
+        pid_t *k = realloc(known, n * sizeof *k);
+        if (!k) return;                 /* 记不下就当它一直是"新的"：最坏退回原来的行为 */
+        known = k; capknown = n;
+    }
+    known[nknown++] = p;
+}
+static void del_known(pid_t p) {
+    for (size_t i = 0; i < nknown; i++) if (known[i] == p) { known[i] = known[--nknown]; return; }
+}
+
+/* 发给监督器的终止类信号转给目标。
+   以前是直接忽略，靠"目标在同一进程组、会自己收到"——但只发给监督器的就丢了：
+   `timeout 10 enosys-run gh …` 的 timeout 只给它直接拉起的进程（就是监督器）发 SIGTERM，结果永不超时。
+   终端 Ctrl-C 之类内核发给整个前台进程组的（SI_KERNEL），目标已经收到，不再重复转发。 */
+static void forward(int sig, siginfo_t *si, void *uc) {
+    (void)uc;
+    if (si && si->si_code == SI_KERNEL) return;
+    if (g_leader > 0) kill(g_leader, sig);
+}
 
 static long get_syscall_nr(pid_t pid, siginfo_t *si) {
     (void)pid;
@@ -124,10 +169,12 @@ static int supervise(pid_t leader) {
     while ((pid = waitpid(-1, &status, __WALL)) > 0) {
         if (WIFEXITED(status)) {
             if (pid == leader) exit_code = WEXITSTATUS(status);
+            del_known(pid);
             continue;
         }
         if (WIFSIGNALED(status)) {
             if (pid == leader) exit_code = 128 + WTERMSIG(status);
+            del_known(pid);
             continue;
         }
         if (!WIFSTOPPED(status)) continue;
@@ -135,8 +182,13 @@ static int supervise(pid_t leader) {
         int sig = WSTOPSIG(status);
         int deliver = sig;
 
-        if (sig == SIGTRAP) {
-            /* exec 后的初始停、以及 clone/fork 事件停 —— 都不该往目标程序里投信号 */
+        if (!is_known(pid)) {
+            /* 新线程第一次报到：就是那次初始 SIGSTOP，放行不投递 */
+            add_known(pid);
+            if (sig == SIGSTOP) deliver = 0;
+        } else if (sig == SIGTRAP && (status >> 16) != 0) {
+            /* ptrace 事件停（clone / exec）：不是信号，别投进目标程序。
+               开了 TRACEEXEC 之后 exec 也走这里，所以剩下的裸 SIGTRAP 就是真信号，照常投递 */
             deliver = 0;
         } else if (sig == SIGSYS) {
             siginfo_t si;
@@ -151,16 +203,6 @@ static int supervise(pid_t leader) {
                     deliver = 0;        /* 已经"返回"了 ENOSYS，别再投信号 */
                 }
                 /* 设置寄存器失败就按原样投递：退化成不介入，比吞掉信号安全 */
-            }
-        } else if (sig == SIGSTOP) {
-            siginfo_t si;
-            memset(&si, 0, sizeof si);
-            if (ptrace(PTRACE_GETSIGINFO, pid, 0, &si) == 0 &&
-                si.si_code == SI_TKILL && si.si_pid == pid) {
-                /* 新线程被 PTRACE_O_TRACECLONE 带进来的自动停止：
-                   是内核产生的，不是外面发的 SIGSTOP，直接放行。
-                   靠 si_pid == 自己 区分，这样用户真的发 SIGSTOP 时不会被吞掉。 */
-                deliver = 0;
             }
         }
 
@@ -233,16 +275,23 @@ int main(int argc, char **argv) {
         return WIFEXITED(status) ? WEXITSTATUS(status) : 127;
     }
 
-    long opts = PTRACE_O_TRACECLONE | PTRACE_O_EXITKILL;
+    add_known(pid);
+    long opts = PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL;
     if (ptrace(PTRACE_SETOPTIONS, pid, 0, (void *)opts) != 0) {
         perror("ptrace(PTRACE_SETOPTIONS)");
         return 127;
     }
-    /* 自己别被终端的 Ctrl-C 打死：要活着把信号转发给目标、并带回退出码。
-       （目标在同一进程组，会直接从内核收到同一个信号，经跟踪转发。） */
-    signal(SIGINT, SIG_IGN);
-    signal(SIGTERM, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
+    /* 自己不能被这些信号打死（要活着带回退出码），收到就转给目标，见 forward() */
+    g_leader = pid;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = forward;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
+    sigaction(SIGQUIT, &sa, NULL);
 
     if (ptrace(PTRACE_CONT, pid, 0, 0) != 0) {
         perror("ptrace(PTRACE_CONT)");
