@@ -35,6 +35,10 @@ echo "  工具包来源：$(tr "\n" " " < "$A/assets/devkit-sources.txt")"
 mkdir -p "$A/assets/app/lib"
 cc4 -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
   -o "$A/assets/app/lib/seccomp-enosys.so" "$A/native/seccomp-enosys.c"
+# 同一条思路的「从进程外面」版本：静态二进制挂不上 --preload，只好用 ptrace 做同一件事。
+# 这个是**可执行文件**不是库，所以不用 -nostdlib（它自己就是被启动的那个进程，可以正常链 libc）。
+# 入口包装在 assets/bin/enosys-run
+cc4 -O2 -o "$A/assets/app/lib/seccomp-enosys-run" "$A/native/seccomp-enosys-run.c"
 TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"

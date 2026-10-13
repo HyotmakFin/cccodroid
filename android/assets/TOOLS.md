@@ -28,3 +28,17 @@
 ## 出问题时
 
 工具表现异常先跑 `cccodroid-selftest -q`（只列失败项），再据此判断，别凭印象认定"安卓上不行"。
+
+**如果第三方程序只有一行 `SIGSYS: bad system call` 就死**，套一层 `enosys-run`：
+
+```sh
+enosys-run <程序> [参数...]
+enosys-run -v <程序> ...        # 打印每次拦截，确认是不是这个原因
+```
+
+原因是安卓 seccomp 拦了白名单外的系统调用 —— 动态链接的程序由 `seccomp-enosys.so`
+兜住，**静态二进制（Go CLI 居多：gh / lazygit / kubectl / terraform…）挂不上 `--preload`**，
+所以要用这个命令从外面做同样的事（ptrace，**不改动目标程序**）。
+
+判断特征：**同一个程序里有的子命令崩、有的正常** —— 比如 `gh api` 一直好使而
+`gh pr create` 必崩（前者不查找可执行文件，后者要找 `git`）。别据此以为"只是个别命令有 bug"。
