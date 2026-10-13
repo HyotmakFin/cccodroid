@@ -480,9 +480,14 @@ if (cmd === "build") {
   const fr = ["#!" + R.to + "files/usr/bin/sh", "# devkit 首次运行：各包 postinst 里除 alternatives 外的步骤", "cd \"$HOME\" 2>/dev/null"];
   for (const f of firstRun) {
     const p = `usr/libexec/devkit/postinst/${f.pkg}`;
-    tw.add({ name: p, type: "0", mode: 0o755, mtime: 0, data: Buffer.from(f.script) });
+    // py3compile 要靠 termux-setup-package-manager + dpkg -L 列包内文件，我们两样都没带 ——
+    // 原样跑会刷一屏 "cannot determine system package manager"。换成末尾统一 compileall。
+    const script = f.script.replace(/^.*\/py3compile" -p .*$/gm, ": # py3compile → 由 first-run.sh 末尾的 compileall 统一做");
+    tw.add({ name: p, type: "0", mode: 0o755, mtime: 0, data: Buffer.from(script) });
     fr.push(`echo "▸ ${f.pkg}"; "${R.to}files/${p}" configure || echo "  （${f.pkg} 的 postinst 失败，rc=$?）"`);
   }
+  const py = R.to + "files/usr/bin/python3";
+  fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
   tw.add({ name: "usr/libexec/devkit/first-run.sh", type: "0", mode: 0o755, mtime: 0, data: Buffer.from(fr.join("\n") + "\n") });
   console.log(`  alternatives：${[...alts.values()].map((a) => a.group + "←" + a.pkg).join(" ")}`);
   console.log(`  首次运行脚本：${firstRun.map((f) => f.pkg).join(" ") || "无"}`);
