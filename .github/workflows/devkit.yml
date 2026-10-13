@@ -35,6 +35,8 @@ jobs:
           SNAP=$(node -p "require('./out/devkit.lock.json').snapshot")
           N=$(node -p "require('./out/devkit.lock.json').packages.length")
           cat > notes.md <<NOTES
+          **简体中文** · [English](#english)
+
           cccodroid 开发工具包（$N 个组件），取自 Termux 官方仓库，仅做等长前缀改写（com.termux → cc.codroid）。
 
           - 仓库快照：$SNAP
@@ -43,6 +45,19 @@ jobs:
 
           **源码**：各组件按其自身许可证分发（含 GPL 等）。构建配方见 [termux-packages](https://github.com/termux/termux-packages)，
           上游源码地址见各配方的 \`build.sh\`；需要本版本对应源码副本的，请在 Issues 中提出。
+
+          ---
+
+          ## English
+
+          cccodroid toolchain ($N components) taken from the official Termux repositories, with only a same-length prefix relocation (com.termux → cc.codroid).
+
+          - Repository snapshot: $SNAP
+          - \`devkit-cc.codroid.tar.gz\` sha256: \`$GZ_SHA\`
+          - Version, hash and build recipe of every component: \`devkit.lock.json\` / \`SBOM.tsv\`
+
+          **Source**: each component is distributed under its own license (including GPL). Build recipes are in [termux-packages](https://github.com/termux/termux-packages),
+          and each recipe's \`build.sh\` names the upstream source; if you need a copy of the source matching this release, ask in Issues.
           NOTES
           gh release create "$TAG" --title "$TAG" --notes-file notes.md \
             out/devkit-cc.codroid.tar.gz out/devkit.lock.json out/SBOM.tsv
