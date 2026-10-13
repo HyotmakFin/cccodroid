@@ -2232,7 +2232,7 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
 // 而 /api/chat 等于本机任意命令执行，经 priv 还能拿到 Shizuku 的 shell 身份。所以：
 //   1. Host 必须是 127.0.0.1:端口 / localhost:端口 —— 挡 DNS 重绑定；
 //   2. 带 Origin 的请求必须来自本页 —— 挡网页跨站发请求；
-//   3. /api/* 必须带令牌：X-CC-Token 头、cc_t Cookie，或首页地址里的 ?t=（宿主 WebView 首次加载用）。
+//   3. /api/* 必须带令牌：X-CC-Token 头，或 cc_t_<端口> Cookie（宿主 WebView 首次加载首页时带 ?t=令牌 换来）。
 //      令牌在应用私有目录里（0600），别的应用读不到；首页带对 ?t= 时种一个 HttpOnly + SameSite=Strict 的 Cookie，
 //      之后界面的 fetch / EventSource / <img src> 都自动带上，前端不用改。
 //   令牌跨网关重启保持不变（WebView 不会因为网关重启掉线）；删掉文件即轮换。
@@ -2249,6 +2249,9 @@ const TOKEN = (() => {
   fs.renameSync(tmp, TOKEN_FILE);
   return t;
 })();
+// Cookie 不按端口隔离：同一个浏览器里开着两个网关（开发端 8790 + cccodroid 8791）时，同名 Cookie 会互相覆盖，
+// 所以名字里带上端口
+const COOKIE = `cc_t_${CFG.port}`;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`]);
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
 
@@ -2257,9 +2260,10 @@ function tokenOk(t) {
   return crypto.timingSafeEqual(Buffer.from(t), Buffer.from(TOKEN));
 }
 function cookieToken(req) {
-  const m = /(?:^|;\s*)cc_t=([0-9a-f]{64})(?:;|$)/.exec(req.headers.cookie || "");
+  const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([0-9a-f]{64})(?:;|$)`).exec(req.headers.cookie || "");
   return m ? m[1] : "";
 }
+const denyLog = { at: 0, n: 0 };
 /** 返回 null 表示放行；否则返回拒绝的状态码 */
 function denyReason(req, u) {
   if (!ALLOWED_HOSTS.has(String(req.headers.host || "").toLowerCase())) return 421;
@@ -2277,13 +2281,19 @@ const server = http.createServer(async (req, res) => {
 
   const deny = denyReason(req, u);
   if (deny) {
-    log(`拒绝请求 ${req.method} ${p} → ${deny}（host=${req.headers.host || "-"} origin=${req.headers.origin || "-"}）`);
+    // 限流：别的应用能连上来狂刷，别让它把 gateway.log 撑爆
+    const now = Date.now();
+    if (now - denyLog.at > 10000) {
+      log(`拒绝请求 ${req.method} ${p} → ${deny}（host=${req.headers.host || "-"} origin=${req.headers.origin || "-"}）` +
+        (denyLog.n ? `；此前 10 秒内另有 ${denyLog.n} 次被拒` : ""));
+      denyLog.at = now; denyLog.n = 0;
+    } else denyLog.n++;
     req.resume();
     return sendJson(res, deny, { error: deny === 421 ? "bad host" : "forbidden" });
   }
   // 宿主 WebView 首次加载首页时带 ?t=令牌：种 Cookie，之后同源请求自动带上
   if (req.method === "GET" && (p === "/" || p === "/index.html") && tokenOk(u.searchParams.get("t") || "")) {
-    res.setHeader("Set-Cookie", `cc_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict`);
+    res.setHeader("Set-Cookie", `${COOKIE}=${TOKEN}; Path=/; HttpOnly; SameSite=Strict`);
   }
 
   try {

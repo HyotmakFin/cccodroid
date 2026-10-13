@@ -18,6 +18,9 @@
 #define SYS_SECCOMP_CODE 1
 #define ENOSYS_ 38
 #define NR_rt_sigaction 134
+#define NR_tgkill 131
+#define NR_getpid 172
+#define NR_gettid 178
 
 struct k_sigaction {
     void (*handler)(int, siginfo_t *, void *);
@@ -39,9 +42,12 @@ static long raw4(long n, long a, long b, long c, long d) {
 static void on_sigsys(int sig, siginfo_t *si, void *ctx) {
     (void)sig;
     if (si->si_code != SYS_SECCOMP_CODE) {
-        /* 不是 seccomp 引起的：恢复默认行为，返回后重新触发即按默认处理 */
+        /* 不是 seccomp 引起的（比如别人 kill -SYS）：恢复默认行为再给自己补发一次。
+         * 光恢复默认就返回会把这个信号吞掉 —— 外来信号不像 seccomp 陷阱那样会"重新触发"。
+         * SA_NODEFER 下处理函数里 SIGSYS 没被屏蔽，补发的这一次立刻按默认处理（终止 + core）。 */
         struct k_sigaction dfl = { 0 };
         raw4(NR_rt_sigaction, SIGSYS, (long)&dfl, 0, 8);
+        raw4(NR_tgkill, raw4(NR_getpid, 0, 0, 0, 0), raw4(NR_gettid, 0, 0, 0, 0), SIGSYS, 0);
         return;
     }
     ((ucontext_t *)ctx)->uc_mcontext.regs[0] = (unsigned long)-ENOSYS_;
