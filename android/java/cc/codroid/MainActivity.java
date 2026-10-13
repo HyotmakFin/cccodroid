@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     private TextView log;
     private ScrollView logScroll;
     private ProgressBar bar;
+    private TextView stat;
     private WebView web;
     private ValueCallback<Uri[]> fileCb;
 
@@ -77,7 +78,7 @@ public class MainActivity extends Activity {
             try {
                 Installer ins = new Installer(env, new Installer.Progress() {
                     public void step(String m) { say(m); }
-                    public void bytes(long d, long t) { progress(t > 0 ? (int) (d * 100 / t) : -1); }
+                    public void bytes(long d, long t) { progress(d, t); }
                 });
                 if (!env.devkitReady()) {
                     String src = null;
@@ -207,6 +208,11 @@ public class MainActivity extends Activity {
         bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setIndeterminate(true);
         col.addView(bar, new LinearLayout.LayoutParams(-1, dp(12)));
+        stat = new TextView(this);
+        stat.setTextColor(Color.parseColor("#8b949e"));
+        stat.setTextSize(12);
+        stat.setTypeface(android.graphics.Typeface.MONOSPACE);
+        col.addView(stat);
         log = new TextView(this);
         log.setTextColor(Color.parseColor("#c9d1d9"));
         log.setTextSize(12);
@@ -226,13 +232,34 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void progress(int pct) {
+    // 下载 / 解包进度：已完成 / 总量 · 百分比 · 速度 · 剩余时间。几百 MB 走十分钟，光一根条看不出是不是卡住了
+    private long lastD = -1, lastT;
+    private double speed;                     // 字节/秒，指数平滑
+    private void progress(long d, long t) {
+        long now = System.currentTimeMillis();
+        if (d < lastD || lastD < 0) { speed = 0; lastD = d; lastT = now; }      // 新的一段（换了阶段）
+        else if (now - lastT >= 1000) {
+            double v = (d - lastD) * 1000.0 / (now - lastT);
+            speed = speed == 0 ? v : speed * 0.7 + v * 0.3;
+            lastD = d; lastT = now;
+        }
+        String txt;
+        if (t <= 0) txt = mb(d);
+        else {
+            txt = mb(d) + " / " + mb(t) + " · " + (d * 100 / t) + "%";
+            if (speed > 0 && d < t) {
+                long eta = (long) ((t - d) / speed);
+                txt += " · " + mb((long) speed) + "/s · 剩约 " + (eta >= 60 ? (eta / 60) + " 分" : eta + " 秒");
+            }
+        }
+        final String line = txt;
         ui.post(() -> {
-            if (pct < 0) { bar.setIndeterminate(true); return; }
-            bar.setIndeterminate(false);
-            bar.setProgress(pct);
+            if (t <= 0) bar.setIndeterminate(true);
+            else { bar.setIndeterminate(false); bar.setProgress((int) (d * 100 / t)); }
+            stat.setText(line);
         });
     }
+    private static String mb(long b) { return String.format(java.util.Locale.ROOT, b >= 100 << 20 ? "%.0f MB" : "%.1f MB", b / 1048576.0); }
 
     @SuppressLint("SetJavaScriptEnabled")
     private void showWeb() {
