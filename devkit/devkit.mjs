@@ -478,6 +478,8 @@ function rewriteZip(buf, swap) {
     pos += 30 + lnlen + lelen + data.length;
   }
 
+  // 一处没命中就原档返回：重建会丢掉数据描述符等细节，签名过的 jar / 校验和也就不再逐字节一致
+  if (!hits) return [buf, 0];
   const cdBuf = Buffer.concat(cens);
   const eocdOut = Buffer.from(buf.subarray(eocd, eocd + 22));
   eocdOut.writeUInt32LE(cdBuf.length, 12);
