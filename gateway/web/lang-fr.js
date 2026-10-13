@@ -352,4 +352,8 @@ window.I18N_DICT["fr"] = {
   "上下文已压缩": "Contexte compacté",
   "点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出": "Arrêté — {n} en attente, pas d'envoi automatique · touchez ⚡ pour envoyer",
   "发出这条": "Envoyer celui-ci",
+  "排队中": "En file",
+  "已暂停": "En pause",
+  "立即发送": "Envoyer maintenant",
+  "撤销": "Annuler",
 };

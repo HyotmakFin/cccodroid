@@ -373,4 +373,8 @@ window.I18N_DICT.en = {
   "上下文已压缩": "Context compacted",
   "点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出": "Stopped — {n} held, won't send automatically · tap ⚡ to send",
   "发出这条": "Send this one",
+  "排队中": "Queued",
+  "已暂停": "Paused",
+  "立即发送": "Send now",
+  "撤销": "Cancel",
 };

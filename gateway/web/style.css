@@ -447,36 +447,23 @@ td{color:var(--fg2)}
   .inline-img img{max-height:460px}
 }
 
-/* ── 待发队列：忙碌时排队的下一条（回车不打断，排在这里）── */
-#queue-strip{
-  max-width:900px;margin:0 auto 6px;padding:6px 8px;
-  background:var(--bg2);border:1px solid var(--line);border-radius:10px;
-  display:flex;flex-direction:column;gap:5px;
-}
-#queue-strip.hidden{display:none !important}
+/* ── 待发队列：排在对话末尾，样子像一条还没送达的用户消息（照 Claude Desktop）── */
+#queued{display:flex;flex-direction:column;gap:2px}
+#queued.hidden{display:none !important}
 .q-head{
   display:flex;align-items:center;justify-content:space-between;gap:8px;
-  font-size:10.5px;color:var(--fg3);
+  font-size:11px;color:var(--fg3);margin:8px 0 2px;
 }
-.q-clear{
-  background:none;border:none;color:var(--fg3);font-size:10.5px;padding:2px 4px;
+.q-clear,.q-acts button{
+  background:none;border:none;color:var(--fg3);font-size:11.5px;padding:2px 6px;
   text-decoration:underline;text-underline-offset:2px;
 }
-.qitem{display:flex;align-items:center;gap:7px}
-.q-now{
-  flex:0 0 auto;width:20px;height:20px;border-radius:50%;padding:0;
-  background:var(--bg4);border:1px solid var(--line);color:var(--accent);
-  font-size:11px;line-height:1;display:grid;place-items:center;
-}
-.q-text{
-  flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--fg2);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.q-x{
-  flex:0 0 auto;width:18px;height:18px;border-radius:50%;padding:0;
-  background:var(--bg4);border:1px solid var(--line);color:var(--fg3);
-  font-size:10px;line-height:1;display:grid;place-items:center;
-}
+.qitem .bubble{opacity:.7;border-style:dashed;white-space:pre-wrap;max-height:30vh;overflow:auto}
+.qitem.held .bubble{opacity:.45}
+.q-tag{color:var(--accent)}
+.qitem.held .q-tag{color:var(--fg3)}
+.q-acts{display:flex;justify-content:flex-end;gap:4px;margin-top:2px}
+.q-acts .q-now{color:var(--accent)}
 .wait-note{color:var(--fg3);font-size:12px;margin:4px 0 0}
 
 /* ── v3：历史翻页 / 提示条 ── */
@@ -508,4 +495,3 @@ td{color:var(--fg2)}
    这里只补两处物理位置无法自动翻转的地方。 */
 html[dir="rtl"] #dropzone{right:12px;left:12px}
 html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{direction:ltr;text-align:left}
-.qitem.held .q-text{opacity:.55}

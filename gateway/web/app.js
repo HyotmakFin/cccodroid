@@ -37,10 +37,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const fileInput = $("file-input"), filesEl = $("files"), lightboxEl = $("lightbox");
 
   /// 待发队列条：忙碌时排队的消息显示在这里（在附件条上方，composer 内）
+  // 待发队列照 Claude Desktop 的样子：排队的消息直接出现在对话末尾（标「排队中」），
+  // 底下有「立即发送」—— 递进正在跑的这一轮；停止键只管停止，挂起的不会自动发
   const queueStrip = document.createElement("div");
-  queueStrip.id = "queue-strip";
+  queueStrip.id = "queued";
   queueStrip.className = "hidden";
-  $("composer").insertBefore(queueStrip, $("composer-inner"));
 
   const state = {
     model: "—",
@@ -308,6 +309,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   //   · 历史从文件尾倒着按页取，往上滚再取更早的
   //  #chat 里分三层：#older（加载更早）/ #hist（历史页）/ #live（本次打开后实时跑的）
   chatEl.innerHTML = `<button id="older" class="hidden">${t("加载更早的消息")}</button><div id="hist"></div><div id="live"></div>`;
+  chatEl.appendChild(queueStrip);
   const olderEl = $("older"), histEl = $("hist"), liveEl = $("live");
 
   const view = {
@@ -932,6 +934,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function renderQueue() {
     const q = srv.queue;
     queueStrip.classList.toggle("hidden", !q.length);
+    const busy = !!srv.run;
     queueStrip.innerHTML = q.length ? `
       <div class="q-head">
         <span>${q.some((it) => it.held)
@@ -940,11 +943,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <button class="q-clear">${t("全部清除")}</button>
       </div>
       ${q.map((it) => `
-        <div class="qitem${it.held ? " held" : ""}" data-id="${esc(it.id)}">
-          <button class="q-now" title="${it.held ? t("发出这条") : t("插话：递进正在跑的这一轮，不打断")}">⚡</button>
-          <span class="q-text">${esc(it.text)}</span>
-          <button class="q-x" title="${t("撤销这条")}">✕</button>
+        <div class="msg user qitem${it.held ? " held" : ""}" data-id="${esc(it.id)}">
+          <div class="who"><span class="dot"></span>${t("你")} · <span class="q-tag">${it.held ? t("已暂停") : t("排队中")}</span></div>
+          <div class="bubble" dir="auto">${esc(it.text)}</div>
+          <div class="q-acts">
+            <button class="q-now" title="${busy ? t("插话：递进正在跑的这一轮，不打断") : t("发出这条")}">${t("立即发送")}</button>
+            <button class="q-x" title="${t("撤销这条")}">${t("撤销")}</button>
+          </div>
         </div>`).join("")}` : "";
+    if (q.length) scrollDown();
   }
   queueStrip.addEventListener("click", async (e) => {
     const post = (p, body) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) })
