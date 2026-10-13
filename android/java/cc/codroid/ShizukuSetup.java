@@ -578,7 +578,10 @@ final class ShizukuSetup {
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setOnlyAlertOnce(false)
             .setCategory(Notification.CATEGORY_CALL)
-            .setOngoing(true);
+            // 过期由系统收：进程被厂商冻结器冻住 / 被杀时我们的代码根本跑不了，常驻通知会一直挂着「配对中…」。
+            // 进度类通知允许划掉、90 秒过期；等填码的那条给 10 分钟（配对码本身几分钟就失效）
+            .setOngoing(withInput)
+            .setTimeoutAfter(withInput ? 600_000 : 90_000);
         if (!withInput) { Bundle x = new Bundle(); x.putBoolean(EXTRA_PROGRESS, true); b.addExtras(x); }
         if (withInput) {
             RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel("6 位配对码（必要时空格后加端口）").build();
