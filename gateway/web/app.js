@@ -163,7 +163,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const fence = raw.match(/^\s*```(\w*)\s*$/);
       if (fence) {
         if (inCode) {
-          out += `<pre><code>${esc(codeBuf.join("\n"))}</code><button class="copy-btn">复制</button></pre>`;
+          out += `<pre><code>${esc(codeBuf.join("\n"))}</code><button class="copy-btn">${t("复制")}</button></pre>`;
           codeBuf = []; inCode = false;
         } else { closeList(); flushTable(); inCode = true; }
         continue;
@@ -220,7 +220,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     img.addEventListener("error", () => {
       const a = document.createElement("a");
       a.href = "#"; a.className = "missing-img"; a.textContent = path;
-      a.addEventListener("click", (e) => { e.preventDefault(); toast("读不到：" + path, true); });
+      a.addEventListener("click", (e) => { e.preventDefault(); toast(t("读不到：{path}", { path }), true); });
       wrap.replaceWith(a);
     });
     wrap.appendChild(img);
@@ -297,7 +297,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!b) return;
     const code = b.parentElement.querySelector("code");
     if (code) navigator.clipboard?.writeText(code.textContent).then(() => {
-      b.textContent = "已复制"; setTimeout(() => (b.textContent = "复制"), 1400);
+      b.textContent = t("已复制"); setTimeout(() => (b.textContent = t("复制")), 1400);
     });
   });
 
@@ -307,7 +307,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   //   · 发消息只是 POST 一下拿个号，排队也在网关那边（刷新不丢、两个窗口看到同一份）
   //   · 历史从文件尾倒着按页取，往上滚再取更早的
   //  #chat 里分三层：#older（加载更早）/ #hist（历史页）/ #live（本次打开后实时跑的）
-  chatEl.innerHTML = `<button id="older" class="hidden">加载更早的消息</button><div id="hist"></div><div id="live"></div>`;
+  chatEl.innerHTML = `<button id="older" class="hidden">${t("加载更早的消息")}</button><div id="hist"></div><div id="live"></div>`;
   const olderEl = $("older"), histEl = $("hist"), liveEl = $("live");
 
   const view = {
@@ -328,13 +328,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function mkMsg(role, label, parent) {
     const el = document.createElement("div");
     el.className = `msg ${role}`;
-    const name = label || (role === "user" ? "你" : role === "sys" ? "命令" : "Claude");
-    el.innerHTML = `<div class="who"><span class="dot"></span>${esc(name)}</div><div class="bubble"></div>`;
+    const name = label || (role === "user" ? t("你") : role === "sys" ? t("命令") : "Claude");
+    el.innerHTML = `<div class="who"><span class="dot"></span>${esc(name)}</div><div class="bubble" dir="auto"></div>`;
     (parent || liveEl).appendChild(el);
     return el.querySelector(".bubble");
   }
   function addSysMsg(text, title, parent) {
-    const b = mkMsg("sys", "命令", parent);
+    const b = mkMsg("sys", t("命令"), parent);
     setHtml(b, title
       ? `<div class="cmd-card"><div class="cmd-name">${esc(title)}</div>${renderMd(text)}</div>`
       : renderMd(text));
@@ -353,10 +353,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     setHtml(b, renderMd(text));
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = `<button data-a="copy">复制</button><button data-a="resend">重发</button>`;
+    acts.innerHTML = `<button data-a="copy">${t("复制")}</button><button data-a="resend">${t("重发")}</button>`;
     acts.addEventListener("click", (e) => {
       const a = e.target.dataset.a;
-      if (a === "copy") { navigator.clipboard?.writeText(text); toast("已复制"); }
+      if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
     });
     b.parentElement.appendChild(acts);
@@ -373,7 +373,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const THINK_TICK = 250;
   const PAINT_TICK = 60;
   const DOTS = `<div class="dots"><span></span><span></span><span></span></div>`;
-  const fmtChars = (n) => (n < 1000 ? `${n} 字` : `${(n / 1000).toFixed(1)}k 字`);
+  const fmtChars = (n) => (n < 1000 ? t("{n} 字", { n }) : t("{n}k 字", { n: (n / 1000).toFixed(1) }));
 
   /** from 之后、不在代码块里的最后一个空行位置；没有返回 -1 */
   function safeSplit(s, from) {
@@ -429,7 +429,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function ThinkBlock(parent) {
     const el = document.createElement("details");
     el.className = "think";
-    el.innerHTML = `<summary>思考过程 <span class="think-size"></span></summary><div class="think-body"></div>`;
+    el.innerHTML = `<summary>${t("思考过程")} <span class="think-size"></span></summary><div class="think-body"></div>`;
     parent.appendChild(el);
     const body = el.querySelector(".think-body"), label = el.querySelector(".think-size");
     let thinking = "", timer = 0, shown = 0, moreBtn = null, done = false;
@@ -441,7 +441,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         moreBtn.addEventListener("click", () => { shown += THINK_CAP; render("full"); });
         el.appendChild(moreBtn);
       }
-      moreBtn.textContent = `继续渲染（还有 ${fmtChars(left)}）`;
+      moreBtn.textContent = t("继续渲染（还有 {left}）", { left: fmtChars(left) });
       moreBtn.style.display = left > 0 ? "block" : "none";
     }
     function render(mode) {
@@ -453,7 +453,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       }
       shown = Math.min(Math.max(shown, THINK_CAP), thinking.length);
       const left = thinking.length - shown;
-      body.textContent = thinking.slice(0, shown) + (left > 0 ? `\n\n…（还有 ${fmtChars(left)}没渲染）` : "");
+      body.textContent = thinking.slice(0, shown) + (left > 0 ? "\n\n" + t("…（还有 {left}没渲染）", { left: fmtChars(left) }) : "");
       moreSync(left);
     }
     el.addEventListener("toggle", () => {
@@ -495,7 +495,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     card.innerHTML =
       `<div class="tool-head"><span class="chev">▶</span><span class="tool-name">${esc(name)}</span>` +
       `<span class="tool-arg">${esc(summarizeTool(name, input))}</span>` +
-      `<span class="tool-state ${live ? "run" : "ok"}">${live ? "运行中" : "—"}</span></div>` +
+      `<span class="tool-state ${live ? "run" : "ok"}">${live ? t("运行中") : "—"}</span></div>` +
       `<div class="tool-body"></div>`;
     parent.appendChild(card);
     const st = card.querySelector(".tool-state"), bodyEl = card.querySelector(".tool-body");
@@ -503,8 +503,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const build = () => {           // 点开才把参数、结果铺进 DOM
       if (built) return;
       built = true;
-      let html = `<div class="lbl">参数</div><pre>${esc(JSON.stringify(input, null, 2))}</pre>`;
-      if (result) html += `<div class="lbl">结果</div><pre>${esc(result.text)}</pre>`;
+      let html = `<div class="lbl">${t("参数")}</div><pre>${esc(JSON.stringify(input, null, 2))}</pre>`;
+      if (result) html += `<div class="lbl">${t("结果")}</div><pre>${esc(result.text)}</pre>`;
       bodyEl.innerHTML = html;
       if (result) embedLocalImages(bodyEl);
     };
@@ -517,7 +517,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       result(ok, text) {
         result = { ok, text: String(text || "") };
         st.className = "tool-state " + (ok ? "ok" : "err");
-        st.textContent = ok ? "完成" : "失败";
+        st.textContent = ok ? t("完成") : t("失败");
         if (built) { built = false; build(); }
         if (!ok && live) { card.classList.add("open"); build(); }
         // 工具产出的图片（渲染结果、截图）直接露出来，不用点开
@@ -532,7 +532,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           else peek.remove();
         }
       },
-      stop() { if (!result) { st.className = "tool-state err"; st.textContent = "中断"; } },
+      stop() { if (!result) { st.className = "tool-state err"; st.textContent = t("中断"); } },
       finish() { if (!result && !live) { st.textContent = "—"; } },
     };
     if (id) {
@@ -578,7 +578,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         ended = true;
         for (const b of blocks) { b.finish && b.finish(); if (aborted && b.stop) b.stop(); }
         undot();
-        if (!any && live && !aborted) bubble.innerHTML = '<p class="muted">（无输出）</p>';
+        if (!any && live && !aborted) bubble.innerHTML = '<p class="muted">' + t("（无输出）") + '</p>';
       },
       get empty() { return !any; },
       get ended() { return ended; },
@@ -625,8 +625,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     else if (pct >= 85) ctxBar.classList.add("warn");
     ctxFill.style.width = pct + "%";
     ctxTxt.textContent = line > 0
-      ? `上下文 ${fmtTok(state.ctxUsed)} / 压缩线 ${fmtTok(line)} · ${pct}%`
-      : `上下文 ${fmtTok(state.ctxUsed)} / ${fmtTok(state.ctxTotal)} · ${pct}%`;
+      ? t("上下文 {used} / 压缩线 {line} · {pct}%", { used: fmtTok(state.ctxUsed), line: fmtTok(line), pct })
+      : t("上下文 {used} / {total} · {pct}%", { used: fmtTok(state.ctxUsed), total: fmtTok(state.ctxTotal), pct });
     saveUiState();
   }
   /** 从 /context 的输出里抠出真实占用（形如 "**Tokens:** 17.9k / 200k (9%)"） */
@@ -678,7 +678,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function newConversation(note) {
     openSession(null);
     updateCtx(0, state.ctxTotal);
-    setStatus(note || "新会话", "ok");
+    setStatus(note || t("新会话"), "ok");
     inputEl.focus();
   }
 
@@ -693,7 +693,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!initial && !view.cursor) return;
     view.loading = true;
     const gen = view.gen;
-    olderEl.textContent = "加载中…";
+    olderEl.textContent = t("加载中…");
     const q = new URLSearchParams({ limit: initial ? "40" : "60" });
     if (!initial) q.set("before", String(view.cursor));
     const ex = liveExclude();
@@ -704,12 +704,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch (e) {
       if (gen !== view.gen) return;
       view.loading = false;
-      olderEl.textContent = "加载更早的消息";
+      olderEl.textContent = t("加载更早的消息");
       if (e.status === 404 && initial) {
-        addNote("找不到这个会话的记录（可能已删除）—— 下一条消息会开新会话。", histEl);
+        addNote(t("找不到这个会话的记录（可能已删除）—— 下一条消息会开新会话。"), histEl);
         view.sessionId = null;
         saveUiState();
-      } else toast("读取历史失败：" + e.message, true);
+      } else toast(t("读取历史失败：{msg}", { msg: e.message }), true);
       return;
     }
     if (gen !== view.gen) return;
@@ -721,14 +721,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       histEl.innerHTML = "";
       histEl.appendChild(page);
       if (r.contextTokens != null) updateCtx(r.contextTokens, state.ctxTotal);
-      setStatus(view.title ? "会话：" + view.title.slice(0, 40) : "就绪", "ok");
+      setStatus(view.title ? t("会话：{title}", { title: view.title.slice(0, 40) }) : t("就绪"), "ok");
       scrollDown(true);
     } else {
       const h0 = chatEl.scrollHeight, t0 = chatEl.scrollTop;
       histEl.insertBefore(page, histEl.firstChild);
       chatEl.scrollTop = t0 + (chatEl.scrollHeight - h0);   // 往上补内容，视线别跳
     }
-    olderEl.textContent = "加载更早的消息";
+    olderEl.textContent = t("加载更早的消息");
     olderEl.classList.toggle("hidden", !r.cursor);
   }
   olderEl.addEventListener("click", () => loadOlder(false));
@@ -739,13 +739,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
     b.innerHTML =
-      `<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>
-       <ul style="color:var(--fg2);font-size:13.5px">
-         <li><strong>📎</strong> 附加图片或文件（也可以直接粘贴、拖放）</li>
-         <li><code>/</code> 唤起斜杠命令，<code>@</code> 引用文件路径</li>
-         <li>顶栏 <strong>📁</strong> 打开文件浏览器（可预览图片、插入路径）</li>
-         <li>左上角 <strong>☰</strong> 管理历史会话 / 设置 / 查看能力清单</li>
-         <li>生成中可以接着发：消息会排队；<strong>⚡</strong> 插话（不打断，并进当前这一轮）</li>
+            t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
+      `<ul style="color:var(--fg2);font-size:13.5px">
+         <li><strong>📎</strong> ${t("附加图片或文件（也可以直接粘贴、拖放）")}</li>
+         <li><code>/</code> ${t("唤起斜杠命令，")}<code>@</code> ${t("引用文件路径")}</li>
+         <li>${t("顶栏")} <strong>📁</strong> ${t("打开文件浏览器（可预览图片、插入路径）")}</li>
+         <li>${t("左上角")} <strong>☰</strong> ${t("管理历史会话 / 设置 / 查看能力清单")}</li>
+         <li>${t("生成中可以接着发：消息会排队；")}<strong>⚡</strong> ${t("插话（不打断，并进当前这一轮）")}</li>
        </ul>`;
   }
 
@@ -770,7 +770,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   function setConn(ok) {
     srv.connected = ok;
-    if (!ok) setStatus("与网关断开，正在重连…（生成不受影响）", "warn");
+    if (!ok) setStatus(t("与网关断开，正在重连…（生成不受影响）"), "warn");
   }
   document.addEventListener("visibilitychange", () => {
     // 切回前台：WebView 在后台冻过，连接可能已经悄悄死了
@@ -842,13 +842,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     helloCount++;
     if (ev.uiTag && uiTag != null && ev.uiTag !== uiTag) {
       // 新界面已经部署了：生成在网关里不受影响，放心刷新
-      setStatus("界面已更新，正在刷新…", "warn");
+      setStatus(t("界面已更新，正在刷新…"), "warn");
       location.reload();
       return;
     }
     if (ev.uiTag) uiTag = ev.uiTag;
     applyState(ev);
-    if (ev.resume) { setStatus("已连接", "ok"); return; }
+    if (ev.resume) { setStatus(t("已连接"), "ok"); return; }
 
     // 续不上（首次连接 / 网关重启过 / 断太久）：本视图从头来 —— 历史重新取，
     // 正在跑的那一轮紧接着会被网关整轮重放过来
@@ -865,7 +865,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     renderSessions();
     if (sid) loadOlder(true);
     else if (!(ev.run && keepRuns.has(ev.run.id))) showWelcome();
-    setStatus("已连接", "ok");
+    setStatus(t("已连接"), "ok");
   }
 
   function onRunEnd(ev) {
@@ -878,22 +878,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (ev.localCommand && ev.resultText) {
       av.finish();
       if (av.empty) av.remove();
-      const b = mkMsg("sys", "命令", liveEl);
+            const b = mkMsg("sys", t("命令"), liveEl);
       setHtml(b, `<div class="cmd-card"><div class="cmd-name">${esc("/" + ev.localCommand)}</div>${renderMd(ev.resultText)}</div>`);
       if (ev.localCommand === "context") parseContextText(ev.resultText);
       if (ev.localCommand === "model" || ev.localCommand === "effort") loadSettings();
     } else {
       av.finish(ev.aborted);
-      if (ev.aborted) av.note("已中断");
+      if (ev.aborted) av.note(t("已中断"));
       const bits = [];
       if (ev.durationMs) bits.push((ev.durationMs / 1000).toFixed(1) + "s");
       if (ev.usage?.output_tokens) bits.push("↓" + ev.usage.output_tokens + " tok");
       if (ev.costUsd) bits.push("$" + ev.costUsd.toFixed(4));
       statEl.textContent = bits.join(" · ");
     }
-    if (ev.failed) setStatus("失败", "err");
-    else if (ev.aborted) setStatus("已中断", "warn");
-    else setStatus("就绪", "ok");
+    if (ev.failed) setStatus(t("失败"), "err");
+    else if (ev.aborted) setStatus(t("已中断"), "warn");
+    else setStatus(t("就绪"), "ok");
     scrollDown();
     loadSessions();
     if (!state.caps?.slashCommands?.length) loadCaps();
@@ -906,12 +906,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const busy = !!srv.run;
     sendEl.classList.toggle("busy", busy && !inputEl.value.trim());
     inputEl.placeholder = busy
-      ? "生成中 · 回车 = 排队 · ⚡ = 插话（不打断）"
-      : "给 Claude 发消息，/ 命令，@ 引用文件…";
+      ? t("生成中 · 回车 = 排队 · ⚡ = 插话（不打断）")
+      : t("给 Claude 发消息，/ 命令，@ 引用文件…");
     syncInterject();
     renderQueue();
     if (busy) setStatus(srv.run.sessionId === view.sessionId || view.runIds.has(srv.run.id)
-      ? "生成中…" : "另一个会话正在生成…", "warn");
+      ? t("生成中…") : t("另一个会话正在生成…"), "warn");
   }
   const isBusy = () => !!srv.run;
 
@@ -927,14 +927,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     queueStrip.classList.toggle("hidden", !q.length);
     queueStrip.innerHTML = q.length ? `
       <div class="q-head">
-        <span>待发 ${q.length} 条 · 当前这一轮结束后依次发出</span>
-        <button class="q-clear">全部清除</button>
+        <span>${t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })}</span>
+        <button class="q-clear">${t("全部清除")}</button>
       </div>
       ${q.map((it) => `
         <div class="qitem" data-id="${esc(it.id)}">
-          <button class="q-now" title="插话：递进正在跑的这一轮，不打断">⚡</button>
+          <button class="q-now" title="${t("插话：递进正在跑的这一轮，不打断")}">⚡</button>
           <span class="q-text">${esc(it.text)}</span>
-          <button class="q-x" title="撤销这条">✕</button>
+          <button class="q-x" title="${t("撤销这条")}">✕</button>
         </div>`).join("")}` : "";
   }
   queueStrip.addEventListener("click", async (e) => {
@@ -959,7 +959,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 纯界面命令：不惊动 claude
     if (text === "/clear" || text === "/new") {
       if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
-      newConversation("已清空上下文，开始新会话");
+      newConversation(t("已清空上下文，开始新会话"));
       return;
     }
     // 官方账户登录：OAuth 全程由 claude 自己完成，网关只转递授权页地址和用户贴回的码
@@ -971,27 +971,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       });
       try {
         if (!arg || arg === "console") {
-          addNote("正在启动登录…");
+          addNote(t("正在启动登录…"));
           const j = await post("/api/login/start", { method: arg === "console" ? "console" : "claudeai" });
-          if (!j.ok) throw new Error(j.message || "启动登录失败");
-          addSysMsg(`在浏览器打开下面的地址完成授权，然后把页面给出的授权码用 \`/login <授权码>\` 发回来：\n\n[${j.url}](${j.url})`, "/login");
+          if (!j.ok) throw new Error(j.message || t("启动登录失败"));
+          addSysMsg(t("在浏览器打开下面的地址完成授权，然后把页面给出的授权码用 {cmd} 发回来：", { cmd: "`/login " + t("授权码") + "`" }) + `\n\n[${j.url}](${j.url})`, "/login");
         } else {
-          addNote("正在提交授权码…");
+          addNote(t("正在提交授权码…"));
           const j = await post("/api/login/code", { code: arg });
-          addSysMsg(j.ok ? "✓ 已登录，可以开始对话了" : "✗ 登录失败：\n\n```\n" + (j.output || j.message || "") + "\n```", "/login");
+          addSysMsg(j.ok ? t("✓ 已登录，可以开始对话了") : t("✗ 登录失败：") + "\n\n```\n" + (j.output || j.message || "") + "\n```", "/login");
         }
       } catch (e) { toast(e.message, true); }
       return;
     }
     if (text.startsWith("/rename ")) {
-      if (!view.sessionId) return toast("当前还没有会话", true);
+      if (!view.sessionId) return toast(t("当前还没有会话"), true);
       try {
         await api(`/api/session/${encodeURIComponent(view.sessionId)}/rename`, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: text.slice(8).trim() }),
         });
         if (fromInput) { inputEl.value = ""; autoGrow(); }
-        toast("已重命名"); loadSessions();
+        toast(t("已重命名")); loadSessions();
       } catch (e) { toast(e.message, true); }
       return;
     }
@@ -1014,12 +1014,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       });
       view.runIds.add(r.id);
       view.lastRunId = r.id;
-      if (r.injected) toast("已插话：当前这一步做完，Claude 就会看到");
-      else if (!r.started) toast(mode === "inject" ? "这一轮正在收尾，插不进去 —— 已排到最前，马上发出" : "已排队，这一轮结束后发出");
+      if (r.injected) toast(t("已插话：当前这一步做完，Claude 就会看到"));
+      else if (!r.started) toast(mode === "inject" ? t("这一轮正在收尾，插不进去 —— 已排到最前，马上发出") : t("已排队，这一轮结束后发出"));
     } catch (e) {
       view.cids.delete(cid);
       if (fromInput && !inputEl.value) { inputEl.value = text; autoGrow(); }   // 别把用户的话吞了
-      toast(e.message || "发送失败", true);
+      toast(e.message || t("发送失败"), true);
       if (e.status === 503) openDrawer("settings");
     }
   }
@@ -1046,7 +1046,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     state.popup.mode = mode;
     state.popup.items = items;
     state.popup.sel = 0;
-    popupHead.innerHTML = `<span>${esc(head)}</span><span>${items.length} 项</span>`;
+    popupHead.innerHTML = `<span>${esc(head)}</span><span>${t("{n} 项", { n: items.length })}</span>`;
     renderPopup();
     popupEl.classList.remove("hidden");
   }
@@ -1058,11 +1058,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (it.cat && it.cat !== lastCat) { html += `<div class="pgroup">${esc(it.cat)}</div>`; lastCat = it.cat; }
       html += `<div class="pitem ${i === sel ? "sel" : ""}" data-i="${i}">` +
         `<span class="pi-name ${state.popup.mode === "cmd" ? "cmd" : ""}">${esc(it.label)}</span>` +
-        (it.cat && state.popup.mode === "file" ? `<span class="pi-cat">${it.dir ? "目录" : "文件"}</span>` : "") +
+        (it.cat && state.popup.mode === "file" ? `<span class="pi-cat">${it.dir ? t("目录") : t("文件")}</span>` : "") +
         (it.desc ? `<span class="pi-desc">${esc(it.desc)}</span>` : "") +
         `</div>`;
     });
-    popupList.innerHTML = html || '<div class="pitem">没有匹配项</div>';
+    popupList.innerHTML = html || '<div class="pitem">' + t("没有匹配项") + '</div>';
     const selEl = popupList.querySelector(".pitem.sel");
     if (selEl) selEl.scrollIntoView({ block: "nearest" });
   }
@@ -1071,7 +1071,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const caps = state.caps;
     const cmds = (caps?.slashCommands || []).filter((c) => !filter || c.name.includes(filter));
     showPopup("cmd", cmds.map((c) => ({ label: "/" + c.name, desc: c.desc || "", cat: c.cat, raw: c.name })),
-      "斜杠命令" + (filter ? ` · 匹配 “${filter}”` : ""));
+      t("斜杠命令") + (filter ? t(" · 匹配 “{q}”", { q: filter }) : ""));
   }
 
   async function openFilePalette(filter) {
@@ -1086,7 +1086,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         raw: e.name,
       }));
       if (r.parent && r.parent !== r.path) items.unshift({ label: "..", dir: true, cat: r.path, raw: ".." });
-      showPopup("file", items, "引用文件 · " + r.path);
+      showPopup("file", items, t("引用文件 · {path}", { path: r.path }));
     } catch { hidePopup(); }
   }
 
@@ -1189,7 +1189,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           ? `<img src="${fileUrl(a.path)}" alt="">`
           : `<span class="att-ico">${esc((a.name.split(".").pop() || "?").slice(0, 4))}</span>`}
         <span class="att-name">${esc(a.name)}</span>
-        <button class="att-x" aria-label="移除">✕</button>
+        <button class="att-x" aria-label="${t("移除")}">✕</button>
       </div>`).join("");
     attachStrip.querySelectorAll(".att").forEach((el) => {
       const a = list[Number(el.dataset.i)];
@@ -1229,12 +1229,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           insertAtCursor("@" + j.path);
         }
       } catch (e) {
-        toast(`「${f.name}」附加失败：${e.message}`, true);
+        toast(t("「{name}」附加失败：{msg}", { name: f.name, msg: e.message }), true);
       }
     }
     if (done.length) {
       renderAttachments();
-      toast(`已附加 ${done.length} 个文件`);
+      toast(t("已附加 {n} 个文件", { n: done.length }));
     }
     return done;
   }
@@ -1250,13 +1250,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
     insertAtCursor("@" + p);
     renderAttachments();
-    toast("已附加 " + name);
+    toast(t("已附加 {name}", { name }));
   });
   window.addEventListener("ccapp-insert", (e) => {
     const t = e.detail?.value;
     if (!t) return;
     insertAtCursor(t);
-    toast("已插入分享的内容");
+    toast(t("已插入分享的内容"));
   });
 
   // 三扇门：点回形针 / 设置里选 / ＋ 面板
@@ -1318,7 +1318,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (!keepSel) state.fs.sel = null;
       $("fs-search").value = state.fs.q = "";
       renderFs();
-    } catch (e) { toast("打开目录失败：" + e.message, true); }
+    } catch (e) { toast(t("打开目录失败：{msg}", { msg: e.message }), true); }
   }
 
   function fsVisible() {
@@ -1332,7 +1332,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       .map((r) => `<span class="chip" data-p="${esc(r)}">${esc(r.replace(/^\/sdcard/, "~"))}</span>`).join("");
 
     const list = fsVisible();
-    $("fs-count").textContent = `${list.length} 项 · ${state.fs.path || ""}`;
+    $("fs-count").textContent = t("{n} 项 · {path}", { n: list.length, path: state.fs.path || "" });
     $("fs-list").innerHTML = list.length ? list.map((e, i) => `
       <div class="item fs-item ${state.fs.sel === e.name ? "active" : ""}" data-i="${i}">
         <div class="fs-row">
@@ -1340,7 +1340,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           <span class="it-title">${esc(e.name)}${e.dir ? "/" : ""}</span>
           <span class="fs-meta">${e.dir ? "" : fmtSize(e.size)}</span>
         </div>
-      </div>`).join("") : '<div class="tiny">（空目录）</div>';
+      </div>`).join("") : '<div class="tiny">' + t("（空目录）") + '</div>';
 
     // 图片直接出缩略图，别的类型给一行摘要
     if (list.some((e) => e.kind === "image")) {
@@ -1389,21 +1389,21 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } else if (e.kind === "audio") {
       body = `<audio src="${fileUrl(full)}" controls></audio>`;
     } else if (e.kind === "text" && e.size < 262144) {
-      box.innerHTML = `<div class="fs-prev-head"><span class="mono">${esc(e.name)}</span><span class="tiny">读取中…</span></div>`;
+      box.innerHTML = `<div class="fs-prev-head"><span class="mono">${esc(e.name)}</span><span class="tiny">${t("读取中…")}</span></div>`;
       try {
         const t = await fetch(fileUrl(full)).then((r) => r.text());
-        body = `<pre class="fs-pre">${esc(t.slice(0, 12000))}${t.length > 12000 ? "\n…（已截断）" : ""}</pre>`;
-      } catch { body = '<div class="tiny">读取失败</div>'; }
+        body = `<pre class="fs-pre">${esc(t.slice(0, 12000))}${t.length > 12000 ? "\n" + t("…（已截断）") : ""}</pre>`;
+      } catch { body = '<div class="tiny">' + t("读取失败") + '</div>'; }
     } else {
-      body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · 无可内嵌预览</div>`;
+      body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;
     }
 
     box.innerHTML =
       `<div class="fs-prev-head">
          <span class="mono">${esc(e.name)}</span>
          <span class="tiny">${fmtSize(e.size)}</span>
-         <button class="btn ghost sm" data-a="insert">插入 @路径</button>
-         <a class="btn ghost sm" href="${fileUrl(full, true)}" download>下载</a>
+         <button class="btn ghost sm" data-a="insert">${t("插入 @路径")}</button>
+         <a class="btn ghost sm" href="${fileUrl(full, true)}" download>${t("下载")}</a>
        </div>
        <div class="fs-prev-body">${body}</div>`;
     box.querySelector('[data-a="insert"]')?.addEventListener("click", () => insertFile(e));
@@ -1413,7 +1413,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function insertFile(e) {
     const full = e.dir ? fullPathOf(e) + "/" : fullPathOf(e);
     insertAtCursor("@" + full);
-    toast(e.dir ? "已插入目录路径" : "已插入文件路径");
+    toast(e.dir ? t("已插入目录路径") : t("已插入文件路径"));
     closeFiles();
     inputEl.focus();
   }
@@ -1452,7 +1452,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function renderSessions() {
     const box = $("session-list");
     if (!state.sessions.length) {
-      box.innerHTML = '<div class="tiny">还没有历史会话。</div>';
+      box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
     const liveSid = srv.run && srv.run.sessionId;
@@ -1462,14 +1462,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <div class="it-meta">
           <span>${relTime(s.mtime)}</span>
           <span>${s.sizeKb} KB</span>
-          ${s.id === liveSid ? '<span class="badge cur">生成中</span>' : ""}
-          ${s.currentProject ? '<span class="badge cur">当前项目</span>' : ""}
-          ${s.renamed ? '<span class="badge">已命名</span>' : ""}
+          ${s.id === liveSid ? `<span class="badge cur">${t("生成中")}</span>` : ""}
+          ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
+          ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
         </div>
         <div class="it-acts">
-          <button data-a="open">切换到此会话</button>
-          <button data-a="rename">重命名</button>
-          <button data-a="del">删除</button>
+          <button data-a="open">${t("切换到此会话")}</button>
+          <button data-a="rename">${t("重命名")}</button>
+          <button data-a="del">${t("删除")}</button>
         </div>
       </div>`).join("");
   }
@@ -1482,7 +1482,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "open") { closeDrawer(); openSession(id); return; }
     if (a === "rename") {
       const cur = state.sessions.find((s) => s.id === id);
-      const name = prompt("新的会话名称", cur?.title || "");
+      const name = prompt(t("新的会话名称"), cur?.title || "");
       if (!name) return;
       try {
         await api(`/api/session/${encodeURIComponent(id)}/rename`, {
@@ -1494,12 +1494,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return;
     }
     if (a === "del") {
-      if (!confirm("删除这个会话的记录？不可恢复。")) return;
+      if (!confirm(t("删除这个会话的记录？不可恢复。"))) return;
       try { await api(`/api/session/${encodeURIComponent(id)}`, { method: "DELETE" }); }
       catch (err) { return toast(err.message, true); }
       if (view.sessionId === id) newConversation();
       loadSessions();
-      toast("已删除");
+      toast(t("已删除"));
     }
   });
 
@@ -1509,7 +1509,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 接口（厂商）────────────────────────────────────────────────────
   // 下拉框只决定"看哪一家的配置卡"；真正切换要在卡上点「使用这个接口」——
   // 配置和切换分开，免得填密钥填到一半就把正在用的接口换掉了。
-  const GROUP_NAME = { claude: "Claude 官方", third: "第三方（填 Key 即用）", custom: "自定义接口" };
+  const GROUP_NAME = { claude: "Claude", third: t("第三方（填 Key 即用）"), custom: t("自定义接口") };
   const post = (p, body) => api(p, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}),
   });
@@ -1527,19 +1527,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       for (const p of state.providers) (groups[p.group] = groups[p.group] || []).push(p);
       const opt = (p) => {
         const tag = p.active ? "● " : "";
-        const st = p.login ? "" : (p.hasKey ? "" : " · 未配 Key");
+        const st = p.login ? "" : (p.hasKey ? "" : t(" · 未配 Key"));
         return `<option value="${esc(p.id)}">${tag}${esc(p.label)}${st}</option>`;
       };
       sel.innerHTML = ["claude", "third", "custom"].map((g) =>
         `<optgroup label="${GROUP_NAME[g]}">` + (groups[g] || []).map(opt).join("") +
-        (g === "custom" ? `<option value="__new__">＋ 新增自定义接口…</option>` : "") + `</optgroup>`).join("");
+        (g === "custom" ? `<option value="__new__">${t("＋ 新增自定义接口…")}</option>` : "") + `</optgroup>`).join("");
       sel.value = state.provView;
-      $("provider-count").textContent = state.providers.length + " 个";
+      $("provider-count").textContent = t("{n} 个", { n: state.providers.length });
       const cur = state.providers.find((p) => p.id === r.active) || {};
-      $("provider-info").innerHTML = `当前在用：<b>${esc(cur.label || r.active)}</b>　<code>${esc(cur.baseUrl || "")}</code>`;
+      $("provider-info").innerHTML = t("当前在用：<b>{name}</b>　<code>{url}</code>", { name: esc(cur.label || r.active), url: esc(cur.baseUrl || "") });
       renderProvCard();
     } catch (e) {
-      $("provider-info").textContent = "读取接口清单失败：" + e.message;
+      $("provider-info").textContent = t("读取接口清单失败：{msg}", { msg: e.message });
     }
   }
 
@@ -1559,27 +1559,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   const useBtn = (p) => p.active
-    ? `<span class="pill">● 正在使用</span>`
-    : `<button class="btn sm" data-act="use">使用这个接口</button>`;
+    ? `<span class="pill">${t("● 正在使用")}</span>`
+    : `<button class="btn sm" data-act="use">${t("使用这个接口")}</button>`;
 
   async function useProvider(p) {
-    if (!p.login && !p.hasKey) return toast("先填 Key 并保存", true);
+    if (!p.login && !p.hasKey) return toast(t("先填 Key 并保存"), true);
     const r = await saveSettings({ provider: p.id });
     if (!r) return;
     await loadSettings();
     await refreshStatus();
-    toast(`已切到 ${p.label}（下一条消息生效）`);
+    toast(t("已切到 {name}（下一条消息生效）", { name: p.label }));
   }
 
   // ── 账户登录卡 ──
   async function renderLoginCard(box, p) {
     box.innerHTML = `<div class="sub">${esc(p.label)}</div>
-      <div class="prov-state" id="login-state">查询登录状态…</div>
+      <div class="prov-state" id="login-state">${t("查询登录状态…")}</div>
       <div class="row-actions" id="login-actions"></div>
       <div id="login-flow"></div>
       <div class="tiny">${esc(p.hint || "")}</div>`;
     let st;
-    try { st = await api("/api/login/status"); } catch (e) { $("login-state").textContent = "查询失败：" + e.message; return; }
+    try { st = await api("/api/login/status"); } catch (e) { $("login-state").textContent = t("查询失败：{msg}", { msg: e.message }); return; }
     if (state.provView !== p.id) return;      // 查询期间用户换了卡
     paintLoginState(st, p);
     if (st.pending) watchLogin(p);
@@ -1588,17 +1588,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const el = $("login-state"); if (!el) return;
     if (st.loggedIn) {
       el.className = "prov-state ok";
-      el.innerHTML = `✓ 已登录` + (st.email ? `：<b>${esc(st.email)}</b>` : "") +
+            el.innerHTML = (st.email ? t("✓ 已登录：<b>{email}</b>", { email: esc(st.email) }) : t("✓ 已登录")) +
         (st.plan ? ` · ${esc(st.plan)}` : "") + (st.org ? `<br><span class="tiny">${esc(st.org)}</span>` : "");
     } else {
       el.className = "prov-state warn";
-      el.textContent = st.pending ? "等待浏览器里完成授权…" : "未登录";
+      el.textContent = st.pending ? t("等待浏览器里完成授权…") : t("未登录");
     }
     $("login-actions").innerHTML = (st.pending
-      ? `<button class="btn sm ghost" data-act="cancel">取消登录</button>`
-      : `<button class="btn sm" data-act="login">${st.loggedIn ? "换个账户登录" : "登录 Claude 账户"}</button>` +
-        `<button class="btn sm ghost" data-act="login-console">用 Console 账户</button>` +
-        (st.loggedIn ? `<button class="btn sm ghost danger" data-act="logout">退出登录</button>` : "")) +
+      ? `<button class="btn sm ghost" data-act="cancel">${t("取消登录")}</button>`
+      : `<button class="btn sm" data-act="login">${st.loggedIn ? t("换个账户登录") : t("登录 Claude 账户")}</button>` +
+        `<button class="btn sm ghost" data-act="login-console">${t("用 Console 账户")}</button>` +
+        (st.loggedIn ? `<button class="btn sm ghost danger" data-act="logout">${t("退出登录")}</button>` : "")) +
       (st.loggedIn ? useBtn(p) : "");
     $("login-actions").onclick = (e) => {
       const act = e.target.dataset && e.target.dataset.act;
@@ -1618,24 +1618,24 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   async function startLogin(p, method) {
     $("login-state").className = "prov-state";
-    $("login-state").textContent = "正在启动登录…";
+    $("login-state").textContent = t("正在启动登录…");
     let r;
     try { r = await post("/api/login/start", { method }); } catch (e) { return toast(e.message, true); }
-    if (!r.ok) { $("login-state").textContent = "✗ " + (r.message || "启动失败"); return; }
+    if (!r.ok) { $("login-state").textContent = "✗ " + (r.message || t("启动失败")); return; }
     openExternal(r.url);
-    $("login-flow").innerHTML = `<div class="tiny">已在浏览器打开授权页。授权后浏览器会跳回本机，登录自动完成。
-        没自动打开？<a href="${esc(r.url)}" target="_blank" rel="noopener">点这里打开</a></div>
+        $("login-flow").innerHTML = `<div class="tiny">${t("已在浏览器打开授权页。授权后浏览器会跳回本机，登录自动完成。")}
+        ${t("没自动打开？")}<a href="${esc(r.url)}" target="_blank" rel="noopener">${t("点这里打开")}</a></div>
       <div class="prov-manual">
-        <div class="tiny">浏览器没跳回来（或在别的设备上授权）？打开下面这个地址，把页面给出的授权码贴回来：</div>
+        <div class="tiny">${t("浏览器没跳回来（或在别的设备上授权）？打开下面这个地址，把页面给出的授权码贴回来：")}</div>
         <div class="mono"><a href="${esc(r.manualUrl || r.url)}" target="_blank" rel="noopener">${esc(r.manualUrl || r.url)}</a></div>
-        <input id="login-code" placeholder="粘贴授权码（形如 xxxx#yyyy）" autocomplete="off">
-        <button class="btn sm" id="btn-login-code">提交授权码</button>
+        <input id="login-code" placeholder="${t("粘贴授权码（形如 xxxx#yyyy）")}" autocomplete="off">
+        <button class="btn sm" id="btn-login-code">${t("提交授权码")}</button>
       </div>`;
     $("btn-login-code").onclick = async () => {
       const code = $("login-code").value.trim();
-      if (!code) return toast("先粘贴授权码", true);
+      if (!code) return toast(t("先粘贴授权码"), true);
       const j = await post("/api/login/code", { code }).catch((e) => ({ ok: false, output: e.message }));
-      if (!j.ok) toast("登录失败：" + (j.output || "").slice(-120), true);
+      if (!j.ok) toast(t("登录失败：{msg}", { msg: (j.output || "").slice(-120) }), true);
     };
     watchLogin(p);
   }
@@ -1646,59 +1646,59 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       try { st = await api("/api/login/status"); } catch { return; }
       if (st.pending) { if (state.provView === p.id) paintLoginState(st, p); return; }
       clearInterval(state.loginTimer);
-      if (st.loggedIn) toast("✓ 已登录" + (st.email ? "：" + st.email : "") + (p.active ? "" : "，点「使用这个接口」切过去"));
-      else if (st.last && !st.last.ok) toast("登录没有完成", true);
+      if (st.loggedIn) toast((st.email ? t("✓ 已登录：{email}", { email: st.email }) : t("✓ 已登录")) + (p.active ? "" : t("，点「使用这个接口」切过去")));
+      else if (st.last && !st.last.ok) toast(t("登录没有完成"), true);
       if (state.provView === p.id) renderProvCard();
       refreshStatus();
     }, 2000);
   }
   async function logout(p) {
-    if (!confirm("退出这台设备上的 Claude 账户登录？")) return;
+    if (!confirm(t("退出这台设备上的 Claude 账户登录？"))) return;
     const r = await post("/api/login/logout").catch((e) => ({ ok: false, output: e.message }));
-    toast(r.ok ? "已退出登录" : "退出失败：" + (r.output || r.message || ""), !r.ok);
+    toast(r.ok ? t("已退出登录") : t("退出失败：{msg}", { msg: r.output || r.message || "" }), !r.ok);
     renderProvCard();
   }
 
   // ── 密钥卡（Claude API Key 与第三方厂商）──
   function renderKeyCard(box, p) {
     box.innerHTML = `<div class="sub">${esc(p.label)}</div>
-      ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">线路</div>
+      ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">${t("线路")}</div>
         <select id="pc-endpoint">${p.endpoints.map((e) =>
           `<option value="${esc(e.id)}" ${e.id === p.endpoint ? "selected" : ""}>${esc(e.label)}</option>`).join("")}</select>` : ""}
       <input id="pc-key" type="password" autocomplete="off"
-        placeholder="${p.hasKey ? `已保存（…${esc(p.keyTail)}），留空则不改` : "粘贴 API Key"}">
+        placeholder="${p.hasKey ? t("已保存（…{tail}），留空则不改", { tail: esc(p.keyTail) }) : t("粘贴 API Key")}">
       <div class="row-actions">
-        <button class="btn sm" data-act="save">保存</button>
-        <button class="btn sm ghost" data-act="test">测试</button>
-        ${p.hasKey ? `<button class="btn sm ghost danger" data-act="clear">清除 Key</button>` : ""}
+        <button class="btn sm" data-act="save">${t("保存")}</button>
+        <button class="btn sm ghost" data-act="test">${t("测试")}</button>
+        ${p.hasKey ? `<button class="btn sm ghost danger" data-act="clear">${t("清除 Key")}</button>` : ""}
         ${useBtn(p)}
       </div>
       <div class="prov-state" id="pc-result"></div>
-      <div class="tiny">端点 <code>${esc(p.baseUrl)}</code>${p.defaultModel ? ` · 默认模型 <code>${esc(p.defaultModel)}</code>` : ""}
-        ${p.keyUrl ? `<br><a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">去官网创建 Key ↗</a>` : ""}
-        <br>${esc(p.hint || "Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。")}</div>`;
+      <div class="tiny">${t("端点")} <code>${esc(p.baseUrl)}</code>${p.defaultModel ? ` · ${t("默认模型")} <code>${esc(p.defaultModel)}</code>` : ""}
+        ${p.keyUrl ? `<br><a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${t("去官网创建 Key ↗")}</a>` : ""}
+        <br>${esc(p.hint || t("Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。"))}</div>`;
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;
       if (act === "use") return useProvider(p);
       if (act === "clear") {
-        if (!confirm(`清除 ${p.label} 的 Key？`)) return;
+        if (!confirm(t("清除 {name} 的 Key？", { name: p.label }))) return;
         await post("/api/providers/save", { id: p.id, clearKey: true }).catch((e2) => toast(e2.message, true));
-        return reloadProv("已清除");
+        return reloadProv(t("已清除"));
       }
       const body = { id: p.id, apiKey: $("pc-key").value.trim() };
       if ($("pc-endpoint")) body.endpoint = $("pc-endpoint").value;
       if (act === "save" || body.apiKey || body.endpoint !== p.endpoint) {
         try { await post("/api/providers/save", body); } catch (e2) { return toast(e2.message, true); }
         $("pc-key").value = "";
-        if (act === "save") return reloadProv("已保存", true);
+        if (act === "save") return reloadProv(t("已保存"), true);
       }
       await testAndShow(p.id);
     };
   }
   async function testAndShow(id) {
     const el = $("pc-result"); if (!el) return;
-    el.className = "prov-state"; el.textContent = "测试中…";
+    el.className = "prov-state"; el.textContent = t("测试中…");
     const r = await post("/api/providers/test", { id }).catch((e) => ({ ok: false, message: e.message }));
     el.className = "prov-state " + (r.ok ? "ok" : "err");
     el.textContent = (r.ok ? "✓ " : "✗ ") + r.message;
@@ -1716,33 +1716,33 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── Shizuku ──
   const PRIV_TEXT = {
-    not_installed: ["warn", "没装 Shizuku"],
-    not_running: ["warn", "Shizuku 已安装，但服务没在运行（重启手机后需要在 Shizuku 里重新启动）"],
-    no_permission: ["warn", "Shizuku 在运行，还没授权给 cccodroid"],
-    unreachable: ["err", "连不上应用的后台服务"],
+        not_installed: ["warn", t("没装 Shizuku")],
+        not_running: ["warn", t("Shizuku 已安装，但服务没在运行（重启手机后需要在 Shizuku 里重新启动）")],
+        no_permission: ["warn", t("Shizuku 在运行，还没授权给 cccodroid")],
+        unreachable: ["err", t("连不上应用的后台服务")],
   };
   const SETUP_BUSY = ["downloading", "installing", "connecting", "pairing", "starting", "permission"];
   let privPoll = null;
   // 各家系统里"允许后台运行"的位置。红魔/中兴为实测，其余是常见路径
   const BG_HOW = {
-    nubia: "红魔 / 努比亚：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>（<b>自启动</b>也选允许，开机激活 Shizuku、更新后自动恢复都靠它）",
-    zte: "中兴：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>，<b>自启动：允许</b>",
-    xiaomi: "小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）",
-    redmi: "小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）",
-    oppo: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
-    oneplus: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
-    realme: "OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）",
-    vivo: "vivo / iQOO：设置 → 电池 → 后台耗电管理 → cccodroid <b>允许后台高耗电</b>；i管家里允许<b>自启动</b>（常见路径）",
-    huawei: "华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）",
-    honor: "华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）",
+        nubia: t("红魔 / 努比亚：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>（<b>自启动</b>也选允许，开机激活 Shizuku、更新后自动恢复都靠它）"),
+        zte: t("中兴：应用信息 → 应用的电池用量 → 电池优化 → <b>后台运行：允许</b>，<b>自启动：允许</b>"),
+        xiaomi: t("小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）"),
+        redmi: t("小米 / 红米：应用信息 → <b>省电策略：无限制</b>，<b>自启动</b>打开（常见路径，可能因系统版本不同）"),
+        oppo: t("OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）"),
+        oneplus: t("OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）"),
+        realme: t("OPPO / 一加 / 真我：应用信息 → 耗电管理 → <b>允许后台行为</b>、<b>允许自启动</b>（常见路径）"),
+        vivo: t("vivo / iQOO：设置 → 电池 → 后台耗电管理 → cccodroid <b>允许后台高耗电</b>；i管家里允许<b>自启动</b>（常见路径）"),
+        huawei: t("华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）"),
+        honor: t("华为 / 荣耀：设置 → 应用启动管理 → cccodroid 关闭「自动管理」，手动允许<b>自启动</b>和<b>后台活动</b>（常见路径）"),
   };
   function renderBg(fz) {
     const show = fz && fz.count > 0;
     $("bg-field").classList.toggle("hidden", !show);
     if (!show) return;
-    $("bg-state").textContent = `检测到 cccodroid 在后台被系统冻结过 ${fz.count} 次（最近一次约 ${Math.round(fz.ms / 1000)} 秒，${new Date(fz.at).toLocaleString()}）。` +
-      "冻结期间网关和正在跑的任务全部停住，回到前台才继续。前台服务挡不住这类厂商冻结器。";
-    $("bg-how").innerHTML = BG_HOW[fz.vendor] || "在系统设置里给 cccodroid 允许后台运行、关闭电池优化、允许自启动（各家叫法不同）。";
+        $("bg-state").textContent = t("检测到 cccodroid 在后台被系统冻结过 {n} 次（最近一次约 {sec} 秒，{at}）。", { n: fz.count, sec: Math.round(fz.ms / 1000), at: new Date(fz.at).toLocaleString() }) +
+      t("冻结期间网关和正在跑的任务全部停住，回到前台才继续。前台服务挡不住这类厂商冻结器。");
+    $("bg-how").innerHTML = BG_HOW[fz.vendor] || t("在系统设置里给 cccodroid 允许后台运行、关闭电池优化、允许自启动（各家叫法不同）。");
   }
   $("bg-actions").addEventListener("click", async (e) => {
     const act = e.target.dataset && e.target.dataset.act;
@@ -1759,11 +1759,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const el = $("priv-state");
     if (st.state === "ok") {
       el.className = "prov-state ok";
-      el.textContent = `✓ 已就绪 · 以 ${st.uid === 0 ? "root" : st.uid === 2000 ? "shell" : "uid " + st.uid} 身份执行${st.version ? " · Shizuku v" + st.version : ""}`;
+      el.textContent = t("✓ 已就绪 · 以 {who} 身份执行", { who: st.uid === 0 ? "root" : st.uid === 2000 ? "shell" : "uid " + st.uid }) + (st.version ? " · Shizuku v" + st.version : "");
     } else {
-      const [cls, txt] = PRIV_TEXT[st.state] || ["err", st.message || "状态未知"];
+      const [cls, txt] = PRIV_TEXT[st.state] || ["err", st.message || t("状态未知")];
       el.className = "prov-state " + cls;
-      el.textContent = txt + (st.lastPermission === "denied" ? "（上次被拒绝了）" : "");
+      el.textContent = txt + (st.lastPermission === "denied" ? t("（上次被拒绝了）") : "");
     }
     // 一键安装 / 激活的进度
     const su = st.setup || { phase: "idle" };
@@ -1778,36 +1778,36 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("priv-pair").classList.toggle("hidden", su.phase !== "pairing");
     const wl = st.wireless !== false;
     $("priv-actions").innerHTML =
-      st.state === "not_installed" ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>一键安装并激活</button>
-        <a class="btn sm ghost" href="https://shizuku.rikka.app/download/" target="_blank" rel="noopener">手动下载 ↗</a>` :
-      st.state === "not_running" ? (wl ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>一键激活（无线调试）</button>` : "") +
-        `<button class="btn sm ghost" data-act="open">打开 Shizuku</button>` :
-      st.state === "no_permission" ? `<button class="btn sm" data-act="request">授权给 cccodroid</button>` : "";
+      st.state === "not_installed" ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>${t("一键安装并激活")}</button>
+        <a class="btn sm ghost" href="https://shizuku.rikka.app/download/" target="_blank" rel="noopener">${t("手动下载")} ↗</a>` :
+      st.state === "not_running" ? (wl ? `<button class="btn sm" data-act="activate" ${busy ? "disabled" : ""}>${t("一键激活（无线调试）")}</button>` : "") +
+        `<button class="btn sm ghost" data-act="open">${t("打开 Shizuku")}</button>` :
+      st.state === "no_permission" ? `<button class="btn sm" data-act="request">${t("授权给 cccodroid")}</button>` : "";
     // Shizuku 在跑，但没有（或已失效的）无线调试配对：重启后就没法自动激活。这种情况平时看不出来，主动提示
     if (st.state === "ok" && wl && !st.paired && !busy) {
       se.classList.remove("hidden");
       se.className = "prov-state warn";
       se.textContent = st.pairOk === 0
-        ? "无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。"
-        : "Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。";
-      $("priv-actions").insertAdjacentHTML("afterbegin", `<button class="btn sm" data-act="repair">${st.pairOk === 0 ? "重新配对" : "配对"}</button>`);
+                ? t("无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。")
+        : t("Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。");
+      $("priv-actions").insertAdjacentHTML("afterbegin", `<button class="btn sm" data-act="repair">${st.pairOk === 0 ? t("重新配对") : t("配对")}</button>`);
     }
     if (st.bootMissed) {
       se.classList.remove("hidden");
       se.className = "prov-state warn";
-      se.textContent = "这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。" +
-        "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。";
-      $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">去允许自启动</button>`);
+            se.textContent = t("这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。") +
+        t("想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。");
+      $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">${t("去允许自启动")}</button>`);
     }
     if (st.dev) {                                     // 开发端：Shizuku 由它自己的应用管理，这里只报实测状态
       $("priv-actions").innerHTML = "";
       if (st.state !== "ok") {
         se.classList.remove("hidden");
         se.className = "prov-state warn";
-        se.textContent = "在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。" + (st.message ? "（" + st.message + "）" : "");
+        se.textContent = t("在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。") + (st.message ? "（" + st.message + "）" : "");
       }
     }
-    $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">刷新</button>`);
+    $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">${t("刷新")}</button>`);
     $("priv-auto-row").classList.toggle("hidden", !(wl && st.paired));
     $("priv-auto").checked = st.autostart !== false;
     $("priv-ka-row").classList.toggle("hidden", !!st.dev);
@@ -1827,7 +1827,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (act === "activate") { await post("/api/app/shz_activate").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
     if (act === "request") {
       const r = await post("/api/priv/request").catch((e2) => ({ message: e2.message }));
-      toast(r.message || "已请求");
+      toast(r.message || t("已请求"));
       // 授权对话框在 Shizuku 那边弹，回来后多刷几次
       for (let i = 0; i < 10; i++) { await new Promise((ok) => setTimeout(ok, 1500)); await loadPriv(); if ($("priv-state").classList.contains("ok")) break; }
       return;
@@ -1837,7 +1837,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("priv-pair").addEventListener("click", async (e) => {
     if (!(e.target.dataset && e.target.dataset.act === "pair")) return;
     const code = $("priv-code").value.replace(/\D/g, "");
-    if (code.length !== 6) return toast("配对码是 6 位数字", true);
+    if (code.length !== 6) return toast(t("配对码是 6 位数字"), true);
     const port = $("priv-port").value.replace(/\D/g, "");
     $("priv-code").value = "";
     await post("/api/app/shz_pair", { code: port ? code + " " + port : code }).catch((e2) => toast(e2.message, true));
@@ -1846,7 +1846,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("priv-auto").addEventListener("change", (e) => post("/api/app/shz_autostart", { enable: e.target.checked }).catch(() => {}));
 
   // ── 更新：应用本体 / 开发工具包 / Claude Code ──
-  const UPD_TEXT = { uptodate: "已是最新", available: "有新版本", downloading: "下载中", ready: "已下载，待安装", installing: "安装中", error: "出错", unknown: "未检查" };
+    const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查") };
   let updPoll = null;
   async function loadUpd() {
     let st;
@@ -1863,24 +1863,24 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done)} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
         : it.state === "installing" && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
       const cls = it.state === "error" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
-      const btn = it.state === "available" ? (it.id === "claude" ? "更新" : "下载并安装")
-        : it.state === "ready" ? "安装" : it.state === "error" && it.latest ? "重试" : "";
+      const btn = it.state === "available" ? (it.id === "claude" ? t("更新") : t("下载并安装"))
+        : it.state === "ready" ? t("安装") : it.state === "error" && it.latest ? t("重试") : "";
       return `<div class="row-actions" style="justify-content:space-between">
         <div><b>${esc(it.name)}</b> <span class="tiny">${ver}</span><br>
           <span class="prov-state ${cls}" style="margin:0">${UPD_TEXT[it.state] || esc(it.state)}${prog}${it.message ? " · " + esc(it.message) : ""}</span></div>
         ${btn ? `<button class="btn sm" data-item="${esc(it.id)}">${btn}</button>` : ""}</div>`;
     }).join("");
-    $("upd-last").textContent = st.checking ? "检查中…" : st.error ? "✗ " + st.error
-      : st.lastCheck ? "上次检查：" + new Date(st.lastCheck).toLocaleString() : "还没检查过";
+    $("upd-last").textContent = st.checking ? t("检查中…") : st.error ? "✗ " + st.error
+      : st.lastCheck ? t("上次检查：{at}", { at: new Date(st.lastCheck).toLocaleString() }) : t("还没检查过");
     clearTimeout(updPoll);
     if (moving && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
   }
   $("upd-items").addEventListener("click", async (e) => {
     const item = e.target.dataset && e.target.dataset.item;
     if (!item) return;
-    if (item === "devkit" && !confirm("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。")) return;
+    if (item === "devkit" && !confirm(t("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
     const r = await post("/api/app/upd_apply", { item }).catch((e2) => ({ ok: false, message: e2.message }));
-    toast(r.message || (r.ok ? "开始" : "失败"), !r.ok);
+    toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
     setTimeout(loadUpd, 500);
   });
   $("upd-check").addEventListener("click", async () => {
@@ -1891,63 +1891,63 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("upd-channel").addEventListener("change", (e) => post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {}));
   $("priv-ka").addEventListener("change", async (e) => {
     const on = e.target.checked;
-    if (on && !confirm("开启后台保活增强？\n\n会改几项系统设置：幽灵进程上限（影响所有应用）、本应用的电池白名单与后台运行限制。关掉开关会恢复前两项。")) {
+    if (on && !confirm(t("开启后台保活增强？\n\n会改几项系统设置：幽灵进程上限（影响所有应用）、本应用的电池白名单与后台运行限制。关掉开关会恢复前两项。"))) {
       e.target.checked = false; return;
     }
     const out = $("priv-ka-result");
-    out.className = "prov-state"; out.textContent = on ? "正在应用…" : "正在恢复…";
+    out.className = "prov-state"; out.textContent = on ? t("正在应用…") : t("正在恢复…");
     const r = await post("/api/priv/keepalive", { enable: on }).catch((e2) => ({ ok: false, message: e2.message }));
     out.className = "prov-state " + (r.ok ? "ok" : "err");
     out.textContent = r.ok
-      ? (on ? `✓ 已应用${r.phantom ? "（幽灵进程上限 " + r.phantom + "）" : ""}` : "✓ 已恢复")
-      : "✗ " + (r.message || "失败");
+            ? (on ? t("✓ 已应用") + (r.phantom ? t("（幽灵进程上限 {n}）", { n: r.phantom }) : "") : t("✓ 已恢复"))
+      : "✗ " + (r.message || t("失败"));
     loadPriv();
   });
 
   // ── 自定义接口卡（任何讲 Anthropic Messages 协议的端点）──
   function renderCustomCard(box, p) {
     const v = p || { label: "", baseUrl: "", authStyle: "bearer", modelsUrl: "", defaultModel: "", fastModel: "" };
-    box.innerHTML = `<div class="sub">${p ? esc(p.label) : "新增自定义接口"}</div>
-      <input id="cc-label" placeholder="名字（比如：公司网关）" value="${esc(v.label)}">
-      <input id="cc-base" placeholder="端点地址，如 https://example.com/anthropic" value="${esc(v.baseUrl)}">
+    box.innerHTML = `<div class="sub">${p ? esc(p.label) : t("新增自定义接口")}</div>
+      <input id="cc-label" placeholder="${t("名字（比如：公司网关）")}" value="${esc(v.label)}">
+      <input id="cc-base" placeholder="${t("端点地址，如")} https://example.com/anthropic" value="${esc(v.baseUrl)}">
       <select id="cc-auth">
-        <option value="bearer" ${v.authStyle !== "x-api-key" ? "selected" : ""}>认证：Authorization: Bearer（多数第三方）</option>
-        <option value="x-api-key" ${v.authStyle === "x-api-key" ? "selected" : ""}>认证：x-api-key（Anthropic 风格）</option>
+        <option value="bearer" ${v.authStyle !== "x-api-key" ? "selected" : ""}>${t("认证：Authorization: Bearer（多数第三方）")}</option>
+        <option value="x-api-key" ${v.authStyle === "x-api-key" ? "selected" : ""}>${t("认证：x-api-key（Anthropic 风格）")}</option>
       </select>
-      <input id="cc-model" placeholder="默认模型名（必填，claude 不认识第三方模型）" value="${esc(v.defaultModel || "")}">
-      <input id="cc-fast" placeholder="快模型名（选填，子代理用；留空同上）" value="${esc(v.fastModel || "")}">
-      <input id="cc-models" placeholder="模型清单地址（选填，OpenAI 形状的 /models）" value="${esc(v.modelsUrl || "")}">
+      <input id="cc-model" placeholder="${t("默认模型名（必填，claude 不认识第三方模型）")}" value="${esc(v.defaultModel || "")}">
+      <input id="cc-fast" placeholder="${t("快模型名（选填，子代理用；留空同上）")}" value="${esc(v.fastModel || "")}">
+      <input id="cc-models" placeholder="${t("模型清单地址（选填，OpenAI 形状的 /models）")}" value="${esc(v.modelsUrl || "")}">
       <input id="pc-key" type="password" autocomplete="off"
-        placeholder="${p && p.hasKey ? `已保存（…${esc(p.keyTail)}），留空则不改` : "API Key"}">
+        placeholder="${p && p.hasKey ? t("已保存（…{tail}），留空则不改", { tail: esc(p.keyTail) }) : t("粘贴 API Key")}">
       <div class="row-actions">
-        <button class="btn sm" data-act="save">${p ? "保存" : "添加"}</button>
-        ${p ? `<button class="btn sm ghost" data-act="test">测试</button>
-               <button class="btn sm ghost danger" data-act="del">删除</button>${useBtn(p)}` : ""}
+        <button class="btn sm" data-act="save">${p ? t("保存") : t("添加")}</button>
+        ${p ? `<button class="btn sm ghost" data-act="test">${t("测试")}</button>
+               <button class="btn sm ghost danger" data-act="del">${t("删除")}</button>${useBtn(p)}` : ""}
       </div>
       <div class="prov-state" id="pc-result"></div>
-      <div class="tiny">要求对端讲 <b>Anthropic Messages</b> 协议（各家文档里写"Claude Code 接入"的那个地址）。
-        地址末尾不要带 <code>/v1</code>，claude 会自己补 <code>/v1/messages</code>。</div>`;
+            <div class="tiny">${t("要求对端讲 <b>Anthropic Messages</b> 协议（各家文档里写“Claude Code 接入”的那个地址）。")}
+        ${t("地址末尾不要带 <code>/v1</code>，claude 会自己补 <code>/v1/messages</code>。")}</div>`;
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;
       if (act === "use") return useProvider(p);
       if (act === "test") return testAndShow(p.id);
       if (act === "del") {
-        if (!confirm(`删除接口「${p.label}」？`)) return;
+        if (!confirm(t("删除接口「{name}」？", { name: p.label }))) return;
         try { await post("/api/providers/delete", { id: p.id }); } catch (e2) { return toast(e2.message, true); }
         state.provView = state.providerActive === p.id ? null : state.providerActive;
-        return reloadProv("已删除");
+        return reloadProv(t("已删除"));
       }
       const body = {
         id: p ? p.id : "", label: $("cc-label").value.trim(), baseUrl: $("cc-base").value.trim(),
         authStyle: $("cc-auth").value, defaultModel: $("cc-model").value.trim(), fastModel: $("cc-fast").value.trim(),
         modelsUrl: $("cc-models").value.trim(), apiKey: $("pc-key").value.trim(),
       };
-      if (!body.defaultModel) return toast("默认模型名必填", true);
+      if (!body.defaultModel) return toast(t("默认模型名必填"), true);
       let r;
       try { r = await post("/api/providers/save", body); } catch (e2) { return toast(e2.message, true); }
       state.provView = r.id;
-      await reloadProv(p ? "已保存" : "已添加", true);
+      await reloadProv(p ? t("已保存") : t("已添加"), true);
     };
   }
 
@@ -1961,7 +1961,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       // 这时候列表框里得有个诚实的"默认"项 —— 否则列表第一条（比如 haiku）会顶在上面，
       // 让人以为正在用的就是它，其实 claude 用的是自己挑的那个。
       const dfltOpt = r.nativeModels
-        ? `<option value="">（默认${r.defaultModel ? "：" + esc(r.defaultModel) : "，由 claude 决定"}）</option>`
+        ? (r.defaultModel ? `<option value="">${t("（默认：{model}）", { model: esc(r.defaultModel) })}</option>`
+                           : `<option value="">${t("（默认，由 claude 决定）")}</option>`)
         : "";
       sel.innerHTML = (dfltOpt + (MODELS.length
         ? MODELS.map((m) => {
@@ -1970,10 +1971,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
             const ctx = m.context_window ? Math.round(m.context_window / 1024) + "k" : "—";
             return `<option value="${esc(m.id)}">${esc(m.id)} · ${esc(m.name || "")} · ${ctx}${img}</option>`;
           }).join("")
-        : (dfltOpt ? "" : '<option value="">（该厂商不提供模型清单）</option>')));
+        : (dfltOpt ? "" : '<option value="">' + t("（该厂商不提供模型清单）") + '</option>')));
       if (r.current) sel.value = r.current;
       else if (r.nativeModels) sel.value = "";
-      $("model-count").textContent = MODELS.length + " 个";
+      $("model-count").textContent = t("{n} 个", { n: MODELS.length });
       renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
 
       // 用量条：总刻度用厂商给的真实窗口，但设了压缩窗口就改以它为满刻度
@@ -1984,22 +1985,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (cur) {
         const k = (v) => (v ? Math.round(v / 1024) + "k" : "—");
         $("model-info").innerHTML =
-          `上下文 ${k(cur.context_window)} · ` +
-          `输出上限 ${k(cur.max_output_tokens)} · ` +
-          `输入 ${(cur.input_modalities || []).join(" / ")}` +
-          `｜也可直接打 <code>/model &lt;id&gt;</code>`;
+                    t("上下文 {n} · 输出上限 {out} · 输入 {mods}", { n: k(cur.context_window), out: k(cur.max_output_tokens), mods: (cur.input_modalities || []).join(" / ") }) +
+          t("｜也可直接打 <code>/model &lt;id&gt;</code>");
         const ac = $("set-autocompact");
         if (ac && document.activeElement !== ac) ac.value = r.autoCompactWindow || "";
       } else if (r.nativeModels) {
         $("model-info").innerHTML =
-          `没指定模型 → <b>由 claude 自己决定</b>（官方账户当前默认 <code>${esc(r.defaultModel || "claude 内置默认")}</code>）。` +
-          `<br>上面的清单就是账户里能用的全部型号，挑一个即锁定。`;
+                    t("没指定模型 → <b>由 claude 自己决定</b>（官方账户当前默认 <code>{model}</code>）。", { model: esc(r.defaultModel || t("claude 内置默认")) }) +
+          t("<br>上面的清单就是账户里能用的全部型号，挑一个即锁定。");
       } else if (!MODELS.length) {
         $("model-info").innerHTML =
-          `该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。`;
+                    t("该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。");
       }
     } catch (e) {
-      $("model-info").textContent = "拉取模型清单失败：" + e.message;
+      $("model-info").textContent = t("拉取模型清单失败：{msg}", { msg: e.message });
     }
   }
 
@@ -2007,11 +2006,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const sel = $("set-effort");
     // 留一个"不指定"：没设过档位时 claude 按模型自己的默认走。
     // 以前没这一项，下拉框会显示第一档 low，让人以为正在用 low，而且一旦选过就再也撤不回默认
-    sel.innerHTML = `<option value="">（默认${dflt ? "：" + esc(dflt) : "，由 claude 按模型决定"}）</option>` +
+    sel.innerHTML = (dflt ? `<option value="">${t("（默认：{model}）", { model: esc(dflt) })}</option>`
+                            : `<option value="">${t("（默认，由 claude 按模型决定）")}</option>`) +
       levels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
     sel.value = current && levels.includes(current) ? current : "";
     $("effort-info").innerHTML =
-      `档位越高思考越久。也可在输入框打 <code>/effort &lt;level&gt;</code>`;
+      t("档位越高思考越久。也可在输入框打 <code>/effort &lt;level&gt;</code>");
   }
 
   async function loadSettings() {
@@ -2019,12 +2019,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       state.settings = await api("/api/settings");
       $("set-perm").value = state.settings.permissionMode || "bypassPermissions";
       // 输出风格清单由网关列（内置 + 自定义 .md），不再写死 —— 以前写死的 concise 根本不存在
-      $("set-style").innerHTML = '<option value="">（默认）</option>' +
+      $("set-style").innerHTML = '<option value="">' + t("（默认）") + '</option>' +
         (state.settings.outputStyles || []).map((o) =>
           `<option value="${esc(o.id)}">${esc(o.id)}${o.desc ? " · " + esc(o.desc) : ""}</option>`).join("");
       $("set-style").value = state.settings.outputStyle || "";
       // 没指定模型时别把顶栏写成 "—"：init 报过的真实模型更有用
-      modelEl.textContent = state.settings.model || state.model || "默认";
+      modelEl.textContent = state.settings.model || state.model || t("默认");
       permEl.textContent = state.settings.permissionMode || "";
       renderDirs();
       await loadProviders();
@@ -2039,8 +2039,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const dirs = state.settings.addDirs || [];
     $("dir-list").innerHTML = dirs.length
       ? dirs.map((d, i) => `<div class="item"><div class="it-title">${esc(d)}</div>
-          <div class="it-acts"><button data-i="${i}">移除</button></div></div>`).join("")
-      : '<div class="tiny">（没有附加目录）</div>';
+          <div class="it-acts"><button data-i="${i}">${t("移除")}</button></div></div>`).join("")
+      : '<div class="tiny">' + t("（没有附加目录）") + '</div>';
     $("dir-list").querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
       const dirs2 = (state.settings.addDirs || []).filter((_, i) => i !== Number(b.dataset.i));
       await saveSettings({ addDirs: dirs2 });
@@ -2054,12 +2054,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         body: JSON.stringify(patch),
       });
       state.settings = { ...state.settings, ...(r.settings || {}) };
-      modelEl.textContent = state.settings.model || state.model || "默认";
+      modelEl.textContent = state.settings.model || state.model || t("默认");
       permEl.textContent = state.settings.permissionMode || "";
       renderDirs();
-      toast("已保存");
+            toast(t("已保存"));
       return r;
-    } catch (e) { toast(e.message || "保存失败", true); }
+    } catch (e) { toast(e.message || t("保存失败"), true); }
   }
 
   $("set-provider").addEventListener("change", (e) => {
@@ -2089,11 +2089,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("btn-cli-doctor").addEventListener("click", async () => {
     const box = $("cli-out");
     box.classList.remove("hidden");
-    box.textContent = "正在运行 claude doctor…";
+    box.textContent = t("正在运行 claude doctor…");
     try {
       const r = await api("/api/cli?cmd=" + encodeURIComponent("doctor"));
-      box.textContent = (r.out || "") + (r.err ? "\n" + r.err : "") || "(无输出)";
-    } catch (e) { box.textContent = "失败：" + e.message; }
+      box.textContent = (r.out || "") + (r.err ? "\n" + r.err : "") || t("(无输出)");
+    } catch (e) { box.textContent = t("失败：{msg}", { msg: e.message }); }
   });
 
   // ── 能力面板 ──────────────────────────────────────────────────────
@@ -2104,7 +2104,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     state.caps.agents = ev.agents || state.caps.agents || [];
     state.caps.mcpServers = ev.mcpServers || state.caps.mcpServers || [];
     state.caps.slashCommands = (ev.slashCommands || []).filter((c) => !String(c).startsWith("__"))
-      .map((c) => (typeof c === "string" ? { name: c, cat: "其他", desc: "" } : c));
+      .map((c) => (typeof c === "string" ? { name: c, cat: t("其他"), desc: "" } : c));
     renderCaps();
   }
 
@@ -2118,14 +2118,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function chips(el, arr, hl) {
     el.innerHTML = arr?.length
       ? arr.map((x) => `<span class="chip ${hl ? "hl" : ""}">${esc(x)}</span>`).join("")
-      : '<span class="tiny">（暂无数据，先发一条消息即可从 CLI 获取）</span>';
+      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
   }
 
   function renderCaps() {
     const c = state.caps || {};
     $("caps-summary").innerHTML = c.version
-      ? `Claude Code ${esc(c.version)} · 模型 ${esc(c.model || "—")} · 权限 ${esc(c.permissionMode || "—")} · 输出风格 ${esc(c.outputStyle || "default")}`
-      : "还没有从 CLI 拿到能力清单 —— 发出第一条消息后会自动填充。";
+      ? t("Claude Code {ver} · 模型 {model} · 权限 {perm} · 输出风格 {style}", { ver: esc(c.version), model: esc(c.model || "—"), perm: esc(c.permissionMode || "—"), style: esc(c.outputStyle || "default") })
+      : t("还没有从 CLI 拿到能力清单 —— 发出第一条消息后会自动填充。");
 
     const cmds = (c.slashCommands || []).map((x) => "/" + (x.name || x));
     $("c-count").textContent = cmds.length;
@@ -2141,12 +2141,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   $("btn-refresh-mcp").addEventListener("click", async () => {
-    chips($("caps-mcp"), ["查询中…"]);
+    chips($("caps-mcp"), [t("查询中…")]);
     try {
       const r = await api("/api/cli?cmd=" + encodeURIComponent("mcp list"));
       const lines = (r.out || "").split("\n").map((s) => s.trim()).filter(Boolean);
-      chips($("caps-mcp"), lines.length ? lines.slice(0, 40) : ["(无 MCP 服务器)"]);
-    } catch (e) { chips($("caps-mcp"), ["查询失败：" + e.message]); }
+      chips($("caps-mcp"), lines.length ? lines.slice(0, 40) : [t("(无 MCP 服务器)")]);
+    } catch (e) { chips($("caps-mcp"), [t("查询失败：{msg}", { msg: e.message })]); }
   });
 
   // ── 抽屉 / 面板 ───────────────────────────────────────────────────
@@ -2172,15 +2172,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("btn-palette").addEventListener("click", () => { openCmdPalette(""); inputEl.focus(); });
   $("btn-close-drawer").addEventListener("click", closeDrawer);
   drawerEl.addEventListener("click", (e) => { if (e.target === drawerEl) closeDrawer(); });
-  $("btn-refresh-sessions").addEventListener("click", () => { loadSessions(); toast("已刷新"); });
+  $("btn-refresh-sessions").addEventListener("click", () => { loadSessions(); toast(t("已刷新")); });
   $("btn-close-session").addEventListener("click", () => {
     closeDrawer();
-    newConversation("已断开，下一条消息开新会话");
+    newConversation(t("已断开，下一条消息开新会话"));
   });
 
   $("btn-new").addEventListener("click", () => {
     newConversation();
-    toast("已开始新会话");
+    toast(t("已开始新会话"));
   });
 
   // ＋ 快捷面板
@@ -2206,7 +2206,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const s = await api("/api/status");
       if (uiTag != null && s.uiTag && s.uiTag !== uiTag) {
         // v3 起生成不归页面管，随时刷新都安全
-        setStatus("界面已更新，正在刷新…", "warn");
+        setStatus(t("界面已更新，正在刷新…"), "warn");
         location.reload();
         return;
       }
@@ -2216,22 +2216,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       modelEl.textContent = s.model || "—";
       state.model = s.model;
       $("status-box").textContent =
-        `网关     ${s.version} (pid ${s.pid})\n` +
-        `运行时   ${s.ready ? "就绪" : "缺失"}\n` +
-        `厂商     ${s.providerLabel || s.provider}\n` +
-        `上游     ${s.upstream}\n` +
-        `凭据     ${s.keyMode === "login" ? "官方登录态" : (s.hasKey ? "已配置密钥" : "未配置")}\n` +
-        `DNS 桥   ${s.bridge ? "已连接" : "未启动"}\n` +
-        `模型     ${s.model || "(由 claude 决定)"}\n` +
-        `生成     ${s.busy ? "进行中" : "空闲"}${s.queued ? ` · 排队 ${s.queued} 条` : ""}\n` +
-        `工作区   ${s.workspace}`;
+                `${t("网关")}     ${s.version} (pid ${s.pid})\n` +
+        `${t("运行时")}   ${s.ready ? t("就绪") : t("缺失")}\n` +
+        `${t("厂商")}     ${s.providerLabel || s.provider}\n` +
+        `${t("上游")}     ${s.upstream}\n` +
+        `${t("凭据")}     ${s.keyMode === "login" ? t("官方登录态") : (s.hasKey ? t("已配置密钥") : t("未配置"))}\n` +
+        `${t("DNS 桥")}   ${s.bridge ? t("已连接") : t("未启动")}\n` +
+        `${t("模型")}     ${s.model || t("(由 claude 决定)")}\n` +
+        `${t("生成")}     ${s.busy ? t("进行中") : t("空闲")}${s.queued ? t(" · 排队 {n} 条", { n: s.queued }) : ""}\n` +
+        `${t("工作区")}   ${s.workspace}`;
       if (!s.busy) {
-        setStatus(s.ready && s.hasKey ? (srv.connected ? "就绪" : "已连接网关") : s.hasKey ? "运行时缺失" : "需要配置密钥",
+        setStatus(s.ready && s.hasKey ? (srv.connected ? t("就绪") : t("已连接网关")) : s.hasKey ? t("运行时缺失") : t("需要配置密钥"),
           s.ready && s.hasKey ? "ok" : "warn");
       }
     } catch (e) {
-      $("status-box").textContent = "无法连接网关：" + e.message;
-      setStatus("网关离线", "err");
+      $("status-box").textContent = t("无法连接网关：{msg}", { msg: e.message });
+      setStatus(t("网关离线"), "err");
     }
   }
 
@@ -2242,7 +2242,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   (async function boot() {
     view.sessionId = loadUiState();      // 上次的会话号与用量，先捞回来
     updateCtx(state.ctxUsed, state.ctxTotal);
-    setStatus("正在连接网关…");
+    setStatus(t("正在连接网关…"));
 
     await refreshStatus();
     // 本地不知道用哪条，就问网关「最近真正跑过哪条会话」—— 总比默默开个新会话强

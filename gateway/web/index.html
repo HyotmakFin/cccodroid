@@ -12,20 +12,20 @@
 
 <!-- ── 顶栏 ── -->
 <header id="topbar">
-  <button id="btn-menu" class="icon-btn" aria-label="会话与设置">
+    <button id="btn-menu" class="icon-btn" aria-label="会话与设置" data-i18n-attr="aria-label">
     <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
   </button>
   <div id="title-block">
     <div id="app-title">Claude CLI</div>
-    <div id="sub-title">连接中…</div>
+        <div id="sub-title" data-i18n>连接中…</div>
   </div>
-  <button id="btn-files" class="icon-btn" aria-label="文件浏览器" title="文件浏览器">
+    <button id="btn-files" class="icon-btn" aria-label="文件浏览器" title="文件浏览器" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
   </button>
-  <button id="btn-palette" class="icon-btn" aria-label="命令面板" title="命令面板">
+    <button id="btn-palette" class="icon-btn" aria-label="命令面板" title="命令面板" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg>
   </button>
-  <button id="btn-new" class="icon-btn" aria-label="新会话">
+    <button id="btn-new" class="icon-btn" aria-label="新会话" data-i18n-attr="aria-label">
     <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
   </button>
 </header>
@@ -42,18 +42,18 @@
 <!-- ── 输入区 ── -->
 <div id="composer">
   <div id="composer-inner">
-    <button id="btn-plus" class="mini-btn" aria-label="更多">
+        <button id="btn-plus" class="mini-btn" aria-label="更多" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
     </button>
-    <button id="btn-attach" class="mini-btn" aria-label="附加图片或文件" title="附加图片或文件">
+        <button id="btn-attach" class="mini-btn" aria-label="附加图片或文件" title="附加图片或文件" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg>
     </button>
-    <textarea id="input" rows="1" placeholder="给 Claude 发消息，/ 命令，@ 引用文件…" autocomplete="off" spellcheck="false"></textarea>
+    <textarea id="input" rows="1" dir="auto" placeholder="给 Claude 发消息，/ 命令，@ 引用文件…" data-i18n-attr="placeholder" autocomplete="off" spellcheck="false"></textarea>
     <!-- 忙碌且输入框有字时才出现：打断当前 + 立刻发这条 -->
-    <button id="btn-interject" class="hidden" aria-label="插话" title="插话：递进正在跑的这一轮，不打断">
+        <button id="btn-interject" class="hidden" aria-label="插话" title="插话：递进正在跑的这一轮，不打断" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/></svg>
     </button>
-    <button id="btn-send" aria-label="发送">
+        <button id="btn-send" aria-label="发送" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24" class="ico-send"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
       <svg viewBox="0 0 24 24" class="ico-stop"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
     </button>
@@ -83,7 +83,7 @@
         <button class="tab" data-tab="settings" data-i18n>设置</button>
         <button class="tab" data-tab="caps" data-i18n>能力</button>
       </div>
-      <button id="btn-close-drawer" class="icon-btn" aria-label="关闭">
+            <button id="btn-close-drawer" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
@@ -91,8 +91,8 @@
     <!-- 会话 -->
     <section id="tab-sessions" class="tab-pane">
       <div class="row-actions">
-        <button id="btn-refresh-sessions" class="btn ghost sm">刷新列表</button>
-        <button id="btn-close-session" class="btn ghost sm">断开当前</button>
+                <button id="btn-refresh-sessions" class="btn ghost sm" data-i18n>刷新列表</button>
+                <button id="btn-close-session" class="btn ghost sm" data-i18n>断开当前</button>
       </div>
       <div id="session-list" class="list"></div>
     </section>
@@ -112,9 +112,9 @@
       </div>
 
       <div class="field">
-        <label>接口 <span class="pill" id="provider-count"></span></label>
+                <label><span data-i18n>接口</span> <span class="pill" id="provider-count"></span></label>
         <select id="set-provider"></select>
-        <div class="tiny" id="provider-info">正在读取…</div>
+                <div class="tiny" id="provider-info" data-i18n>正在读取…</div>
       </div>
 
       <!-- 选中那一家的配置卡：账户登录 / 密钥 / 自定义接口，由 app.js 按类型渲染 -->
@@ -122,116 +122,115 @@
 
       <!-- 后台被冻结的提示：GatewayService 测到冻结才出现（前台服务挡不住部分厂商的冻结器） -->
       <div class="field hidden" id="bg-field">
-        <label>后台运行</label>
+                <label data-i18n>后台运行</label>
         <div class="prov-card">
           <div class="prov-state warn" id="bg-state"></div>
           <div class="tiny" id="bg-how"></div>
           <div class="row-actions" id="bg-actions">
-            <button class="btn sm" data-act="appsettings">去系统设置</button>
-            <button class="btn sm ghost" data-act="ack">已设置好，清除提示</button>
+                        <button class="btn sm" data-act="appsettings" data-i18n>去系统设置</button>
+                        <button class="btn sm ghost" data-act="ack" data-i18n>已设置好，清除提示</button>
           </div>
         </div>
       </div>
 
       <!-- Shizuku：调试提权。只有 cccodroid 带这项集成，旧版里整块隐藏 -->
       <div class="field hidden" id="priv-field">
-        <label>Shizuku（调试提权）</label>
+                <label data-i18n>Shizuku（调试提权）</label>
         <div class="prov-card">
-          <div class="prov-state" id="priv-state">查询中…</div>
+                    <div class="prov-state" id="priv-state" data-i18n>查询中…</div>
           <div class="prov-state hidden" id="priv-setup"></div>
           <div class="row-actions hidden" id="priv-pair">
-            <input id="priv-code" inputmode="numeric" maxlength="6" placeholder="6 位配对码" style="width:8em;margin:0">
-            <input id="priv-port" inputmode="numeric" maxlength="5" placeholder="端口（可不填）" style="width:8em;margin:0">
-            <button class="btn sm" data-act="pair">配对</button>
+            <input id="priv-code" inputmode="numeric" maxlength="6" placeholder="6 位配对码" data-i18n-attr="placeholder" style="width:8em;margin:0">
+            <input id="priv-port" inputmode="numeric" maxlength="5" placeholder="端口（可不填）" data-i18n-attr="placeholder" style="width:8em;margin:0">
+                        <button class="btn sm" data-act="pair" data-i18n>配对</button>
           </div>
           <div class="row-actions" id="priv-actions"></div>
           <label class="tiny hidden" id="priv-auto-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
             <input type="checkbox" id="priv-auto" style="width:auto;margin:0">
-            <span>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</span>
+                        <span data-i18n>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</span>
           </label>
           <label class="tiny" id="priv-ka-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
             <input type="checkbox" id="priv-ka" style="width:auto;margin:0">
-            <span>后台保活增强：放宽安卓的"幽灵进程"上限（防止并行编译时子进程被系统杀掉）、加入电池白名单、允许后台运行</span>
+                        <span data-i18n>后台保活增强：放宽安卓的“幽灵进程”上限（防止并行编译时子进程被系统杀掉）、加入电池白名单、允许后台运行</span>
           </label>
           <div class="prov-state" id="priv-ka-result"></div>
-          <div class="tiny">开启后，终端里可用 <code>priv '命令'</code> 以 shell 身份执行（pm / am / settings / dumpsys / logcat / screencap…），Claude 也会用它。
+                    <div class="tiny" data-i18n-html>开启后，终端里可用 <code>priv '命令'</code> 以 shell 身份执行（pm / am / settings / dumpsys / logcat / screencap…），Claude 也会用它。
             没有 Shizuku 时基础开发功能照常，只是这些调试能力用不了。</div>
         </div>
       </div>
 
       <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
       <div class="field hidden" id="upd-field">
-        <label>更新</label>
+                <label data-i18n>更新</label>
         <div class="prov-card">
           <div id="upd-items"></div>
           <div class="row-actions">
-            <button class="btn sm" id="upd-check">检查更新</button>
+                        <button class="btn sm" id="upd-check" data-i18n>检查更新</button>
             <select id="upd-channel" style="width:auto;margin:0">
-              <option value="stable">CLI：stable</option>
-              <option value="latest">CLI：latest</option>
+                            <option value="stable" data-i18n>CLI：stable</option>
+              <option value="latest" data-i18n>CLI：latest</option>
             </select>
           </div>
           <label class="tiny" style="display:flex;gap:8px;align-items:center">
             <input type="checkbox" id="upd-auto" style="width:auto;margin:0">
-            <span>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；
-              开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</span>
+                        <span data-i18n>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</span>
           </label>
           <div class="tiny" id="upd-last"></div>
         </div>
       </div>
 
       <div class="field">
-        <label>模型 <span class="pill" id="model-count"></span></label>
+                <label><span data-i18n>模型</span> <span class="pill" id="model-count"></span></label>
         <select id="set-model"></select>
-        <div class="tiny" id="model-info">从厂商的 <code>/models</code> 实时拉取；也可在输入框直接打 <code>/model &lt;id&gt;</code>。</div>
+                <div class="tiny" id="model-info" data-i18n-html>从厂商的 <code>/models</code> 实时拉取；也可在输入框直接打 <code>/model &lt;id&gt;</code>。</div>
       </div>
 
       <div class="field">
-        <label>权限模式</label>
+                <label data-i18n>权限模式</label>
         <select id="set-perm">
-          <option value="bypassPermissions">bypassPermissions · 全部放行（默认）</option>
-          <option value="acceptEdits">acceptEdits · 自动接受编辑</option>
-          <option value="auto">auto · 自动判断</option>
-          <option value="plan">plan · 只出计划不执行</option>
-          <option value="dontAsk">dontAsk · 不询问</option>
-          <option value="manual">manual · 手动确认</option>
+                    <option value="bypassPermissions" data-i18n>bypassPermissions · 全部放行（默认）</option>
+          <option value="acceptEdits" data-i18n>acceptEdits · 自动接受编辑</option>
+          <option value="auto" data-i18n>auto · 自动判断</option>
+          <option value="plan" data-i18n>plan · 只出计划不执行</option>
+          <option value="dontAsk" data-i18n>dontAsk · 不询问</option>
+          <option value="manual" data-i18n>manual · 手动确认</option>
         </select>
-        <div class="tiny">GUI 里没法点「允许」，所以默认全放行。想更保守可以选 plan。</div>
+                <div class="tiny" data-i18n>GUI 里没法点「允许」，所以默认全放行。想更保守可以选 plan。</div>
       </div>
 
       <div class="field">
-        <label>附加目录（--add-dir）</label>
+                <label data-i18n>附加目录（--add-dir）</label>
         <div id="dir-list" class="list compact"></div>
         <div class="row-actions">
-          <input id="inp-dir" placeholder="/sdcard/某个目录" style="flex:1">
-          <button id="btn-add-dir" class="btn sm">添加</button>
+                    <input id="inp-dir" placeholder="/sdcard/某个目录" data-i18n-attr="placeholder" style="flex:1">
+                    <button id="btn-add-dir" class="btn sm" data-i18n>添加</button>
         </div>
-        <div class="tiny">让 claude 能读写工作区之外的目录。这些目录同时会成为文件浏览器的快捷入口。</div>
+                <div class="tiny" data-i18n>让 claude 能读写工作区之外的目录。这些目录同时会成为文件浏览器的快捷入口。</div>
       </div>
 
       <div class="field">
-        <label>输出风格</label>
+                <label data-i18n>输出风格</label>
         <select id="set-style">
-          <option value="">（默认）</option>
+                    <option value="" data-i18n>（默认）</option>
         </select>
       </div>
 
       <div class="field">
-        <label>思考强度（--effort）</label>
+                <label data-i18n>思考强度（--effort）</label>
         <select id="set-effort"></select>
-        <div class="tiny" id="effort-info">档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</div>
+                <div class="tiny" id="effort-info" data-i18n-html>档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</div>
       </div>
 
       <div class="field">
-        <label>自动压缩窗口（token）</label>
-        <input id="set-autocompact" type="number" inputmode="numeric" placeholder="留空 = 交给 claude 按窗口决定">
-        <div class="tiny" id="ac-info">用量逼近这个值时自动摘要历史。留空即不干预；也可在输入框打 <code>/autocompact &lt;n&gt;k</code>。</div>
+                <label data-i18n>自动压缩窗口（token）</label>
+                <input id="set-autocompact" type="number" inputmode="numeric" placeholder="留空 = 交给 claude 按窗口决定" data-i18n-attr="placeholder">
+                <div class="tiny" id="ac-info" data-i18n-html>用量逼近这个值时自动摘要历史。留空即不干预；也可在输入框打 <code>/autocompact &lt;n&gt;k</code>。</div>
       </div>
 
       <div class="field">
-        <label>运行状态</label>
-        <pre id="status-box" class="mono">读取中…</pre>
-        <button id="btn-cli-doctor" class="btn ghost sm">跑一次 doctor</button>
+                <label data-i18n>运行状态</label>
+                <pre id="status-box" class="mono" data-i18n>读取中…</pre>
+                <button id="btn-cli-doctor" class="btn ghost sm" data-i18n>跑一次 doctor</button>
         <pre id="cli-out" class="mono hidden"></pre>
       </div>
     </section>
@@ -239,18 +238,18 @@
     <!-- 能力 -->
     <section id="tab-caps" class="tab-pane hidden">
       <div id="caps-summary" class="tiny"></div>
-      <div class="field"><label>斜杠命令 <span id="c-count" class="pill"></span></label>
+            <div class="field"><label><span data-i18n>斜杠命令</span> <span id="c-count" class="pill"></span></label>
         <div id="caps-cmds" class="chips"></div></div>
-      <div class="field"><label>工具 <span id="t-count" class="pill"></span></label>
+            <div class="field"><label><span data-i18n>工具</span> <span id="t-count" class="pill"></span></label>
         <div id="caps-tools" class="chips"></div></div>
-      <div class="field"><label>技能 <span id="s-count" class="pill"></span></label>
+            <div class="field"><label><span data-i18n>技能</span> <span id="s-count" class="pill"></span></label>
         <div id="caps-skills" class="chips"></div></div>
-      <div class="field"><label>子代理 <span id="a-count" class="pill"></span></label>
+            <div class="field"><label><span data-i18n>子代理</span> <span id="a-count" class="pill"></span></label>
         <div id="caps-agents" class="chips"></div></div>
-      <div class="field"><label>MCP 服务器</label>
+            <div class="field"><label data-i18n>MCP 服务器</label>
         <div id="caps-mcp" class="chips"></div>
-        <button id="btn-refresh-mcp" class="btn ghost sm">查询 MCP</button></div>
-      <div class="field"><label>插件</label>
+                <button id="btn-refresh-mcp" class="btn ghost sm" data-i18n>查询 MCP</button></div>
+            <div class="field"><label data-i18n>插件</label>
         <div id="caps-plugins" class="chips"></div></div>
     </section>
   </div>
@@ -259,22 +258,22 @@
 <!-- ── 文件浏览器（全屏）── -->
 <div id="files" class="hidden">
   <div class="fs-head">
-    <button id="fs-close" class="icon-btn" aria-label="关闭">
+        <button id="fs-close" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
     <div id="fs-crumbs" class="fs-crumbs mono"></div>
-    <button id="fs-up" class="icon-btn" aria-label="上级目录">
+        <button id="fs-up" class="icon-btn" aria-label="上级目录" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
     </button>
-    <button id="fs-reload" class="icon-btn" aria-label="刷新">
+        <button id="fs-reload" class="icon-btn" aria-label="刷新" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg>
     </button>
   </div>
 
   <div class="fs-tools">
-    <input id="fs-search" placeholder="过滤当前目录…" autocomplete="off">
-    <label class="fs-chk"><input type="checkbox" id="fs-hidden"> 隐藏项</label>
-    <button id="fs-pick" class="btn ghost sm">选文件…</button>
+        <input id="fs-search" placeholder="过滤当前目录…" data-i18n-attr="placeholder" autocomplete="off">
+        <label class="fs-chk"><input type="checkbox" id="fs-hidden"> <span data-i18n>隐藏项</span></label>
+        <button id="fs-pick" class="btn ghost sm" data-i18n>选文件…</button>
   </div>
 
   <div id="fs-roots" class="chips fs-roots"></div>
@@ -286,7 +285,7 @@
 
   <div class="fs-foot">
     <span id="fs-count" class="tiny"></span>
-    <button id="fs-insert" class="btn sm">插入到输入框</button>
+        <button id="fs-insert" class="btn sm" data-i18n>插入到输入框</button>
   </div>
 </div>
 
@@ -295,32 +294,32 @@
   <img id="lightbox-img" alt="">
   <div class="lb-bar">
     <span id="lightbox-cap" class="mono"></span>
-    <a id="lightbox-dl" class="btn ghost sm" download>下载</a>
-    <button id="lightbox-close" class="btn ghost sm">关闭</button>
+        <a id="lightbox-dl" class="btn ghost sm" download data-i18n>下载</a>
+        <button id="lightbox-close" class="btn ghost sm" data-i18n>关闭</button>
   </div>
 </div>
 
 <!-- ── 快捷面板（＋ 按钮）── -->
 <div id="sheet" class="hidden">
   <div class="sheet-panel">
-    <button class="sheet-item" data-act="attach">附加图片 / 文件</button>
-    <button class="sheet-item" data-act="browse">浏览文件…</button>
-    <button class="sheet-item" data-act="new">新建会话</button>
-    <button class="sheet-item" data-act="model">切换模型 /model</button>
-    <button class="sheet-item" data-act="effort">思考强度 /effort</button>
-    <button class="sheet-item" data-act="context">查看上下文占用 /context</button>
-    <button class="sheet-item" data-act="cost">查看花费 /cost</button>
-    <button class="sheet-item" data-act="compact">压缩上下文 /compact</button>
-    <button class="sheet-item" data-act="config">查看配置 /config</button>
-    <button class="sheet-item" data-act="usage">用量 /usage</button>
-    <button class="sheet-item" data-act="mcp">MCP 服务器 /mcp</button>
-    <button class="sheet-item" data-act="agents">子代理 /agents</button>
-    <button class="sheet-item" data-act="caps">打开能力面板</button>
+        <button class="sheet-item" data-act="attach" data-i18n>附加图片 / 文件</button>
+    <button class="sheet-item" data-act="browse" data-i18n>浏览文件…</button>
+    <button class="sheet-item" data-act="new" data-i18n>新建会话</button>
+    <button class="sheet-item" data-act="model" data-i18n>切换模型 /model</button>
+    <button class="sheet-item" data-act="effort" data-i18n>思考强度 /effort</button>
+    <button class="sheet-item" data-act="context" data-i18n>查看上下文占用 /context</button>
+    <button class="sheet-item" data-act="cost" data-i18n>查看花费 /cost</button>
+    <button class="sheet-item" data-act="compact" data-i18n>压缩上下文 /compact</button>
+    <button class="sheet-item" data-act="config" data-i18n>查看配置 /config</button>
+    <button class="sheet-item" data-act="usage" data-i18n>用量 /usage</button>
+    <button class="sheet-item" data-act="mcp" data-i18n>MCP 服务器 /mcp</button>
+    <button class="sheet-item" data-act="agents" data-i18n>子代理 /agents</button>
+    <button class="sheet-item" data-act="caps" data-i18n>打开能力面板</button>
   </div>
 </div>
 
 <div id="toast" class="hidden"></div>
-<div id="dropzone" class="hidden"><div>松手即附加</div></div>
+<div id="dropzone" class="hidden"><div data-i18n>松手即附加</div></div>
 
 <!-- 顺序要紧：语言注册表 → i18n（定义 I18N.t，按需插入当前语言的词典并翻译静态标记）→ app.js -->
 <script src="/langs.js"></script>

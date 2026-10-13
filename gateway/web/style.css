@@ -58,7 +58,7 @@ body{
 .msg.user .who .dot{background:var(--tool)}
 .msg.bot  .who .dot{background:var(--accent)}
 .msg.sys  .who .dot{background:var(--purple)}
-.who .tag{margin-left:auto;font-weight:400;color:var(--fg3);font-size:10.5px}
+.who .tag{margin-inline-start:auto;font-weight:400;color:var(--fg3);font-size:10.5px}
 
 .bubble{
   background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
@@ -70,12 +70,12 @@ body{
 .bubble p{margin:0 0 9px} .bubble p:last-child{margin-bottom:0}
 .bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:13px 0 7px;font-size:15.5px;line-height:1.35}
 .bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child{margin-top:0}
-.bubble ul,.bubble ol{margin:6px 0;padding-left:21px}
+.bubble ul,.bubble ol{margin:6px 0;padding-inline-start:21px}
 .bubble li{margin:3px 0}
 .bubble a{color:var(--tool)}
 .bubble strong{color:#fff;font-weight:600}
 .bubble hr{border:0;border-top:1px solid var(--line);margin:12px 0}
-.bubble blockquote{margin:8px 0;padding:2px 0 2px 11px;border-left:3px solid var(--line);color:var(--fg2)}
+.bubble blockquote{margin:8px 0;padding:2px 0;padding-inline-start:11px;border-inline-start:3px solid var(--line);color:var(--fg2)}
 
 code{
   background:#0b0f14;border:1px solid var(--line);border-radius:6px;
@@ -87,14 +87,14 @@ pre{
 }
 pre code{background:none;border:0;padding:0;font-size:12.3px;line-height:1.55}
 .copy-btn{
-  position:absolute;top:6px;right:6px;background:var(--bg4);border:1px solid var(--line);
+    position:absolute;top:6px;inset-inline-end:6px;background:var(--bg4);border:1px solid var(--line);
   color:var(--fg2);border-radius:7px;font-size:10.5px;padding:3px 8px;
 }
 
 /* 表格（/context 等命令会输出） */
 .tbl-wrap{overflow-x:auto;margin:9px 0;-webkit-overflow-scrolling:touch}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
-th,td{border:1px solid var(--line);padding:5px 9px;text-align:left;white-space:nowrap}
+th,td{border:1px solid var(--line);padding:5px 9px;text-align:start;white-space:nowrap}
 th{background:var(--bg3);color:var(--fg);font-weight:600}
 td{color:var(--fg2)}
 
@@ -208,15 +208,15 @@ td{color:var(--fg2)}
 .pitem:active,.pitem.sel{background:var(--bg4)}
 .pitem .pi-name{font-family:"SF Mono",Menlo,monospace;font-size:12.5px;color:var(--fg)}
 .pitem .pi-name.cmd{color:var(--purple)}
-.pitem .pi-desc{color:var(--fg3);font-size:11.5px;margin-left:auto;text-align:right;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pitem .pi-desc{color:var(--fg3);font-size:11.5px;margin-inline-start:auto;text-align:end;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pitem .pi-cat{font-size:10px;color:var(--fg3);border:1px solid var(--line);border-radius:5px;padding:1px 5px;flex:0 0 auto}
 .pgroup{padding:7px 10px 3px;font-size:10.5px;color:var(--fg3);letter-spacing:.5px}
 
 /* ── 抽屉 ── */
 #drawer{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
 .drawer-panel{
-  position:absolute;top:0;right:0;bottom:0;width:min(440px,92vw);
-  background:var(--bg2);border-left:1px solid var(--line);
+    position:absolute;top:0;inset-inline-end:0;bottom:0;width:min(440px,92vw);
+  background:var(--bg2);border-inline-start:1px solid var(--line);
   padding:calc(var(--safe-t) + 12px) 16px calc(var(--safe-b) + 16px);
   overflow-y:auto;-webkit-overflow-scrolling:touch;animation:slide .2s ease;
 }
@@ -287,7 +287,7 @@ td{color:var(--fg2)}
   font-family:"SF Mono",Menlo,monospace;
 }
 .chip.hl{color:var(--purple);border-color:#332a4d}
-.pill{font-size:10px;background:var(--bg4);border-radius:9px;padding:1px 7px;color:var(--fg3);margin-left:4px}
+.pill{font-size:10px;background:var(--bg4);border-radius:9px;padding:1px 7px;color:var(--fg3);margin-inline-start:4px}
 
 /* 快捷面板 */
 #sheet{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
@@ -297,7 +297,7 @@ td{color:var(--fg2)}
 }
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
 .sheet-item{
-  width:100%;text-align:left;background:transparent;border:0;color:var(--fg);
+    width:100%;text-align:start;background:transparent;border:0;color:var(--fg);
   font:inherit;font-size:14.5px;padding:12px 10px;border-radius:10px;
 }
 .sheet-item:active{background:var(--bg3)}
@@ -355,7 +355,7 @@ td{color:var(--fg2)}
 }
 .att-name{font-size:9.5px;color:var(--fg3);max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .att-x{
-  position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;
+    position:absolute;top:-5px;inset-inline-end:-5px;width:18px;height:18px;border-radius:50%;
   background:var(--bg4);border:1px solid var(--line);color:var(--fg2);
   font-size:10px;line-height:1;display:grid;place-items:center;padding:0;
 }
@@ -437,7 +437,7 @@ td{color:var(--fg2)}
 
 @media(min-width:760px){
   #chat{padding:20px 22px 8px}
-  #popup{left:auto;right:22px;width:520px;bottom:96px}
+    #popup{inset-inline-start:auto;inset-inline-end:22px;width:520px;bottom:96px}
   /* 宽屏：预览与列表并排 */
   #fs-body{flex-direction:row}
   #fs-body .fs-preview{flex:0 0 42%;max-height:none}
@@ -501,3 +501,10 @@ td{color:var(--fg2)}
 .prov-state.ok{color:var(--ok)} .prov-state.err{color:var(--err)} .prov-state.warn{color:var(--warn)}
 .prov-manual{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .prov-manual .mono{word-break:break-all;font-size:11px}
+
+/* ── 从右往左的语言（阿拉伯语）────────────────────────────────────────
+   上面的排版用的是**逻辑属性**（inline-start / inline-end / text-align:start…），
+   所以 dir="rtl" 时这些位置会自动镜像，不需要单独写一套规则。
+   这里只补两处物理位置无法自动翻转的地方。 */
+html[dir="rtl"] #dropzone{right:12px;left:12px}
+html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{direction:ltr;text-align:left}
