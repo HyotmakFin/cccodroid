@@ -8,6 +8,27 @@ import java.util.Map;
 final class Env {
     static final int PORT = 8791;
 
+    /** 网关访问令牌（server.mjs 首次启动时生成，0600，存在应用私有目录）。见 server.mjs「访问控制」 */
+    private static volatile File tokenFile = new File("/data/data/cc.codroid/files/home/.gateway-token");
+
+    static String token() {
+        try { return new String(java.nio.file.Files.readAllBytes(tokenFile.toPath()), "UTF-8").trim(); }
+        catch (Exception e) { return ""; }
+    }
+
+    /** 连本机网关：自动带上令牌头。网关没生成令牌前会得到 403，调用方照"没就绪"处理即可 */
+    static java.net.HttpURLConnection gateway(String path) throws java.io.IOException {
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:" + PORT + path).openConnection();
+        c.setRequestProperty("X-CC-Token", token());
+        return c;
+    }
+
+    /** WebView 首次加载的地址：带 ?t= 让网关种 Cookie */
+    static String uiUrl() {
+        String t = token();
+        return "http://127.0.0.1:" + PORT + "/" + (t.isEmpty() ? "" : "?t=" + t);
+    }
+
     final File files, usr, home, app, log;
 
     Env(Context c) {
@@ -16,6 +37,7 @@ final class Env {
         home = new File(files, "home");
         app = new File(files, "app");
         log = new File(home, "gateway.log");
+        tokenFile = new File(home, ".gateway-token");
     }
 
     File bin(String name) { return new File(usr, "bin/" + name); }
@@ -68,6 +90,7 @@ final class Env {
         File sh = shared();
         if (sh != null) e.put("CCAPP_SHARED", sh.getPath());
         e.put("CCAPP_PORT", String.valueOf(PORT));
+        e.put("CCAPP_TOKEN_FILE", new File(home, ".gateway-token").getPath());
         e.put("CCAPP_SHELL", bin("bash").getPath());
         e.put("CCAPP_LOADER", new File(usr, "glibc/lib/ld-linux-aarch64.so.1").getPath());
         e.put("CCAPP_GLIBC_LIB", new File(usr, "glibc/lib").getPath());

@@ -2226,10 +2226,65 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
   }
 }
 
+// ── 访问控制 ──────────────────────────────────────────────────────────
+// 只监听 127.0.0.1 在安卓上不是安全边界：同机任何有联网权限的应用都能连 127.0.0.1，
+// 手机浏览器里的网页也能向它发"简单请求"（text/plain 的 POST 不触发 CORS 预检）。
+// 而 /api/chat 等于本机任意命令执行，经 priv 还能拿到 Shizuku 的 shell 身份。所以：
+//   1. Host 必须是 127.0.0.1:端口 / localhost:端口 —— 挡 DNS 重绑定；
+//   2. 带 Origin 的请求必须来自本页 —— 挡网页跨站发请求；
+//   3. /api/* 必须带令牌：X-CC-Token 头、cc_t Cookie，或首页地址里的 ?t=（宿主 WebView 首次加载用）。
+//      令牌在应用私有目录里（0600），别的应用读不到；首页带对 ?t= 时种一个 HttpOnly + SameSite=Strict 的 Cookie，
+//      之后界面的 fetch / EventSource / <img src> 都自动带上，前端不用改。
+//   令牌跨网关重启保持不变（WebView 不会因为网关重启掉线）；删掉文件即轮换。
+const TOKEN_FILE = process.env.CCAPP_TOKEN_FILE || path.join(CFG.home, ".gateway-token");
+const TOKEN = (() => {
+  try {
+    const t = fs.readFileSync(TOKEN_FILE, "utf8").trim();
+    if (/^[0-9a-f]{64}$/.test(t)) { try { fs.chmodSync(TOKEN_FILE, 0o600); } catch {} return t; }
+  } catch {}
+  const t = crypto.randomBytes(32).toString("hex");
+  try { fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true }); } catch {}
+  const tmp = TOKEN_FILE + ".tmp";
+  fs.writeFileSync(tmp, t + "\n", { mode: 0o600 });
+  fs.renameSync(tmp, TOKEN_FILE);
+  return t;
+})();
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`]);
+const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
+
+function tokenOk(t) {
+  if (typeof t !== "string" || t.length !== TOKEN.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(t), Buffer.from(TOKEN));
+}
+function cookieToken(req) {
+  const m = /(?:^|;\s*)cc_t=([0-9a-f]{64})(?:;|$)/.exec(req.headers.cookie || "");
+  return m ? m[1] : "";
+}
+/** 返回 null 表示放行；否则返回拒绝的状态码 */
+function denyReason(req, u) {
+  if (!ALLOWED_HOSTS.has(String(req.headers.host || "").toLowerCase())) return 421;
+  const origin = req.headers.origin;
+  if (origin !== undefined && !ALLOWED_ORIGINS.has(String(origin).toLowerCase())) return 403;
+  if (!u.pathname.startsWith("/api/")) return null;          // 静态页面与资源不含秘密
+  if (tokenOk(String(req.headers["x-cc-token"] || "")) || tokenOk(cookieToken(req))) return null;
+  return 403;
+}
+
 // ── 路由 ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://127.0.0.1:${CFG.port}`);
   const p = u.pathname;
+
+  const deny = denyReason(req, u);
+  if (deny) {
+    log(`拒绝请求 ${req.method} ${p} → ${deny}（host=${req.headers.host || "-"} origin=${req.headers.origin || "-"}）`);
+    req.resume();
+    return sendJson(res, deny, { error: deny === 421 ? "bad host" : "forbidden" });
+  }
+  // 宿主 WebView 首次加载首页时带 ?t=令牌：种 Cookie，之后同源请求自动带上
+  if (req.method === "GET" && (p === "/" || p === "/index.html") && tokenOk(u.searchParams.get("t") || "")) {
+    res.setHeader("Set-Cookie", `cc_t=${TOKEN}; Path=/; HttpOnly; SameSite=Strict`);
+  }
 
   try {
     if (req.method === "GET" && p === "/api/status") {
