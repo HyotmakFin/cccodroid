@@ -1723,7 +1723,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="prov-state" id="pc-result"></div>
       <div class="tiny">${t("端点")} <code>${esc(p.baseUrl)}</code>${p.defaultModel ? ` · ${t("默认模型")} <code>${esc(p.defaultModel)}</code>` : ""}
         ${p.keyUrl ? `<br><a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${t("去官网创建 Key ↗")}</a>` : ""}
-        <br>${esc(p.hint || t("Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。"))}</div>`;
+        <br>${esc(p.hint || t("Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。"))}</div>`;
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;

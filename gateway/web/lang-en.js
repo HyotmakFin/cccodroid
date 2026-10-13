@@ -137,7 +137,7 @@ window.I18N_DICT.en = {
   "端点": "Endpoint",
   "默认模型": "Default model",
   "去官网创建 Key ↗": "Create a key on the provider's site ↗",
-  "Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。": "The key is stored only in this app's private directory, passed to claude as an environment variable at runtime, and used to call the provider's Anthropic-compatible endpoint directly.",
+  "Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。": "The key is stored only in this app's private directory and read on demand by claude's apiKeyHelper (never placed in environment variables); it is used to call the provider's Anthropic-compatible endpoint directly.",
   "粘贴 API Key": "Paste API key",
   "已保存（…{tail}），留空则不改": "Saved (…{tail}); leave empty to keep",
   "保存": "Save",

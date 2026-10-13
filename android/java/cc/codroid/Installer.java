@@ -244,13 +244,14 @@ final class Installer {
         new File(env.usr, "tmp").mkdirs();
         env.home.mkdirs();
 
+        long since = System.currentTimeMillis() - 2000;      // 文件系统时间戳精度留点余量
         ui.step("首次运行配置…");
         int rc = run(env.bin("bash").getPath(), new File(env.usr, "libexec/devkit/first-run.sh").getPath());
         if (rc != 0) ui.step("（first-run 返回 " + rc + "，不影响使用）");
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
-        pruneManifest();
+        pruneManifest(since);
         try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
         write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
         pend.delete();
@@ -283,20 +284,30 @@ final class Installer {
     // ── 完整性：工具包里的 libexec/devkit/MANIFEST 记着每个文件的 sha256 与大小 ──
     static final String MANIFEST = "libexec/devkit/MANIFEST", LOCAL_MANIFEST = ".devkit-manifest";
 
-    /** first-run 里的 postinst 可能删掉包里个别文件：装完以后按实际在的文件修剪一份本机基线，免得每次都报"缺失" */
-    private void pruneManifest() {
+    /**
+     * 本机校验基线：包里的清单 + first-run 的改动。postinst 会删掉个别文件（剔除），也会现场重写一些
+     * （例如 git-delta 重新生成补全脚本 —— 按改动时间认出来，按实际内容重记）。tar 里的文件保留了打包时的
+     * 修改时间，first-run 写过的才是现在的时间，所以拿 since 一比就分得开。
+     */
+    private void pruneManifest(long since) {
         File man = new File(env.usr, MANIFEST);
         if (!man.isFile()) return;
         try {
             StringBuilder sb = new StringBuilder();
-            int dropped = 0;
+            int dropped = 0, rebased = 0;
             for (String l : java.nio.file.Files.readAllLines(man.toPath(), StandardCharsets.UTF_8)) {
                 String[] f = l.split(" ", 3);
                 if (f.length != 3) continue;
-                if (new File(env.usr, f[2]).isFile()) sb.append(l).append('\n'); else dropped++;
+                File file = new File(env.usr, f[2]);
+                if (!file.isFile()) { dropped++; continue; }
+                if (file.lastModified() >= since) {
+                    String h = sha256(file);
+                    if (!h.equals(f[0])) { l = h + " " + file.length() + " " + f[2]; rebased++; }
+                }
+                sb.append(l).append('\n');
             }
             write(new File(env.usr, LOCAL_MANIFEST), sb.toString());
-            if (dropped > 0) ui.step("（首次配置去掉了 " + dropped + " 个文件，已从校验基线里剔除）");
+            if (dropped + rebased > 0) ui.step("（首次配置删掉 " + dropped + " 个、改写 " + rebased + " 个文件，校验基线已按实际情况记下）");
         } catch (IOException e) { ui.step("（校验基线没写成：" + e.getMessage() + "）"); }
     }
 

@@ -128,7 +128,7 @@ window.I18N_DICT["zh-Hant"] = {
   "端点": "端點",
   "默认模型": "預設模型",
   "去官网创建 Key ↗": "去官網建立 Key ↗",
-  "Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。": "Key 只存在本機應用私有目錄，執行時以環境變數交給 claude，直連廠商的 Anthropic 相容端點。",
+  "Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。": "Key 只存在本機應用私有目錄，由 claude 的 apiKeyHelper 按需讀取（不進環境變數），直連廠商的 Anthropic 相容端點。",
   "粘贴 API Key": "貼上 API Key",
   "已保存（…{tail}），留空则不改": "已儲存（…{tail}），留空則不改",
   "保存": "儲存",

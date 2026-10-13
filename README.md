@@ -45,6 +45,8 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Claude Code: silent updates from the official channel (stable / latest); running conversations are not affected.
   - cccodroid itself: downloaded, signature-checked, then offered for install; installed silently when idle if Shizuku is available.
   - Toolchain: pre-downloaded on Wi‑Fi only and swapped in the next time the app opens; anything you installed with pip / npm -g is kept.
+  - Updates never cut each other off: while the toolchain is downloading or being replaced, the app update waits. The replacement is checked against the release manifest before the old toolchain is touched, and if it is interrupted (app restart, process killed) the next launch finishes it or rolls back.
+  - **Verify / Repair** in Settings checks every toolchain file against its recorded hash; Repair reinstalls the same version and keeps your own packages. A quick check also runs at each launch.
 - **USB debugging of another device**: connect it with an OTG cable and run `usb-adb`, then `adb devices / install / shell` as usual.
 - **Self-test**: `cccodroid-selftest` exercises 71 tools and usages; the tool notes are injected into Claude's system prompt so it knows what it has.
 
@@ -115,6 +117,7 @@ Layout:
 
 ## Special thanks
 
+- **[DeepSeek Harness for Android](https://github.com/woaiys3/deepseek-harness-android-app)** (woaiys3): running AI agents on a phone without root, elevating through Shizuku, keeping alive with a foreground service — it walked these paths first. cccodroid's early exploration and development happened inside the environment it built; that Claude Code runs on Android the way it does today rests on the foundation laid by it and its author.
 - **[Archify](https://github.com/tt-a1i/archify)** (tt-a1i, MIT): the architecture diagram above was made with it and passed its layout checks; license in [ThirdPartyLicenses/Archify](ThirdPartyLicenses/Archify/LICENSE).
 - **[Termux](https://termux.dev)**: the toolchain is assembled from its official packages.
 - **[Shizuku](https://shizuku.rikka.app)** (RikkaApps): system privileges without root.

@@ -128,7 +128,7 @@ window.I18N_DICT["fr"] = {
   "端点": "Point d'accès",
   "默认模型": "Modèle par défaut",
   "去官网创建 Key ↗": "Créer une clé sur le site du fournisseur ↗",
-  "Key 只存在本机应用私有目录，运行时以环境变量交给 claude，直连厂商的 Anthropic 兼容端点。": "La clé n'est conservée que dans le répertoire privé de l'application ; elle est transmise à claude par variable d'environnement et sert à appeler directement le point d'accès compatible Anthropic du fournisseur.",
+  "Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。": "La clé n'est conservée que dans le répertoire privé de l'application et lue à la demande par l'apiKeyHelper de claude (jamais placée dans une variable d'environnement) ; elle sert à appeler directement le point d'accès compatible Anthropic du fournisseur.",
   "粘贴 API Key": "Coller la clé d'API",
   "已保存（…{tail}），留空则不改": "Enregistrée (…{tail}) ; laisser vide pour conserver",
   "保存": "Enregistrer",

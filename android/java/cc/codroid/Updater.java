@@ -89,8 +89,18 @@ final class Updater {
                 devkit.size = st.getLong("size"); devkit.url = devkit.base + f.getName(); devkit.latest = tagOf(devkit.base);
                 devkit.tarSha = st.optString("tarSha256", null);
                 devkit.set("ready", "");
+                dropStagedIfInstalled();
             }
         } catch (Exception ignored) {}
+    }
+
+    /** 已下载待装的那份其实已经装上了（上次被打断、recover() 接着装完的）：删掉，别再装一遍 */
+    void dropStagedIfInstalled() {
+        if (!"ready".equals(devkit.state) || devkit.sha == null || !devkit.sha.equals(installedDevkitSha())) return;
+        if (devkit.file != null) devkit.file.delete();
+        prefs().edit().remove("devkitStaged").apply();
+        refreshCurrent();
+        devkit.set("uptodate", "");
     }
 
     SharedPreferences prefs() { return ctx.getSharedPreferences("upd", Context.MODE_PRIVATE); }

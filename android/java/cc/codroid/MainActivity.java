@@ -96,6 +96,7 @@ public class MainActivity extends Activity {
                 GatewayService.pause(true);
                 try { if (ins.recover()) say("✓ 开发工具包已恢复到一致状态"); }
                 finally { GatewayService.pause(false); }
+                Updater.get(this).dropStagedIfInstalled();
                 if (!env.devkitReady()) {
                     String src = null;
                     for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { src = l; break; }
@@ -330,6 +331,7 @@ public class MainActivity extends Activity {
     }
 
     private void say(String m) {
+        android.util.Log.i("cccodroid-setup", m);      // 安装 / 更新出问题时，logcat 里能看到走到了哪一步
         ui.post(() -> {
             log.append(m + "\n");
             if (log.getLineCount() > 400) log.setText(log.getText().subSequence(log.getText().length() / 2, log.getText().length()));

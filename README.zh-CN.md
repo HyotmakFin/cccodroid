@@ -46,6 +46,8 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - Claude Code：从官方渠道静默更新（stable / latest 可选），正在跑的对话不受影响；
   - cccodroid 本体：下载后核对签名，提醒安装；有 Shizuku 时空闲自动静默安装；
   - 开发工具包：只在 Wi‑Fi 下预先下载，下次打开应用时替换；你用 pip / npm -g 装进去的东西会保留。
+  - 更新之间不会互相打断：工具包在下载或替换时，应用本体的更新会等它完成。替换前先按发布清单核对解出来的内容，核对不过就不动旧工具包；替换中途被打断（应用重启、进程被杀），下次打开时会接着装完或退回旧版。
+  - 设置页的**校验 / 修复**：逐个文件核对工具包的哈希；修复会重装同一版本，你自己装的包照常保留。每次启动也会做一次快速自检。
 - **USB 调试另一台设备**：OTG 线连上后运行 `usb-adb`，就能照常 `adb devices / install / shell`。
 - **自检**：`cccodroid-selftest` 逐项实测 71 个工具与用法；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
 
@@ -116,6 +118,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 
 ## 特别鸣谢
 
+- **[DeepSeek Harness 安卓版](https://github.com/woaiys3/deepseek-harness-android-app)**（woaiys3）：免 root 在手机上跑 AI 代理、借 Shizuku 提权、前台保活 —— 这些路是它先蹚出来的。cccodroid 的早期探索和开发都在它搭起的环境里完成，Claude Code 能在安卓上走到今天，地基是它和它的作者打下的。
 - **[Archify](https://github.com/tt-a1i/archify)**（tt-a1i，MIT）：上面的架构图用它生成，经过它的布局校验；许可证见 [ThirdPartyLicenses/Archify](ThirdPartyLicenses/Archify/LICENSE)。
 - **[Termux](https://termux.dev)**：开发工具包由它的官方软件包组装。
 - **[Shizuku](https://shizuku.rikka.app)**（RikkaApps）：不 root 也能拿到系统权限。
