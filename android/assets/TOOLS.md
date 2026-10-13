@@ -12,10 +12,13 @@
 
 - **C/C++**：`cc`/`c++`/`clang`/`clang++` 21（`gcc` 也指向 clang），lld，C++20 可用。**只能动态链接**：没有静态 libc，别用 `-static`。产物由 `/system/bin/linker64` 加载，库在 `$PREFIX/lib`、头文件在 `$PREFIX/include`。
 - **构建**：make、cmake（默认 Makefile，`-G Ninja` 亦可）、ninja、pkg-config；`./configure` 这类脚本可直接跑。
-- **调试**：gdb（可 run / bt）、strace、patchelf。
+- **调试**：gdb、strace、patchelf。⚠️ **gdb 默认下不了断点** —— `$SHELL` 指向应用造的 wrapper，
+  gdb 的 `startup-with-shell` 经它启动 inferior 后拿不到 PIE 重定位基址，报
+  `Cannot insert breakpoint … Cannot access memory at address 0x…`（看着像内存问题，其实不是）。
+  用 `SHELL=/bin/sh gdb …`、`env -u SHELL gdb …`，或 `(gdb) set startup-with-shell off` 即可。
 - **Python 3.14**：ssl、sqlite3、ctypes 可用。装库用 `pip install --user <包>`（或在 venv 里装）；`python3 -m venv <目录>` 建出的环境自带 pip。带 C 扩展的包会现场用 clang 编译，较慢。
 - **Node 26 + npm 11**：npm install、npx、`node_modules/.bin` 均可（项目要放在工作区，不能放 /sdcard）。
-- **Java / 安卓构建**：openjdk-21（java、javac、jar、keytool），aapt2、d8、apksigner。没有自带 `android.jar`（Android SDK 平台包需用户自行下载，许可不允许随包分发）。
+- **Java / 安卓构建**：openjdk-21（java、javac、jar、keytool），aapt2、d8、apksigner。没有自带 `android.jar`（Android SDK 平台包需用户自行下载，许可不允许随包分发）—— 但 `aapt2 link` 可以拿设备自带的 `/system/framework/framework-res.apk` 顶替（`-I` 参数），资源链接能正常完成。
 - **版本控制与网络**：git（https / ssh）、curl、openssl、ssh、ssh-keygen。
 - **命令行工具**：rg、fd、bat、delta、hx、jq、yq、sqlite3、typst、duckdb、magick（ImageMagick）、man、file、tar、xz、zstd、zip / unzip。
 - **Claude Code** 本身：终端里 `claude` 命令可用。
@@ -24,6 +27,29 @@
 
 需要 pm / am / settings / dumpsys / logcat / screencap / input 之类的系统能力时，用 `priv '<命令>'`：经 Shizuku 以 shell 身份（uid 2000）执行，标准输入、输出与退出码都照常传递；`priv -- 程序 参数…` 不经 sh 直接执行。
 先 `priv --status` 看是否可用：没装 / 没启动 / 没授权 Shizuku 时如实告诉用户去 cccodroid 设置页处理，别反复重试。
+
+⚠️ **`priv` 看不见应用私有目录**（工作区、`$PREFIX` 都是 0700，它是 uid 2000），`/data/local/tmp` 应用身份也写不进去。
+所以**要在 `priv` 里跑的东西必须先放到共享目录**，否则报的是误导性的 `inaccessible or not found` / `Permission denied`：
+
+```sh
+cp 脚本.sh /sdcard/cccodroid/            # 先中转
+priv 'sh /sdcard/cccodroid/脚本.sh'      # 再执行
+```
+
+## 这些坑不报错，但结果是错的
+
+比崩溃更麻烦的一类：退出码 0、stderr 干净，可结果不对。别被"没报错"骗过去。
+
+| 场景 | 现象 | 怎么办 |
+|---|---|---|
+| Java 任何程序 | 默认时区是 GMT（设备是 Asia/Shanghai），差 8 小时 | `TZ=Asia/Shanghai` 或 `-Duser.timezone=Asia/Shanghai` |
+| Python `zoneinfo` | 598 个时区全部 `ZoneInfoNotFoundError`；但 `time.tzset()` 正常，会掩盖它 | `pip install tzdata` |
+| `npm install` 原生包 | 原生模块根本没编译（`.node` 不存在），真用到时才炸 | `npm rebuild <包>` |
+| typst 编译中文 | PDF 里中文全是空白方框 | `TYPST_FONT_PATHS=/system/fonts typst compile …` |
+| hx（Helix） | 一个 tree-sitter 语法都没装，全语言无高亮；`hx --health` 却照打 `Tree-sitter parser: ✓` | `hx --grammar fetch && hx --grammar build` |
+| `ASAN_OPTIONS=detect_leaks=1` | 进程启动即 abort，连内存越界报告都出不来 | 别设这个变量（平台不支持泄漏检测） |
+| `-fsanitize=leak` | 链接失败 `undefined symbol: __lsan::lsan_flags`（Termux 的 lsan 归档自身残缺） | 改用 `-fsanitize=address` |
+| `-fsanitize=thread` | 一起线程就 SIGSEGV | 别用；ASan / HWASan 正常 |
 
 ## 出问题时
 
@@ -36,9 +62,14 @@ enosys-run <程序> [参数...]
 enosys-run -v <程序> ...        # 打印每次拦截，确认是不是这个原因
 ```
 
-原因是安卓 seccomp 拦了白名单外的系统调用 —— 动态链接的程序由 `seccomp-enosys.so`
-兜住，**静态二进制（Go CLI 居多：gh / lazygit / kubectl / terraform…）挂不上 `--preload`**，
-所以要用这个命令从外面做同样的事（ptrace，**不改动目标程序**）。
+原因是安卓 seccomp 拦了白名单外的系统调用。**只有 `claude` 本体自动挂了垫片**
+（glibc 加载器的 `--preload`），**普通动态链接的程序并没有 —— 它照样会被 SIGSYS 打死**；
+静态二进制（Go CLI 居多：gh / lazygit / kubectl / terraform…）又挂不上 `--preload`。
+所以这两类都套 `enosys-run`（ptrace，**不改动目标程序**）。
+
+被拦的是「比 targetSdk 更新的系统调用」那批，实际会撞上的是
+`clone3`（glibc ≥ 2.34 的 `pthread_create` 首选）、`faccessat2`、`openat2`、`epoll_pwait2`；
+`mount` / `umount2` / `reboot` / `kcmp` 这类也拦。
 
 判断特征：**同一个程序里有的子命令崩、有的正常** —— 比如 `gh api` 一直好使而
 `gh pr create` 必崩（前者不查找可执行文件，后者要找 `git`）。别据此以为"只是个别命令有 bug"。
