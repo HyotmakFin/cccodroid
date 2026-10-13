@@ -11,6 +11,14 @@
 > 安装时从 Anthropic 官方渠道下载，按官方清单校验 sha256，不做任何修改。
 
 
+## 为什么
+
+在手机上用 AI 干活，模型要真正动手（跑代码、改文件、打包）时，通常得把任务送进云端沙箱，手机只是一块显示屏。
+cccodroid 让执行回到你自己的设备上：云端只负责模型推理，代码、文件、工具链都留在本地，环境不会随会话销毁，还能直接触达设备本身。
+这套做法不绑定某一个代理，任何能在 Linux arm64 上运行的命令行 AI 代理都能这样搬上手机。
+
+详见 **[设计哲学](docs/design-philosophy.zh-CN.md)**。
+
 ## 能做什么
 
 - **官方 Claude Code + 图形界面**：对话、流式输出、思考过程、工具调用、文件浏览器、历史会话。
@@ -102,7 +110,8 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `android/` | Java 外壳、Manifest、资源、终端小工具（`assets/bin/`）、原生小库（`native/`） |
 | `gateway/` | 网关与界面（源头目前在作者的另一个仓库，由 `scripts/sync-shared.sh` 同步） |
 | `devkit/` | 开发工具包构建脚本与清单 |
-| `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 静态 SVG） |
+| `docs/design-philosophy.zh-CN.md` | 项目为什么存在、背后的原则 |
+| `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 浅色 / 深色 PNG） |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
 
 ## 特别鸣谢

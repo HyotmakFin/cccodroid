@@ -10,6 +10,14 @@ write code, compile C/C++, run Python / Node, build APKs and push with git — a
 > cccodroid is a third-party project and is not affiliated with Anthropic. It runs the **official, unmodified Claude Code**:
 > downloaded from Anthropic's official channel at install time, verified against the official sha256 manifest, never modified.
 
+## Why
+
+When you use AI on a phone and the model needs to actually do something (run code, edit files, build a package), the work usually goes to a cloud sandbox, and the phone is just a screen.
+cccodroid brings execution back to your own device: the cloud does model inference, while your code, files and toolchain stay local, the environment persists across sessions, and the agent can reach the device itself.
+The approach is not tied to one agent — any command-line AI agent that runs on Linux arm64 can be brought to a phone the same way.
+
+See **[Design philosophy](docs/design-philosophy.md)**.
+
 ## Features
 
 - **Official Claude Code with a GUI**: chat, streaming output, thinking, tool calls, file browser, session history.
@@ -101,7 +109,8 @@ Layout:
 | `android/` | Java shell, Manifest, resources, terminal helpers (`assets/bin/`), native libraries (`native/`) |
 | `gateway/` | Gateway and UI (currently sourced from the author's other repository and synced by `scripts/sync-shared.sh`) |
 | `devkit/` | Toolchain build script and manifests |
-| `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → static SVG) |
+| `docs/design-philosophy.md` | Why the project exists and the principles behind it |
+| `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → light / dark PNG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |
 
 ## Special thanks
