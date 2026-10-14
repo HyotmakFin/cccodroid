@@ -81,6 +81,8 @@ final class Env {
         e.put("PATH", usr.getPath() + "/bin:" + new File(app, "bin").getPath() + ":/system/bin:/system/xbin");
         e.put("LANG", "en_US.UTF-8");
         e.put("TERM", "xterm-256color");
+        // typst 自带的只有拉丁字体，不给它路径中文就渲染成空白方框；安卓的字体都在 /system/fonts
+        e.put("TYPST_FONT_PATHS", "/system/fonts");
         e.put("SHELL", bin("bash").getPath());
         // 网关（server.mjs）认的变量
         e.put("CCAPP_PREFIX", usr.getPath());
