@@ -20,7 +20,7 @@
 - **Node 26 + npm 11**：npm install、npx、`node_modules/.bin` 均可（项目要放在工作区，不能放 /sdcard）。
 - **Java / 安卓构建**：openjdk-21（java、javac、jar、keytool），aapt2、d8、apksigner。没有自带 `android.jar`（Android SDK 平台包需用户自行下载，许可不允许随包分发）—— 但 `aapt2 link` 可以拿设备自带的 `/system/framework/framework-res.apk` 顶替（`-I` 参数），资源链接能正常完成。
 - **版本控制与网络**：git（https / ssh）、curl、openssl、ssh、ssh-keygen。
-- **命令行工具**：rg、fd、bat、delta、hx、jq、yq、sqlite3、typst、duckdb、magick（ImageMagick）、man、file、tar、xz、zstd、zip / unzip。
+- **命令行工具**：rg、fd、bat、delta、hx（+ `hx-grammar` 装语法）、jq、yq、sqlite3、typst、duckdb、magick（ImageMagick）、man、file、tar、xz、zstd、zip / unzip。交互式 bash 里 tab 补全可用。
 - **Claude Code** 本身：终端里 `claude` 命令可用。
 
 ## 系统权限：priv
@@ -45,8 +45,8 @@ priv 'sh /sdcard/cccodroid/脚本.sh'      # 再执行
 | Java 任何程序 | 默认时区是 GMT，不跟设备时区，时间差几个小时 | `TZ=$(getprop persist.sys.timezone)`（或 `-Duser.timezone=…`） |
 | Python `zoneinfo` | 598 个时区全部 `ZoneInfoNotFoundError`；但 `time.tzset()` 正常，会掩盖它 | `pip install tzdata` |
 | `npm install` 原生包 | 原生模块根本没编译（`.node` 不存在），真用到时才炸 | `npm rebuild <包>` |
-| typst 编译中文 | PDF 里中文全是空白方框 | `TYPST_FONT_PATHS=/system/fonts typst compile …` |
-| hx（Helix） | 一个 tree-sitter 语法都没装，全语言无高亮；`hx --health` 却照打 `Tree-sitter parser: ✓` | `hx --grammar fetch && hx --grammar build` |
+| typst 编译中文 | 中文渲染成空白方框（typst 自带的只有拉丁字体） | 环境里已经默认 `TYPST_FONT_PATHS=/system/fonts`；自己起的进程照抄这个变量即可 |
+| hx（Helix） | 一个 tree-sitter 语法都没装，全语言无高亮；`hx --health` 却照打 `Tree-sitter parser: ✓` | `hx-grammar rust python lua` 只装要用的。**别用 `hx --grammar fetch`**：它拉全部 245 个语法（实测 70 个就 374MB） |
 | `ASAN_OPTIONS=detect_leaks=1` | 进程启动即 abort，连内存越界报告都出不来 | 别设这个变量（平台不支持泄漏检测） |
 | `-fsanitize=leak` | 链接失败 `undefined symbol: __lsan::lsan_flags`（Termux 的 lsan 归档自身残缺） | 改用 `-fsanitize=address` |
 | `-fsanitize=thread` | 一起线程就 SIGSEGV | 别用；ASan / HWASan 正常 |
