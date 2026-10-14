@@ -1794,13 +1794,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       }
       const ver = c.installedVersion || c.version;
       const meta = "<span>" + esc(st) + "</span>" + (ver ? "<span>" + esc(ver) + "</span>" : "") +
-        (size && c.state !== "ok" ? "<span>" + esc(size) + "</span>" : "");
+        (size && c.state !== "ok" ? "<span>" + esc(size) + "</span>" : "") +
+        // 社区组件标出来；没有真机验证记录的再加一个提醒
+        (c.source === "community" ? "<span>" + t("社区") + "</span>" : "") +
+        (!c.verified ? '<span class="warn">' + t("未经真机验证") + "</span>" : "") +
+        (c.license && c.state !== "ok" ? "<span>" + esc(c.license) + "</span>" : "");
       let desc = '<div class="tiny ext-desc">' + esc(pickLang(c.desc)) + "</div>";
       if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
+      if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
-      return extItem(name, meta, acts, desc + bar);
+      return extItem(name, meta, acts, desc + bar).replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\""));
     }).join("");
-    box.innerHTML = html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>";
+    box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
+      (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "");
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
     if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
       compTimer = setTimeout(loadComponents, 1000);
@@ -1919,6 +1925,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (cb && !cb.disabled) {
       const c = cb.dataset.c, id = cb.dataset.id;
       const nm = (cb.closest(".item")?.querySelector(".it-title")?.textContent || id).trim();
+      if (c === "install" && cb.dataset.unverified && !confirm(t("{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？", { name: nm }))) return;
       if (c === "remove" && !confirm(t("卸载组件 {name}？会删掉它装进工具包的文件，你自己的文件不受影响。", { name: nm }))) return;
       cb.disabled = true;
       const r = await post("/api/components/" + c, { id }).catch((err) => ({ ok: false, message: err.message }));

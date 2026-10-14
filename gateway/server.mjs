@@ -1780,6 +1780,13 @@ async function handleTerm(req, res, p) {
 // 只在 cccodroid（有 Termux 前缀）上可用；开发端没有 $PREFIX，接口返回 supported:false。
 const COMP_INDEX = process.env.CCAPP_COMPONENTS_INDEX ||
   "https://github.com/greyoak111/cccodroid/releases/download/components/components.json";
+// 社区组件（v0.2.0 起）：greyoak111/cccodroid-components 仓库，CI 按配方打包、出签名索引
+const COMP_COMMUNITY_INDEX = process.env.CCAPP_COMPONENTS_COMMUNITY_INDEX ||
+  "https://github.com/greyoak111/cccodroid-components/releases/download/index/components.json";
+// 索引签名公钥（ed25519）：每份索引旁边都有 <索引>.sig（对原始字节的签名，base64），验不过整份不用。
+// 索引里有每个包的 sha256，所以验了索引就等于验了包。私钥只在发布机和组件仓库的 CI 密钥里。
+const COMP_INDEX_PUBKEY = crypto.createPublicKey(
+  "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4u1V3UuRVZgXwqXXQaQIBaefPf2PCGqKqvsna9Pgzzs=\n-----END PUBLIC KEY-----\n");
 const COMP_DIR = PREFIX ? path.join(path.dirname(PREFIX), "components") : "";
 const COMP_JOBS = new Map();      // id → { phase, done, total, error, child, cancelled }
 let compIndexCache = { at: 0, data: null, error: "" };
@@ -1795,20 +1802,45 @@ function compWriteRecord(id, rec) {
   fs.renameSync(compRecFile(id) + ".tmp", compRecFile(id));
 }
 
+function compFetch(src) {
+  return new Promise((resolve, reject) => {
+    execFile(path.join(PREFIX, "bin", "curl"), ["-fsSL", "--max-time", "30", "--retry", "2", src],
+      { env: claudeEnv(), maxBuffer: 4 << 20, encoding: "buffer" },
+      (e, so, se) => (e ? reject(new Error(String(se || e.message).trim().slice(0, 200))) : resolve(so)));
+  });
+}
+/** 取一份索引并验签。unsigned 只在私有目录里有 allow-unsigned 开关文件时才放行（/sdcard 别的应用也能写） */
+async function compFetchIndex(src) {
+  const body = await compFetch(src);
+  let sig = null;
+  try { sig = Buffer.from(String(await compFetch(src + ".sig")).trim(), "base64"); } catch {}
+  const ok = sig && sig.length === 64 && crypto.verify(null, body, COMP_INDEX_PUBKEY, sig);
+  if (!ok && !fs.existsSync(path.join(COMP_DIR, "allow-unsigned"))) throw new Error(sig ? "索引签名不对，已拒绝" : "索引没有签名，已拒绝");
+  return { ...JSON.parse(String(body)), signed: !!ok };
+}
+
+/** 两个来源合并：预置（cccodroid 仓库）在前，社区（cccodroid-components）在后；id 撞了以预置为准。
+ *  共享目录里放了 components/components.json 就代替预置来源（离线 / 测试），同样要签名。 */
 async function compIndex(force) {
   if (!force && compIndexCache.data && Date.now() - compIndexCache.at < 10 * 60e3) return compIndexCache;
-  try {
-    const out = await new Promise((resolve, reject) => {
-      // 离线 / 测试：共享目录里放了 components/components.json 就优先用它（同工具包的本地文件规则）
-      const local = process.env.CCAPP_SHARED && path.join(process.env.CCAPP_SHARED, "components", "components.json");
-      const src = local && fs.existsSync(local) ? "file://" + local : COMP_INDEX;
-      execFile(path.join(PREFIX, "bin", "curl"), ["-fsSL", "--max-time", "30", "--retry", "2", src],
-        { env: claudeEnv(), maxBuffer: 4 << 20 }, (e, so, se) => (e ? reject(new Error(String(se || e.message).trim().slice(0, 200))) : resolve(so)));
-    });
-    compIndexCache = { at: Date.now(), data: JSON.parse(out), error: "" };
-  } catch (e) {
-    compIndexCache = { at: Date.now() - 9 * 60e3, data: compIndexCache.data, error: e.message };   // 失败一分钟后再试
+  const local = process.env.CCAPP_SHARED && path.join(process.env.CCAPP_SHARED, "components", "components.json");
+  const sources = [
+    { source: "preset", url: local && fs.existsSync(local) ? "file://" + local : COMP_INDEX },
+    { source: "community", url: COMP_COMMUNITY_INDEX },
+  ];
+  const got = await Promise.all(sources.map((s) => compFetchIndex(s.url).then((d) => ({ ...s, d }), (e) => ({ ...s, e }))));
+  const components = {}, errors = [];
+  for (const g of got) {
+    if (g.e) { errors.push(`${g.source}: ${g.e.message}`); continue; }
+    for (const [id, e] of Object.entries(g.d.components || {})) if (!components[id]) components[id] = { ...e, source: g.source, signed: g.d.signed };
   }
+  // 某个来源这次没取到：沿用上次那个来源的条目，免得已装组件的状态跳成"不在索引里"
+  const prev = (compIndexCache.data && compIndexCache.data.components) || {};
+  for (const g of got) if (g.e) for (const [id, e] of Object.entries(prev)) if (e.source === g.source && !components[id]) components[id] = e;
+  const anyOk = got.some((g) => !g.e);
+  compIndexCache = anyOk || !compIndexCache.data
+    ? { at: errors.length ? Date.now() - 9 * 60e3 : Date.now(), data: { components }, error: errors.join("；") }   // 有失败的一分钟后再试
+    : { at: Date.now() - 9 * 60e3, data: compIndexCache.data, error: errors.join("；") };
   return compIndexCache;
 }
 
@@ -1834,6 +1866,7 @@ function compState(id, entry, dk) {
 async function compList(force) {
   if (!PREFIX) return { supported: false };
   const dk = devkitIdentity();
+  compHealSkills();
   const ix = await compIndex(force);
   const comps = (ix.data && ix.data.components) || {};
   const ids = new Set([...Object.keys(comps)]);
@@ -1848,6 +1881,10 @@ async function compList(force) {
       progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total } : null,
       error: job && job.error ? job.error : "",
       bin: (b && b.bin) || (rec && rec.bin) || [],
+      // 来源与可信度：预置组件由 cccodroid 发布、随版本测过；社区组件看 verified（真机验证记录）
+      source: e ? e.source : (rec && rec.source) || "", signed: e ? !!e.signed : true,
+      verified: e ? e.source === "preset" || !!(b && b.verified) : true,
+      license: (e && e.license) || "", homepage: (e && e.homepage) || "", needs: (e && e.needs) || {},
     };
   });
   return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, items };
@@ -1915,7 +1952,7 @@ async function compInstall(id) {
   const ix = await compIndex(true);
   const entry = ix.data && ix.data.components && ix.data.components[id];
   if (!entry) return { ok: false, message: ix.error || "没有这个组件" };
-  const b = compBuildFor(entry, dk);
+  const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source };
   if (!b) return { ok: false, message: "这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试" };
   // 空间：压缩包 + 解开后的大小，再留 10%
   try {
@@ -1930,6 +1967,36 @@ async function compInstall(id) {
     (e) => { job.finished = true; job.error = job.cancelled ? "" : e.message; log(`[comp] ${id} 安装失败：${e.message}`); });
   return { ok: true };
 }
+
+/** 把组件带的 skill 目录拷进 ~/.claude/skills。skill 路径相对 files/（以 usr/ 开头），PREFIX 已经是 files/usr */
+function compInstallSkill(id, rel, rec) {
+  const src = path.join(PREFIX, rel.replace(/^usr\//, ""));
+  const name = (skillMeta(src) || {}).name || id;
+  const dst = path.join(SKILLS_DIR, name);
+  try {
+    fs.rmSync(dst, { recursive: true, force: true });
+    fs.mkdirSync(dst, { recursive: true });
+    for (const f of fs.readdirSync(src)) fs.copyFileSync(path.join(src, f), path.join(dst, f));
+    rec.skill = name;
+  } catch (e) { log(`[comp] ${id} 技能没装上：${e.message}`); }
+}
+// v0.1.9 拼错了 skill 路径（多了一层 usr/），装好的组件没有 skill：发现就补上
+function compHealSkills() {
+  let fs_; try { fs_ = fs.readdirSync(COMP_DIR); } catch { return; }
+  for (const f of fs_) {
+    if (!f.endsWith(".json")) continue;
+    const id = f.slice(0, -5), rec = compRecord(id);
+    if (!rec || rec.state !== "ok" || rec.skill || (COMP_JOBS.get(id) && !COMP_JOBS.get(id).finished)) continue;
+    const rel = `usr/share/cccodroid/components/${id}/skill`;
+    if (!fs.existsSync(path.join(PREFIX, rel.slice(4), "SKILL.md"))) continue;
+    try { fs.rmdirSync(path.join(SKILLS_DIR, id)); } catch {}     // 当时留下的空目录（只删空的）
+    compInstallSkill(id, rel, rec);
+    if (rec.skill) { compWriteRecord(id, rec); log(`[comp] ${id} 补装技能 ${rec.skill}`); }
+  }
+}
+
+// 启动后预取一次索引：首次打开「扩展」页时不用干等两份索引下载验签
+if (PREFIX) setTimeout(() => { compHealSkills(); compIndex(false).catch(() => {}); }, 8000).unref?.();
 
 async function compRunInstall(id, b, job) {
   const stage = path.join(COMP_DIR, ".staging"), gz = path.join(stage, `${id}-${b.sha256.slice(0, 12)}.tar.gz`), tree = path.join(stage, id);
@@ -1976,7 +2043,7 @@ async function compRunInstall(id, b, job) {
   job.phase = "installing";
   const old = compRecord(id);
   if (old) compRemoveFiles(old);                    // 升级 / 重装：先清掉上一版
-  const rec = { id, version: b.version, upstream: b.upstream, base: b.base, sha256: b.sha256, bin: b.bin || [],
+  const rec = { id, source: b.source || "", version: b.version, upstream: b.upstream, base: b.base, sha256: b.sha256, bin: b.bin || [],
     skill: "", state: "installing", at: Date.now(), files: [] };
   // 先按包内文件清单记下"将要放进去的文件"：搬到一半被杀也能按它卸干净
   const list = [];
@@ -1994,17 +2061,7 @@ async function compRunInstall(id, b, job) {
   const fr = path.join(PREFIX, lx, "first-run.sh");
   if (fs.existsSync(fr)) { try { await compRun(job, path.join(PREFIX, "bin", "sh"), [fr]); } catch (e) { log(`[comp] ${id} first-run：${e.message}`); } }
   // 5) 给 Claude 的技能
-  if (b.skill) {
-    const src = path.join(PREFIX, b.skill);
-    const name = (skillMeta(src) || {}).name || id;
-    const dst = path.join(SKILLS_DIR, name);
-    try {
-      fs.rmSync(dst, { recursive: true, force: true });
-      fs.mkdirSync(dst, { recursive: true });
-      for (const f of fs.readdirSync(src)) fs.copyFileSync(path.join(src, f), path.join(dst, f));
-      rec.skill = name;
-    } catch (e) { log(`[comp] ${id} 技能没装上：${e.message}`); }
-  }
+  if (b.skill) compInstallSkill(id, b.skill, rec);
   rec.state = "ok"; rec.at = Date.now();
   compWriteRecord(id, rec);
   fs.rmSync(tree, { recursive: true, force: true });

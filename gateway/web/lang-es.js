@@ -508,4 +508,8 @@ window.I18N_DICT["es"] = {
   "浏览器": "Navegador",
   "可选组件": "Componentes opcionales",
   "体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。": "Las herramientas grandes no vienen con la app: descárgalas aquí cuando las necesites. Desinstalar solo borra los archivos del componente.",
+  "社区": "Comunidad",
+  "未经真机验证": "No verificado en un dispositivo",
+  "部分组件清单取不到：{msg}": "No se pudieron cargar algunas listas de componentes: {msg}",
+  "{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？": "Nadie ha verificado {name} en un dispositivo real todavía. Puede que no se instale o no funcione. ¿Instalar de todos modos?",
 };

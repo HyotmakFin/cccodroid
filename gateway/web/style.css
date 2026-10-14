@@ -651,3 +651,4 @@ code a.fpath{border-bottom-style:dotted}
 .comp-bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:6px}
 .comp-bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
 .tiny.err{color:var(--err)}
+.item .it-meta span.warn{color:var(--warn)}

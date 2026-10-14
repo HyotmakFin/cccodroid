@@ -529,4 +529,8 @@ window.I18N_DICT.en = {
   "浏览器": "Browser",
   "可选组件": "Optional components",
   "体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。": "Large tools don't ship with the app — download them here when you need them. Uninstalling removes only the component's own files.",
+  "社区": "Community",
+  "未经真机验证": "Not verified on a device",
+  "部分组件清单取不到：{msg}": "Some component lists couldn't be loaded: {msg}",
+  "{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？": "No one has verified {name} on a real device yet. It may fail to install or not work. Install anyway?",
 };
