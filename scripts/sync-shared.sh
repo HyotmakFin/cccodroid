@@ -7,8 +7,8 @@ UP=${UP:-/sdcard/DeepSeekHarness/claude-apk}
 rm -rf "$ROOT/gateway" "$ROOT/devkit"
 mkdir -p "$ROOT/gateway/web" "$ROOT/devkit/vendor/xz-decompress/dist/package"
 cp "$UP/src/server.mjs" "$ROOT/gateway/"
-# web/ 下全部平铺文件（界面 + i18n.js / langs.js / lang-*.js 词典），跳过备份
-for f in "$UP/src/web/"*; do case "$f" in *.bak*) ;; *) [ -f "$f" ] && cp "$f" "$ROOT/gateway/web/";; esac; done
+# web/ 下全部文件（界面 + i18n.js / langs.js / lang-*.js 词典 + 子目录 pdfjs/），跳过备份
+for f in "$UP/src/web/"*; do case "$f" in *.bak*) ;; *) cp -R "$f" "$ROOT/gateway/web/";; esac; done
 cp "$UP/devkit/devkit.mjs" "$UP/devkit/devkit.json" "$UP/devkit/README.md" "$ROOT/devkit/"
 X="$UP/devkit/vendor/xz-decompress"
 cp "$X/package.json" "$X/README.md" "$ROOT/devkit/vendor/xz-decompress/"

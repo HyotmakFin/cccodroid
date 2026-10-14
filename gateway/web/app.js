@@ -293,14 +293,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   // 代码复制 + 图片点击（事件委托）
-  chatEl.addEventListener("click", (e) => {
+  const onCopyBtn = (e) => {
     const b = e.target.closest(".copy-btn");
     if (!b) return;
     const code = b.parentElement.querySelector("code");
     if (code) navigator.clipboard?.writeText(code.textContent).then(() => {
       b.textContent = t("已复制"); setTimeout(() => (b.textContent = t("复制")), 1400);
     });
-  });
+  };
+  chatEl.addEventListener("click", onCopyBtn);
+  $("vw-body").addEventListener("click", onCopyBtn);   // 文件查看器里渲染的 Markdown 也有代码块
 
   // ── 对话视图 ──────────────────────────────────────────────────────
   //  v3：照 Claude Desktop 的路子 —— 生成归网关管，界面只是订阅者。
@@ -1438,8 +1440,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } else if (e.kind === "text" && e.size < 262144) {
       box.innerHTML = `<div class="fs-prev-head"><span class="mono">${esc(e.name)}</span><span class="tiny">${t("读取中…")}</span></div>`;
       try {
-        const t = await fetch(fileUrl(full)).then((r) => r.text());
-        body = `<pre class="fs-pre">${esc(t.slice(0, 12000))}${t.length > 12000 ? "\n" + t("…（已截断）") : ""}</pre>`;
+        const txt = await fetch(fileUrl(full)).then((r) => r.text());
+        body = `<pre class="fs-pre">${esc(txt.slice(0, 12000))}${txt.length > 12000 ? "\n" + t("…（已截断）") : ""}</pre>`;
       } catch { body = '<div class="tiny">' + t("读取失败") + '</div>'; }
     } else {
       body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;
@@ -1449,12 +1451,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       `<div class="fs-prev-head">
          <span class="mono">${esc(e.name)}</span>
          <span class="tiny">${fmtSize(e.size)}</span>
+         <button class="btn sm" data-a="open">${e.kind === "text" ? t("打开 / 编辑") : t("打开")}</button>
          <button class="btn ghost sm" data-a="insert">${t("插入 @路径")}</button>
-         <a class="btn ghost sm" href="${fileUrl(full, true)}" download>${t("下载")}</a>
+         <a class="btn ghost sm" href="${fileUrl(full, true)}" download>⤓</a>
        </div>
        <div class="fs-prev-body">${body}</div>`;
     box.querySelector('[data-a="insert"]')?.addEventListener("click", () => insertFile(e));
-    box.querySelector("img")?.addEventListener("click", () => openLightbox(full));
+    box.querySelector('[data-a="open"]')?.addEventListener("click", () => openViewer(full, e.kind, e.size));
+    box.querySelector("img")?.addEventListener("click", () => openViewer(full, e.kind, e.size));
   }
 
   function insertFile(e) {
@@ -2566,6 +2570,586 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
   $("btn-menu").addEventListener("click", () => openDrawer("sessions"));
+  // ── 文件查看 / 编辑器 ──────────────────────────────────────────────
+  // 文本 / 代码：直接改，保存时带上打开那一刻的 mtime —— Claude 在这期间改过就先问，别互相覆盖。
+  // Markdown：默认渲染，可切到编辑。图片：点一下在「适应屏幕」和「原始大小」之间切。
+  // PDF：pdf.js（按需加载），页面进视野才画、离远了就释放，几百页的也不会把 WebView 撑爆。
+  const viewerEl = $("viewer");
+  const VW = {
+    path: "", kind: "", size: 0, mode: "", text: "", mtime: 0, dirty: false,
+    pdf: null, pdfObs: null, zoom: 1, wrap: localStorage.getItem("cc.vw.wrap") !== "0",
+  };
+  const VW_EDIT_MAX = 2 * 1024 * 1024;
+  const isMd = (p) => /\.(md|markdown|mdx)$/i.test(p);
+
+  async function openViewer(path, kind, size) {
+    if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
+    closeViewerPdf();
+    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1 });
+    $("vw-name").textContent = path.split("/").pop();
+    $("vw-name").title = path;
+    $("vw-info").textContent = fmtSize(VW.size);
+    viewerEl.classList.remove("hidden");
+    if (VW.kind === "text") return vwLoadText(isMd(path) ? "md" : "edit");
+    if (VW.kind === "image") return vwImage();
+    if (VW.kind === "pdf") return vwPdf();
+    if (VW.kind === "video" || VW.kind === "audio") {
+      vwActs([]);
+      const tag = VW.kind === "video" ? "video" : "audio";
+      $("vw-body").innerHTML = `<div class="vw-media"><${tag} src="${fileUrl(path)}" controls autoplay></${tag}></div>`;
+      return;
+    }
+    vwActs([]);
+    $("vw-body").innerHTML = `<div class="vw-empty">
+      <div>${t("这种文件没有内置预览。")}</div>
+      ${VW.size <= VW_EDIT_MAX ? `<button class="btn ghost sm" data-a="astext">${t("当作文本打开")}</button>` : ""}
+      <a class="btn ghost sm" href="${fileUrl(path, true)}" download>${t("下载")}</a></div>`;
+    $("vw-body").querySelector('[data-a="astext"]')?.addEventListener("click", () => { VW.kind = "text"; vwLoadText("edit"); });
+  }
+
+  /** 顶栏右侧的按钮：[文字, 动作, 是否高亮] */
+  function vwActs(list) {
+    const base = [[t("插入 @路径"), "insert"], ["⤓", "download"]];
+    $("vw-acts").innerHTML = list.concat(base).map(([l, a, on]) =>
+      `<button class="btn ${on ? "" : "ghost"} sm" data-a="${a}">${esc(l)}</button>`).join("");
+  }
+
+  $("vw-acts").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-a]");
+    if (!b) return;
+    const a = b.dataset.a;
+    if (a === "insert") {
+      insertAtCursor("@" + VW.path);
+      toast(t("已插入文件路径"));
+      return closeViewer();
+    }
+    if (a === "download") { location.href = fileUrl(VW.path, true); return; }
+    if (a === "save") return vwSave(false);
+    if (a === "md") { VW.text = vwText(); return vwRenderText("md"); }
+    if (a === "edit") return vwRenderText("edit");
+    if (a === "wrap") {
+      VW.wrap = !VW.wrap;
+      localStorage.setItem("cc.vw.wrap", VW.wrap ? "1" : "0");
+      $("vw-text")?.classList.toggle("nowrap", !VW.wrap);
+      return vwRenderActs();
+    }
+    if (a === "zoom-" || a === "zoom+") {
+      VW.zoom = Math.max(0.5, Math.min(4, VW.zoom * (a === "zoom+" ? 1.25 : 0.8)));
+      return vwPdfRelayout();
+    }
+  });
+
+  function vwText() { const ta = $("vw-text"); return ta ? ta.value : VW.text; }
+
+  async function vwLoadText(mode) {
+    if (VW.size > VW_EDIT_MAX) {
+      vwActs([]);
+      $("vw-body").innerHTML = `<div class="vw-empty"><div>${t("文件太大（{size}），只能下载查看。", { size: fmtSize(VW.size) })}</div></div>`;
+      return;
+    }
+    $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    try {
+      const r = await fetch(fileUrl(VW.path));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      VW.mtime = Number(r.headers.get("x-mtime")) || 0;
+      VW.text = await r.text();
+    } catch (e) {
+      $("vw-body").innerHTML = `<div class="vw-empty">${t("读取失败")}: ${esc(e.message)}</div>`;
+      return;
+    }
+    VW.dirty = false;
+    vwRenderText(mode);
+  }
+
+  function vwRenderActs() {
+    const acts = [];
+    if (isMd(VW.path)) acts.push(VW.mode === "md" ? [t("编辑"), "edit"] : [t("预览"), "md"]);
+    if (VW.mode === "edit") {
+      acts.push([t("换行"), "wrap", VW.wrap]);
+      acts.push([VW.dirty ? t("保存") + " •" : t("保存"), "save", VW.dirty]);
+    }
+    vwActs(acts);
+  }
+
+  function vwRenderText(mode) {
+    VW.mode = mode;
+    if (mode === "md") {
+      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text)}</div>`;
+    } else {
+      $("vw-body").innerHTML = `<textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>`;
+      const ta = $("vw-text");
+      ta.value = VW.text;
+      ta.addEventListener("input", () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } });
+      ta.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); vwSave(false); }
+        else if (e.key === "Tab" && !e.ctrlKey && !e.altKey) { e.preventDefault(); document.execCommand("insertText", false, "\t"); }
+      });
+    }
+    vwRenderActs();
+  }
+
+  async function vwSave(force) {
+    const text = vwText();
+    let r;
+    try {
+      r = await fetch(`/api/file/save?path=${encodeURIComponent(VW.path)}&mtime=${VW.mtime}${force ? "&force=1" : ""}`, {
+        method: "POST", body: text,
+      });
+    } catch (e) { return toast(t("保存失败：{msg}", { msg: e.message }), true); }
+    if (r.status === 409) {
+      if (confirm(t("文件在你打开之后被改过了（可能是 Claude 改的）。\n确定：用你的版本覆盖\n取消：放弃你的修改，重新载入"))) return vwSave(true);
+      VW.dirty = false;
+      return vwLoadText("edit");
+    }
+    let j = {};
+    try { j = await r.json(); } catch {}
+    if (!r.ok) return toast(t("保存失败：{msg}", { msg: j.error || r.status }), true);
+    VW.text = text; VW.mtime = j.mtime; VW.size = j.size; VW.dirty = false;
+    $("vw-info").textContent = fmtSize(VW.size);
+    vwRenderActs();
+    toast(t("已保存"));
+  }
+
+  function vwImage() {
+    vwActs([]);
+    $("vw-body").innerHTML = `<div class="vw-img"><img src="${fileUrl(VW.path)}" alt=""></div>`;
+    const box = $("vw-body").querySelector(".vw-img");
+    const img = box.querySelector("img");
+    img.addEventListener("load", () => { $("vw-info").textContent = `${img.naturalWidth}×${img.naturalHeight} · ${fmtSize(VW.size)}`; });
+    img.addEventListener("click", (e) => {
+      // 放大时以点到的位置为中心
+      const r = img.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+      box.classList.toggle("zoom");
+      if (box.classList.contains("zoom")) {
+        box.scrollLeft = fx * img.naturalWidth - box.clientWidth / 2;
+        box.scrollTop = fy * img.naturalHeight - box.clientHeight / 2;
+      }
+    });
+  }
+
+  let pdfjsP = null;
+  function loadPdfjs() {
+    if (!pdfjsP) {
+      pdfjsP = import("/pdfjs/pdf.min.mjs").then((m) => {
+        m.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
+        return m;
+      }).catch((e) => { pdfjsP = null; throw e; });
+    }
+    return pdfjsP;
+  }
+
+  async function vwPdf() {
+    vwActs([["−", "zoom-"], ["+", "zoom+"]]);
+    $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    let lib, doc;
+    try {
+      lib = await loadPdfjs();
+      const task = lib.getDocument({
+        url: fileUrl(VW.path), cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, wasmUrl: "/pdfjs/wasm/",
+        isEvalSupported: false,
+      });
+      task.onPassword = (cb, reason) => {
+        const pw = prompt(reason === 2 ? t("密码不对，再输一次：") : t("这个 PDF 有密码："));
+        if (pw == null) task.destroy(); else cb(pw);
+      };
+      doc = await task.promise;
+    } catch (e) {
+      $("vw-body").innerHTML = `<div class="vw-empty">${t("PDF 打不开：{msg}", { msg: esc(e.message || String(e)) })}</div>`;
+      return;
+    }
+    if (VW.kind !== "pdf" || viewerEl.classList.contains("hidden")) { doc.destroy(); return; }
+    VW.pdf = doc;
+    const p1 = await doc.getPage(1);
+    const vp = p1.getViewport({ scale: 1 });
+    VW.pdfRatio = vp.height / vp.width;
+    $("vw-body").innerHTML = `<div class="vw-pdf"><div class="vw-pages"></div></div><div class="vw-pageno tiny"></div>`;
+    const pages = $("vw-body").querySelector(".vw-pages");
+    for (let i = 1; i <= doc.numPages; i++) {
+      const h = document.createElement("div");
+      h.className = "vw-page";
+      h.dataset.n = i;
+      pages.appendChild(h);
+    }
+    const scroller = $("vw-body").querySelector(".vw-pdf");
+    VW.pdfObs = new IntersectionObserver((ents) => {
+      for (const en of ents) {
+        if (en.isIntersecting) vwPdfRender(en.target);
+        else vwPdfRelease(en.target);
+      }
+    }, { root: scroller, rootMargin: "1200px 0px" });
+    vwPdfRelayout();
+    scroller.addEventListener("scroll", vwPdfPageNo, { passive: true });
+    vwPdfPageNo();
+  }
+
+  function vwPdfRelayout() {
+    const scroller = $("vw-body").querySelector(".vw-pdf");
+    if (!scroller || !VW.pdf) return;
+    const w = Math.floor((scroller.clientWidth - 16) * VW.zoom);
+    scroller.classList.toggle("wide", VW.zoom > 1);
+    const keep = scroller.scrollTop / Math.max(1, scroller.scrollHeight);
+    for (const h of scroller.querySelectorAll(".vw-page")) {
+      const ratio = Number(h.dataset.ratio) || VW.pdfRatio;
+      h.style.width = w + "px";
+      h.style.height = Math.round(w * ratio) + "px";
+      vwPdfRelease(h);
+      VW.pdfObs.unobserve(h);
+      VW.pdfObs.observe(h);
+    }
+    scroller.scrollTop = keep * scroller.scrollHeight;
+  }
+
+  async function vwPdfRender(h) {
+    if (h.dataset.state) return;
+    h.dataset.state = "busy";
+    const doc = VW.pdf;
+    try {
+      const page = await doc.getPage(Number(h.dataset.n));
+      const v1 = page.getViewport({ scale: 1 });
+      const ratio = v1.height / v1.width;
+      if (Math.abs(ratio - (Number(h.dataset.ratio) || VW.pdfRatio)) > 0.001) {
+        h.dataset.ratio = ratio;
+        h.style.height = Math.round(h.clientWidth * ratio) + "px";
+      }
+      // 画布像素封顶：放大很多倍时别分配几百 MB 的画布
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      let scale = (h.clientWidth / v1.width) * dpr;
+      const maxPx = 16e6;
+      if (v1.width * v1.height * scale * scale > maxPx) scale = Math.sqrt(maxPx / (v1.width * v1.height));
+      const vp = page.getViewport({ scale });
+      const c = document.createElement("canvas");
+      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+      h.replaceChildren(c);
+      h._task = page.render({ canvasContext: c.getContext("2d"), viewport: vp });
+      await h._task.promise;
+      if (VW.pdf !== doc) return;
+      h.dataset.state = "done";
+    } catch (e) {
+      if (e?.name !== "RenderingCancelledException") h.dataset.state = "";
+    }
+  }
+
+  function vwPdfRelease(h) {
+    try { h._task?.cancel(); } catch {}
+    h._task = null;
+    const c = h.querySelector("canvas");
+    if (c) { c.width = c.height = 0; c.remove(); }
+    h.dataset.state = "";
+  }
+
+  function vwPdfPageNo() {
+    const sc = $("vw-body").querySelector(".vw-pdf"), el = $("vw-body").querySelector(".vw-pageno");
+    if (!sc || !el || !VW.pdf) return;
+    const mid = sc.scrollTop + sc.clientHeight / 3;
+    let n = 1;
+    for (const h of sc.querySelectorAll(".vw-page")) { if (h.offsetTop <= mid) n = Number(h.dataset.n); else break; }
+    el.textContent = `${n} / ${VW.pdf.numPages}`;
+  }
+
+  function closeViewerPdf() {
+    VW.pdfObs?.disconnect(); VW.pdfObs = null;
+    if (VW.pdf) { try { VW.pdf.destroy(); } catch {} VW.pdf = null; }
+  }
+
+  function closeViewer() {
+    if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
+    VW.dirty = false;
+    closeViewerPdf();
+    $("vw-body").innerHTML = "";
+    viewerEl.classList.add("hidden");
+    // 文件面板开着就刷新一下：大小 / 修改时间可能变了
+    if (!filesEl.classList.contains("hidden") && state.fs.path) fsLoad(state.fs.path, { keepSel: true });
+  }
+  $("vw-close").addEventListener("click", closeViewer);
+  window.addEventListener("resize", () => { if (VW.pdf) { clearTimeout(VW.rt); VW.rt = setTimeout(vwPdfRelayout, 200); } });
+
+  // ── 应用内终端 ────────────────────────────────────────────────────
+  // xterm.js 按需加载（近 500 KB，不开终端就不付这个钱）；每个终端一个 xterm 实例，
+  // 输出走 /api/term/<id>/stream（SSE，先回放缓冲），按键攒一小撮再按顺序 POST。
+  // 手机键盘没有 Esc / Ctrl / 方向键：底下一排补上，Ctrl / Alt 是「粘住」的，作用于下一个键。
+  const termEl = $("term");
+  const TERM = {
+    list: [], cur: null, inst: new Map(), loaded: null, ctrl: false, alt: false,
+    font: Number(localStorage.getItem("cc.term.font")) || 13,
+  };
+
+  function loadXterm() {
+    if (TERM.loaded) return TERM.loaded;
+    const add = (tag, attrs) => new Promise((ok, bad) => {
+      const el = document.createElement(tag);
+      Object.assign(el, attrs);
+      el.onload = ok;
+      el.onerror = () => bad(new Error(attrs.src || attrs.href));
+      document.head.appendChild(el);
+    });
+    TERM.loaded = add("link", { rel: "stylesheet", href: "/xterm.css" })
+      .then(() => add("script", { src: "/xterm.js" }))
+      .then(() => add("script", { src: "/xterm-addon-fit.js" }))
+      .catch((e) => { TERM.loaded = null; throw e; });
+    return TERM.loaded;
+  }
+
+  function termTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (k) => cs.getPropertyValue(k).trim();
+    const light = document.documentElement.dataset.theme === "light";
+    const base = {
+      background: v("--code-bg") || (light ? "#fff" : "#000"), foreground: v("--fg"),
+      cursor: v("--accent"), cursorAccent: v("--code-bg"),
+      selectionBackground: light ? "rgba(201,100,66,.25)" : "rgba(217,119,87,.35)",
+    };
+    // 浅色底上 xterm 默认的黄 / 亮白几乎看不见，换一套深一点的
+    return light ? Object.assign(base, {
+      black: "#24292f", red: "#cf222e", green: "#116329", yellow: "#7d4e00", blue: "#0550ae",
+      magenta: "#8250df", cyan: "#1b7c83", white: "#6e7781",
+      brightBlack: "#57606a", brightRed: "#a40e26", brightGreen: "#1a7f37", brightYellow: "#633c01",
+      brightBlue: "#0969da", brightMagenta: "#a475f9", brightCyan: "#3192aa", brightWhite: "#8c959f",
+    }) : base;
+  }
+
+  async function openTerm() {
+    termEl.classList.remove("hidden");
+    try { await loadXterm(); } catch (e) { toast(t("终端组件加载失败：{msg}", { msg: e.message }), true); return; }
+    let r;
+    try { r = await api("/api/term/list"); } catch (e) { toast(t("终端打不开：{msg}", { msg: e.message }), true); return; }
+    if (!r.available) { toast(t("找不到伪终端程序（ptyhost / python3）"), true); return; }
+    const srv = r.terms || [];
+    // 本界面开着、网关却不认识了（网关重启过）：标成已退出，留着看最后的输出
+    for (const x of TERM.list) if (TERM.inst.has(x.id) && !srv.some((y) => y.id === x.id)) srv.push(Object.assign(x, { alive: false }));
+    // 已退出的：本界面开过的留着，别处留下的不显示
+    TERM.list = srv.filter((x) => x.alive || TERM.inst.has(x.id));
+    const live = TERM.list.filter((x) => x.alive);
+    if (!live.length) return newTerm();
+    if (!TERM.list.some((x) => x.id === TERM.cur)) TERM.cur = live[live.length - 1].id;
+    renderTermTabs();
+    showTerm(TERM.cur);
+  }
+
+  function closeTerm() {
+    termEl.classList.add("hidden");
+    TERM.inst.get(TERM.cur)?.xt.blur();
+  }
+
+  async function newTerm() {
+    const box = $("term-screens");
+    // 先用一个探针算出这块地方能放几行几列，开出来就是对的大小，免得 shell 先按 80x24 画一遍
+    let cols = 80, rows = 24;
+    if (TERM.inst.size) { const a = TERM.inst.get(TERM.cur); if (a) { cols = a.xt.cols; rows = a.xt.rows; } }
+    else if (box.clientWidth) {
+      cols = Math.max(20, Math.floor((box.clientWidth - 8) / (TERM.font * 0.6)));
+      rows = Math.max(5, Math.floor((box.clientHeight - 4) / (TERM.font * 1.2)));
+    }
+    let r;
+    try { r = await api("/api/term/new", { method: "POST", body: JSON.stringify({ cols, rows }) }); }
+    catch (e) { toast(t("新建终端失败：{msg}", { msg: e.message }), true); return; }
+    TERM.list.push(r.term);
+    TERM.cur = r.term.id;
+    renderTermTabs();
+    showTerm(r.term.id);
+  }
+
+  function renderTermTabs() {
+    $("term-tabs").innerHTML = TERM.list.map((x) => `
+      <span class="term-tab ${x.id === TERM.cur ? "cur" : ""} ${x.alive === false ? "dead" : ""}" data-id="${x.id}">
+        <span class="tt-name">${esc(x.title)}</span><span class="tt-x" data-x="1" aria-label="${esc(t("关闭"))}">×</span>
+      </span>`).join("");
+    $("term-tabs").querySelectorAll(".term-tab").forEach((el) => el.addEventListener("click", (e) => {
+      const id = el.dataset.id;
+      if (e.target.dataset.x) return killTerm(id);
+      TERM.cur = id; renderTermTabs(); showTerm(id);
+    }));
+  }
+
+  async function killTerm(id) {
+    const x = TERM.list.find((y) => y.id === id);
+    if (x && x.alive !== false && !confirm(t("关闭这个终端？里面正在跑的程序会被结束。"))) return;
+    try { await api(`/api/term/${id}/kill`, { method: "POST", body: "{}" }); } catch {}
+    const a = TERM.inst.get(id);
+    if (a) { try { a.es?.close(); } catch {} a.ro?.disconnect(); a.xt.dispose(); a.el.remove(); TERM.inst.delete(id); }
+    TERM.list = TERM.list.filter((y) => y.id !== id);
+    if (TERM.cur === id) TERM.cur = TERM.list.length ? TERM.list[TERM.list.length - 1].id : null;
+    renderTermTabs();
+    if (TERM.cur) showTerm(TERM.cur); else closeTerm();
+  }
+
+  function showTerm(id) {
+    for (const [k, a] of TERM.inst) a.el.classList.toggle("hidden", k !== id);
+    let a = TERM.inst.get(id);
+    if (!a) a = mountTerm(id);
+    requestAnimationFrame(() => { termFit(a); a.xt.focus(); });
+  }
+
+  function mountTerm(id) {
+    const el = document.createElement("div");
+    el.className = "term-screen";
+    $("term-screens").appendChild(el);
+    const xt = new window.Terminal({
+      fontSize: TERM.font, fontFamily: "ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace",
+      theme: termTheme(), scrollback: 5000, cursorBlink: true, allowProposedApi: false,
+      macOptionIsMeta: true, convertEol: false,
+    });
+    const fit = new window.FitAddon.FitAddon();
+    xt.loadAddon(fit);
+    xt.open(el);
+    const a = { id, el, xt, fit, es: null, ro: null, q: "", sending: Promise.resolve(), timer: 0, cols: 0, rows: 0 };
+    TERM.inst.set(id, a);
+
+    xt.onData((d) => termSend(a, termMods(d)));
+    xt.onTitleChange((s) => {
+      const x = TERM.list.find((y) => y.id === id);
+      if (x && s) { x.title = s.slice(0, 40); renderTermTabs(); }
+    });
+    a.ro = new ResizeObserver(() => termFit(a));
+    a.ro.observe(el);
+
+    const es = new EventSource(`/api/term/${id}/stream`);
+    a.es = es;
+    es.addEventListener("replay", (m) => { xt.reset(); try { xt.write(JSON.parse(m.data)); } catch {} });
+    es.addEventListener("o", (m) => { try { xt.write(JSON.parse(m.data)); } catch {} });
+    es.addEventListener("exit", (m) => {
+      let code = null; try { code = JSON.parse(m.data).code; } catch {}
+      es.close();
+      xt.write("\r\n\x1b[2m" + t("[进程已退出，代码 {code}]", { code }) + "\x1b[0m\r\n");
+      const x = TERM.list.find((y) => y.id === id);
+      if (x) { x.alive = false; x.code = code; renderTermTabs(); }
+    });
+    // 网关重启后这个终端就没了：别让 EventSource 无限重连
+    es.onerror = () => {
+      if (es.readyState !== EventSource.CLOSED) return;
+      xt.write("\r\n\x1b[2m" + t("[与网关的连接已断开]") + "\x1b[0m\r\n");
+    };
+    return a;
+  }
+
+  /** 粘住的 Ctrl / Alt 作用到下一次输入（软键盘打出来的字、底排的键都算） */
+  function termMods(d) {
+    if (!TERM.ctrl && !TERM.alt) return d;
+    if (TERM.ctrl && d.length === 1) {
+      const c = d.toUpperCase().charCodeAt(0);
+      if (c >= 64 && c <= 95) d = String.fromCharCode(c - 64);
+      else if (d === " ") d = "\x00";
+      else if (d === "?") d = "\x7f";
+    }
+    if (TERM.alt) d = "\x1b" + d;
+    TERM.ctrl = TERM.alt = false;
+    renderTermKeys();
+    return d;
+  }
+
+  function termSend(a, d) {
+    a.q += d;
+    if (a.timer) return;
+    a.timer = setTimeout(() => {
+      const body = a.q;
+      a.q = ""; a.timer = 0;
+      // 串起来发，保证顺序（并发的 fetch 不保证先到先处理）
+      a.sending = a.sending.then(() => fetch(`/api/term/${a.id}/in`, { method: "POST", body }).catch(() => {}));
+    }, 6);
+  }
+
+  function termFit(a) {
+    if (!a || a.el.classList.contains("hidden") || !a.el.clientWidth) return;
+    try { a.fit.fit(); } catch { return; }
+    if (a.xt.cols === a.cols && a.xt.rows === a.rows) return;
+    a.cols = a.xt.cols; a.rows = a.xt.rows;
+    clearTimeout(a.rt);
+    a.rt = setTimeout(() => api(`/api/term/${a.id}/resize`, {
+      method: "POST", body: JSON.stringify({ cols: a.cols, rows: a.rows }),
+    }).catch(() => {}), 120);
+  }
+
+  const TERM_KEYS = [
+    ["Esc", "\x1b"], ["Tab", "\t"], ["Ctrl", "ctrl"], ["Alt", "alt"],
+    ["←", "\x1b[D"], ["↓", "\x1b[B"], ["↑", "\x1b[A"], ["→", "\x1b[C"],
+    ["Home", "\x1b[H"], ["End", "\x1b[F"], ["PgUp", "\x1b[5~"], ["PgDn", "\x1b[6~"],
+    ["|", "|"], ["~", "~"], ["/", "/"], ["-", "-"],
+    ["📋", "paste"], ["A−", "font-"], ["A+", "font+"],
+  ];
+
+  function renderTermKeys() {
+    $("term-keys").innerHTML = TERM_KEYS.map(([l, k], i) =>
+      `<button class="tk ${(k === "ctrl" && TERM.ctrl) || (k === "alt" && TERM.alt) ? "on" : ""}" data-i="${i}">${esc(l)}</button>`).join("");
+  }
+
+  $("term-keys").addEventListener("pointerdown", (e) => { if (e.target.closest(".tk")) e.preventDefault(); });  // 别抢走焦点，否则软键盘会收起
+  $("term-keys").addEventListener("click", async (e) => {
+    const b = e.target.closest(".tk");
+    if (!b) return;
+    const k = TERM_KEYS[Number(b.dataset.i)][1];
+    const a = TERM.inst.get(TERM.cur);
+    if (k === "ctrl") { TERM.ctrl = !TERM.ctrl; return renderTermKeys(); }
+    if (k === "alt") { TERM.alt = !TERM.alt; return renderTermKeys(); }
+    if (k === "font-" || k === "font+") {
+      TERM.font = Math.max(8, Math.min(28, TERM.font + (k === "font+" ? 1 : -1)));
+      localStorage.setItem("cc.term.font", TERM.font);
+      for (const x of TERM.inst.values()) { x.xt.options.fontSize = TERM.font; termFit(x); }
+      return;
+    }
+    if (!a) return;
+    if (k === "paste") {
+      let s = "";
+      try { s = await navigator.clipboard.readText(); } catch {}
+      if (!s) s = prompt(t("粘贴到终端：")) || "";
+      if (s) a.xt.paste(s);
+      return a.xt.focus();
+    }
+    // 方向键在应用光标模式（vim、less…）下要换成 ESC O x
+    let d = k;
+    if (a.xt.modes.applicationCursorKeysMode && /^\x1b\[[ABCDHF]$/.test(d)) d = "\x1bO" + d[2];
+    termSend(a, termMods(d));
+  });
+
+  // 文本视图：xterm 在触屏上选不了字，把缓冲区摊成普通文本，用系统的长按选择
+  $("term-text").addEventListener("click", () => {
+    const a = TERM.inst.get(TERM.cur);
+    if (!a) return;
+    const b = a.xt.buffer.active, lines = [];
+    for (let i = Math.max(0, b.length - 3000); i < b.length; i++) lines.push(b.getLine(i)?.translateToString(true) ?? "");
+    while (lines.length && !lines[lines.length - 1]) lines.pop();
+    $("term-text-pre").textContent = lines.join("\n");
+    $("term-textview").classList.remove("hidden");
+    const pre = $("term-text-pre");
+    pre.scrollTop = pre.scrollHeight;
+  });
+  $("term-text-copy").addEventListener("click", () => {
+    const sel = String(getSelection() || "");
+    navigator.clipboard?.writeText(sel || $("term-text-pre").textContent);
+    toast(sel ? t("已复制选中内容") : t("已复制全部"));
+  });
+  $("term-text-close").addEventListener("click", () => $("term-textview").classList.add("hidden"));
+
+  $("term-close").addEventListener("click", closeTerm);
+  $("term-new").addEventListener("click", newTerm);
+  $("btn-term").addEventListener("click", openTerm);
+  renderTermKeys();
+  // 换主题时跟着换
+  new MutationObserver(() => { for (const a of TERM.inst.values()) a.xt.options.theme = termTheme(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // ── 回到最新：往上翻得远了，右下角出一个 ↓ 圆钮；翻着的时候有新内容进来，钮上亮个点 ──
+  const toBottomEl = document.createElement("button");
+  toBottomEl.id = "btn-bottom";
+  toBottomEl.className = "hidden";
+  toBottomEl.setAttribute("aria-label", t("回到最新"));
+  toBottomEl.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>';
+  $("composer").appendChild(toBottomEl);
+  let bottomH = 0, bottomRaf = 0;
+  function syncBottomBtn() {
+    bottomRaf = 0;
+    const away = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 320;
+    toBottomEl.classList.toggle("hidden", !away);
+    if (!away) toBottomEl.classList.remove("new");
+    else if (chatEl.scrollHeight > bottomH + 4 && bottomH) toBottomEl.classList.add("new");
+    bottomH = chatEl.scrollHeight;
+  }
+  const queueBottomSync = () => { if (!bottomRaf) bottomRaf = requestAnimationFrame(syncBottomBtn); };
+  chatEl.addEventListener("scroll", queueBottomSync, { passive: true });
+  new MutationObserver(queueBottomSync).observe(chatEl, { childList: true, subtree: true, characterData: true });
+  toBottomEl.addEventListener("click", () => {
+    toBottomEl.classList.remove("new");
+    chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: "smooth" });
+  });
+
   $("btn-files").addEventListener("click", () => openFiles());
   $("btn-palette").addEventListener("click", () => { openCmdPalette(""); inputEl.focus(); });
   $("btn-close-drawer").addEventListener("click", closeDrawer);

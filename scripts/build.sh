@@ -22,7 +22,7 @@ OUT=$ROOT/dist
 echo "▸ assets"
 rm -rf "$A/assets/app"; mkdir -p "$A/assets/app/web" "$A/assets/app/scripts" "$A/assets/app/bin"
 cp "$SRC/server.mjs" "$A/assets/app/"
-for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp "$f" "$A/assets/app/web/";; esac; done
+for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp -R "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
 cp "$A/assets/TOOLS.md" "$A/assets/app/"     # 给 claude 的工具说明（网关读进系统提示）
@@ -39,7 +39,9 @@ cc4 -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--ha
 # 这个是**可执行文件**不是库，所以不用 -nostdlib（它自己就是被启动的那个进程，可以正常链 libc）。
 # 入口包装在 assets/bin/enosys-run
 cc4 -O2 -o "$A/assets/app/lib/seccomp-enosys-run" "$A/native/seccomp-enosys-run.c"
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" "$A/assets/app/web/"* "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
+# 应用内终端的伪终端（node 没有 pty）：stdin/stdout 与 pty 对转，fd 3 收窗口大小
+cc4 -O2 -o "$A/assets/app/lib/ptyhost" "$A/native/ptyhost.c"
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 

@@ -20,6 +20,7 @@ import net from "node:net";
 import path from "node:path";
 import zlib from "node:zlib";
 import { spawn, execFile } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 
@@ -1469,6 +1470,7 @@ const MIME = {
   ".log": "text/plain; charset=utf-8", ".csv": "text/csv; charset=utf-8",
   ".yaml": "text/yaml; charset=utf-8", ".yml": "text/yaml; charset=utf-8",
   ".apk": "application/vnd.android.package-archive", ".zip": "application/zip",
+  ".wasm": "application/wasm",
 };
 
 const EXT_KIND = {
@@ -1476,7 +1478,11 @@ const EXT_KIND = {
   video: [".mp4", ".webm", ".mkv", ".mov", ".3gp"],
   audio: [".mp3", ".wav", ".ogg", ".m4a", ".flac", ".opus"],
   text:  [".txt", ".md", ".log", ".csv", ".json", ".yaml", ".yml", ".xml", ".html", ".js", ".mjs",
-          ".css", ".c", ".h", ".cpp", ".py", ".sh", ".java", ".kt", ".rs", ".go", ".ts", ".sql"],
+          ".css", ".c", ".h", ".cpp", ".py", ".sh", ".java", ".kt", ".rs", ".go", ".ts", ".sql",
+          ".toml", ".ini", ".conf", ".cfg", ".properties", ".gradle", ".kts", ".tsx", ".jsx", ".cjs",
+          ".vue", ".svelte", ".scss", ".less", ".hpp", ".cc", ".cxx", ".rb", ".php", ".lua", ".pl",
+          ".swift", ".dart", ".cs", ".zig", ".r", ".tex", ".typ", ".gd", ".tscn", ".tres", ".diff",
+          ".patch", ".bash", ".zsh", ".fish", ".bat", ".ps1", ".rst", ".org", ".tsv", ".jsonl", ".svg"],
 };
 const KIND_OF = new Map();
 for (const [k, list] of Object.entries(EXT_KIND)) for (const e of list) KIND_OF.set(e, k);
@@ -1526,6 +1532,22 @@ function safeFilePath(p) {
   return { file: real, size: st.size, mtime: st.mtimeMs };
 }
 
+/** 写文件前的同一套防呆：已有文件走 safeFilePath；新文件看父目录 */
+function safeWritePath(p) {
+  if (!p || !path.isAbsolute(String(p))) return { error: "absolute path required", status: 400 };
+  const full = String(p);
+  if (fs.existsSync(full)) return safeFilePath(full);
+  let dir;
+  try { dir = fs.realpathSync(path.dirname(full)); } catch (e) { return { error: "no such directory", status: 400 }; }
+  for (const root of [CFG.home, CFG.runtime]) {
+    let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
+    if (dir === rr || dir.startsWith(rr + path.sep)) return { error: "forbidden", status: 403 };
+  }
+  const name = path.basename(full);
+  if (SECRET_NAMES.has(name) || SECRET_RE.test(path.join(dir, name))) return { error: "forbidden", status: 403 };
+  return { file: path.join(dir, name), size: 0, mtime: 0, fresh: true };
+}
+
 /** 二进制安全的体读取（readBody 走 utf8，会把图片读坏） */
 function readBodyBuf(req, max = 64 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
@@ -1557,6 +1579,191 @@ function fileRoots() {
   add("/sdcard");
   for (const d of SETTINGS.addDirs || []) add(d);
   return out;
+}
+
+// ── 应用内终端 ────────────────────────────────────────────────────────
+// node 没有 pty：cccodroid 自带原生小程序 app/lib/ptyhost（源码 android/native/ptyhost.c）；
+// 开发端没有 lib/，退回到同一协议的 python3 pty 版。协议：
+//   ptyhost <rows> <cols> <程序> [参数…]；stdin→pty，pty→stdout，fd 3 一行 "rows cols" 改窗口大小。
+// 输出留一段环形缓冲：界面重开 / 断线重连时先回放，再接着推实时输出（SSE）。
+const TERM_MAX = 8;
+const TERM_RING = 256 * 1024;
+const TERMS = new Map();
+let termSeq = 0;
+const PY_PTY = `import os,sys,pty,select,signal,struct,fcntl,termios,errno,time
+r,c=int(sys.argv[1]),int(sys.argv[2])
+try: os.fstat(3); ctl=3
+except OSError: ctl=-1
+pid,m=pty.fork()
+if pid==0:
+  if ctl>=0: os.close(ctl)
+  try: os.execvp(sys.argv[3],sys.argv[3:])
+  except Exception as e: sys.stderr.write("exec: %s\\r\\n"%e); os._exit(127)
+def size(a,b):
+  fcntl.ioctl(m,termios.TIOCSWINSZ,struct.pack("HHHH",a or 24,b or 80,0,0))
+  try: os.killpg(pid,signal.SIGWINCH)
+  except OSError: pass
+size(r,c)
+fds=[m,0]+([ctl] if ctl>=0 else []); line=b""
+while True:
+  try: rd,_,_=select.select(fds,[],[])
+  except InterruptedError: continue
+  if m in rd:
+    try: d=os.read(m,16384)
+    except OSError: d=b""
+    if not d: break
+    os.write(1,d)
+  if 0 in rd:
+    d=os.read(0,16384)
+    if d: os.write(m,d)
+    else:
+      for s in (signal.SIGHUP,signal.SIGKILL):
+        try: os.killpg(pid,s)
+        except OSError: pass
+        time.sleep(0.5)
+      sys.exit(129)
+  if ctl in rd:
+    d=os.read(ctl,4096)
+    if not d: fds.remove(ctl); continue
+    line+=d
+    while b"\\n" in line:
+      l,line=line.split(b"\\n",1)
+      try: a,b=map(int,l.split()); size(a,b)
+      except ValueError: pass
+_,st=os.waitpid(pid,0)
+sys.exit(os.waitstatus_to_exitcode(st) if hasattr(os,"waitstatus_to_exitcode") else 0)
+`;
+
+function ptyCommand() {
+  const own = process.env.CCAPP_PTYHOST || path.join(HERE, "lib", "ptyhost");
+  if (fs.existsSync(own)) return [own];
+  const py = [PREFIX && path.join(PREFIX, "bin", "python3"), path.join(CFG.runtime, "..", "devbin", "python3")]
+    .find((p) => p && fs.existsSync(p));
+  return py ? [py, "-c", PY_PTY] : null;
+}
+
+/** 终端里的环境：与 claude 的工具子进程同一套 PATH / TMPDIR / terminfo，但它是给人用的 —— 要颜色，不要 CI 标记。 */
+function termEnv() {
+  const env = claudeEnv();
+  for (const k of ["CI", "NO_COLOR", "CLAUDE_CODE_SHELL", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[k];
+  env.TERM = "xterm-256color";
+  env.COLORTERM = "truecolor";
+  // C.UTF-8 是 glibc 内建的（开发端的 bash 是 glibc 版，没带 locale 数据）；不设的话 readline 把中文显示成 \344\270…
+  if (!/utf-?8/i.test(env.LC_ALL || env.LANG || "")) env.LANG = "C.UTF-8";
+  // …而它在哪儿找 locale 是编译期写死的：开发端的 locale 数据在工具链的 glibc 目录里，得用 LOCPATH 指过去
+  const loc = path.join(PATHS.toolchain, "dshtc", "prefix", "glibc", "lib", "locale");
+  if (!PREFIX && !env.LOCPATH && fs.existsSync(loc)) env.LOCPATH = loc;
+  env.CCAPP_TERMINAL = "1";
+  return env;
+}
+
+function termInfo(t) {
+  return { id: t.id, title: t.title, cols: t.cols, rows: t.rows, created: t.created, alive: t.alive, code: t.code };
+}
+
+function termNew({ cols, rows } = {}) {
+  for (const [id, t] of TERMS) if (!t.alive) TERMS.delete(id);   // 已退出的不占名额
+  if (TERMS.size >= TERM_MAX) return { error: `too many terminals (${TERM_MAX})` };
+  const pc = ptyCommand();
+  if (!pc) return { error: "no pty helper (ptyhost / python3)" };
+  cols = Math.max(20, Math.min(500, cols | 0 || 80));
+  rows = Math.max(5, Math.min(300, rows | 0 || 24));
+  const shell = ensureShell();
+  let cwd = CFG.workspace;
+  try { if (!fs.statSync(cwd).isDirectory()) cwd = CFG.home; } catch { cwd = CFG.home; }
+  const child = spawn(pc[0], [...pc.slice(1), String(rows), String(cols), shell], {
+    cwd, env: termEnv(), detached: true, stdio: ["pipe", "pipe", "pipe", "pipe"],
+  });
+  const id = (++termSeq).toString(36) + Math.random().toString(36).slice(2, 6);
+  const t = {
+    id, title: `${path.basename(shell) === "bash" ? "bash" : "sh"} ${termSeq}`, cols, rows,
+    created: Date.now(), alive: true, code: null, child,
+    buf: "", subs: new Set(), dec: new StringDecoder("utf8"),
+  };
+  const out = (s) => {
+    if (!s) return;
+    t.buf += s;
+    if (t.buf.length > TERM_RING) t.buf = t.buf.slice(t.buf.length - TERM_RING);
+    for (const r of t.subs) sseSend(r, "o", s);
+  };
+  child.stdout.on("data", (d) => out(t.dec.write(d)));
+  child.stderr.on("data", (d) => out(d.toString()));     // 只有 ptyhost 自己的报错走这里
+  child.stdin.on("error", () => {});
+  child.stdio[3]?.on("error", () => {});
+  child.on("error", (e) => out(`\r\n[${e.message}]\r\n`));
+  child.on("exit", (code, sig) => {
+    out(t.dec.end());
+    t.alive = false;
+    t.code = code ?? (sig ? 128 : null);
+    for (const r of t.subs) { sseSend(r, "exit", { code: t.code }); try { r.end(); } catch {} }
+    t.subs.clear();
+  });
+  TERMS.set(id, t);
+  log(`[term] ${id} 打开 ${cols}x${rows} via ${path.basename(pc[0])}`);
+  return { ok: true, term: termInfo(t) };
+}
+
+function sseSend(res, ev, data) {
+  try { res.write(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
+}
+
+function termKill(t) {
+  if (!t) return;
+  if (t.alive) { try { t.child.stdin.end(); } catch {} setTimeout(() => { if (t.alive) killTree(t.child); }, 1500); }
+  TERMS.delete(t.id);
+  for (const r of t.subs) { try { r.end(); } catch {} }
+  t.subs.clear();
+}
+
+async function handleTerm(req, res, p) {
+  if (req.method === "GET" && p === "/api/term/list") {
+    return sendJson(res, 200, { terms: [...TERMS.values()].map(termInfo), available: !!ptyCommand() });
+  }
+  if (req.method === "POST" && p === "/api/term/new") {
+    let b = {};
+    try { b = JSON.parse(await readBody(req) || "{}"); } catch {}
+    const r = termNew(b);
+    return sendJson(res, r.error ? 400 : 200, r);
+  }
+  const m = p.match(/^\/api\/term\/([0-9a-z]+)\/(stream|in|resize|kill|rename)$/);
+  if (!m) return sendJson(res, 404, { error: "not found" });
+  const t = TERMS.get(m[1]);
+  if (!t) return sendJson(res, 404, { error: "no such terminal" });
+  const op = m[2];
+  if (req.method === "GET" && op === "stream") {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    res.socket?.setNoDelay?.(true);
+    sseSend(res, "replay", t.buf);
+    if (!t.alive) { sseSend(res, "exit", { code: t.code }); return res.end(); }
+    t.subs.add(res);
+    const ka = setInterval(() => { try { res.write(": k\n\n"); } catch {} }, 25000);
+    req.on("close", () => { clearInterval(ka); t.subs.delete(res); });
+    return;
+  }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "method" });
+  const body = await readBody(req);
+  if (op === "in") {
+    if (t.alive) try { t.child.stdin.write(body); } catch {}
+    return sendJson(res, 200, { ok: true });
+  }
+  let b = {};
+  try { b = JSON.parse(body || "{}"); } catch {}
+  if (op === "resize") {
+    t.cols = Math.max(20, Math.min(500, b.cols | 0 || t.cols));
+    t.rows = Math.max(5, Math.min(300, b.rows | 0 || t.rows));
+    if (t.alive) try { t.child.stdio[3].write(`${t.rows} ${t.cols}\n`); } catch {}
+    return sendJson(res, 200, { ok: true });
+  }
+  if (op === "rename") {
+    t.title = String(b.title || "").slice(0, 40) || t.title;
+    return sendJson(res, 200, { ok: true });
+  }
+  if (op === "kill") { termKill(t); return sendJson(res, 200, { ok: true }); }
 }
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
@@ -3070,6 +3277,9 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // ── 应用内终端 ──
+    if (p.startsWith("/api/term/")) return handleTerm(req, res, p);
+
     // ── 能力清单 ──
     if (req.method === "GET" && p === "/api/capabilities") {
       return sendJson(res, 200, capabilities());
@@ -3083,6 +3293,7 @@ const server = http.createServer(async (req, res) => {
         "content-type": mimeOf(r.file),
         "content-length": r.size,
         "cache-control": "no-store",
+        "x-mtime": String(r.mtime),     // 编辑器保存时带回来做冲突检测
       };
       if (u.searchParams.get("download") === "1") {
         head["content-disposition"] =
@@ -3093,6 +3304,21 @@ const server = http.createServer(async (req, res) => {
       st.on("error", () => { try { res.destroy(); } catch {} });
       st.pipe(res);
       return;
+    }
+
+    // ── 文件编辑器保存：带上打开时的 mtime，磁盘上的已经被别人（多半是 Claude）改过就拒绝，免得互相覆盖 ──
+    if (req.method === "POST" && p === "/api/file/save") {
+      const r = safeWritePath(u.searchParams.get("path"));
+      if (r.error) return sendJson(res, r.status || 400, { error: r.error });
+      const base = Number(u.searchParams.get("mtime") || 0);
+      if (!r.fresh && base && Math.abs(r.mtime - base) > 1 && u.searchParams.get("force") !== "1") {
+        return sendJson(res, 409, { error: "changed on disk", mtime: r.mtime, size: r.size });
+      }
+      const buf = await readBodyBuf(req, 16 * 1024 * 1024);
+      try { fs.writeFileSync(r.file, buf); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+      const st = fs.statSync(r.file);
+      log(`[file] 保存 ${r.file} ${buf.length}B`);
+      return sendJson(res, 200, { ok: true, path: r.file, size: st.size, mtime: st.mtimeMs });
     }
 
     // ── 把界面拿到的东西落盘（粘贴 / 拖放 / 选择文件共用）──
@@ -3344,5 +3570,5 @@ setTimeout(async () => {
   } catch (e) { log(`模型校验失败: ${e.message}`); }
 }, 2500);
 
-process.on("SIGTERM", () => { try { bridgeProc?.kill(); } catch {} process.exit(0); });
+process.on("SIGTERM", () => { for (const t of TERMS.values()) if (t.alive) killTree(t.child); try { bridgeProc?.kill(); } catch {} process.exit(0); });
 process.on("SIGINT", () => { try { bridgeProc?.kill(); } catch {} process.exit(0); });

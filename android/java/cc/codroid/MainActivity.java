@@ -238,12 +238,22 @@ public class MainActivity extends Activity {
         String have = tag.isFile() ? new String(java.nio.file.Files.readAllBytes(tag.toPath())) : "";
         if (want.equals(have)) return;
         say("部署界面与网关 " + want.trim());
-        Installer.deleteTree(env.app);
-        copyAssetDir("app", env.app);
-        // lib/ 里除了 .so 还有可执行的 seccomp-enosys-run（enosys-run 的本体）
-        for (String d : new String[]{"scripts", "bin", "lib"}) {
-            File[] fs = new File(env.app, d).listFiles();
-            if (fs != null) for (File f : fs) f.setExecutable(true, true);
+        // boot() 一开头就起了网关服务，守护线程可能已经拿旧的 server.mjs 把 node 拉起来了 ——
+        // 不停一下，升级后界面是新的、网关还是旧的（新接口全 404），直到下次重启。
+        // 只在内容哈希变了（= 刚升级，进程本来就被安装杀过）时走到这里，不会打断任务
+        GatewayService.pause(true);
+        try {
+            Installer.deleteTree(env.app);
+            copyAssetDir("app", env.app);
+            // lib/ 里除了 .so 还有可执行的 seccomp-enosys-run、ptyhost
+            for (String d : new String[]{"scripts", "bin", "lib"}) {
+                File[] fs = new File(env.app, d).listFiles();
+                if (fs != null) for (File f : fs) f.setExecutable(true, true);
+            }
+        } finally {
+            // 守护线程若恰好在 pause 前一刻已经在拉 node，这里再杀一次，保证起来的一定是新文件
+            GatewayService.pause(true);
+            GatewayService.pause(false);
         }
     }
 

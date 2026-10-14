@@ -23,6 +23,9 @@
     <button id="btn-files" class="icon-btn" aria-label="文件浏览器" title="文件浏览器" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
   </button>
+    <button id="btn-term" class="icon-btn" aria-label="终端" title="终端" data-i18n-attr="aria-label,title">
+    <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>
+  </button>
     <button id="btn-palette" class="icon-btn" aria-label="命令面板" title="命令面板" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg>
   </button>
@@ -359,6 +362,44 @@
     <span id="fs-count" class="tiny"></span>
         <button id="fs-insert" class="btn sm" data-i18n>插入到输入框</button>
   </div>
+</div>
+
+<!-- ── 文件查看 / 编辑（全屏）── -->
+<div id="viewer" class="hidden">
+  <div class="vw-head">
+        <button id="vw-close" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="vw-title"><span id="vw-name" class="mono"></span><span id="vw-info" class="tiny"></span></div>
+    <div id="vw-acts" class="vw-acts"></div>
+  </div>
+  <div id="vw-body"></div>
+</div>
+
+<!-- ── 终端（全屏）── -->
+<div id="term" class="hidden">
+  <div class="term-head">
+        <button id="term-close" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="term-tabs" class="term-tabs"></div>
+        <button id="term-text" class="icon-btn" aria-label="以文本查看（可选中复制）" title="以文本查看（可选中复制）" data-i18n-attr="aria-label,title">
+      <svg viewBox="0 0 24 24"><path d="M8 4h8l4 4v12H8zM16 4v4h4M4 8v12h4"/></svg>
+    </button>
+        <button id="term-new" class="icon-btn" aria-label="新终端" title="新终端" data-i18n-attr="aria-label,title">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+  <div id="term-screens"></div>
+  <div id="term-keys" class="term-keys"></div>
+</div>
+<div id="term-textview" class="hidden">
+  <div class="term-head">
+        <span class="tiny" data-i18n>长按选择文字</span>
+        <button id="term-text-copy" class="btn ghost sm" data-i18n>复制</button>
+        <button id="term-text-close" class="btn ghost sm" data-i18n>关闭</button>
+  </div>
+  <pre id="term-text-pre" class="mono"></pre>
 </div>
 
 <!-- ── 图片查看器 ── -->

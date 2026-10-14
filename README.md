@@ -26,6 +26,9 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Each reply shows a live generation timer that settles to the total time when it finishes.
   - Light / dark appearance, or follow the system (status bar included).
   - **Session management**: deleted sessions go to a recycle bin first (restorable for 30 days). Pick sessions one by one or all at once and export them as a zip — handed straight to the system share sheet — then import the zip on another device and carry on where you left off.
+  - **Terminal** (top bar): a real terminal with tabs, running the same bash and toolchain Claude uses — hx (Helix), less, top, git and the rest. A row of extra keys supplies what phone keyboards lack (Esc, Tab, sticky Ctrl / Alt, arrows, Home / End, PgUp / PgDn, paste, font size); a text view lets you long-press to select and copy output. Terminals keep running when you close the panel and replay their output when you come back.
+  - **File viewer / editor** (from the file browser): edit text and code and save — if the file changed on disk after you opened it (say Claude edited it), you are asked before anything is overwritten. Markdown renders with an edit toggle; images open fit-to-screen and tap to 1:1; PDFs render with [pdf.js](https://mozilla.github.io/pdf.js/) (CJK text and password-protected files included), pages drawn only as they scroll into view.
+  - A **↓ button** appears when you scroll up through a long chat; tap it to jump to the latest message. A dot on it means new output arrived meanwhile.
   - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically. The account card shows your 5-hour and weekly usage limits with their reset times (taken from what Claude Code itself reports after each turn — the app never queries anything with your credentials).
@@ -139,4 +142,6 @@ cccodroid itself is released under the [Apache License 2.0](LICENSE) (see also [
 - **Toolchain**: taken from the official Termux repositories; each component is distributed under its own license (including GPL). Versions, hashes and build recipes are in the `devkit.lock.json` / `SBOM.tsv` attached to each release. If you need a copy of the source, ask in Issues.
 - **Shizuku-API**: MIT, see [third_party/shizuku/LICENSE](third_party/shizuku/LICENSE).
 - **xz-decompress** (used at toolchain build time): MIT.
+- **[xterm.js](https://xtermjs.org)** (terminal): MIT, see [ThirdPartyLicenses/xterm.js](ThirdPartyLicenses/xterm.js/LICENSE).
+- **[pdf.js](https://mozilla.github.io/pdf.js/)** (PDF viewer): Apache-2.0; its bundled OpenJPEG / JBIG2 / QCMS decoders carry their own licenses. See [ThirdPartyLicenses/pdf.js](ThirdPartyLicenses/pdf.js/).
 - **`android.jar`** is not shipped (its license forbids redistribution); download it yourself if you want to compile APKs on the phone.
