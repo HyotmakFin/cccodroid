@@ -505,7 +505,7 @@ function loadRecipe(dir) {
   const r = JSON.parse(fs.readFileSync(path.join(dir, "recipe.json"), "utf8"));
   if (r.schema !== 1) throw new Error("配方 schema 必须是 1");
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.id || "")) throw new Error("配方 id 不合法: " + r.id);
-  if ((r.kind || "termux") !== "termux") throw new Error(`kind "${r.kind}" 还不支持（v1 只有 termux）`);
+  if (!["termux", "glibc"].includes(r.kind || "termux")) throw new Error(`kind "${r.kind}" 还不支持（termux / glibc）`);
   if (!Array.isArray(r.roots) || !r.roots.length) throw new Error("roots 不能为空");
   for (const n of r.repos || []) if (!MAN.extraRepos[n]) throw new Error("不认识的仓库: " + n);
   r.files = { ...(r.files || {}) };
