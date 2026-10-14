@@ -56,6 +56,7 @@ final class Updater {
     private volatile boolean appWaiting, appWaitingUser;
     /** 最近一次校验的结果（给界面看） */
     private volatile JSONObject lastVerify;
+    private volatile boolean repairing;    // 这次下载 / 安装是「修复」发起的（账本里分开记）
 
     static final class Item {
         final String id, name;
@@ -123,8 +124,16 @@ final class Updater {
         SharedPreferences.Editor e = prefs().edit();
         if (req.has("auto")) e.putBoolean("auto", req.optBoolean("auto", true));
         String ch = req.optString("channel", "");
-        if (ch.equals("stable") || ch.equals("latest")) e.putString("channel", ch);
+        boolean switched = (ch.equals("stable") || ch.equals("latest")) && !ch.equals(channel());
+        if (switched) e.putString("channel", ch);
         e.apply();
+        // 换渠道是用户明说要哪个版本：马上按新渠道查，版本对不上就直接换（切回 stable 也会换回 stable 的版本）
+        if (switched) new Thread(() -> {
+            try {
+                checkClaude();
+                if ("available".equals(claude.state)) apply("claude", true);
+            } catch (Exception ex) { claude.set("error", "连不上 downloads.claude.ai：" + ex.getMessage()); }
+        }, "upd-channel").start();
     }
 
     private void refreshCurrent() {
@@ -243,8 +252,15 @@ final class Updater {
         String v = new String(Installer.httpGetSmall("https://downloads.claude.ai/claude-code-releases/" + channel()), StandardCharsets.UTF_8).trim();
         if (!v.matches("\\d+\\.\\d+\\.\\d+.*")) throw new IOException("版本号不对：" + v);
         claude.latest = v;
-        if (!"installing".equals(claude.state))
-            claude.set(cmpVer(v, claude.current) <= 0 ? "uptodate" : "available", channel().equals("latest") ? "latest 渠道" : "");
+        // 已装的版本要和所选渠道的版本「一致」，而不只是「不比它旧」：
+        // 从 latest 切回 stable 时，stable 的版本号更小，以前这里判成「已是最新」，结果一直停在 latest 的版本上
+        if (!"installing".equals(claude.state)) {
+            int c = cmpVer(v, claude.current);
+            String tag = channel().equals("latest") ? "latest 渠道" : "";
+            if (c == 0) claude.set("uptodate", tag);
+            else if (c > 0 || claude.current.isEmpty()) claude.set("available", tag);
+            else claude.set("available", "切回 " + channel() + " 渠道：将换成 " + v + "（比当前的 " + claude.current + " 旧）");
+        }
     }
 
     /** 发布列表地址。home/.config/cccodroid/update-feed 里写了地址就用它（测试更新流程用，形状同 GitHub API） */
@@ -432,10 +448,14 @@ final class Updater {
             refreshCurrent();
             devkit.set("uptodate", "");
             ctx.getSystemService(NotificationManager.class).cancel(20);
+            Ledger.add(env, repairing ? "repair" : "install", true, (repairing ? "修复完成：重装 " : "已装上 ") + tagOf(devkit.base),
+                new JSONObject().put("sha256", devkit.sha));
         } catch (Exception e) {
             devkit.set("error", e.getMessage());
+            Ledger.add(env, repairing ? "repair" : "install", false, (repairing ? "修复失败：" : "安装失败：") + e.getMessage(), null);
             throw e;
         } finally {
+            repairing = false;
             GatewayService.pause(false);
             releaseApp();
         }
@@ -456,6 +476,15 @@ final class Updater {
                     JSONObject v = installer(devkit).verifyDevkit(full);
                     v.put("full", full).put("at", System.currentTimeMillis());
                     lastVerify = v;
+                    int nBad = v.optInt("missing") + v.optInt("changed");
+                    // 启动时的快速自检每次都跑，没问题就不记，免得账本被刷满
+                    if (full || nBad > 0 || !v.optBoolean("manifest"))
+                        Ledger.add(env, "verify", v.optBoolean("manifest") && nBad == 0,
+                            (full ? "完整校验" : "快速自检") + "：" + (!v.optBoolean("manifest") ? "没有文件清单，无法核对"
+                                : nBad == 0 ? v.optInt("total") + " 个文件完好"
+                                : "缺 " + v.optInt("missing") + " 个、内容不对 " + v.optInt("changed") + " 个"),
+                            new JSONObject().put("installed", tagOf(installedDevkitBase())).put("total", v.optInt("total"))
+                                .put("missing", v.optInt("missing")).put("changed", v.optInt("changed")).put("samples", v.optJSONArray("samples")));
                     if (!v.optBoolean("manifest")) {
                         devkit.set(full ? "damaged" : prev, full ? "这一版工具包没带文件清单，没法逐个核对；可以修复（重装同一版本）" : prevMsg);
                         return;
@@ -466,7 +495,10 @@ final class Updater {
                         + (v.optInt("missing") > 0 && v.optInt("changed") > 0 ? "、" : "")
                         + (v.optInt("changed") > 0 ? v.optInt("changed") + " 个文件内容不对" : "") + "，点修复重装同一版本");
                     if (!full) notifyDamaged(v);
-                } catch (Exception e) { devkit.set("error", "校验失败：" + e.getMessage()); }
+                } catch (Exception e) {
+                    devkit.set("error", "校验失败：" + e.getMessage());
+                    Ledger.add(env, "verify", false, "校验失败：" + e.getMessage(), null);
+                }
             }, "upd-verify").start();
             return r.put("ok", true).put("message", full ? "开始逐个核对（一两分钟）" : "开始核对");
         } catch (Exception e) {
@@ -493,9 +525,12 @@ final class Updater {
             devkit.url = base + gz.getString("file");
             devkit.file = new File(env.files, gz.getString("file"));
             devkit.set("available", "修复：重装 " + devkit.latest);
+            repairing = true;
+            Ledger.add(env, "repair", true, "开始修复：重新下载 " + devkit.latest, null);
             new Thread(() -> download(devkit, true), "upd-dl-devkit").start();
             return r.put("ok", true).put("message", "开始下载 " + devkit.latest + " 用于修复");
         } catch (Exception e) {
+            Ledger.add(env, "repair", false, "修复没开始：" + e.getMessage(), null);
             try { r.put("ok", false).put("message", "修复没开始：" + e.getMessage()); } catch (Exception ignored) {}
             return r;
         }

@@ -18,6 +18,7 @@ import http from "node:http";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import zlib from "node:zlib";
 import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -893,9 +894,38 @@ function descendants(root) {
 /** 每次起 claude 都带的 --settings：输出风格 + 密钥读取器。
  *  apiKeyHelper 的输出 claude 会同时放进 x-api-key 与 Authorization: Bearer，两种认证风格都覆盖。 */
 const KEY_FILE = path.join(CFG.home, ".cache", "ccapp-key");
+
+/** 安全模式：配置弄坏了（钩子、插件、MCP、CLAUDE.md…）跑不起来时，用 claude 自带的 --safe-mode 起：
+ *  所有自定义项一概不加载，登录、密钥、会话、模型照旧。不挪、不改任何文件，关掉就恢复原样。
+ *  开关是一个标记文件 —— 界面打不开时，安卓壳的启动页也能直接写它。 */
+const SAFE_FILE = path.join(CFG.home, ".ccapp-safe-mode");
+const safeMode = () => fs.existsSync(SAFE_FILE);
+function setSafeMode(on) {
+  if (on) fs.writeFileSync(SAFE_FILE, String(Date.now()));
+  else try { fs.unlinkSync(SAFE_FILE); } catch {}
+  ledger("safe-mode", true, on ? "进入安全模式（界面开启）" : "退出安全模式");
+  log(on ? "进入安全模式" : "退出安全模式");
+}
+
+/** 修复账本（安卓壳记安装 / 校验 / 修复，网关记安全模式），一行一条 JSON。没给路径就不记 */
+function ledger(kind, ok, msg, detail) {
+  const f = process.env.CCAPP_LEDGER;
+  if (!f) return;
+  try { fs.appendFileSync(f, JSON.stringify({ at: Date.now(), kind, ok, msg, ...(detail ? { detail } : {}) }) + "\n"); } catch {}
+}
+function readLedger(n = 100) {
+  const f = process.env.CCAPP_LEDGER;
+  if (!f) return null;
+  try {
+    return fs.readFileSync(f, "utf8").trim().split("\n").reverse().slice(0, n)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { return []; }
+}
+
 function settingsArgs() {
   const st = {};
-  if (SETTINGS.outputStyle) st.outputStyle = SETTINGS.outputStyle;
+  const safe = safeMode();
+  if (SETTINGS.outputStyle && !safe) st.outputStyle = SETTINGS.outputStyle;
   if (API_KEY) {
     try {
       fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
@@ -906,7 +936,7 @@ function settingsArgs() {
   } else {
     try { fs.unlinkSync(KEY_FILE); } catch {}
   }
-  return Object.keys(st).length ? ["--settings", JSON.stringify(st)] : [];
+  return [...(safe ? ["--safe-mode"] : []), ...(Object.keys(st).length ? ["--settings", JSON.stringify(st)] : [])];
 }
 
 /** 跑一次 claude 并收集全部 stdout（用于取 CLI 状态类输出） */
@@ -1011,7 +1041,7 @@ function listSessions(limit = 150) {
       cwd: meta.cwd,
       mtime: s.mtime,
       sizeKb: Math.round(s.size / 1024),
-      currentProject: meta.cwd === CFG.workspace,
+      currentProject: meta.cwd === CFG.workspace || meta.cwd === realWorkspace(),
     };
   });
 }
@@ -1027,6 +1057,208 @@ function findSessionFile(id) {
     if (fs.existsSync(full)) return { file: full, project: d.name };
   }
   return null;
+}
+
+// ── 会话管理：回收站 / 导出 / 导入 ─────────────────────────────────────
+// 回收站放在 claude 的 projects 目录之外（它看不见，--resume 也就找不回来），同一文件系统，挪进挪出都是 rename。
+// 每个会话一格：<id>.jsonl + 同名目录（子代理、超长工具结果）+ meta.json（原项目目录、标题、删除时间）。
+const TRASH_DIR = path.join(CFG.home, ".ccapp-trash");
+const TRASH_KEEP_DAYS = 30;
+const SID_RE = /^[A-Za-z0-9._-]+$/;
+
+function trashSession(id) {
+  const found = findSessionFile(id);
+  if (!found) return { ok: false, error: "not found" };
+  const meta = peekSession(found.file);
+  const slot = path.join(TRASH_DIR, id);
+  fs.rmSync(slot, { recursive: true, force: true });
+  fs.mkdirSync(slot, { recursive: true });
+  const st = fs.statSync(found.file);
+  fs.renameSync(found.file, path.join(slot, id + ".jsonl"));
+  const side = path.join(PATHS.projects, found.project, id);
+  if (fs.existsSync(side)) fs.renameSync(side, path.join(slot, "dir"));
+  fs.writeFileSync(path.join(slot, "meta.json"), JSON.stringify({
+    id, project: found.project, title: NAMES[id] || meta.title, renamed: !!NAMES[id],
+    cwd: meta.cwd, mtime: st.mtimeMs, size: st.size, deletedAt: Date.now(),
+  }));
+  PEEK_CACHE.delete(found.file);
+  delete NAMES[id]; saveNames();
+  return { ok: true };
+}
+
+function listTrash() {
+  let ids = [];
+  try { ids = fs.readdirSync(TRASH_DIR); } catch { return []; }
+  const out = [];
+  for (const id of ids) {
+    try { out.push(JSON.parse(fs.readFileSync(path.join(TRASH_DIR, id, "meta.json"), "utf8"))); } catch {}
+  }
+  return out.sort((a, b) => b.deletedAt - a.deletedAt);
+}
+
+function restoreSession(id) {
+  if (!SID_RE.test(id)) return { ok: false, error: "bad id" };
+  const slot = path.join(TRASH_DIR, id);
+  let meta;
+  try { meta = JSON.parse(fs.readFileSync(path.join(slot, "meta.json"), "utf8")); } catch { return { ok: false, error: "not found" }; }
+  if (findSessionFile(id)) return { ok: false, error: "exists" };
+  const dir = path.join(PATHS.projects, SID_RE.test(meta.project || "") ? meta.project : projectSlug(realWorkspace()));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.renameSync(path.join(slot, id + ".jsonl"), path.join(dir, id + ".jsonl"));
+  if (fs.existsSync(path.join(slot, "dir"))) fs.renameSync(path.join(slot, "dir"), path.join(dir, id));
+  if (meta.renamed && meta.title) { NAMES[id] = meta.title; saveNames(); }
+  fs.rmSync(slot, { recursive: true, force: true });
+  return { ok: true };
+}
+
+function purgeTrash(ids) {
+  let n = 0;
+  for (const id of ids) {
+    if (!SID_RE.test(id)) continue;
+    const slot = path.join(TRASH_DIR, id);
+    if (fs.existsSync(slot)) { fs.rmSync(slot, { recursive: true, force: true }); n++; }
+  }
+  return n;
+}
+
+/** 回收站里放满 30 天的自动清掉（网关启动时跑一次） */
+function expireTrash() {
+  const cut = Date.now() - TRASH_KEEP_DAYS * 86400000;
+  const old = listTrash().filter((m) => m.deletedAt < cut).map((m) => m.id);
+  if (old.length) log(`回收站：清掉 ${purgeTrash(old)} 个放满 ${TRASH_KEEP_DAYS} 天的会话`);
+}
+
+/** claude 给 cwd 起项目目录名的规则：非字母数字一律换成 -。
+ *  它拿的是解析过符号链接的真实路径（/sdcard → /storage/emulated/0），这边也得先 realpath，否则对不上 */
+function realWorkspace() { try { return fs.realpathSync(CFG.workspace); } catch { return CFG.workspace; } }
+function projectSlug(cwd) { return String(cwd).replace(/[^A-Za-z0-9]/g, "-"); }
+
+// 极简 zip（只 deflate / store，够会话包用）。不引第三方包：网关是单文件分发的
+function zipBuild(entries) {
+  const locals = [], centrals = [];
+  let off = 0;
+  const dosTime = (d) => ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xffff;
+  const dosDate = (d) => (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xffff;
+  const now = new Date();
+  for (const e of entries) {
+    const name = Buffer.from(e.name, "utf8");
+    const raw = Buffer.isBuffer(e.data) ? e.data : Buffer.from(e.data);
+    const comp = zlib.deflateRawSync(raw, { level: 6 });
+    const store = comp.length >= raw.length;
+    const body = store ? raw : comp;
+    const crc = zlib.crc32(raw) >>> 0;
+    const h = Buffer.alloc(30);
+    h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6);
+    h.writeUInt16LE(store ? 0 : 8, 8); h.writeUInt16LE(dosTime(now), 10); h.writeUInt16LE(dosDate(now), 12);
+    h.writeUInt32LE(crc, 14); h.writeUInt32LE(body.length, 18); h.writeUInt32LE(raw.length, 22);
+    h.writeUInt16LE(name.length, 26); h.writeUInt16LE(0, 28);
+    const c = Buffer.alloc(46);
+    c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0x0800, 8);
+    c.writeUInt16LE(store ? 0 : 8, 10); c.writeUInt16LE(dosTime(now), 12); c.writeUInt16LE(dosDate(now), 14);
+    c.writeUInt32LE(crc, 16); c.writeUInt32LE(body.length, 20); c.writeUInt32LE(raw.length, 24);
+    c.writeUInt16LE(name.length, 28); c.writeUInt32LE(off, 42);
+    locals.push(h, name, body);
+    centrals.push(c, name);
+    off += h.length + name.length + body.length;
+  }
+  const cd = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16);
+  return Buffer.concat([...locals, cd, end]);
+}
+
+function zipRead(buf) {
+  let e = buf.length - 22;
+  while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--;
+  if (e < 0) throw new Error("不是 zip 文件");
+  const n = buf.readUInt16LE(e + 10);
+  let p = buf.readUInt32LE(e + 16);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("zip 目录损坏");
+    const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20);
+    const nlen = buf.readUInt16LE(p + 28), xlen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
+    const lo = buf.readUInt32LE(p + 42);
+    const name = buf.toString("utf8", p + 46, p + 46 + nlen);
+    p += 46 + nlen + xlen + clen;
+    if (name.endsWith("/")) continue;
+    const ds = lo + 30 + buf.readUInt16LE(lo + 26) + buf.readUInt16LE(lo + 28);
+    const body = buf.subarray(ds, ds + csize);
+    if (method !== 0 && method !== 8) throw new Error("不支持的压缩方式：" + name);
+    out.push({ name, data: method === 8 ? zlib.inflateRawSync(body) : Buffer.from(body) });
+  }
+  return out;
+}
+
+/** 导出：manifest.json + sessions/<id>.jsonl + sessions/<id>/…（子代理等） */
+function exportSessions(ids) {
+  const entries = [], list = [];
+  const walk = (dir, rel) => {
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, d.name);
+      if (d.isDirectory()) walk(f, rel + "/" + d.name);
+      else if (d.isFile()) entries.push({ name: rel + "/" + d.name, data: fs.readFileSync(f) });
+    }
+  };
+  for (const id of ids) {
+    const found = findSessionFile(id);
+    if (!found) continue;
+    const meta = peekSession(found.file);
+    entries.push({ name: `sessions/${id}.jsonl`, data: fs.readFileSync(found.file) });
+    const side = path.join(PATHS.projects, found.project, id);
+    if (fs.existsSync(side)) walk(side, `sessions/${id}`);
+    list.push({ id, title: NAMES[id] || meta.title, renamed: !!NAMES[id], cwd: meta.cwd, mtime: fs.statSync(found.file).mtimeMs });
+  }
+  if (!list.length) throw new Error("没有可导出的会话");
+  entries.unshift({ name: "manifest.json", data: JSON.stringify({ format: "cccodroid-sessions", version: 1, exportedAt: Date.now(), sessions: list }, null, 1) });
+  const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
+  const dir = path.join(base, "exports");
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
+  const file = path.join(dir, `sessions-${stamp}.zip`);
+  const zip = zipBuild(entries);
+  fs.writeFileSync(file, zip);
+  return { file, count: list.length, bytes: zip.length };
+}
+
+/** 导入：一律落进当前工作区（cwd 改写成本机工作区，--resume 才找得到）；同 id 已有的跳过 */
+function importSessions(buf) {
+  const files = zipRead(buf);
+  const man = files.find((f) => f.name === "manifest.json");
+  let manifest = {};
+  try { manifest = JSON.parse(man.data.toString("utf8")); } catch { throw new Error("缺少 manifest.json，不是会话包"); }
+  if (manifest.format !== "cccodroid-sessions") throw new Error("不是 cccodroid 会话包");
+  const ws = realWorkspace();
+  const dir = path.join(PATHS.projects, projectSlug(ws));
+  fs.mkdirSync(dir, { recursive: true });
+  const res = { imported: [], skipped: [] };
+  for (const s of manifest.sessions || []) {
+    const id = String(s.id || "");
+    if (!SID_RE.test(id)) continue;
+    const main = files.find((f) => f.name === `sessions/${id}.jsonl`);
+    if (!main) continue;
+    if (findSessionFile(id) || fs.existsSync(path.join(TRASH_DIR, id))) { res.skipped.push(id); continue; }
+    const lines = main.data.toString("utf8").split("\n").map((l) => {
+      if (!l.includes('"cwd"')) return l;
+      try { const ev = JSON.parse(l); if (ev.cwd) ev.cwd = ws; return JSON.stringify(ev); } catch { return l; }
+    });
+    fs.writeFileSync(path.join(dir, id + ".jsonl"), lines.join("\n"));
+    if (s.mtime) try { fs.utimesSync(path.join(dir, id + ".jsonl"), new Date(), new Date(s.mtime)); } catch {}
+    const pre = `sessions/${id}/`;
+    for (const f of files) {
+      if (!f.name.startsWith(pre)) continue;
+      const rel = f.name.slice(pre.length);
+      if (rel.split("/").some((x) => !x || x === "." || x === "..")) continue;   // 防目录穿越
+      const dst = path.join(dir, id, rel);
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, f.data);
+    }
+    if (s.renamed && s.title) NAMES[id] = String(s.title).slice(0, 120);
+    res.imported.push(id);
+  }
+  saveNames();
+  return res;
 }
 
 /** 工具参数里的长字符串截短 —— 历史里一个 Write 工具能带几百 KB 的文件内容，
@@ -2002,7 +2234,12 @@ async function devUpdCheck() {
     const v = (await r.text()).trim();
     if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error("版本号不对：" + v.slice(0, 40));
     c.latest = v;
-    if (c.state !== "installing") { c.state = cmpVer(v, c.current) > 0 ? "available" : "uptodate"; c.message = devUpd.channel === "latest" ? "latest 渠道" : ""; }
+    // 已装版本要和所选渠道「一致」：从 latest 切回 stable 时版本号变小，以前判成「已是最新」就一直停在 latest 上
+    if (c.state !== "installing") {
+      const d = cmpVer(v, c.current);
+      c.state = d === 0 ? "uptodate" : "available";
+      c.message = d < 0 && c.current ? `切回 ${devUpd.channel} 渠道：将换成 ${v}（比当前的 ${c.current} 旧）` : devUpd.channel === "latest" ? "latest 渠道" : "";
+    }
     devUpd.lastCheck = Date.now();
   } catch (e) { devUpd.error = "连不上 downloads.claude.ai：" + e.message; }
   finally { devUpd.checking = false; devUpdSave(); }
@@ -2097,7 +2334,11 @@ async function devApp(op, b) {
   if (op === "upd_check") { devUpdCheck(); await new Promise((r) => setTimeout(r, 200)); return devUpdStatus(); }
   if (op === "upd_set") {
     if (typeof b.auto === "boolean") devUpd.auto = b.auto;
-    if (b.channel === "stable" || b.channel === "latest") { devUpd.channel = b.channel; devUpdCheck(); }
+    // 换渠道 = 明说要那个渠道的版本：查完对不上就直接换（自动更新关着也换）
+    if ((b.channel === "stable" || b.channel === "latest") && b.channel !== devUpd.channel) {
+      devUpd.channel = b.channel;
+      devUpdCheck().then(() => { if (devUpd.claude.state === "available") devUpdInstall(); }).catch(() => {});
+    }
     devUpdSave();
     return devUpdStatus();
   }
@@ -2255,9 +2496,221 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
       if (ev.is_error && ev.result) sse({ type: "error", message: String(ev.result).slice(0, 1500) });
       break;
 
+    case "rate_limit_event":
+      noteRateLimit(ev.rate_limit_info);
+      break;
+
     default:
       break;
   }
+}
+
+/** 订阅额度（5 小时 / 每周）。
+ *  claude 每轮都会在 stream-json 里报一条 rate_limit_event，unifiedWindows 里就是两个窗口的占用比例和重置时间。
+ *  网关只是记下 claude 自己吐出来的这条 —— 不拿令牌去查任何接口。
+ *  所以额度要「发过一条消息」之后才有，之后每轮刷新；记下当时的账户，换账户就不显示旧数。 */
+const RL_FILE = path.join(CFG.home, ".cache", "ccapp-ratelimits.json");
+let RATE_LIMITS = (() => { try { return JSON.parse(fs.readFileSync(RL_FILE, "utf8")); } catch { return null; } })();
+function noteRateLimit(info) {
+  const w = info && info.unifiedWindows;
+  if (!w || !isLoginMode()) return;
+  const win = (x) => x && Number.isFinite(+x.utilization)
+    ? { used: +x.utilization <= 1 ? Math.round(+x.utilization * 1000) / 10 : +x.utilization, resetsAt: x.resetsAt || null }
+    : null;
+  RATE_LIMITS = {
+    at: Date.now(),
+    email: AUTH_CACHE?.v?.email || null,
+    status: info.status || null,
+    fiveHour: win(w.five_hour), sevenDay: win(w.seven_day),
+  };
+  saveRateLimits();
+  // 账户缓存是冷的就补查一次，把这份额度钉到账户上（换账户后不显示旧数）
+  if (!RATE_LIMITS.email) authStatus().then((v) => { if (RATE_LIMITS && v.email) { RATE_LIMITS.email = v.email; saveRateLimits(); } }).catch(() => {});
+}
+function saveRateLimits() {
+  try {
+    fs.mkdirSync(path.dirname(RL_FILE), { recursive: true });
+    fs.writeFileSync(RL_FILE, JSON.stringify(RATE_LIMITS));
+  } catch {}
+}
+
+// ── 扩展：插件 / 技能 / MCP ───────────────────────────────────────────
+// 全部转给 claude 自己的命令行（claude plugin … / claude mcp …），网关不自己改它的配置文件 ——
+// 格式随 claude 版本变，自己写迟早写坏。技能目录（~/.claude/skills）例外：它就是一堆文件夹，没有命令。
+// 同一时刻只跑一个改配置的命令，免得两个安装同时写 settings.json。
+let EXT_LOCK = Promise.resolve();
+function extRun(args, timeoutMs = 180000) {
+  const job = EXT_LOCK.then(() => new Promise((resolve) => {
+    const child = spawn(PATHS.loader, claudeArgv(args), {
+      cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home,
+      env: claudeEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true,
+    });
+    let out = "", err = "";
+    child.stdout.on("data", (d) => (out += d)); child.stderr.on("data", (d) => (err += d));
+    const t = setTimeout(() => killTree(child), timeoutMs);
+    child.on("close", (code) => { clearTimeout(t); resolve({ code, out, err }); });
+    child.on("error", (e) => { clearTimeout(t); resolve({ code: -1, out, err: err + e.message }); });
+  }));
+  EXT_LOCK = job.catch(() => {});
+  return job;
+}
+const lastJson = (s) => {
+  const lines = String(s).trim().split("\n").reverse();
+  for (const l of lines) { try { return JSON.parse(l); } catch {} }
+  try { return JSON.parse(String(s).slice(String(s).indexOf("{"))); } catch {}
+  try { return JSON.parse(String(s).slice(String(s).indexOf("["))); } catch {}
+  return null;
+};
+const cliMsg = (r) => (r.err || r.out || "").replace(/\x1b\[[0-9;]*m/g, "").trim().slice(-600);
+
+let PLUGIN_CATALOG = null;   // 可安装清单有三千多条，缓存 10 分钟，搜索在网关这边做
+async function pluginState(withAvailable) {
+  const fresh = PLUGIN_CATALOG && Date.now() - PLUGIN_CATALOG.at < 600000;
+  const r = await extRun(["plugin", "list", "--json", ...(withAvailable && !fresh ? ["--available"] : [])], 120000);
+  const j = lastJson(r.out);
+  if (!j) throw new Error(cliMsg(r) || "claude plugin list 没有输出");
+  const installed = Array.isArray(j) ? j : j.installed || [];
+  if (!Array.isArray(j) && j.available) PLUGIN_CATALOG = { at: Date.now(), list: j.available };
+  return installed;
+}
+
+async function listPlugins(q, offset, withAvailable) {
+  const installed = await pluginState(withAvailable);
+  const ids = new Set(installed.map((p) => p.id));
+  const res = {
+    installed: installed.map((p) => ({ id: p.id, version: p.version, scope: p.scope, enabled: p.enabled !== false, installedAt: p.installedAt })),
+  };
+  if (withAvailable && PLUGIN_CATALOG) {
+    const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const hit = PLUGIN_CATALOG.list.filter((p) => {
+      if (ids.has(p.pluginId)) return false;
+      const hay = (p.name + " " + (p.description || "") + " " + p.marketplaceName).toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+    res.total = hit.length;
+    res.available = hit.slice(offset, offset + 40).map((p) => ({
+      id: p.pluginId, name: p.name, description: String(p.description || "").slice(0, 300),
+      marketplace: p.marketplaceName, version: p.version || null,
+    }));
+  }
+  return res;
+}
+
+/** 安装：有的插件要靠执行一条命令装（或拉包时要跑 headersHelper）。claude 会先把这条命令亮出来，
+ *  不经人点头不装 —— 这里也一样：先不带确认跑一次，拿到命令和它的 sha256 交给界面，用户同意后再带 --accept-command 装。 */
+async function installPlugin(id, accept) {
+  const r = await extRun(["plugin", "install", id, "--json", ...(accept ? ["--accept-command", accept] : [])], 600000);
+  const j = lastJson(r.out) || {};
+  const shown = j.shownCommand || j.command;
+  if (r.code !== 0 && shown && shown.sha256 && !accept) {
+    return { ok: false, needConfirm: true, command: shown.command || shown.display || JSON.stringify(shown), sha256: shown.sha256 };
+  }
+  return r.code === 0 ? { ok: true } : { ok: false, message: j.error || j.message || cliMsg(r) };
+}
+
+async function pluginOp(op, id) {
+  const args = op === "uninstall" ? ["plugin", "uninstall", id, "--json"] : ["plugin", op, id];
+  const r = await extRun(args, 120000);
+  const j = lastJson(r.out) || {};
+  return r.code === 0 ? { ok: true } : { ok: false, message: j.error || j.message || cliMsg(r) };
+}
+
+async function listMarketplaces() {
+  const r = await extRun(["plugin", "marketplace", "list", "--json"], 60000);
+  const j = lastJson(r.out);
+  return Array.isArray(j) ? j.map((m) => ({ name: m.name, source: m.source?.repo || m.source?.url || m.source?.path || m.url || "" })) : [];
+}
+
+async function marketplaceOp(op, arg) {
+  const r = await extRun(["plugin", "marketplace", op, arg], 300000);
+  if (r.code === 0) PLUGIN_CATALOG = null;
+  return r.code === 0 ? { ok: true } : { ok: false, message: cliMsg(r) };
+}
+
+/** claude mcp list 只有给人看的文本：「名字: 目标 - ✔ Connected」。顺带做了连通检查，所以慢几秒 */
+async function listMcp() {
+  const r = await extRun(["mcp", "list"], 90000);
+  const out = [];
+  for (const line of r.out.replace(/\x1b\[[0-9;]*m/g, "").split("\n")) {
+    const m = line.match(/^(.+?): (.+) - ([✔✗⚠!]|[^\s]+)\s*(.*)$/u);
+    if (!m) continue;
+    const name = m[1].trim();
+    out.push({ name, target: m[2].trim(), ok: m[3] === "✔", status: (m[3] + " " + m[4]).trim().slice(0, 200), cloud: name.startsWith("claude.ai ") });
+  }
+  return out;
+}
+
+async function addMcp(b) {
+  const name = String(b.name || "").trim();
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name)) return { ok: false, message: "名字只能用字母、数字、点、下划线、横线" };
+  const transport = ["stdio", "http", "sse"].includes(b.transport) ? b.transport : "stdio";
+  const target = String(b.target || "").trim();
+  if (!target) return { ok: false, message: "缺少命令或地址" };
+  // -e / --header 是可变参数，会把后面的名字吞掉：名字放前面，选项跟在后面、用 -- 收尾
+  const args = ["mcp", "add", "-s", "user", "--transport", transport, name];
+  if (transport !== "stdio") args.push(target);
+  for (const kv of [].concat(b.env || [])) if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(kv)) args.push("-e", kv);
+  for (const h of [].concat(b.headers || [])) if (String(h).includes(":")) args.push("--header", String(h));
+  if (transport === "stdio") {
+    // 命令行按空白切开；带空格的参数用引号括起来
+    const parts = target.match(/"[^"]*"|'[^']*'|\S+/g).map((x) => x.replace(/^(["'])(.*)\1$/, "$2"));
+    args.push("--", ...parts);
+  }
+  const r = await extRun(args, 60000);
+  return r.code === 0 ? { ok: true } : { ok: false, message: cliMsg(r) };
+}
+
+async function removeMcp(name) {
+  const r = await extRun(["mcp", "remove", String(name)], 60000);
+  return r.code === 0 ? { ok: true } : { ok: false, message: cliMsg(r) };
+}
+
+// 技能：~/.claude/skills/<名字>/SKILL.md（开头 YAML 里有 name / description）
+const SKILLS_DIR = path.join(CFG.home, ".claude", "skills");
+function skillMeta(dir) {
+  try {
+    const s = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8").slice(0, 4000);
+    const fm = s.match(/^---\n([\s\S]*?)\n---/);
+    const get = (k) => { const m = fm && fm[1].match(new RegExp("^" + k + ":\\s*(.*)$", "m")); return m ? m[1].replace(/^["']|["']$/g, "").trim() : ""; };
+    return { name: get("name"), description: get("description").slice(0, 300) };
+  } catch { return null; }
+}
+function listSkills() {
+  let ents = [];
+  try { ents = fs.readdirSync(SKILLS_DIR, { withFileTypes: true }); } catch { return []; }
+  return ents.filter((d) => d.isDirectory() || d.isSymbolicLink()).map((d) => {
+    const m = skillMeta(path.join(SKILLS_DIR, d.name));
+    return m ? { dir: d.name, name: m.name || d.name, description: m.description } : null;
+  }).filter(Boolean);
+}
+function deleteSkill(dir) {
+  if (!SID_RE.test(dir)) return { ok: false, message: "bad name" };
+  const p = path.join(SKILLS_DIR, dir);
+  if (!fs.existsSync(path.join(p, "SKILL.md"))) return { ok: false, message: "not found" };
+  fs.rmSync(p, { recursive: true, force: true });
+  return { ok: true };
+}
+/** 从 zip 装技能：包里找 SKILL.md，它所在的目录就是技能根（兼容「包一层文件夹」和「直接打包」两种） */
+function importSkill(buf) {
+  const files = zipRead(buf);
+  const md = files.filter((f) => /(^|\/)SKILL\.md$/.test(f.name)).sort((a, b) => a.name.length - b.name.length)[0];
+  if (!md) throw new Error("压缩包里没有 SKILL.md");
+  const root = md.name.slice(0, md.name.length - "SKILL.md".length);
+  const text = md.data.toString("utf8");
+  const nm = (text.match(/^---\n[\s\S]*?^name:\s*(.+)$/m) || [])[1];
+  const dir = String(nm || root.replace(/\/$/, "").split("/").pop() || "skill").trim().replace(/^["']|["']$/g, "").replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+  if (!SID_RE.test(dir) || dir === "." || dir === "..") throw new Error("技能名不合法");
+  const dst = path.join(SKILLS_DIR, dir);
+  if (fs.existsSync(dst)) throw new Error(`已有同名技能「${dir}」，先删掉旧的`);
+  for (const f of files) {
+    if (!f.name.startsWith(root)) continue;
+    const rel = f.name.slice(root.length);
+    if (!rel || rel.split("/").some((x) => !x || x === "." || x === "..")) continue;
+    const out = path.join(dst, rel);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, f.data);
+  }
+  return { ok: true, dir };
 }
 
 // ── 访问控制 ──────────────────────────────────────────────────────────
@@ -2331,6 +2784,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "POST" && p === "/api/safe-mode") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      setSafeMode(!!b.on);
+      return sendJson(res, 200, { ok: true, safeMode: safeMode() });
+    }
+    if (req.method === "GET" && p === "/api/ledger") {
+      return sendJson(res, 200, { items: readLedger(Number(u.searchParams.get("n")) || 100) });
+    }
+
     if (req.method === "GET" && p === "/api/status") {
       return sendJson(res, 200, {
         app: "claude-cli",
@@ -2352,6 +2814,8 @@ const server = http.createServer(async (req, res) => {
         version: "3.0.0",
         busy: !!activeRun,
         queued: QUEUE.length,
+        safeMode: safeMode(),
+        hasLedger: !!process.env.CCAPP_LEDGER,
         uiTag: uiTag(),
         lastSessionId: LAST_SESSION ? LAST_SESSION.id : null,
         lastSessionAt: LAST_SESSION ? LAST_SESSION.at : null,
@@ -2460,6 +2924,84 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { sessions: list, workspace: CFG.workspace, count: list.length });
     }
 
+    // ── 扩展：插件 / 市场 / MCP / 技能 ──
+    if (p.startsWith("/api/ext/")) {
+      const body = req.method === "POST" && p !== "/api/ext/skills/import" ? JSON.parse((await readBody(req)) || "{}") : {};
+      try {
+        if (req.method === "GET" && p === "/api/ext/plugins") {
+          return sendJson(res, 200, await listPlugins(u.searchParams.get("q"), Number(u.searchParams.get("offset")) || 0, u.searchParams.get("available") === "1"));
+        }
+        if (req.method === "POST" && p === "/api/ext/plugins/install") {
+          const r = await installPlugin(String(body.id || ""), body.accept ? String(body.accept) : null);
+          if (r.ok) log(`装了插件 ${body.id}`);
+          return sendJson(res, 200, r);
+        }
+        const op = p.match(/^\/api\/ext\/plugins\/(uninstall|enable|disable)$/);
+        if (req.method === "POST" && op) {
+          const r = await pluginOp(op[1], String(body.id || ""));
+          if (r.ok) log(`插件 ${op[1]} ${body.id}`);
+          return sendJson(res, 200, r);
+        }
+        if (req.method === "GET" && p === "/api/ext/marketplaces") return sendJson(res, 200, { items: await listMarketplaces() });
+        if (req.method === "POST" && p === "/api/ext/marketplaces/add") return sendJson(res, 200, await marketplaceOp("add", String(body.source || "").trim()));
+        if (req.method === "POST" && p === "/api/ext/marketplaces/remove") return sendJson(res, 200, await marketplaceOp("remove", String(body.name || "")));
+        if (req.method === "GET" && p === "/api/ext/mcp") return sendJson(res, 200, { items: await listMcp() });
+        if (req.method === "POST" && p === "/api/ext/mcp/add") return sendJson(res, 200, await addMcp(body));
+        if (req.method === "POST" && p === "/api/ext/mcp/remove") return sendJson(res, 200, await removeMcp(body.name));
+        if (req.method === "GET" && p === "/api/ext/skills") return sendJson(res, 200, { items: listSkills(), dir: SKILLS_DIR });
+        if (req.method === "POST" && p === "/api/ext/skills/delete") return sendJson(res, 200, deleteSkill(String(body.dir || "")));
+        if (req.method === "POST" && p === "/api/ext/skills/import") return sendJson(res, 200, importSkill(await readBodyBuf(req, 64 * 1024 * 1024)));
+      } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }
+      return sendJson(res, 404, { error: "not found" });
+    }
+
+    // ── 会话管理：批量进回收站 / 回收站 / 导出 / 导入 ──
+    if (req.method === "POST" && p === "/api/sessions/trash") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const done = [], failed = [];
+      for (const id of [].concat(b.ids || [])) {
+        if (activeRun && activeRun.sessionId === id) { failed.push(id); continue; }
+        try { (trashSession(String(id)).ok ? done : failed).push(id); } catch { failed.push(id); }
+      }
+      if (done.length) log(`${done.length} 个会话进回收站`);
+      return sendJson(res, 200, { ok: true, done, failed });
+    }
+    if (req.method === "GET" && p === "/api/trash") {
+      return sendJson(res, 200, { items: listTrash(), keepDays: TRASH_KEEP_DAYS });
+    }
+    if (req.method === "POST" && p === "/api/trash/restore") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const done = [], failed = [];
+      for (const id of [].concat(b.ids || [])) {
+        let r; try { r = restoreSession(String(id)); } catch (e) { r = { ok: false, error: e.message }; }
+        (r.ok ? done : failed).push(r.ok ? id : { id, error: r.error });
+      }
+      return sendJson(res, 200, { ok: true, done, failed });
+    }
+    if (req.method === "POST" && p === "/api/trash/purge") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const ids = b.all ? listTrash().map((m) => m.id) : [].concat(b.ids || []).map(String);
+      const n = purgeTrash(ids);
+      log(`回收站：彻底删除 ${n} 个会话`);
+      return sendJson(res, 200, { ok: true, purged: n });
+    }
+    if (req.method === "POST" && p === "/api/sessions/export") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const ids = b.all ? listSessions(100000).map((x) => x.id) : [].concat(b.ids || []).map(String);
+      try {
+        const r = exportSessions(ids);
+        log(`导出 ${r.count} 个会话 → ${r.file}`);
+        return sendJson(res, 200, { ok: true, ...r, shared: !!process.env.CCAPP_SHARED && r.file.startsWith(process.env.CCAPP_SHARED) });
+      } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
+    }
+    if (req.method === "POST" && p === "/api/sessions/import") {
+      try {
+        const r = importSessions(await readBodyBuf(req, 512 * 1024 * 1024));
+        log(`导入会话：${r.imported.length} 个，跳过 ${r.skipped.length} 个`);
+        return sendJson(res, 200, { ok: true, ...r });
+      } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
+    }
+
     if (p.startsWith("/api/session/")) {
       const rest = decodeURIComponent(p.slice("/api/session/".length));
       const [id, action] = rest.split("/");
@@ -2490,11 +3032,11 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "DELETE" && !action) {
         if (!found) return sendJson(res, 404, { error: "not found" });
         if (activeRun && activeRun.sessionId === id) return sendJson(res, 409, { error: "busy", message: "这个会话正在生成中。" });
-        PEEK_CACHE.delete(found.file);
-        try { fs.unlinkSync(found.file); } catch (e) { return sendJson(res, 500, { error: e.message }); }
-        delete NAMES[id]; saveNames();
-        log(`已删除会话 ${id.slice(0, 8)}`);
-        return sendJson(res, 200, { ok: true });
+        // 删除先进回收站（30 天内可恢复），彻底删除走 /api/trash/purge
+        let r;
+        try { r = trashSession(id); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+        if (r.ok) log(`会话进回收站 ${id.slice(0, 8)}`);
+        return sendJson(res, r.ok ? 200 : 404, r);
       }
 
       if (req.method === "POST" && action === "rename") {
@@ -2682,7 +3224,7 @@ const server = http.createServer(async (req, res) => {
     // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
     if (p.startsWith("/api/app/")) {
       const op = p.slice(9);
-      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
+      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
       if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: "未知操作" });
       const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
       if (!PREFIX) return sendJson(res, 200, await devApp(op, b));
@@ -2703,6 +3245,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, {
         ...st,
         pending: !!(LOGIN && !LOGIN.done),
+        limits: st.loggedIn && RATE_LIMITS && (!RATE_LIMITS.email || RATE_LIMITS.email === st.email) ? RATE_LIMITS : null,
         last: LOGIN && LOGIN.done ? { ok: LOGIN.ok, output: LOGIN.ok ? "" : LOGIN.out.slice(-800) } : null,
       });
     }
@@ -2714,6 +3257,7 @@ const server = http.createServer(async (req, res) => {
       if (activeRun && isLoginMode()) return sendJson(res, 409, { error: "busy", message: "这一轮还在生成，等它跑完再退出登录。" });
       const r = await runAuth(["logout"]);
       AUTH_CACHE = null;
+      RATE_LIMITS = null; try { fs.unlinkSync(RL_FILE); } catch {}
       return sendJson(res, 200, { ok: r.code === 0, output: r.out.slice(-500) });
     }
 
@@ -2779,6 +3323,7 @@ server.listen(CFG.port, "127.0.0.1", () => {
   if (!fs.existsSync(PATHS.claude)) log(`  ⚠️ 未找到 claude: ${PATHS.claude}`);
   if (!fs.existsSync(PATHS.loader)) log(`  ⚠️ 未找到 glibc loader: ${PATHS.loader}`);
   log(`  历史会话 ${listSessions(500).length} 个`);
+  try { expireTrash(); } catch (e) { log("回收站清理失败: " + e.message); }
 });
 
 // 启动后校验一次模型名：不在清单里就落到默认。

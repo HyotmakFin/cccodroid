@@ -1496,16 +1496,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch {}
   }
 
+  // 会话页三种视图：普通列表 / 多选（导出、批量删除）/ 回收站
+  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30 };
+
   function renderSessions() {
     const box = $("session-list");
+    renderSessBar();
+    if (sess.mode === "trash") return renderTrash(box);
     if (!state.sessions.length) {
       box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
     const liveSid = srv.run && srv.run.sessionId;
+    const picking = sess.mode === "select";
     box.innerHTML = state.sessions.map((s) => `
-      <div class="item ${s.id === view.sessionId ? "active" : ""}" data-id="${esc(s.id)}">
-        <div class="it-title">${esc(s.title)}</div>
+      <div class="item ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
+        <div class="it-title">${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}> ` : ""}${esc(s.title)}</div>
         <div class="it-meta">
           <span>${relTime(s.mtime)}</span>
           <span>${s.sizeKb} KB</span>
@@ -1513,19 +1519,142 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
           ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
         </div>
-        <div class="it-acts">
+        ${picking ? "" : `<div class="it-acts">
           <button data-a="open">${t("切换到此会话")}</button>
           <button data-a="rename">${t("重命名")}</button>
           <button data-a="del">${t("删除")}</button>
+        </div>`}
+      </div>`).join("");
+  }
+
+  function renderSessBar() {
+    const bar = $("sess-bar");
+    $("btn-sess-select").textContent = sess.mode === "select" ? t("取消选择") : t("选择");
+    $("btn-sess-trash").textContent = sess.mode === "trash" ? t("返回会话") : t("回收站");
+    $("btn-sess-select").classList.toggle("hidden", sess.mode === "trash");
+    if (sess.mode === "select") {
+      const n = sess.sel.size, all = state.sessions.length && n === state.sessions.length;
+      bar.innerHTML = `<button class="btn ghost sm" data-b="all">${all ? t("全不选") : t("全选")}</button>
+        <span class="tiny">${t("已选 {n} 个", { n })}</span>
+        <button class="btn sm" data-b="export" ${n ? "" : "disabled"}>${t("导出所选")}</button>
+        <button class="btn ghost sm danger" data-b="trash" ${n ? "" : "disabled"}>${t("删除所选")}</button>`;
+    } else if (sess.mode === "trash") {
+      bar.innerHTML = `<span class="tiny">${t("删除的会话在这里保留 {n} 天，之后自动清除。", { n: sess.keepDays })}</span>
+        ${sess.trash.length ? `<button class="btn ghost sm danger" data-b="empty">${t("清空回收站")}</button>` : ""}`;
+    }
+    bar.classList.toggle("hidden", sess.mode === "list");
+  }
+
+  function renderTrash(box) {
+    if (!sess.trash.length) { box.innerHTML = '<div class="tiny">' + t("回收站是空的。") + '</div>'; return; }
+    box.innerHTML = sess.trash.map((m) => `
+      <div class="item" data-id="${esc(m.id)}">
+        <div class="it-title">${esc(m.title || m.id)}</div>
+        <div class="it-meta">
+          <span>${t("删除于 {time}", { time: relTime(m.deletedAt) })}</span>
+          <span>${Math.round((m.size || 0) / 1024)} KB</span>
+        </div>
+        <div class="it-acts">
+          <button data-a="restore">${t("恢复")}</button>
+          <button data-a="purge">${t("彻底删除")}</button>
         </div>
       </div>`).join("");
   }
+
+  async function loadTrash() {
+    try {
+      const r = await api("/api/trash");
+      sess.trash = r.items || []; sess.keepDays = r.keepDays || 30;
+    } catch (e) { toast(e.message, true); }
+    renderSessions();
+  }
+
+  $("btn-sess-select").addEventListener("click", () => {
+    sess.mode = sess.mode === "select" ? "list" : "select";
+    sess.sel.clear();
+    renderSessions();
+  });
+  $("btn-sess-trash").addEventListener("click", () => {
+    if (sess.mode === "trash") { sess.mode = "list"; loadSessions(); return; }
+    sess.mode = "trash"; loadTrash();
+  });
+  $("btn-sess-import").addEventListener("click", () => $("sess-import-file").click());
+  $("sess-import-file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    toast(t("正在导入…"));
+    try {
+      const r = await api("/api/sessions/import", {
+        method: "POST", headers: { "content-type": "application/zip" }, body: await f.arrayBuffer(),
+      });
+      toast(r.skipped.length
+        ? t("已导入 {n} 个会话，跳过 {m} 个已存在的", { n: r.imported.length, m: r.skipped.length })
+        : t("已导入 {n} 个会话", { n: r.imported.length }));
+    } catch (err) { toast(t("导入失败：{msg}", { msg: err.message }), true); }
+    if (sess.mode === "trash") sess.mode = "list";
+    loadSessions();
+  });
+
+  $("sess-bar").addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b || b.disabled) return;
+    const act = b.dataset.b;
+    if (act === "all") {
+      if (sess.sel.size === state.sessions.length) sess.sel.clear();
+      else state.sessions.forEach((s) => sess.sel.add(s.id));
+      return renderSessions();
+    }
+    if (act === "export") {
+      if (!confirm(t("会话记录可能含有你贴过的密钥、令牌或文件内容。导出的压缩包请只发给你信任的地方。继续？"))) return;
+      let r;
+      try { r = await post("/api/sessions/export", { ids: [...sess.sel] }); }
+      catch (err) { return toast(t("导出失败：{msg}", { msg: err.message }), true); }
+      if (!r.ok) return toast(t("导出失败：{msg}", { msg: r.message || "" }), true);
+      toast(t("已导出 {n} 个会话：{file}", { n: r.count, file: r.file }));
+      // cccodroid：直接弹系统分享面板（发到网盘、聊天、另一台设备）
+      if (state.serverStatus && state.serverStatus.product === "cccodroid")
+        post("/api/app/share_file", { path: r.file, mime: "application/zip" }).catch(() => {});
+      sess.mode = "list"; sess.sel.clear(); renderSessions();
+      return;
+    }
+    if (act === "trash") {
+      if (!confirm(t("把选中的 {n} 个会话移进回收站？{d} 天内可以恢复。", { n: sess.sel.size, d: sess.keepDays }))) return;
+      const r = await post("/api/sessions/trash", { ids: [...sess.sel] }).catch((err) => ({ done: [], failed: [], err }));
+      if (r.done.includes(view.sessionId)) newConversation();
+      toast(r.failed.length ? t("{n} 个已删除，{m} 个正在生成没删", { n: r.done.length, m: r.failed.length }) : t("已移进回收站"), !!r.failed.length);
+      sess.mode = "list"; sess.sel.clear(); loadSessions();
+      return;
+    }
+    if (act === "empty") {
+      if (!confirm(t("彻底删除回收站里全部 {n} 个会话？不可恢复。", { n: sess.trash.length }))) return;
+      await post("/api/trash/purge", { all: true }).catch((err) => toast(err.message, true));
+      loadTrash();
+    }
+  });
+
   $("session-list").addEventListener("click", async (e) => {
-    const b = e.target.closest("button");
     const el = e.target.closest(".item");
-    if (!b || !el) return;
+    if (!el) return;
+    const id = el.dataset.id;
+    if (sess.mode === "select") {
+      if (sess.sel.has(id)) sess.sel.delete(id); else sess.sel.add(id);
+      return renderSessions();
+    }
+    const b = e.target.closest("button");
+    if (!b) return;
     e.stopPropagation();
-    const id = el.dataset.id, a = b.dataset.a;
+    const a = b.dataset.a;
+    if (a === "restore") {
+      const r = await post("/api/trash/restore", { ids: [id] }).catch((err) => ({ failed: [{ error: err.message }] }));
+      if (r.failed && r.failed.length) toast(t("恢复失败：{msg}", { msg: r.failed[0].error === "exists" ? t("同名会话已存在") : r.failed[0].error }), true);
+      else toast(t("已恢复"));
+      return loadTrash();
+    }
+    if (a === "purge") {
+      if (!confirm(t("彻底删除这个会话？不可恢复。"))) return;
+      await post("/api/trash/purge", { ids: [id] }).catch((err) => toast(err.message, true));
+      return loadTrash();
+    }
     if (a === "open") { closeDrawer(); openSession(id); return; }
     if (a === "rename") {
       const cur = state.sessions.find((s) => s.id === id);
@@ -1541,13 +1670,193 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return;
     }
     if (a === "del") {
-      if (!confirm(t("删除这个会话的记录？不可恢复。"))) return;
       try { await api(`/api/session/${encodeURIComponent(id)}`, { method: "DELETE" }); }
       catch (err) { return toast(err.message, true); }
       if (view.sessionId === id) newConversation();
       loadSessions();
-      toast(t("已删除"));
+      toast(t("已移进回收站（{d} 天内可恢复）", { d: sess.keepDays }));
     }
+  });
+
+  // ── 扩展：插件 / 技能 / MCP ──────────────────────────────────────────
+  const ext = { q: "", offset: 0, busy: false };
+  const extItem = (title, meta, acts, desc) => `<div class="item">
+      <div class="it-title">${title}</div>
+      ${meta ? `<div class="it-meta">${meta}</div>` : ""}
+      ${desc || ""}
+      ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
+
+  function loadExt() { loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+
+  async function loadExtPlugins() {
+    const box = $("ext-plugins");
+    let r;
+    try { r = await api("/api/ext/plugins"); } catch (e) { box.innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    if (r.ok === false) { box.innerHTML = `<div class="tiny">${esc(r.message)}</div>`; return; }
+    $("ext-p-count").textContent = r.installed.length;
+    box.innerHTML = r.installed.length ? r.installed.map((p) => extItem(
+      esc(p.id.split("@")[0]) + (p.enabled ? "" : ` <span class="badge">${t("已停用")}</span>`),
+      `<span>${esc(p.id.split("@")[1] || "")}</span><span>${esc(String(p.version || "").slice(0, 16))}</span><span>${esc(p.scope || "")}</span>`,
+      `<button data-x="${p.enabled ? "disable" : "enable"}" data-id="${esc(p.id)}">${p.enabled ? t("停用") : t("启用")}</button>
+       <button data-x="uninstall" data-id="${esc(p.id)}">${t("卸载")}</button>`)).join("")
+      : `<div class="tiny">${t("还没装插件。在下面搜索可安装的。")}</div>`;
+  }
+
+  async function searchPlugins(more) {
+    const box = $("ext-catalog");
+    if (!more) { ext.offset = 0; ext.q = $("ext-p-q").value.trim(); box.innerHTML = `<div class="tiny">${t("正在拉取插件目录…")}</div>`; }
+    let r;
+    try { r = await api(`/api/ext/plugins?available=1&q=${encodeURIComponent(ext.q)}&offset=${ext.offset}`); }
+    catch (e) { box.innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    if (r.ok === false) { box.innerHTML = `<div class="tiny">${esc(r.message)}</div>`; return; }
+    const html = (r.available || []).map((p) => extItem(
+      esc(p.name),
+      `<span>${esc(p.marketplace)}</span>${p.version ? `<span>${esc(p.version)}</span>` : ""}`,
+      `<button data-x="install" data-id="${esc(p.id)}">${t("安装")}</button>`,
+      `<div class="tiny ext-desc">${esc(p.description)}</div>`)).join("");
+    const old = box.querySelector(".ext-more-btn"); if (old) old.remove();
+    if (!more) box.innerHTML = `<div class="tiny">${t("找到 {n} 个", { n: r.total || 0 })}</div>` + html;
+    else box.insertAdjacentHTML("beforeend", html);
+    ext.offset += (r.available || []).length;
+    if (ext.offset < (r.total || 0)) box.insertAdjacentHTML("beforeend", `<button class="btn ghost sm ext-more-btn">${t("再显示 40 个")}</button>`);
+  }
+
+  async function installPlugin(id, btn) {
+    btn.disabled = true; btn.textContent = t("安装中…");
+    let r = await post("/api/ext/plugins/install", { id }).catch((e) => ({ ok: false, message: e.message }));
+    // 要执行命令才能装的插件：claude 把命令亮出来，人点头了才装
+    if (r.needConfirm) {
+      if (confirm(t("这个插件安装时要在本机执行下面这条命令，确认是你信任的来源再继续：\n\n{cmd}", { cmd: r.command }))) {
+        r = await post("/api/ext/plugins/install", { id, accept: r.sha256 }).catch((e) => ({ ok: false, message: e.message }));
+      } else r = { ok: false, message: t("已取消") };
+    }
+    if (r.ok) { toast(t("已安装 {name}，下一条消息生效", { name: id.split("@")[0] })); btn.closest(".item").remove(); loadExtPlugins(); }
+    else { toast(t("安装失败：{msg}", { msg: r.message || "" }), true); btn.disabled = false; btn.textContent = t("安装"); }
+  }
+
+  async function loadExtMarkets() {
+    const r = await api("/api/ext/marketplaces").catch(() => ({ items: [] }));
+    $("ext-markets").innerHTML = (r.items || []).map((m) => extItem(esc(m.name), `<span>${esc(m.source)}</span>`,
+      `<button data-x="market-rm" data-id="${esc(m.name)}">${t("移除")}</button>`)).join("")
+      || `<div class="tiny">${t("只有内置的官方目录。可以添加别的插件市场（GitHub 仓库或网址）。")}</div>`;
+  }
+
+  async function loadExtSkills() {
+    const r = await api("/api/ext/skills").catch(() => ({ items: [] }));
+    $("ext-s-count").textContent = (r.items || []).length;
+    $("ext-skills").innerHTML = (r.items || []).map((s) => extItem(esc(s.name), "",
+      `<button data-x="skill-rm" data-id="${esc(s.dir)}">${t("删除")}</button>`,
+      `<div class="tiny ext-desc">${esc(s.description)}</div>`)).join("")
+      || `<div class="tiny">${t("~/.claude/skills 里还没有技能。插件也可能自带技能。")}</div>`;
+  }
+
+  async function loadExtMcp() {
+    const box = $("ext-mcp");
+    const r = await api("/api/ext/mcp").catch((e) => ({ items: [], err: e.message }));
+    $("ext-m-count").textContent = (r.items || []).length;
+    box.innerHTML = (r.items || []).map((m) => extItem(
+      esc(m.name) + (m.cloud ? ` <span class="badge">${t("账户连接器")}</span>` : ""),
+      `<span class="mono">${esc(m.target)}</span>`,
+      m.cloud ? "" : `<button data-x="mcp-rm" data-id="${esc(m.name)}">${t("移除")}</button>`,
+      `<div class="tiny ext-st ${m.ok ? "ok" : "warn"}">${esc(m.status)}</div>`)).join("")
+      || `<div class="tiny">${esc(r.err || t("还没有 MCP 服务器。"))}</div>`;
+  }
+
+  $("ext-p-search").addEventListener("click", () => searchPlugins(false));
+  $("ext-p-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPlugins(false); });
+  $("ext-s-import").addEventListener("click", () => $("ext-s-file").click());
+  $("ext-s-file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    const r = await api("/api/ext/skills/import", { method: "POST", headers: { "content-type": "application/zip" }, body: await f.arrayBuffer() })
+      .catch((err) => ({ ok: false, message: err.message }));
+    toast(r.ok ? t("已安装技能 {name}", { name: r.dir }) : t("安装失败：{msg}", { msg: r.message || "" }), !r.ok);
+    loadExtSkills();
+  });
+  $("ext-m-add").addEventListener("click", async () => {
+    const source = $("ext-m-src").value.trim();
+    if (!source) return;
+    toast(t("正在添加市场…"));
+    const r = await post("/api/ext/marketplaces/add", { source }).catch((e) => ({ ok: false, message: e.message }));
+    toast(r.ok ? t("已添加") : t("添加失败：{msg}", { msg: r.message || "" }), !r.ok);
+    if (r.ok) $("ext-m-src").value = "";
+    loadExtMarkets();
+  });
+  $("ext-mcp-add").addEventListener("click", async () => {
+    const transport = $("ext-mcp-tr").value;
+    const extra = $("ext-mcp-env").value.split(",").map((x) => x.trim()).filter(Boolean);
+    const body = {
+      name: $("ext-mcp-name").value.trim(), transport, target: $("ext-mcp-target").value.trim(),
+      env: extra.filter((x) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(x)),
+      headers: extra.filter((x) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(x) && x.includes(":")),
+    };
+    const r = await post("/api/ext/mcp/add", body).catch((e) => ({ ok: false, message: e.message }));
+    toast(r.ok ? t("已添加 {name}", { name: body.name }) : t("添加失败：{msg}", { msg: r.message || "" }), !r.ok);
+    if (r.ok) { ["ext-mcp-name", "ext-mcp-target", "ext-mcp-env"].forEach((id) => ($(id).value = "")); loadExtMcp(); }
+  });
+
+  $("tab-ext").addEventListener("click", async (e) => {
+    if (e.target.classList.contains("ext-more-btn")) return searchPlugins(true);
+    const b = e.target.closest("button[data-x]");
+    if (!b || b.disabled) return;
+    const x = b.dataset.x, id = b.dataset.id;
+    if (x === "install") return installPlugin(id, b);
+    const ask = {
+      uninstall: t("卸载插件 {name}？", { name: id }),
+      "skill-rm": t("删除技能 {name}？文件夹会被整个删掉。", { name: id }),
+      "mcp-rm": t("移除 MCP 服务器 {name}？", { name: id }),
+      "market-rm": t("移除插件市场 {name}？从它装的插件也会一并卸载。", { name: id }),
+    }[x];
+    if (ask && !confirm(ask)) return;
+    b.disabled = true;
+    const url = { uninstall: "/api/ext/plugins/uninstall", enable: "/api/ext/plugins/enable", disable: "/api/ext/plugins/disable",
+      "skill-rm": "/api/ext/skills/delete", "mcp-rm": "/api/ext/mcp/remove", "market-rm": "/api/ext/marketplaces/remove" }[x];
+    const key = x === "skill-rm" ? "dir" : x === "mcp-rm" || x === "market-rm" ? "name" : "id";
+    const r = await post(url, { [key]: id }).catch((err) => ({ ok: false, message: err.message }));
+    toast(r.ok ? t("完成") : t("失败：{msg}", { msg: r.message || "" }), !r.ok);
+    b.disabled = false;
+    if (x === "skill-rm") loadExtSkills();
+    else if (x === "mcp-rm") loadExtMcp();
+    else if (x === "market-rm") { loadExtMarkets(); loadExtPlugins(); }
+    else loadExtPlugins();
+  });
+
+  // ── 排障：安全模式 / 日志分享 / 修复账本 ───────────────────────────
+  function paintSafeMode(on) {
+    $("safe-mode").checked = !!on;
+    let bar = $("safe-bar");
+    if (on && !bar) {
+      bar = document.createElement("div");
+      bar.id = "safe-bar"; bar.className = "safe-bar";
+      bar.innerHTML = `<span>${t("安全模式：自定义配置（CLAUDE.md、技能、插件、钩子、MCP）没有加载")}</span> <button class="btn sm ghost" id="safe-off">${t("退出安全模式")}</button>`;
+      $("chat").before(bar);
+      $("safe-off").onclick = () => setSafe(false);
+    } else if (!on && bar) bar.remove();
+  }
+  async function setSafe(on) {
+    const r = await post("/api/safe-mode", { on }).catch((e) => ({ ok: false, message: e.message }));
+    if (!r.ok) return toast(r.message || "", true);
+    paintSafeMode(r.safeMode);
+    toast(r.safeMode ? t("已进入安全模式，下一条消息生效") : t("已退出安全模式，下一条消息生效"));
+  }
+  $("safe-mode").addEventListener("change", (e) => setSafe(e.target.checked));
+  $("btn-share-logs").addEventListener("click", async () => {
+    toast(t("正在打包日志…"));
+    const r = await post("/api/app/share_logs").catch((e) => ({ ok: false, message: e.message }));
+    if (!r.ok) toast(t("没分享成：{msg}", { msg: r.message || "" }), true);
+  });
+  const LEDGER_KIND = () => ({ verify: t("校验"), repair: t("修复"), install: t("安装"), recover: t("恢复"), "safe-mode": t("安全模式"), logs: t("日志") });
+  $("btn-ledger").addEventListener("click", async () => {
+    const box = $("ledger-list");
+    if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+    const r = await api("/api/ledger").catch(() => ({ items: [] }));
+    const K = LEDGER_KIND();
+    box.innerHTML = (r.items || []).map((e) => `<div class="item ledger ${e.ok ? "" : "bad"}">
+        <div class="it-meta"><span>${esc(new Date(e.at).toLocaleString())}</span><span class="badge">${esc(K[e.kind] || e.kind)}</span><span>${e.ok ? "✓" : "✗"}</span></div>
+        <div class="it-title wrap">${esc(e.msg || "")}</div>
+        ${e.detail && e.detail.samples && e.detail.samples.length ? `<div class="tiny mono">${e.detail.samples.slice(0, 5).map((x) => esc(typeof x === "string" ? x : JSON.stringify(x))).join("<br>")}</div>` : ""}
+      </div>`).join("") || `<div class="tiny">${r.items === null ? t("这个版本没有修复账本。") : t("还没有记录。安装、校验、修复、启动时的恢复都会记在这里。")}</div>`;
+    box.classList.remove("hidden");
   });
 
   // ── 设置 ──────────────────────────────────────────────────────────
@@ -1636,7 +1945,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (st.loggedIn) {
       el.className = "prov-state ok";
             el.innerHTML = (st.email ? t("✓ 已登录：<b>{email}</b>", { email: esc(st.email) }) : t("✓ 已登录")) +
-        (st.plan ? ` · ${esc(st.plan)}` : "") + (st.org ? `<br><span class="tiny">${esc(st.org)}</span>` : "");
+        (st.plan ? ` · ${esc(st.plan)}` : "") + (st.org ? `<br><span class="tiny">${esc(st.org)}</span>` : "") +
+        quotaHtml(st.limits);
     } else {
       el.className = "prov-state warn";
       el.textContent = st.pending ? t("等待浏览器里完成授权…") : t("未登录");
@@ -1655,6 +1965,28 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       else if (act === "logout") logout(p);
       else if (act === "use") useProvider(p);
     };
+  }
+  /** 订阅额度：claude 每轮回报一次，网关记下最近一次（不另外查接口） */
+  function quotaHtml(l) {
+    if (!l) return `<div class="quota tiny">${t("额度：发一条消息后显示（5 小时 / 每周）")}</div>`;
+    const when = (sec) => {
+      if (!sec) return "";
+      const d = new Date(sec * 1000), now = new Date();
+      const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return d.toDateString() === now.toDateString() ? hm : d.toLocaleDateString([], { month: "numeric", day: "numeric" }) + " " + hm;
+    };
+    const row = (label, w) => {
+      if (!w) return "";
+      const pct = Math.max(0, Math.min(100, w.used));
+      const cls = pct >= 90 ? " hot" : pct >= 70 ? " warm" : "";
+      return `<div class="quota-row"><span class="quota-l">${label}</span>
+        <span class="quota-bar"><i class="${cls.trim()}" style="width:${pct}%"></i></span>
+        <span class="quota-v">${Math.round(pct)}%</span>
+        <span class="tiny">${w.resetsAt ? t("{time} 重置", { time: esc(when(w.resetsAt)) }) : ""}</span></div>`;
+    };
+    const ago = Math.max(0, Math.round((Date.now() - l.at) / 60000));
+    return `<div class="quota">${row(t("5 小时"), l.fiveHour)}${row(t("每周"), l.sevenDay)}
+      <div class="tiny">${ago < 1 ? t("额度刚刚更新") : t("额度更新于 {n} 分钟前（每轮对话后刷新）", { n: ago })}</div></div>`;
   }
   /** 交给系统浏览器：安卓壳把非本机地址都转给外部浏览器（WebView 里登录会被 Google 等拦） */
   function openExternal(url) {
@@ -1895,6 +2227,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 更新：应用本体 / 开发工具包 / Claude Code ──
     const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查"), verifying: t("校验中"), damaged: t("已损坏") };
   let updPoll = null;
+  let updFollowUntil = 0;
+  const followUpd = () => { updFollowUntil = Date.now() + 15000; };
   async function loadUpd() {
     let st;
     try { st = await api("/api/app/upd_status"); } catch { return; }
@@ -1927,7 +2261,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("upd-last").textContent = st.checking ? t("检查中…") : st.error ? "✗ " + st.error
       : st.lastCheck ? t("上次检查：{at}", { at: new Date(st.lastCheck).toLocaleString() }) : t("还没检查过");
     clearTimeout(updPoll);
-    if (moving && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
+    // 点完按钮 / 换完渠道后的一小段时间也接着刷：后台的检查、换版本要过一会儿才开始，只看「正在进行」会漏掉结果
+    if ((moving || st.checking || Date.now() < updFollowUntil) && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
   }
   $("upd-items").addEventListener("click", async (e) => {
     const item = e.target.dataset && e.target.dataset.item;
@@ -1937,20 +2272,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (act === "repair" && !confirm(t("修复开发工具包？\n\n会重新下载当前这一版（约 600 MB，断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
       const r = await post(act === "verify" ? "/api/app/upd_verify" : "/api/app/upd_repair", { full: true }).catch((e2) => ({ ok: false, message: e2.message }));
       toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
-      setTimeout(loadUpd, 500);
+      followUpd(); setTimeout(loadUpd, 500);
       return;
     }
     if (item === "devkit" && !confirm(t("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
     const r = await post("/api/app/upd_apply", { item }).catch((e2) => ({ ok: false, message: e2.message }));
     toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
-    setTimeout(loadUpd, 500);
+    followUpd(); setTimeout(loadUpd, 500);
   });
   $("upd-check").addEventListener("click", async () => {
     await post("/api/app/upd_check").catch((e2) => toast(e2.message, true));
-    setTimeout(loadUpd, 300);
+    followUpd(); setTimeout(loadUpd, 300);
   });
   $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch(() => {}));
-  $("upd-channel").addEventListener("change", (e) => post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {}));
+  $("upd-channel").addEventListener("change", (e) => { followUpd(); post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {}); });
   $("priv-ka").addEventListener("change", async (e) => {
     const on = e.target.checked;
     if (on && !confirm(t("开启后台保活增强？\n\n会改几项系统设置：幽灵进程上限（影响所有应用）、本应用的电池白名单与后台运行限制。关掉开关会恢复前两项。"))) {
@@ -2226,6 +2561,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
     if (name === "sessions") loadSessions();
     if (name === "caps") loadCaps();
+    if (name === "ext") loadExt();
     if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
@@ -2275,6 +2611,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (s.uiTag) uiTag = s.uiTag;
       if (s.product) { const t = document.getElementById("app-title"); if (t && t.textContent !== s.product) { t.textContent = s.product; document.title = s.product; } }
       state.serverStatus = s;
+      paintSafeMode(s.safeMode);
+      // 日志分享靠安卓壳（cccodroid）打包、弹分享面板；旧版应用没有
+      $("btn-share-logs").classList.toggle("hidden", s.product !== "cccodroid");
+      $("share-logs-hint").classList.toggle("hidden", s.product !== "cccodroid");
+      $("btn-ledger").classList.toggle("hidden", !s.hasLedger);
       modelEl.textContent = s.model || "—";
       state.model = s.model;
       $("status-box").textContent =

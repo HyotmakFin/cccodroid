@@ -92,10 +92,22 @@ public class MainActivity extends Activity {
                     public void step(String m) { say(m); }
                     public void bytes(long d, long t) { progress(d, t); }
                 });
-                // 上次换工具包被打断（APK 升级重启、进程被杀）：先收拾到一致状态，再判断装没装好
-                GatewayService.pause(true);
-                try { if (ins.recover()) say("✓ 开发工具包已恢复到一致状态"); }
-                finally { GatewayService.pause(false); }
+                // 上次换工具包被打断（APK 升级重启、进程被杀）：先收拾到一致状态，再判断装没装好。
+                // 只在真有残局时才停网关：界面被系统回收后重新打开也会走到这里，那时网关可能正在跑任务，
+                // 无条件停一下就把用户的任务杀了。正在替换工具包（另一个界面实例发起的）时也别插手
+                Updater upd0 = Updater.get(this);
+                if (!upd0.devkitMoving() && ins.needsRecovery()) {
+                    GatewayService.pause(true);
+                    try {
+                        if (ins.recover()) {
+                            say("✓ 开发工具包已恢复到一致状态");
+                            Ledger.add(env, "recover", true, ins.recovered != null ? ins.recovered : "收拾了上次中断留下的目录", null);
+                        }
+                    } catch (Exception e) {
+                        Ledger.add(env, "recover", false, "启动时恢复失败：" + e.getMessage(), null);
+                        throw e;
+                    } finally { GatewayService.pause(false); }
+                }
                 Updater.get(this).dropStagedIfInstalled();
                 if (!env.devkitReady()) {
                     String src = null;
@@ -109,6 +121,7 @@ public class MainActivity extends Activity {
                         gz.delete();      // 解完就删，腾出 600MB
                     }
                     say("✓ 开发工具包就绪");
+                    Ledger.add(env, "install", true, "首次安装开发工具包", null);
                 }
                 deployAssets();
                 if (!env.claudeReady()) {
@@ -117,10 +130,14 @@ public class MainActivity extends Activity {
                 }
                 // 上次自动下好的工具包更新：趁现在（刚打开、没有任务）装上
                 Updater upd = Updater.get(this);
-                if (upd.auto() && upd.devkitStaged() && !Updater.gatewayBusy()) {
-                    say("安装已下载的开发工具包更新…");
-                    upd.applyDevkit(ins);
-                    say("✓ 开发工具包已更新");
+                if (upd.auto() && upd.devkitStaged()) {
+                    // 先等网关答话再问它忙不忙：刚起的网关回话慢，读超时会被当成「忙」，更新就一直装不上
+                    for (int i = 0; i < 40 && !Updater.pingGateway(); i++) Thread.sleep(250);
+                    if (!Updater.gatewayBusy()) {
+                        say("安装已下载的开发工具包更新…");
+                        upd.applyDevkit(ins);
+                        say("✓ 开发工具包已更新");
+                    } else say("开发工具包更新已下载；有任务在跑，等空闲时再装（也可在设置页手动装）");
                 }
                 askBatteryExemption();
                 say("等待网关…");

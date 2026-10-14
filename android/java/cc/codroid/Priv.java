@@ -307,6 +307,8 @@ final class Priv {
                 case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
                 case "upd_verify": resp = Updater.get(ctx).verifyAsync(req.optBoolean("full", true)); break;
                 case "upd_repair": resp = Updater.get(ctx).repair(); break;
+                case "share_logs": resp = Share.send(ctx, Share.bundleLogs(ctx), "application/zip"); break;
+                case "share_file": resp = Share.send(ctx, new java.io.File(req.optString("path")), req.optString("mime", "application/octet-stream")); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
                 default: resp = new JSONObject().put("ok", false).put("message", "未知操作 " + op);
             }

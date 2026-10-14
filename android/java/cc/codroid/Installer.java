@@ -262,21 +262,33 @@ final class Installer {
      * 启动时先调：上次装工具包被打断的话，把目录收拾到一致状态。
      * @return 动过东西（接着装完了，或者退回了旧版）
      */
+    /** 有没有上次中断留下要收拾的东西。只看不动 —— 没有就别去停网关 */
+    boolean needsRecovery() {
+        File neu = usrNew(), old = usrOld();
+        return neu.exists() || old.exists() || new File(env.usr, PENDING).isFile();
+    }
+
+    /** recover() 这次做了什么（给修复账本用）；什么都没做时为 null */
+    String recovered;
+
     boolean recover() throws IOException {
         File neu = usrNew(), old = usrOld();
         boolean did = false;
+        recovered = null;
         // 断在两次换名之间：旧版已换下、新版（校验过的）还没换上
         if (!env.usr.exists() && neu.isDirectory() && new File(neu, PENDING).isFile()) {
             if (!neu.renameTo(env.usr)) throw new IOException("换名失败: " + neu);
             did = true;
+            recovered = "两次换名之间被打断：把已校验的新版换上";
         }
         if (new File(env.usr, PENDING).isFile()) {
             ui.step("上次的开发工具包更新被打断了，接着完成…");
             finish();
+            recovered = (recovered == null ? "" : recovered + "；") + "上次更新在收尾阶段被打断：重跑首次配置并写好校验基线";
             return true;
         }
-        if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; }   // 新版没成：退回旧版
-        if (neu.exists()) { deleteTree(neu); did = true; }                                      // 解到一半的残骸
+        if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; recovered = "新版没换上：退回旧版"; }   // 新版没成：退回旧版
+        if (neu.exists()) { deleteTree(neu); did = true; recovered = (recovered == null ? "" : recovered + "；") + "删掉解到一半的新版"; }   // 解到一半的残骸
         if (old.exists() && new File(env.usr, ".devkit-ok").isFile()) deleteTree(old);
         return did;
     }

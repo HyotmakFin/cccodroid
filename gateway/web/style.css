@@ -289,6 +289,9 @@ td{color:var(--fg2)}
   background:var(--bg);border:1px solid var(--line);border-radius:10px;
   padding:9px 11px;display:flex;flex-direction:column;gap:3px;
 }
+.item.picked{border-color:var(--accent);background:var(--active-bg)}
+.sess-bar{align-items:center;flex-wrap:wrap}
+.item .sess-ck{vertical-align:-2px;margin:0 4px 0 0}
 .item.active{border-color:var(--accent-dim);background:var(--active-bg)}
 .item .it-title{font-size:13.5px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .it-meta{font-size:10.5px;color:var(--fg3);display:flex;gap:8px;flex-wrap:wrap}
@@ -507,6 +510,13 @@ td{color:var(--fg2)}
 .prov-card a{color:var(--tool)}
 .prov-state{font-size:13px;margin-bottom:8px;line-height:1.6}
 .prov-state.ok{color:var(--ok)} .prov-state.err{color:var(--err)} .prov-state.warn{color:var(--warn)}
+.quota{margin-top:6px;color:var(--fg)}
+.quota-row{display:flex;align-items:center;gap:8px;margin:3px 0}
+.quota-l{min-width:4.5em;font-size:12px}
+.quota-bar{flex:1;max-width:220px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.quota-bar i{display:block;height:100%;background:var(--ok)}
+.quota-bar i.warm{background:var(--warn)} .quota-bar i.hot{background:var(--err)}
+.quota-v{min-width:3em;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
 .prov-manual{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .prov-manual .mono{word-break:break-all;font-size:11px}
 
@@ -520,3 +530,19 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 /* 生成计时：生成中每秒跳，结束后定格为「用时」 */
 .who .run-timer{font-variant-numeric:tabular-nums}
 .who .run-timer.live{color:var(--accent)}
+/* 扩展页 */
+#tab-ext .row-actions input{flex:1;min-width:0}
+#tab-ext .list{margin:6px 0}
+.ext-desc{margin-top:3px;color:var(--fg2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ext-st.ok{color:var(--ok)} .ext-st.warn{color:var(--warn)}
+.ext-st{word-break:break-all}
+.ext-more{margin:6px 0}
+.ext-more summary{cursor:pointer;font-size:12.5px;color:var(--fg2);padding:4px 0}
+.ext-form{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ext-more-btn{margin-top:4px}
+/* 安全模式横条 / 修复账本 */
+.safe-bar{flex:none;background:var(--err-bg);color:var(--err-fg);border-top:1px solid var(--err-line);font-size:12.5px;padding:6px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.item.ledger.bad{border-color:var(--err-line)}
+.item .it-title.wrap{white-space:normal}
+#tab-ext > .tiny:first-child{margin-bottom:10px}
+.quota-row > .tiny{min-width:8.5em}

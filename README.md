@@ -25,9 +25,10 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - `/compact`, `/context` and other built-in commands show their results immediately.
   - Each reply shows a live generation timer that settles to the total time when it finishes.
   - Light / dark appearance, or follow the system (status bar included).
+  - **Session management**: deleted sessions go to a recycle bin first (restorable for 30 days). Pick sessions one by one or all at once and export them as a zip — handed straight to the system share sheet — then import the zip on another device and carry on where you left off.
   - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Several ways to connect**:
-  - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically.
+  - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically. The account card shows your 5-hour and weekly usage limits with their reset times (taken from what Claude Code itself reports after each turn — the app never queries anything with your credentials).
   - Claude API key.
   - The official Anthropic-compatible endpoints of DeepSeek, Zhipu GLM, Qwen and Kimi.
   - Any other compatible third-party endpoint you add.
@@ -36,7 +37,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Languages: Python 3.14 (pip, venv), Node 26 (npm, npx).
   - Android builds: OpenJDK 21, aapt2 / d8 / apksigner — build APKs on the phone.
   - VCS and network: git, ssh, curl.
-  - CLI tools: rg / fd / bat / jq / sqlite3 / typst / ImageMagick…
+  - CLI tools: rg / fd / bat / jq / sqlite3 / typst / ImageMagick… Tab completion works in interactive bash; `hx-grammar` installs just the Helix syntax grammars you need; typst finds the system CJK fonts out of the box.
 - **System privileges (optional)**: [Shizuku](https://shizuku.rikka.app) integration. In the terminal, `priv '<cmd>'` runs pm / am / settings / logcat / screencap… as the shell user.
   - One-tap install and activation from Settings: downloaded from Shizuku's official release (signing certificate verified), installed with the system installer,
     then activated over Wireless debugging — no computer needed. The pairing code is entered in a notification that stays at the top of the screen, so the pairing dialog stays open.
@@ -47,6 +48,11 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Toolchain: pre-downloaded on Wi‑Fi only and swapped in the next time the app opens; anything you installed with pip / npm -g is kept.
   - Updates never cut each other off: while the toolchain is downloading or being replaced, the app update waits. The replacement is checked against the release manifest before the old toolchain is touched, and if it is interrupted (app restart, process killed) the next launch finishes it or rolls back.
   - **Verify / Repair** in Settings checks every toolchain file against its recorded hash; Repair reinstalls the same version and keeps your own packages. A quick check also runs at each launch.
+- **Extensions**: install, enable, disable and uninstall Claude Code plugins (search the official directory or add other marketplaces), install skills from a zip, and add or remove MCP servers — all from the Extensions tab. Everything goes through Claude Code’s own `claude plugin` / `claude mcp` commands; a plugin that needs to run a command to install shows it to you first.
+- **Troubleshooting**:
+  - **Safe mode**: if a hook, plugin, MCP server or CLAUDE.md breaks things, turn on safe mode and Claude Code starts with its built-in `--safe-mode` — no customizations loaded, while sign-in, keys, sessions and model stay as they are. Nothing is moved or edited; turning it off restores everything.
+  - **One-tap log share**: diagnostics, the app log, the gateway log and the repair ledger, packed into a zip and handed to the system share sheet. Keys, tokens and email addresses are scrubbed first.
+  - **Repair ledger**: every toolchain install, verification, repair and startup recovery is recorded (what was found, what was done, the result) and can be read in Settings.
 - **USB debugging of another device**: connect it with an OTG cable and run `usb-adb`, then `adb devices / install / shell` as usual.
 - **Self-test**: `cccodroid-selftest` exercises 71 tools and usages; the tool notes are injected into Claude's system prompt so it knows what it has.
 

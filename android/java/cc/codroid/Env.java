@@ -100,6 +100,7 @@ final class Env {
         // ld-linux --preload 给 claude 挂上：被 seccomp 拦下的调用改回 ENOSYS（Android 14 拦 epoll_pwait2）
         e.put("CCAPP_CLAUDE_PRELOAD", new File(app, "lib/seccomp-enosys.so").getPath());
         e.put("CCAPP_LOG", log.getPath());
+        e.put("CCAPP_LEDGER", Ledger.file(this).getPath());   // 修复账本：网关记安全模式、界面能翻
         e.put("CCAPP_SEED", new File(home, "seed.json").getPath());
         e.put("CCAPP_BIN", new File(app, "bin").getPath());   // 应用自带的小工具（priv）
     }

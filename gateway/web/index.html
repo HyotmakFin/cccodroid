@@ -83,6 +83,7 @@
         <button class="tab active" data-tab="sessions" data-i18n>会话</button>
         <button class="tab" data-tab="settings" data-i18n>设置</button>
         <button class="tab" data-tab="caps" data-i18n>能力</button>
+        <button class="tab" data-tab="ext" data-i18n>扩展</button>
       </div>
             <button id="btn-close-drawer" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -94,7 +95,12 @@
       <div class="row-actions">
                 <button id="btn-refresh-sessions" class="btn ghost sm" data-i18n>刷新列表</button>
                 <button id="btn-close-session" class="btn ghost sm" data-i18n>断开当前</button>
+                <button id="btn-sess-select" class="btn ghost sm" data-i18n>选择</button>
+                <button id="btn-sess-import" class="btn ghost sm" data-i18n>导入</button>
+                <button id="btn-sess-trash" class="btn ghost sm" data-i18n>回收站</button>
+                <input id="sess-import-file" type="file" accept=".zip,application/zip" hidden>
       </div>
+      <div id="sess-bar" class="row-actions sess-bar hidden"></div>
       <div id="session-list" class="list"></div>
     </section>
 
@@ -189,6 +195,23 @@
         </div>
       </div>
 
+      <!-- 排障：安全模式 / 一键分享日志 / 修复账本 -->
+      <div class="field">
+        <label data-i18n>排障</label>
+        <div class="prov-card">
+          <label class="tiny" style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="safe-mode" style="width:auto;margin:0">
+            <span data-i18n>安全模式：用 claude 自带的 --safe-mode 起，CLAUDE.md、技能、插件、钩子、MCP、自定义命令与输出风格一概不加载。登录、Key、会话、模型照旧，不改动任何文件，关掉即恢复</span>
+          </label>
+          <div class="row-actions">
+            <button class="btn sm ghost" id="btn-share-logs" data-i18n>一键分享日志</button>
+            <button class="btn sm ghost" id="btn-ledger" data-i18n>修复账本</button>
+          </div>
+          <div class="tiny" id="share-logs-hint" data-i18n>打包诊断信息、应用日志、网关日志与修复账本，经系统分享发出。密钥、令牌与邮箱会先抹掉；网关日志里有每次提问的开头几十个字。</div>
+          <div id="ledger-list" class="list hidden"></div>
+        </div>
+      </div>
+
       <div class="field">
                 <label><span data-i18n>模型</span> <span class="pill" id="model-count"></span></label>
         <select id="set-model"></select>
@@ -261,6 +284,45 @@
                 <button id="btn-refresh-mcp" class="btn ghost sm" data-i18n>查询 MCP</button></div>
             <div class="field"><label data-i18n>插件</label>
         <div id="caps-plugins" class="chips"></div></div>
+    </section>
+
+    <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
+    <section id="tab-ext" class="tab-pane hidden">
+      <div class="tiny" data-i18n>改动在下一条消息生效。插件和 MCP 由 claude 自己的命令装卸，这里只是替你敲命令。</div>
+      <div class="field"><label><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></label>
+        <div id="ext-plugins" class="list"></div>
+        <div class="row-actions">
+          <input id="ext-p-q" placeholder="搜索插件（官方目录与已添加的市场）" data-i18n-attr="placeholder" autocomplete="off">
+          <button id="ext-p-search" class="btn sm" data-i18n>搜索</button>
+        </div>
+        <div id="ext-catalog" class="list"></div>
+        <details class="ext-more"><summary data-i18n>插件市场</summary>
+          <div id="ext-markets" class="list"></div>
+          <div class="row-actions">
+            <input id="ext-m-src" placeholder="GitHub 仓库（owner/repo）或网址" data-i18n-attr="placeholder" autocomplete="off">
+            <button id="ext-m-add" class="btn sm ghost" data-i18n>添加市场</button>
+          </div>
+        </details>
+      </div>
+      <div class="field"><label><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></label>
+        <div id="ext-skills" class="list"></div>
+        <div class="row-actions">
+          <button id="ext-s-import" class="btn sm ghost" data-i18n>从 zip 安装技能</button>
+          <input id="ext-s-file" type="file" accept=".zip,application/zip" hidden>
+        </div>
+      </div>
+      <div class="field"><label><span data-i18n>MCP 服务器</span> <span id="ext-m-count" class="pill"></span></label>
+        <div id="ext-mcp" class="list"><div class="tiny" data-i18n>查询中…（要逐个试连，稍等几秒）</div></div>
+        <details class="ext-more"><summary data-i18n>添加 MCP 服务器</summary>
+          <div class="ext-form">
+            <input id="ext-mcp-name" placeholder="名字（字母、数字、- _ .）" data-i18n-attr="placeholder" autocomplete="off">
+            <select id="ext-mcp-tr"><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></select>
+            <input id="ext-mcp-target" placeholder="命令（stdio）或网址（http / sse）" data-i18n-attr="placeholder" autocomplete="off">
+            <input id="ext-mcp-env" placeholder="环境变量 / 请求头，可选，用逗号分隔（KEY=值 或 Header: 值）" data-i18n-attr="placeholder" autocomplete="off">
+            <button id="ext-mcp-add" class="btn sm" data-i18n>添加</button>
+          </div>
+        </details>
+      </div>
     </section>
   </div>
 </aside>

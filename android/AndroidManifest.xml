@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cc.codroid"
-    android:versionCode="7"
-    android:versionName="0.1.6">
+    android:versionCode="8"
+    android:versionName="0.1.7">
 
     <!-- targetSdk 28：29 起禁止执行应用可写目录里的程序（W^X），整套原生工具链就跑不了 -->
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="28" />
@@ -61,6 +61,13 @@
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- 往外分享文件（会话导出包、日志包）：不导出，只靠分享时一次性的读授权 -->
+        <provider
+            android:name=".Share"
+            android:authorities="cc.codroid.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <!-- 应用内部回调：安装结果、通知栏填的配对码。不导出 -->
         <receiver android:name=".Events" android:exported="false" />
