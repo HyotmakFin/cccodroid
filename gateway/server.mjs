@@ -1768,6 +1768,284 @@ async function handleTerm(req, res, p) {
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
+// ── 可选组件（v0.1.9 起：浏览器组件 = 无头 Chromium）───────────────────
+// 照 livehime 浏览器组件的路子：
+//   · 组件有自己的版本，跟工具包（devkit）走，不跟 App 走。索引里每个构建声明它要求的工具包（gz 的 sha256），
+//     对不上就不装、已装的显示"需要重新安装"。
+//   · 两阶段：先下载 → 核 sha256 → 解到暂存区 → 按 MANIFEST 逐文件核对；全部通过才把文件换进 $PREFIX。
+//     中途任何一步失败，$PREFIX 一根毫毛不动。
+//   · 已装记录在 files/components/<id>.json（$PREFIX 之外：工具包整体替换时不会把记录一起换掉）；
+//     记录里列着装进去的每个文件，卸载就按它删，不会误删工具包自己的东西。
+//   · 状态：absent / downloading / verifying / installing / ok / outdated（工具包变了）/ damaged / error
+// 只在 cccodroid（有 Termux 前缀）上可用；开发端没有 $PREFIX，接口返回 supported:false。
+const COMP_INDEX = process.env.CCAPP_COMPONENTS_INDEX ||
+  "https://github.com/greyoak111/cccodroid/releases/download/components/components.json";
+const COMP_DIR = PREFIX ? path.join(path.dirname(PREFIX), "components") : "";
+const COMP_JOBS = new Map();      // id → { phase, done, total, error, child, cancelled }
+let compIndexCache = { at: 0, data: null, error: "" };
+
+function devkitIdentity() {
+  try { return JSON.parse(fs.readFileSync(path.join(PREFIX, ".devkit-ok"), "utf8")); } catch { return null; }
+}
+const compRecFile = (id) => path.join(COMP_DIR, id + ".json");
+function compRecord(id) { try { return JSON.parse(fs.readFileSync(compRecFile(id), "utf8")); } catch { return null; } }
+function compWriteRecord(id, rec) {
+  fs.mkdirSync(COMP_DIR, { recursive: true });
+  fs.writeFileSync(compRecFile(id) + ".tmp", JSON.stringify(rec, null, 1));
+  fs.renameSync(compRecFile(id) + ".tmp", compRecFile(id));
+}
+
+async function compIndex(force) {
+  if (!force && compIndexCache.data && Date.now() - compIndexCache.at < 10 * 60e3) return compIndexCache;
+  try {
+    const out = await new Promise((resolve, reject) => {
+      // 离线 / 测试：共享目录里放了 components/components.json 就优先用它（同工具包的本地文件规则）
+      const local = process.env.CCAPP_SHARED && path.join(process.env.CCAPP_SHARED, "components", "components.json");
+      const src = local && fs.existsSync(local) ? "file://" + local : COMP_INDEX;
+      execFile(path.join(PREFIX, "bin", "curl"), ["-fsSL", "--max-time", "30", "--retry", "2", src],
+        { env: claudeEnv(), maxBuffer: 4 << 20 }, (e, so, se) => (e ? reject(new Error(String(se || e.message).trim().slice(0, 200))) : resolve(so)));
+    });
+    compIndexCache = { at: Date.now(), data: JSON.parse(out), error: "" };
+  } catch (e) {
+    compIndexCache = { at: Date.now() - 9 * 60e3, data: compIndexCache.data, error: e.message };   // 失败一分钟后再试
+  }
+  return compIndexCache;
+}
+
+/** 给当前工具包挑一个构建：base 等于已装工具包 gz 的 sha256 */
+function compBuildFor(entry, dk) {
+  const sha = dk && dk.sha256;
+  return (entry.builds || []).find((b) => sha && b.base === sha) || null;
+}
+
+function compState(id, entry, dk) {
+  const job = COMP_JOBS.get(id);
+  if (job && !job.finished) return job.phase;
+  const rec = compRecord(id);
+  if (!rec) return job && job.error ? "error" : "absent";
+  if (rec.state !== "ok") return "damaged";
+  if (!dk || rec.base !== dk.sha256) return "outdated";          // 工具包换过：组件的文件已随旧工具包一起没了
+  for (const b of rec.bin || []) if (!fs.existsSync(path.join(PREFIX, "bin", b))) return "damaged";
+  const build = entry && compBuildFor(entry, dk);
+  if (build && build.sha256 !== rec.sha256) return "update";
+  return "ok";
+}
+
+async function compList(force) {
+  if (!PREFIX) return { supported: false };
+  const dk = devkitIdentity();
+  const ix = await compIndex(force);
+  const comps = (ix.data && ix.data.components) || {};
+  const ids = new Set([...Object.keys(comps)]);
+  try { for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) ids.add(f.slice(0, -5)); } catch {}
+  const items = [...ids].map((id) => {
+    const e = comps[id] || null, b = e && compBuildFor(e, dk), rec = compRecord(id), job = COMP_JOBS.get(id);
+    return {
+      id, name: e ? e.name : { zh: id, en: id }, desc: e ? e.desc : null,
+      version: b ? b.version : null, bytes: b ? b.bytes : 0, installed: b ? b.installed : 0,
+      available: !!b, installedVersion: rec ? rec.version : null,
+      state: compState(id, e, dk),
+      progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total } : null,
+      error: job && job.error ? job.error : "",
+      bin: (b && b.bin) || (rec && rec.bin) || [],
+    };
+  });
+  return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, items };
+}
+
+function sha256File(f, job) {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash("sha256"), s = fs.createReadStream(f, { highWaterMark: 1 << 20 });
+    s.on("data", (c) => { h.update(c); if (job) job.done += c.length; });
+    s.on("end", () => resolve(h.digest("hex")));
+    s.on("error", reject);
+  });
+}
+
+function compRun(job, cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { env: termEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true, ...opts });
+    job.child = child;
+    let err = "";
+    child.stdout.on("data", () => {});
+    child.stderr.on("data", (d) => { err = (err + d).slice(-2000); });
+    child.on("error", reject);
+    child.on("exit", (code) => { job.child = null; job.cancelled ? reject(new Error("cancelled")) : code === 0 ? resolve() : reject(new Error(`${path.basename(cmd)} 退出码 ${code}：${err.trim().split("\n").pop() || ""}`)); });
+  });
+}
+
+/** 把暂存区里的 usr/ 树逐个搬进 $PREFIX；返回搬进去的相对路径（文件与软链） */
+function compMoveIn(stageUsr, rel = "", moved = [], skipped = []) {
+  for (const d of fs.readdirSync(path.join(stageUsr, rel), { withFileTypes: true })) {
+    const r = rel ? rel + "/" + d.name : d.name;
+    const src = path.join(stageUsr, r), dst = path.join(PREFIX, r);
+    if (d.isDirectory()) {
+      let st = null; try { st = fs.lstatSync(dst); } catch {}
+      if (st && !st.isDirectory()) { skipped.push(r); continue; }
+      if (!st) fs.mkdirSync(dst, { recursive: true });
+      compMoveIn(stageUsr, r, moved, skipped);
+      continue;
+    }
+    // 工具包已有的同名文件不覆盖（组件只带底座里没有的包，撞名多半是共用的目录索引之类）
+    let exists = false; try { fs.lstatSync(dst); exists = true; } catch {}
+    if (exists) { skipped.push(r); continue; }
+    fs.renameSync(src, dst);
+    moved.push(r);
+  }
+  return { moved, skipped };
+}
+
+function compRemoveFiles(rec) {
+  const dirs = new Set();
+  for (const r of rec.files || []) {
+    try { fs.unlinkSync(path.join(PREFIX, r)); } catch {}
+    for (let d = path.dirname(r); d && d !== "."; d = path.dirname(d)) dirs.add(d);
+  }
+  // 由深到浅删掉变空的目录（工具包自己的目录不空，自然删不掉）
+  for (const d of [...dirs].sort((a, b) => b.length - a.length)) { try { fs.rmdirSync(path.join(PREFIX, d)); } catch {} }
+  if (rec.skill) fs.rmSync(path.join(SKILLS_DIR, rec.skill), { recursive: true, force: true });
+}
+
+async function compInstall(id) {
+  if (!PREFIX) return { ok: false, message: "only available in cccodroid" };
+  const cur = COMP_JOBS.get(id);
+  if (cur && !cur.finished) return { ok: false, message: "busy" };
+  const dk = devkitIdentity();
+  if (!dk || !dk.sha256) return { ok: false, message: "工具包还没装好（或是本地文件装的，没有版本身份），装不了组件" };
+  const ix = await compIndex(true);
+  const entry = ix.data && ix.data.components && ix.data.components[id];
+  if (!entry) return { ok: false, message: ix.error || "没有这个组件" };
+  const b = compBuildFor(entry, dk);
+  if (!b) return { ok: false, message: "这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试" };
+  // 空间：压缩包 + 解开后的大小，再留 10%
+  try {
+    const sf = fs.statfsSync(path.dirname(PREFIX));
+    const need = (b.bytes + b.installed) * 1.1;
+    if (sf.bavail * sf.bsize < need) return { ok: false, message: `存储空间不够：需要约 ${Math.ceil(need / 1048576)} MB` };
+  } catch {}
+  const job = { phase: "downloading", done: 0, total: b.bytes, error: "", child: null, cancelled: false, finished: false };
+  COMP_JOBS.set(id, job);
+  compRunInstall(id, b, job).then(
+    () => { job.finished = true; log(`[comp] ${id} ${b.version} 装好了`); },
+    (e) => { job.finished = true; job.error = job.cancelled ? "" : e.message; log(`[comp] ${id} 安装失败：${e.message}`); });
+  return { ok: true };
+}
+
+async function compRunInstall(id, b, job) {
+  const stage = path.join(COMP_DIR, ".staging"), gz = path.join(stage, `${id}-${b.sha256.slice(0, 12)}.tar.gz`), tree = path.join(stage, id);
+  fs.mkdirSync(stage, { recursive: true });
+  // 1) 下载（断点续传：.part 的名字带着 sha，换了版本不会接错）
+  if (!fs.existsSync(gz)) {
+    const part = gz + ".part";
+    const tick = setInterval(() => { try { job.done = fs.statSync(part).size; } catch {} }, 500);
+    try {
+      let lastErr;
+      for (let i = 0; i < 4 && !job.cancelled; i++) {
+        try {
+          await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "10000", "--speed-time", "60", "-o", part, b.url]);
+          lastErr = null; break;
+        } catch (e) { lastErr = e; if (job.cancelled) break; }
+      }
+      if (job.cancelled) throw new Error("cancelled");
+      // 上回已经下全、没来得及改名就被打断：续传会得到 416，直接去校验
+      let have = 0; try { have = fs.statSync(part).size; } catch {}
+      if (lastErr && have !== b.bytes) throw lastErr;
+    } finally { clearInterval(tick); }
+    job.phase = "verifying"; job.done = 0; job.total = b.bytes;
+    const got = await sha256File(part, job);
+    if (got !== b.sha256) { fs.rmSync(part, { force: true }); throw new Error("下载的文件校验不符（已删除，重试会重新下载）"); }
+    fs.renameSync(part, gz);
+  }
+  if (job.cancelled) throw new Error("cancelled");
+  // 2) 解到暂存区，按包内 MANIFEST 逐个核对
+  job.phase = "verifying"; job.done = 0; job.total = b.installed || 0;
+  fs.rmSync(tree, { recursive: true, force: true });
+  fs.mkdirSync(tree, { recursive: true });
+  await compRun(job, path.join(PREFIX, "bin", "tar"), ["-xzf", gz, "-C", tree]);
+  const lx = `libexec/devkit/components/${id}`;
+  const man = fs.readFileSync(path.join(tree, "usr", lx, "MANIFEST"), "utf8").trim().split("\n");
+  for (const line of man) {
+    if (job.cancelled) throw new Error("cancelled");
+    const [h, n, ...rest] = line.split(" "), rel = rest.join(" ");
+    const f = path.join(tree, "usr", rel);
+    let st; try { st = fs.statSync(f); } catch { throw new Error("组件包缺文件：" + rel); }
+    if (st.size !== Number(n) || (await sha256File(f)) !== h) throw new Error("组件包里的文件校验不符：" + rel);
+    job.done += st.size;
+  }
+  // 3) 切换：先写"安装中"的记录（被打断就是 damaged，可以重装或卸载），再逐个搬进 $PREFIX
+  job.phase = "installing";
+  const old = compRecord(id);
+  if (old) compRemoveFiles(old);                    // 升级 / 重装：先清掉上一版
+  const rec = { id, version: b.version, upstream: b.upstream, base: b.base, sha256: b.sha256, bin: b.bin || [],
+    skill: "", state: "installing", at: Date.now(), files: [] };
+  // 先按包内文件清单记下"将要放进去的文件"：搬到一半被杀也能按它卸干净
+  const list = [];
+  (function walk(rel) {
+    for (const d of fs.readdirSync(path.join(tree, "usr", rel), { withFileTypes: true })) {
+      const r = rel ? rel + "/" + d.name : d.name;
+      if (d.isDirectory()) walk(r); else list.push(r);
+    }
+  })("");
+  rec.files = list.filter((r) => { try { fs.lstatSync(path.join(PREFIX, r)); return false; } catch { return true; } });
+  compWriteRecord(id, rec);
+  const { skipped } = compMoveIn(path.join(tree, "usr"));
+  if (skipped.length) log(`[comp] ${id}：${skipped.length} 个与工具包同名的文件保留工具包的版本`);
+  // 4) 首次运行配置（各包 postinst），失败不算安装失败
+  const fr = path.join(PREFIX, lx, "first-run.sh");
+  if (fs.existsSync(fr)) { try { await compRun(job, path.join(PREFIX, "bin", "sh"), [fr]); } catch (e) { log(`[comp] ${id} first-run：${e.message}`); } }
+  // 5) 给 Claude 的技能
+  if (b.skill) {
+    const src = path.join(PREFIX, b.skill);
+    const name = (skillMeta(src) || {}).name || id;
+    const dst = path.join(SKILLS_DIR, name);
+    try {
+      fs.rmSync(dst, { recursive: true, force: true });
+      fs.mkdirSync(dst, { recursive: true });
+      for (const f of fs.readdirSync(src)) fs.copyFileSync(path.join(src, f), path.join(dst, f));
+      rec.skill = name;
+    } catch (e) { log(`[comp] ${id} 技能没装上：${e.message}`); }
+  }
+  rec.state = "ok"; rec.at = Date.now();
+  compWriteRecord(id, rec);
+  fs.rmSync(tree, { recursive: true, force: true });
+  fs.rmSync(gz, { force: true });
+}
+
+function compCancel(id) {
+  const job = COMP_JOBS.get(id);
+  if (!job || job.finished) return { ok: false, message: "not running" };
+  if (job.phase === "installing") return { ok: false, message: "正在放进工具包，这一步不能中断" };
+  job.cancelled = true;
+  if (job.child) killTree(job.child);
+  return { ok: true };
+}
+
+function compRemove(id) {
+  if (!PREFIX) return { ok: false, message: "only available in cccodroid" };
+  const job = COMP_JOBS.get(id);
+  if (job && !job.finished) return { ok: false, message: "busy" };
+  const rec = compRecord(id);
+  if (!rec) return { ok: false, message: "not installed" };
+  compRemoveFiles(rec);
+  fs.rmSync(compRecFile(id), { force: true });
+  fs.rmSync(path.join(COMP_DIR, ".staging"), { recursive: true, force: true });
+  COMP_JOBS.delete(id);
+  log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
+  return { ok: true };
+}
+
+async function handleComponents(req, res, p, u) {
+  if (req.method === "GET" && p === "/api/components") return sendJson(res, 200, await compList(u.searchParams.get("refresh") === "1"));
+  if (req.method !== "POST") return sendJson(res, 405, { error: "method" });
+  let body = {}; try { body = JSON.parse((await readBody(req)) || "{}"); } catch {}
+  const id = String(body.id || "");
+  if (!/^[a-z0-9-]{1,40}$/.test(id)) return sendJson(res, 400, { ok: false, message: "bad id" });
+  if (p === "/api/components/install") return sendJson(res, 200, await compInstall(id));
+  if (p === "/api/components/cancel") return sendJson(res, 200, compCancel(id));
+  if (p === "/api/components/remove") return sendJson(res, 200, compRemove(id));
+  return sendJson(res, 404, { error: "not found" });
+}
+
 function uiTag() {
   let t = 0;
   let files = [];
@@ -3280,6 +3558,9 @@ const server = http.createServer(async (req, res) => {
     // ── 应用内终端 ──
     if (p.startsWith("/api/term/")) return handleTerm(req, res, p);
 
+    // ── 可选组件（浏览器组件等）──
+    if (p === "/api/components" || p.startsWith("/api/components/")) return handleComponents(req, res, p, u);
+
     // ── 能力清单 ──
     if (req.method === "GET" && p === "/api/capabilities") {
       return sendJson(res, 200, capabilities());
@@ -3304,6 +3585,19 @@ const server = http.createServer(async (req, res) => {
       st.on("error", () => { try { res.destroy(); } catch {} });
       st.pipe(res);
       return;
+    }
+
+    // ── 回复里的路径被点了：先问一下是什么（文件 / 目录 / 不存在），前端再决定开查看器还是文件面板 ──
+    if (req.method === "GET" && p === "/api/file/stat") {
+      let q = String(u.searchParams.get("path") || "").trim();
+      if (!path.isAbsolute(q)) return sendJson(res, 400, { error: "absolute path required" });
+      let real;
+      try { real = fs.realpathSync(q); } catch { return sendJson(res, 404, { error: "not found", path: q }); }
+      let st; try { st = fs.statSync(real); } catch (e) { return sendJson(res, 404, { error: e.message }); }
+      if (st.isDirectory()) return sendJson(res, 200, { path: real, dir: true });
+      const r = safeFilePath(real);
+      if (r.error) return sendJson(res, r.status || 404, { error: r.error });
+      return sendJson(res, 200, { path: r.file, dir: false, size: r.size, mtime: r.mtime, kind: fileKind(r.file, false) });
     }
 
     // ── 文件编辑器保存：带上打开时的 mtime，磁盘上的已经被别人（多半是 Claude）改过就拒绝，免得互相覆盖 ──

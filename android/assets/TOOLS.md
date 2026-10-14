@@ -6,6 +6,8 @@
   共享存储（/sdcard 下）**不能执行程序、不能建符号链接、npm install 会失败** —— 别在那里编译或装依赖。从那里拷出的文件没有可执行位，要 `chmod +x`。
 - 临时文件用 `$TMPDIR`；`/tmp` 不可写。
 - 安卓没有 `/usr/bin/env`、`/bin/bash`，但 shell 已加载 termux-exec：`#!/usr/bin/env node|python3`、`#!/bin/bash` 的脚本照常直接执行。
+- **回复里提到本机文件或目录时，写完整的绝对路径**（如 `{{WORKSPACE}}/app/main.py`、`/storage/emulated/0/…/report.pdf`，需要时带 `:行号`），不要写 `~/`、`./` 或只写文件名：界面会把绝对路径变成链接，用户点一下就在应用内的查看器里打开（Markdown、代码、图片、PDF、音视频都能看，文本可直接编辑）。路径里尽量别带空格。
+- 本机起了网页服务（开发服务器、预览页）时，在回复里给出 `http://127.0.0.1:<端口>/` 这样的链接：用户点开就在应用内浏览器里看。
 - **没有 pkg / apt**（Termux 仓库的包路径写死，装进来跑不了）。缺系统级工具就如实告诉用户；Python / Node 的库照常用 pip / npm 装。
 
 ## 可用工具（cccodroid-selftest 逐项实测）

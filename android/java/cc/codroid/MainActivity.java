@@ -418,6 +418,11 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void openUrl(String url) {
                 if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) ui.post(() -> openExternal(url));
             }
+            /** 应用内浏览器（回复里的网页链接、本机开发服务）；url 为空 = 回到上次那页 */
+            @android.webkit.JavascriptInterface public void openBrowser(String url) {
+                if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
+                    ui.post(() -> BrowserActivity.open(MainActivity.this, url));
+            }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
         }, "CCApp");

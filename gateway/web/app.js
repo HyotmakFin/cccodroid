@@ -131,12 +131,38 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     "/api/file?path=" + encodeURIComponent(p) + (dl ? "&download=1" : "");
 
   // ── Markdown 渲染 ─────────────────────────────────────────────────
+  // 本机绝对路径：回复里出现就变成可点的链接，点了在应用内查看器打开（目录则开文件面板）。
+  // 只认这几个根，免得把 "/api/file" 这类接口名、"1/2" 这类分数当成路径。可带 ":行号" 尾巴（file.js:12）。
+  const PATH_RE = /(^|[\s(（:：,，、;'"`“])((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[\w.\-+@%~=\u4e00-\u9fff]+)+\/?)(:\d+(?::\d+)?)?/g;
+  const pathLink = (p, line, label) =>
+    `<a class="fpath" data-path="${p}" href="#" title="${t("在查看器中打开")}">${label || p + (line || "")}</a>`;
   function inlineMd(s) {
-    return esc(s)
-      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // 先把代码片段切出来：片段里整段是路径的照样能点，其余不动
+    return esc(s).split(/(`[^`\n]+`)/).map((part, i) => {
+      if (i % 2) {
+        const c = part.slice(1, -1);
+        const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
+        return m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`;
+      }
+      const keep = [];
+      const hold = (h) => "\u0000" + (keep.push(h) - 1) + "\u0000";
+      return part
+        .replace(/\[([^\]]+)\]\((\/[^)\s]+)\)/g, (_, l, p) => hold(pathLink(p.replace(/:\d+(?::\d+)?$/, ""), "", l)))
+        .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, l, u) => hold(`<a class="weblink" href="${u}" target="_blank" rel="noopener">${l}</a>`))
+        // 裸网址也能点（本机开发服务 http://127.0.0.1:端口 最常见）；句末标点不算
+        .replace(/https?:\/\/[^\s<>"'`）)】」，。；、]+/g, (u) => {
+          const tail = (u.match(/[.,;:!?]+$/) || [""])[0];
+          const h = u.slice(0, u.length - tail.length);
+          return hold(`<a class="weblink" href="${h}" target="_blank" rel="noopener">${h}</a>`) + tail;
+        })
+        .replace(PATH_RE, (_, pre, p, line) => {
+          const tail = line ? "" : (p.match(/[.]+$/) || [""])[0];     // 句末的点不算路径
+          return pre + hold(pathLink(p.slice(0, p.length - tail.length), line)) + tail;
+        })
+        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+        .replace(/\u0000(\d+)\u0000/g, (_, n) => keep[n]);
+    }).join("");
   }
 
   /** 支持标题/列表/表格/代码块/引用/分隔线 */
@@ -303,6 +329,45 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   };
   chatEl.addEventListener("click", onCopyBtn);
   $("vw-body").addEventListener("click", onCopyBtn);   // 文件查看器里渲染的 Markdown 也有代码块
+
+  // 回复 / 查看器里的本机路径：点了直接在应用内打开
+  async function openPath(p) {
+    let r;
+    try { r = await api("/api/file/stat?path=" + encodeURIComponent(p)); }
+    catch (e) {
+      return toast(e.status === 403 ? t("这个位置受保护，不能在界面里打开：{p}", { p }) :
+        e.status === 404 ? t("文件不存在：{p}", { p }) : t("打不开：{msg}", { msg: e.message }));
+    }
+    if (r.dir) return openFiles(r.path);
+    openViewer(r.path, r.kind, r.size);
+  }
+  const onPathLink = (e) => {
+    const a = e.target.closest(".fpath");
+    if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    openPath(a.dataset.path);
+  };
+  chatEl.addEventListener("click", onPathLink);
+  $("vw-body").addEventListener("click", onPathLink);
+
+  // 网页链接：有应用内浏览器就在里面开（cccodroid / 开发端外壳提供），否则照常新窗口
+  const hasBrowser = () => !!(window.CCApp && window.CCApp.openBrowser);
+  function openWeb(url) {
+    if (hasBrowser()) return window.CCApp.openBrowser(url || "");
+    if (url) window.open(url, "_blank", "noopener");
+  }
+  const onWebLink = (e) => {
+    const a = e.target.closest("a.weblink");
+    if (!a || !hasBrowser()) return;
+    e.preventDefault();
+    openWeb(a.getAttribute("href"));
+  };
+  chatEl.addEventListener("click", onWebLink);
+  $("vw-body").addEventListener("click", onWebLink);
+  if (hasBrowser()) {
+    $("btn-web").classList.remove("hidden");
+    $("btn-web").addEventListener("click", () => openWeb(""));
+  }
 
   // ── 对话视图 ──────────────────────────────────────────────────────
   //  v3：照 Claude Desktop 的路子 —— 生成归网关管，界面只是订阅者。
@@ -499,6 +564,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     card.innerHTML =
       `<div class="tool-head"><span class="chev">▶</span><span class="tool-name">${esc(name)}</span>` +
       `<span class="tool-arg">${esc(summarizeTool(name, input))}</span>` +
+      (input && /^\//.test(input.file_path || input.notebook_path || "") ? `<a class="fpath tool-open" href="#" data-path="${esc(input.file_path || input.notebook_path)}" title="${t("在查看器中打开")}">↗</a>` : "") +
       `<span class="tool-state ${live ? "run" : "ok"}">${live ? t("运行中") : "—"}</span></div>` +
       `<div class="tool-body"></div>`;
     parent.appendChild(card);
@@ -512,7 +578,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       bodyEl.innerHTML = html;
       if (result) embedLocalImages(bodyEl);
     };
-    card.querySelector(".tool-head").addEventListener("click", () => {
+    card.querySelector(".tool-head").addEventListener("click", (e) => {
+      if (e.target.closest(".fpath")) return;          // 点的是"打开文件"，交给对话区的委托
       card.classList.toggle("open");
       if (card.classList.contains("open")) build();
     });
@@ -1690,7 +1757,54 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  function loadExt() { loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+  function loadExt() { loadComponents(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+
+  // ── 可选组件（浏览器组件 = 无头 Chromium）：下载 → 校验 → 换进工具包，进度靠轮询 ──
+  let compTimer = 0;
+  const pickLang = (o) => (o && typeof o === "object" ? o[(window.I18N && I18N.lang) || "zh"] || o.en || o.zh || "" : o || "");
+  const MB = (n) => Math.max(1, Math.round((n || 0) / 1048576)) + " MB";
+  async function loadComponents(refresh) {
+    clearTimeout(compTimer);
+    const r = await api("/api/components" + (refresh ? "?refresh=1" : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
+    $("comp-field").classList.toggle("hidden", !r.supported);
+    if (!r.supported) return;
+    const box = $("comp-list");
+    const btn = (c, id, label) => `<button data-c="${c}" data-id="${esc(id)}">${label}</button>`;
+    const html = (r.items || []).map((c) => {
+      const name = esc(pickLang(c.name) || c.id), pr = c.progress;
+      const size = c.available ? t("下载约 {a}，装好后约 {b}", { a: MB(c.bytes), b: MB(c.installed) }) : "";
+      const st = {
+        absent: c.available ? t("未安装") : t("暂无适配当前工具包的版本"),
+        downloading: t("下载中"), verifying: t("校验中"), installing: t("正在装进工具包…"),
+        ok: t("已安装"), update: t("有新版本"), outdated: t("工具包已更新，需要重新安装"),
+        damaged: t("安装不完整，需要重新安装"), error: t("安装失败"),
+      }[c.state] || c.state;
+      let acts = "";
+      if (c.state === "absent" && c.available) acts = btn("install", c.id, t("下载安装"));
+      else if (c.state === "downloading" || c.state === "verifying") acts = btn("cancel", c.id, t("取消"));
+      else if (c.state === "ok") acts = btn("remove", c.id, t("卸载"));
+      else if (["update", "outdated", "damaged", "error"].includes(c.state)) {
+        if (c.available) acts += btn("install", c.id, c.state === "update" ? t("更新") : t("重新安装"));
+        if (c.installedVersion) acts += btn("remove", c.id, t("卸载"));
+      }
+      let bar = "";
+      if (pr && pr.total) {
+        const pct = Math.min(100, (pr.done / pr.total) * 100).toFixed(1);
+        bar = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + MB(pr.done) + " / " + MB(pr.total) + "</div>";
+      }
+      const ver = c.installedVersion || c.version;
+      const meta = "<span>" + esc(st) + "</span>" + (ver ? "<span>" + esc(ver) + "</span>" : "") +
+        (size && c.state !== "ok" ? "<span>" + esc(size) + "</span>" : "");
+      let desc = '<div class="tiny ext-desc">' + esc(pickLang(c.desc)) + "</div>";
+      if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
+      if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
+      return extItem(name, meta, acts, desc + bar);
+    }).join("");
+    box.innerHTML = html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>";
+    // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
+    if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+      compTimer = setTimeout(loadComponents, 1000);
+  }
 
   async function loadExtPlugins() {
     const box = $("ext-plugins");
@@ -1801,6 +1915,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   $("tab-ext").addEventListener("click", async (e) => {
     if (e.target.classList.contains("ext-more-btn")) return searchPlugins(true);
+    const cb = e.target.closest("button[data-c]");
+    if (cb && !cb.disabled) {
+      const c = cb.dataset.c, id = cb.dataset.id;
+      const nm = (cb.closest(".item")?.querySelector(".it-title")?.textContent || id).trim();
+      if (c === "remove" && !confirm(t("卸载组件 {name}？会删掉它装进工具包的文件，你自己的文件不受影响。", { name: nm }))) return;
+      cb.disabled = true;
+      const r = await post("/api/components/" + c, { id }).catch((err) => ({ ok: false, message: err.message }));
+      if (!r.ok) toast(t("失败：{msg}", { msg: r.message || "" }), true);
+      else if (c === "remove") toast(t("已卸载"));
+      return loadComponents();
+    }
     const b = e.target.closest("button[data-x]");
     if (!b || b.disabled) return;
     const x = b.dataset.x, id = b.dataset.id;

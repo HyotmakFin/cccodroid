@@ -26,6 +26,9 @@
     <button id="btn-term" class="icon-btn" aria-label="终端" title="终端" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>
   </button>
+    <button id="btn-web" class="icon-btn hidden" aria-label="浏览器" title="浏览器" data-i18n-attr="aria-label,title">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+  </button>
     <button id="btn-palette" class="icon-btn" aria-label="命令面板" title="命令面板" data-i18n-attr="aria-label,title">
     <svg viewBox="0 0 24 24"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg>
   </button>
@@ -291,6 +294,10 @@
 
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
     <section id="tab-ext" class="tab-pane hidden">
+      <div class="field hidden" id="comp-field"><label><span data-i18n>可选组件</span></label>
+        <div class="tiny" data-i18n>体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。</div>
+        <div id="comp-list" class="list"></div>
+      </div>
       <div class="tiny" data-i18n>改动在下一条消息生效。插件和 MCP 由 claude 自己的命令装卸，这里只是替你敲命令。</div>
       <div class="field"><label><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></label>
         <div id="ext-plugins" class="list"></div>

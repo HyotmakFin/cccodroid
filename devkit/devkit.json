@@ -148,5 +148,55 @@
     }
   },
   "_doc_fetch": "fetch：仓库之外的上游原件，按哈希核对后放进包里",
-  "_doc_drop": "drop：解包时丢掉的文件（Termux App 专属脚本）；stubs：替换成说明脚本的命令"
+  "_doc_drop": "drop：解包时丢掉的文件（Termux App 专属脚本）；stubs：替换成说明脚本的命令",
+  "extraRepos": {
+    "x11": {
+      "name": "x11",
+      "base": "https://packages-cf.termux.dev/apt/termux-x11/",
+      "dist": "x11",
+      "component": "main",
+      "arch": "aarch64",
+      "mirrors": [
+        "https://packages.termux.dev/apt/termux-x11/"
+      ]
+    }
+  },
+  "components": {
+    "chromium": {
+      "_doc": "可选组件：无头 Chromium，给 Claude 打开网页、截图、跑页面 JS 用（不随工具包，用户在应用里手动装）",
+      "name": {
+        "zh": "浏览器组件（无头 Chromium）",
+        "en": "Browser component (headless Chromium)"
+      },
+      "desc": {
+        "zh": "让 Claude 打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页，适合测试本机开发的网站。没有窗口，只在后台运行；你自己看网页用应用内浏览器即可，不需要装它。",
+        "en": "Lets Claude open web pages: screenshots, PDF export, rendered DOM, and scripted browsing with puppeteer-core — handy for testing sites you build here. It runs headless in the background; to browse yourself, the built-in browser is enough."
+      },
+      "repos": [
+        "x11"
+      ],
+      "roots": [
+        "chromium"
+      ],
+      "bin": [
+        "chromium-headless",
+        "chromium-browser"
+      ],
+      "exclude": [
+        "python-lxml"
+      ],
+      "_exclude": "python-lxml：只有 lv2 的 Python 小工具要它（lv2 ← lilv ← ffmpeg），postinst 还会现场 pip 装依赖 —— Chromium 用不上",
+      "files": {
+        "usr/bin/chromium-headless": {
+          "src": "components/chromium/chromium-headless",
+          "mode": "755"
+        },
+        "usr/share/cccodroid/components/chromium/skill/SKILL.md": {
+          "src": "components/chromium/SKILL.md"
+        }
+      },
+      "skill": "usr/share/cccodroid/components/chromium/skill",
+      "selftest": "chromium-headless --dump-dom 'data:text/html,<p id=ok>ok</p>'"
+    }
+  }
 }

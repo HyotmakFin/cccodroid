@@ -20,6 +20,8 @@
 //
 //  用法: node devkit.mjs build --target li.dsh.dkt [--groups core,build] [--out DIR]
 //        node devkit.mjs resolve [--groups ...]          只列闭包和体积
+//        node devkit.mjs component <id> --target cc.codroid --base <工具包的 devkit.lock.json>
+//            可选组件（见 devkit.json 的 components）：只打底座里没有的包，产出 out/component-<id>-<包名>.tar.gz
 // ─────────────────────────────────────────────────────────────────────
 import fs from "node:fs";
 import path from "node:path";
@@ -57,9 +59,9 @@ async function get(url) {
 // ── 索引 ─────────────────────────────────────────────────────────────
 // 多个仓库：termux-main 优先，其次 termux-glibc（给官方 Claude Code 的 glibc 版二进制提供运行库）
 const REPOS = MAN.repos || [MAN.repo];
-async function loadIndex() {
+async function loadIndex(repos = REPOS) {
   const pkgs = new Map(), provides = new Map(), dates = [];
-  for (const repo of REPOS) {
+  for (const repo of repos) {
     const one = await loadRepo(repo);
     dates.push(`${repo.name || "main"} ${one.date}`);
     for (const [k, p] of one.pkgs) if (!pkgs.has(k)) pkgs.set(k, p);
@@ -110,7 +112,7 @@ function closure(idx, roots) {
     return null;
   };
   const walk = (n, from) => {
-    if (out.has(n) || (MAN.exclude || []).includes(n)) return;
+    if (out.has(n) || (MAN.exclude || []).includes(n) || ((COMP && COMP.exclude) || []).includes(n)) return;
     const p = idx.pkgs.get(n);
     if (!p) { missing.push(`${n}（${from}）`); return; }
     out.add(n);
@@ -488,27 +490,41 @@ function rewriteZip(buf, swap) {
 }
 
 // ── 主流程 ───────────────────────────────────────────────────────────
-const idx = await loadIndex();
-const { names, missing } = closure(idx, rootsFor(opt("groups")));
+// 组件：底座仓库之外还可以用别的仓库（如 termux-x11），只在打组件时加载，不影响工具包本身的闭包
+const COMP_ID = cmd === "component" ? args[1] : null;
+const COMP = COMP_ID ? (MAN.components || {})[COMP_ID] : null;
+if (COMP_ID && !COMP) throw new Error("devkit.json 的 components 里没有: " + COMP_ID);
+const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
+const idx = await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
+let { names, missing } = closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
+if (COMP) {
+  // 底座已经有的包不再打；底座里的版本和仓库现在的不一样时提醒（组件可能要求更新的库）
+  const inBase = new Map(BASE.packages.map((p) => [p.name, p.version]));
+  const drift = names.filter((n) => inBase.has(n) && inBase.get(n) !== idx.pkgs.get(n).version);
+  if (drift.length) console.log("⚠ 底座与仓库版本不同（组件按底座的版本用）: " + drift.map((n) => `${n} ${inBase.get(n)}→${idx.pkgs.get(n).version}`).join(", "));
+  names = names.filter((n) => !inBase.has(n));
+}
 const total = names.reduce((s, n) => s + idx.pkgs.get(n).size, 0);
 const itotal = names.reduce((s, n) => s + idx.pkgs.get(n).isize, 0);
 console.log(`仓库快照 ${idx.date} · ${idx.pkgs.size} 个包`);
 console.log(`闭包 ${names.length} 个包 · 下载 ${mb(total)} · 解包后约 ${mb(itotal)}`);
 if (missing.length) console.log("⚠ 无法满足: " + missing.join("; "));
 
-if (cmd === "resolve") {
+if (cmd === "resolve" || (COMP && args.includes("--dry"))) {
   for (const n of names) { const p = idx.pkgs.get(n); console.log(`  ${n.padEnd(28)} ${p.version.padEnd(18)} ${mb(p.isize)}`); }
   process.exit(0);
 }
 
-if (cmd === "build") {
+if (cmd === "build" || cmd === "component") {
   const target = opt("target");
+  // 组件的私有文件放在 libexec/devkit/components/<id>/ 下，和底座的 libexec/devkit/ 分开
+  const LX = COMP ? `usr/libexec/devkit/components/${COMP_ID}` : "usr/libexec/devkit";
   if (!target) throw new Error("--target <10 字符包名> 必填");
   const R = relocator(target);
   await bootXz(idx);
   console.log(XZ ? "  解压：原生 xz" : "  解压：JS");
   fs.mkdirSync(OUT, { recursive: true });
-  const tarFile = path.join(OUT, `devkit-${target}.tar`);
+  const tarFile = path.join(OUT, COMP ? `component-${COMP_ID}-${target}.tar` : `devkit-${target}.tar`);
   const tw = new TarWriter(tarFile + ".part");
   // 逐文件清单（libexec/devkit/MANIFEST）："sha256 大小 相对 usr/ 的路径"。App 装完拿它核对缺没缺、坏没坏。
   // 同名条目以最后写入的为准（tar 解包也是后来的覆盖前面的）；被软链盖掉的不算文件
@@ -588,11 +604,11 @@ if (cmd === "build") {
     }
   }
   // 替身：pkg/apt 这类在这里用不了的命令，换成说明为什么、该怎么办的小脚本
-  for (const [p, text] of Object.entries(MAN.stubs || {})) {
+  for (const [p, text] of Object.entries(COMP ? {} : MAN.stubs || {})) {
     tw.add({ name: p, type: "0", mode: 0o755, mtime: 0, data: Buffer.from("#!" + R.to + "files/usr/bin/sh\n" + text.replace(/\n?$/, "\n")) });
   }
   // 仓库之外的上游原件（如 ensurepip 的 pip wheel）：下载、核对哈希、原样放进去
-  for (const [p, f] of Object.entries(MAN.fetch || {})) {
+  for (const [p, f] of Object.entries(COMP ? COMP.fetch || {} : MAN.fetch || {})) {
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {
@@ -603,10 +619,15 @@ if (cmd === "build") {
     tw.add({ name: p, type: "0", mode: 0o644, mtime: 0, data: b });
     lock.push({ name: path.basename(p), version: path.basename(p).split("-")[1], source: "pypi", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why });
   }
+  // 组件自带的文件（入口包装、给 Claude 的 skill）：{{PREFIX}} 换成本应用的前缀
+  for (const [p, f] of Object.entries((COMP && COMP.files) || {})) {
+    const text = fs.readFileSync(path.join(HERE, f.src), "utf8").replaceAll("{{PREFIX}}", R.to + "files/usr");
+    tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: Buffer.from(text) });
+  }
   // 首次运行脚本：App 解包后跑一次（参数与 dpkg 一致：configure）
   const fr = ["#!" + R.to + "files/usr/bin/sh", "# devkit 首次运行：各包 postinst 里除 alternatives 外的步骤", "cd \"$HOME\" 2>/dev/null"];
   for (const f of firstRun) {
-    const p = `usr/libexec/devkit/postinst/${f.pkg}`;
+    const p = `${LX}/postinst/${f.pkg}`;
     // py3compile 要靠 termux-setup-package-manager + dpkg -L 列包内文件，我们两样都没带 ——
     // 原样跑会刷一屏 "cannot determine system package manager"。换成末尾统一 compileall。
     const script = f.script.replace(/^.*\/py3compile" -p .*$/gm, ": # py3compile → 由 first-run.sh 末尾的 compileall 统一做");
@@ -614,10 +635,10 @@ if (cmd === "build") {
     fr.push(`echo "▸ ${f.pkg}"; "${R.to}files/${p}" configure || echo "  （${f.pkg} 的 postinst 失败，rc=$?）"`);
   }
   const py = R.to + "files/usr/bin/python3";
-  fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
-  tw.add({ name: "usr/libexec/devkit/first-run.sh", type: "0", mode: 0o755, mtime: 0, data: Buffer.from(fr.join("\n") + "\n") });
+  if (!COMP) fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
+  tw.add({ name: `${LX}/first-run.sh`, type: "0", mode: 0o755, mtime: 0, data: Buffer.from(fr.join("\n") + "\n") });
   const manText = [...manifest].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([p, [h, n]]) => `${h} ${n} ${p}`).join("\n") + "\n";
-  twAdd({ name: "usr/libexec/devkit/MANIFEST", type: "0", mode: 0o644, mtime: 0, data: Buffer.from(manText) });
+  twAdd({ name: `${LX}/MANIFEST`, type: "0", mode: 0o644, mtime: 0, data: Buffer.from(manText) });
   console.log(`  文件清单：${manifest.size} 个文件`);
   console.log(`  alternatives：${[...alts.values()].map((a) => a.group + "←" + a.pkg).join(" ")}`);
   console.log(`  首次运行脚本：${firstRun.map((f) => f.pkg).join(" ") || "无"}`);
@@ -628,6 +649,20 @@ if (cmd === "build") {
   const tarInfo = await hashFile(tarFile);
   const gzInfo = await gzipFile(tarFile, tarFile + ".gz");
 
+  if (COMP) {
+    // 组件清单：App 据此判断能不能装（底座要对得上）、装后跑哪个 first-run、哪些是入口命令
+    const pkgVer = idx.pkgs.get(COMP.roots[0]).version;
+    fs.writeFileSync(path.join(OUT, `component-${COMP_ID}.json`), JSON.stringify({
+      id: COMP_ID, version: COMP.version || pkgVer, upstream: pkgVer, target, compat: 1,
+      base: { snapshot: BASE.snapshot, gz: BASE.gz.sha256 },
+      bin: COMP.bin || [], skill: COMP.skill || "", selftest: COMP.selftest || "", files: manifest.size,
+      tar: { file: path.basename(tarFile), ...tarInfo },
+      gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
+      installed: itotal, snapshot: idx.date, packages: lock,
+    }, null, 2));
+    console.log(`\n✓ ${tarFile}  ${mb(tarInfo.bytes)} → .gz ${mb(gzInfo.bytes)}  ${lock.length} 个包  用时 ${((Date.now() - t0) / 1000) | 0}s`);
+    process.exit(0);
+  }
   fs.writeFileSync(path.join(OUT, "devkit.lock.json"), JSON.stringify({
     // compat：工具包与 App 外壳的接口版本。改了外壳依赖的布局（路径、first-run 约定…）就加一，旧 App 会拒装新工具包
     target, compat: 1, prefix: R.to + "files/usr", repos: REPOS, snapshot: idx.date,

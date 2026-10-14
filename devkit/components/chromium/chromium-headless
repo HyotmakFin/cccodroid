@@ -1,0 +1,12 @@
+#!{{PREFIX}}/bin/sh
+# chromium-headless —— cccodroid 的 Chromium 组件入口：无头模式 + 安卓上必需的参数
+#   · --no-sandbox：普通应用没有 Chromium 沙箱要的 user namespace / setuid helper
+#   · --disable-gpu：没有显示服务器；页面照常用 CPU 光栅化
+#   · 没有 dbus：把总线地址设成 disabled，免得刷一屏连不上的报错
+# 用法和 chromium 一样，例如：
+#   chromium-headless --screenshot=out.png --window-size=1280,800 http://127.0.0.1:5173/
+#   chromium-headless --dump-dom https://example.com
+#   chromium-headless --print-to-pdf=out.pdf file.html
+export DBUS_SESSION_BUS_ADDRESS=disabled:
+exec "{{PREFIX}}/lib/chromium/chrome" --headless --no-sandbox --disable-gpu --no-first-run \
+  --disable-dev-shm-usage --hide-scrollbars --log-level=3 "$@"
