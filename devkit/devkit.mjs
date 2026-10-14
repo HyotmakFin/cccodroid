@@ -21,6 +21,8 @@
 //  用法: node devkit.mjs build --target li.dsh.dkt [--groups core,build] [--out DIR]
 //        node devkit.mjs resolve [--groups ...]          只列闭包和体积
 //        node devkit.mjs component <id> --target cc.codroid --base <工具包的 devkit.lock.json>
+//        node devkit.mjs component --recipe <配方目录> --target cc.codroid --base <…>
+//            外部配方（cccodroid-components 仓库的 recipes/<id>/recipe.json），见那边的 docs/recipe.md
 //            可选组件（见 devkit.json 的 components）：只打底座里没有的包，产出 out/component-<id>-<包名>.tar.gz
 // ─────────────────────────────────────────────────────────────────────
 import fs from "node:fs";
@@ -491,9 +493,31 @@ function rewriteZip(buf, swap) {
 
 // ── 主流程 ───────────────────────────────────────────────────────────
 // 组件：底座仓库之外还可以用别的仓库（如 termux-x11），只在打组件时加载，不影响工具包本身的闭包
-const COMP_ID = cmd === "component" ? args[1] : null;
-const COMP = COMP_ID ? (MAN.components || {})[COMP_ID] : null;
-if (COMP_ID && !COMP) throw new Error("devkit.json 的 components 里没有: " + COMP_ID);
+// 组件定义两个来源：devkit.json 的 components（预置组件，如 chromium），或 --recipe 指向的外部配方目录
+const RECIPE_DIR = cmd === "component" && opt("recipe") ? path.resolve(opt("recipe")) : null;
+const COMP = RECIPE_DIR ? loadRecipe(RECIPE_DIR) : cmd === "component" ? (MAN.components || {})[args[1]] : null;
+const COMP_ID = COMP ? (RECIPE_DIR ? COMP.id : args[1]) : null;
+if (cmd === "component" && !COMP) throw new Error("devkit.json 的 components 里没有: " + args[1]);
+const COMP_BASE = RECIPE_DIR || HERE;          // files 的 src 相对它找
+
+/** 外部配方：recipe.json + 可选的 skill/ 目录（自动装到 usr/share/cccodroid/components/<id>/skill/） */
+function loadRecipe(dir) {
+  const r = JSON.parse(fs.readFileSync(path.join(dir, "recipe.json"), "utf8"));
+  if (r.schema !== 1) throw new Error("配方 schema 必须是 1");
+  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(r.id || "")) throw new Error("配方 id 不合法: " + r.id);
+  if ((r.kind || "termux") !== "termux") throw new Error(`kind "${r.kind}" 还不支持（v1 只有 termux）`);
+  if (!Array.isArray(r.roots) || !r.roots.length) throw new Error("roots 不能为空");
+  for (const n of r.repos || []) if (!MAN.extraRepos[n]) throw new Error("不认识的仓库: " + n);
+  r.files = { ...(r.files || {}) };
+  for (const p of Object.keys(r.files)) if (!p.startsWith("usr/") || p.includes("..")) throw new Error("files 只能放进 usr/ 下: " + p);
+  const sk = path.join(dir, "skill");
+  if (fs.existsSync(path.join(sk, "SKILL.md"))) {
+    r.skill = `usr/share/cccodroid/components/${r.id}/skill`;
+    for (const f of fs.readdirSync(sk)) r.files[`${r.skill}/${f}`] = { src: path.join("skill", f) };
+  }
+  // 版本：上游版本 + 配方修订号（配方改了但上游没变时也能发新版）
+  return r;
+}
 const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
 const idx = await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
 let { names, missing } = closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
@@ -509,8 +533,13 @@ const itotal = names.reduce((s, n) => s + idx.pkgs.get(n).isize, 0);
 console.log(`仓库快照 ${idx.date} · ${idx.pkgs.size} 个包`);
 console.log(`闭包 ${names.length} 个包 · 下载 ${mb(total)} · 解包后约 ${mb(itotal)}`);
 if (missing.length) console.log("⚠ 无法满足: " + missing.join("; "));
+if (missing.length && RECIPE_DIR) { console.error("✗ 配方的依赖有满足不了的，停止"); process.exit(1); }
 
 if (cmd === "resolve" || (COMP && args.includes("--dry"))) {
+  if (COMP) {          // 给 CI 用：先算出这次会打成哪个版本，已发布过就跳过
+    const v = idx.pkgs.get(COMP.roots[0]).version;
+    console.log("COMPONENT_VERSION=" + (COMP.version || (RECIPE_DIR ? `${v}-r${COMP.revision || 1}` : v)));
+  }
   for (const n of names) { const p = idx.pkgs.get(n); console.log(`  ${n.padEnd(28)} ${p.version.padEnd(18)} ${mb(p.isize)}`); }
   process.exit(0);
 }
@@ -621,7 +650,7 @@ if (cmd === "build" || cmd === "component") {
   }
   // 组件自带的文件（入口包装、给 Claude 的 skill）：{{PREFIX}} 换成本应用的前缀
   for (const [p, f] of Object.entries((COMP && COMP.files) || {})) {
-    const text = fs.readFileSync(path.join(HERE, f.src), "utf8").replaceAll("{{PREFIX}}", R.to + "files/usr");
+    const text = fs.readFileSync(path.join(COMP_BASE, f.src), "utf8").replaceAll("{{PREFIX}}", R.to + "files/usr");
     tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: Buffer.from(text) });
   }
   // 首次运行脚本：App 解包后跑一次（参数与 dpkg 一致：configure）
@@ -653,9 +682,10 @@ if (cmd === "build" || cmd === "component") {
     // 组件清单：App 据此判断能不能装（底座要对得上）、装后跑哪个 first-run、哪些是入口命令
     const pkgVer = idx.pkgs.get(COMP.roots[0]).version;
     fs.writeFileSync(path.join(OUT, `component-${COMP_ID}.json`), JSON.stringify({
-      id: COMP_ID, version: COMP.version || pkgVer, upstream: pkgVer, target, compat: 1,
+      id: COMP_ID, version: COMP.version || (RECIPE_DIR ? `${pkgVer}-r${COMP.revision || 1}` : pkgVer), upstream: pkgVer, target, compat: 1,
       base: { snapshot: BASE.snapshot, gz: BASE.gz.sha256 },
       bin: COMP.bin || [], skill: COMP.skill || "", selftest: COMP.selftest || "", files: manifest.size,
+      name: COMP.name, desc: COMP.desc, kind: COMP.kind || "termux", needs: COMP.needs || {}, license: COMP.license || "",
       tar: { file: path.basename(tarFile), ...tarInfo },
       gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
       installed: itotal, snapshot: idx.date, packages: lock,
