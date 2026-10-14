@@ -34,6 +34,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Optional components** (Extensions → Optional components): large tools that don't ship with the app; download them only if you need them. Each build matches a specific toolchain release, is checked against its SHA-256 and a per-file manifest before anything is installed, and uninstalls cleanly.
   - **Browser component (headless Chromium 155)**, about 290 MB to download and 873 MB installed: lets Claude open pages headlessly — screenshots, PDF export, the rendered DOM, and scripted browsing with puppeteer-core. It comes with a skill that tells Claude how to use it.
+  - **Community components** from the [cccodroid-components](https://github.com/greyoak111/cccodroid-components) repository. Currently **GitHub CLI (gh)**, about 14 MB: pull requests, issues, releases and Actions; once signed in, git pushes over https work too. Indexes are ed25519-signed and rejected if they do not check out; community components are labelled as such, and builds nobody has verified on a real device ask first.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically. The account card shows your 5-hour and weekly usage limits with their reset times (taken from what Claude Code itself reports after each turn — the app never queries anything with your credentials).
   - Claude API key.
