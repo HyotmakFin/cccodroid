@@ -2178,7 +2178,12 @@ function compRemove(id) {
 // 令牌只由 gh 自己存（~/.config/gh/hosts.yml）：网关不读那个文件、不转发、不记 gh 的输出，
 // 对外只给账号名与状态。登录成功后跑 gh auth setup-git，git 走 https 推送就能用
 const GH = { job: null };
-const ghBin = () => (PREFIX ? path.join(PREFIX, "bin", "gh") : "");
+// cccodroid：gh 组件装在 $PREFIX/bin；开发端没有组件这一层，用终端 PATH 里的 gh（devbin/gh）
+function ghBin() {
+  if (PREFIX) return path.join(PREFIX, "bin", "gh");
+  for (const d of String(termEnv().PATH || "").split(":")) if (d && fs.existsSync(path.join(d, "gh"))) return path.join(d, "gh");
+  return "";
+}
 const GH_USER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 function ghExec(args, timeout = 20000) {
   return new Promise((resolve) => execFile(ghBin(), args, { env: termEnv(), timeout },
@@ -2189,7 +2194,8 @@ function ghKill(job) {
   try { process.kill(-job.child.pid, "SIGKILL"); } catch { try { job.child.kill("SIGKILL"); } catch {} }
 }
 async function ghStatus() {
-  if (!PREFIX || !fs.existsSync(ghBin())) return { installed: false };
+  const bin = ghBin();
+  if (!bin || !fs.existsSync(bin)) return { installed: false };
   // 没登录时也是退出码 0、输出 {"hosts":{}}；令牌失效的账号 state 不是 success
   const r = await ghExec(["auth", "status", "--json", "hosts", "-h", "github.com"]);
   let accounts = [];
@@ -2198,10 +2204,11 @@ async function ghStatus() {
   return { installed: true, accounts, job: j ? { state: j.state, code: j.code, url: j.url, error: j.error, git: j.git } : null };
 }
 function ghLogin() {
-  if (!PREFIX || !fs.existsSync(ghBin())) return { ok: false, message: "gh 没装" };
+  const bin = ghBin();
+  if (!bin || !fs.existsSync(bin)) return { ok: false, message: "gh 没装" };
   if (GH.job && ["starting", "waiting"].includes(GH.job.state)) return { ok: true };
   // 没有终端时 gh 不等回车、不开浏览器，只把一次性码和网址打到 stderr；-s workflow 让推 .github/workflows 也行
-  const child = spawn(ghBin(), ["auth", "login", "--web", "-h", "github.com", "-p", "https", "-s", "workflow"],
+  const child = spawn(bin, ["auth", "login", "--web", "-h", "github.com", "-p", "https", "-s", "workflow"],
     { env: termEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true });
   const job = (GH.job = { state: "starting", code: "", url: "", error: "", git: null, child });
   let buf = "";

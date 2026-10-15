@@ -1769,7 +1769,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     clearTimeout(compTimer);
     const r = await api("/api/components" + (refresh ? "?refresh=1" : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
     $("comp-field").classList.toggle("hidden", !r.supported);
-    if (!r.supported) return;
+    if (!r.supported) return loadGhField();
     const box = $("comp-list");
     const btn = (c, id, label) => `<button data-c="${c}" data-id="${esc(id)}">${label}</button>`;
     const html = (r.items || []).map((c) => {
@@ -1827,6 +1827,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── gh 登录卡：设备码流程。令牌只在 gh 自己那儿，网关只回账号名与状态 ──
   const ghAuth = { html: "", at: 0, timer: 0, polling: false };
+  // 没有组件系统的地方（开发端）：gh 在 PATH 里就单独给一张 GitHub 卡片，登录卡同一套
+  async function loadGhField() {
+    const st = await api("/api/gh/auth").catch(() => null);
+    $("gh-field").classList.toggle("hidden", !(st && st.installed));
+    if (!st || !st.installed) return;
+    $("gh-field-box").innerHTML = '<div class="item"><div class="it-title">GitHub CLI（gh）</div><div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div></div>";
+    loadGhAuth(true);
+  }
   async function loadGhAuth(force) {
     clearTimeout(ghAuth.timer);
     // 组件列表下载时一秒刷一次，gh auth status 要联网验令牌，别跟着每秒跑
