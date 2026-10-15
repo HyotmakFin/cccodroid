@@ -1,15 +1,21 @@
 /* Claude CLI · 图形化入口 */
+/* 内置等宽字体：Monaspace Neon（GitHub Next，SIL OFL 1.1）的子集 —— 只留拉丁、标点、箭头、制表符，
+   字重 300–700 可变。按 OFL 保留字名的要求，衍生版改名 CC Mono；许可证见 fonts/OFL-CCMono.txt */
+@font-face{font-family:"CC Mono";src:url("/fonts/ccmono.woff") format("woff");font-weight:300 700;font-style:normal;font-display:swap}
+
+/* 配色：暖中性色（和内置浏览器窗格、Claude 自家的底色一个路子），强调色是 Claude 的陶土橙 */
 :root{
-  --bg:#0d1117; --bg2:#161b22; --bg3:#1c2128; --bg4:#21262d; --line:#30363d;
-  --fg:#e6edf3; --fg2:#9198a1; --fg3:#6e7681;
+  --bg:#1f1e1d; --bg2:#262624; --bg3:#2f2e2b; --bg4:#383732; --line:#3a3935;
+  --fg:#ece9e1; --fg2:#aaa59b; --fg3:#7f7a70;
   --accent:#d97757; --accent-dim:#a85a3f;
-  --ok:#3fb950; --err:#f85149; --warn:#d29922; --tool:#58a6ff; --purple:#bc8cff;
-  --bar-bg:rgba(13,17,23,.94); --bar-bg2:rgba(13,17,23,.96); --veil:rgba(13,17,23,.82);
-  --strong:#fff; --code-bg:#0b0f14; --think-bg:#12171e; --more-bg:#1b2635; --more-line:#2a3a52;
-  --user-bg:#1a2332; --user-line:#24344d; --sys-bg:#1a1526; --sys-line:#332a4d;
-  --tool-bg:#111a26; --tool-line:#24344d; --tool-sep:#1d2836; --cmd-bg:#16121f;
-  --err-bg:#2a1416; --err-line:#6e2b2f; --err-fg:#ffb3ae; --active-bg:#1c1613;
-  --shadow:rgba(0,0,0,.55); --scrim:rgba(0,0,0,.55);
+  --ok:#7fb069; --err:#e5675a; --warn:#d6a24a; --tool:#8fb0d4; --purple:#b49ae0;
+  --bar-bg:#1f1e1d; --bar-bg2:#1f1e1d; --veil:rgba(31,30,29,.85);
+  --strong:#fffdf8; --code-bg:#191817; --think-bg:#232220; --more-bg:#2b2a27; --more-line:#3e3d38;
+  --user-bg:#2f2e2b; --user-line:#2f2e2b; --sys-bg:#29262e; --sys-line:#3b3644;
+  --tool-bg:#232220; --tool-line:#34332f; --tool-sep:#2e2d2a; --cmd-bg:#25232a;
+  --err-bg:#311d1a; --err-line:#6b3229; --err-fg:#f3b1a6; --active-bg:#2c221d;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
+  --mono:"CC Mono",ui-monospace,"Droid Sans Mono","Noto Sans Mono CJK SC",monospace;
   color-scheme:dark;
   --radius:14px;
   --safe-b:env(safe-area-inset-bottom,0px);
@@ -17,32 +23,33 @@
 }
 /* 浅色外观（theme.js 设 html[data-theme]）；没列出的变量沿用上面 */
 html[data-theme="light"]{
-  --bg:#ffffff; --bg2:#f6f8fa; --bg3:#eff2f5; --bg4:#e6eaef; --line:#d0d7de;
-  --fg:#1f2328; --fg2:#59636e; --fg3:#818b98;
-  --accent:#c96442; --accent-dim:#e2a68d;
-  --ok:#1a7f37; --err:#cf222e; --warn:#9a6700; --tool:#0969da; --purple:#8250df;
-  --bar-bg:rgba(255,255,255,.94); --bar-bg2:rgba(255,255,255,.96); --veil:rgba(255,255,255,.85);
-  --strong:#1f2328; --code-bg:#f6f8fa; --think-bg:#f8f9fb; --more-bg:#eef4fb; --more-line:#c8d8ec;
-  --user-bg:#eaf3fe; --user-line:#c3dbf7; --sys-bg:#f7f1ff; --sys-line:#dccbf7;
-  --tool-bg:#f5f9fe; --tool-line:#cfdff2; --tool-sep:#dde7f3; --cmd-bg:#fbf8ff;
-  --err-bg:#fff1f0; --err-line:#f5b8b4; --err-fg:#a40e26; --active-bg:#fcf0ea;
-  --shadow:rgba(31,35,40,.16); --scrim:rgba(31,35,40,.35);
+  --bg:#faf9f5; --bg2:#f3f1ea; --bg3:#ebe8df; --bg4:#e3dfd4; --line:#e0dcd0;
+  --fg:#29261f; --fg2:#5d594f; --fg3:#8b867a;
+  --accent:#c96442; --accent-dim:#e0a68c;
+  --ok:#3d7a2a; --err:#c0392b; --warn:#9a6a00; --tool:#2f6aa8; --purple:#7650c0;
+  --bar-bg:#faf9f5; --bar-bg2:#faf9f5; --veil:rgba(250,249,245,.88);
+  --strong:#1a1813; --code-bg:#f3f1ea; --think-bg:#f6f4ee; --more-bg:#eeebe3; --more-line:#dcd7ca;
+  --user-bg:#efece4; --user-line:#efece4; --sys-bg:#f5f1fa; --sys-line:#e1d7f0;
+  --tool-bg:#f6f4ee; --tool-line:#e5e1d6; --tool-sep:#ebe7dc; --cmd-bg:#f8f5fb;
+  --err-bg:#fcefec; --err-line:#efc0b6; --err-fg:#9e2a1c; --active-bg:#f8ebe4;
+  --shadow:rgba(41,38,31,.14); --scrim:rgba(41,38,31,.3);
   color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{accent-color:var(--accent)}            /* 复选框、单选框、进度条用陶土橙，别是系统蓝 */
 html,body{height:100%;margin:0;overscroll-behavior:none}
 body{
   background:var(--bg);color:var(--fg);display:flex;flex-direction:column;
-  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
 }
 .hidden{display:none !important}
-.mono{font-family:"SF Mono",Menlo,Consolas,"Roboto Mono",monospace}
+.mono{font-family:var(--mono)}
 
 /* ── 顶栏 ── */
 #topbar{
   display:flex;align-items:center;gap:6px;
   padding:calc(var(--safe-t) + 10px) 10px 10px;
-  background:var(--bar-bg);backdrop-filter:blur(12px);
+  background:var(--bar-bg);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
 }
 #title-block{flex:1;min-width:0}
@@ -61,9 +68,9 @@ body{
   position:relative;height:16px;background:var(--bg2);
   border-bottom:1px solid var(--line);flex:0 0 auto;overflow:hidden;
 }
-#ctxfill{height:100%;width:0;background:linear-gradient(90deg,#1f6feb,#3fb950);transition:width .4s}
-#ctxbar.warn #ctxfill{background:linear-gradient(90deg,#9e6a03,#d29922)}
-#ctxbar.danger #ctxfill{background:linear-gradient(90deg,#8e1519,#f85149)}
+#ctxfill{height:100%;width:0;background:linear-gradient(90deg,var(--accent-dim),var(--accent));transition:width .4s}
+#ctxbar.warn #ctxfill{background:var(--warn)}
+#ctxbar.danger #ctxfill{background:var(--err)}
 #ctxtxt{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:10px;color:var(--fg2);letter-spacing:.3px;
@@ -85,31 +92,37 @@ body{
   background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
   padding:11px 13px;word-break:break-word;overflow-wrap:anywhere;
 }
-.msg.user .bubble{background:var(--user-bg);border-color:var(--user-line)}
+/* Claude 的回复不套气泡，直接铺在底色上（长回复、代码块、表格都更舒展）；你的消息是靠右的浅色圆角块 */
+.msg.bot .bubble{background:none;border:0;border-radius:0;padding:0 1px}
+.msg.user{display:flex;flex-direction:column;align-items:flex-end}
+.msg.user .who{display:none}
+.msg.user .bubble{background:var(--user-bg);border-color:var(--user-line);border-radius:18px;max-width:min(85%,680px);padding:9px 14px}
 .msg.sys  .bubble{background:var(--sys-bg);border-color:var(--sys-line)}
+.msg.user .bubble code{background:var(--bg4)}
 
-.bubble p{margin:0 0 9px} .bubble p:last-child{margin-bottom:0}
-.bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:13px 0 7px;font-size:15.5px;line-height:1.35}
+.bubble p{margin:0 0 10px} .bubble p:last-child{margin-bottom:0}
+.bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:18px 0 8px;line-height:1.35;font-weight:650;color:var(--strong)}
+.bubble h1{font-size:19px} .bubble h2{font-size:17.5px} .bubble h3{font-size:16px} .bubble h4{font-size:15px}
 .bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child{margin-top:0}
 .bubble ul,.bubble ol{margin:6px 0;padding-inline-start:21px}
 .bubble li{margin:3px 0}
-.bubble a{color:var(--tool)}
+.bubble a{color:var(--tool);text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:2px}
 .bubble strong{color:var(--strong);font-weight:600}
 .bubble hr{border:0;border-top:1px solid var(--line);margin:12px 0}
-.bubble blockquote{margin:8px 0;padding:2px 0;padding-inline-start:11px;border-inline-start:3px solid var(--line);color:var(--fg2)}
+.bubble blockquote{margin:8px 0;padding:2px 0;padding-inline-start:12px;border-inline-start:3px solid var(--accent-dim);color:var(--fg2)}
 
 code{
-  background:var(--code-bg);border:1px solid var(--line);border-radius:6px;
-  padding:1.5px 5px;font-size:12.6px;font-family:"SF Mono",Menlo,Consolas,monospace;
+  background:var(--bg3);border:0;border-radius:5px;
+  padding:1.5px 5px;font-size:.86em;font-family:var(--mono);
 }
 pre{
   background:var(--code-bg);border:1px solid var(--line);border-radius:10px;
   padding:10px 12px;overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch;position:relative;
 }
-pre code{background:none;border:0;padding:0;font-size:12.3px;line-height:1.55}
+pre code{background:none;border:0;padding:0;font-size:12.5px;line-height:1.6}
 .copy-btn{
-    position:absolute;top:6px;inset-inline-end:6px;background:var(--bg4);border:1px solid var(--line);
-  color:var(--fg2);border-radius:7px;font-size:10.5px;padding:3px 8px;
+  position:absolute;top:6px;inset-inline-end:6px;background:var(--bg3);border:0;
+  color:var(--fg2);border-radius:7px;font-size:10.5px;padding:3px 8px;opacity:.85;
 }
 
 /* 表格（/context 等命令会输出） */
@@ -120,7 +133,7 @@ th{background:var(--bg3);color:var(--fg);font-weight:600}
 td{color:var(--fg2)}
 
 /* 思考块 */
-.think{border:1px dashed var(--line);border-radius:10px;margin:8px 0;background:var(--think-bg)}
+.think{border:0;border-inline-start:2px solid var(--line);border-radius:0;margin:8px 0;background:none}
 .think summary{cursor:pointer;padding:6px 11px;font-size:12px;color:var(--fg3);list-style:none;display:flex;gap:6px;align-items:center;user-select:none}
 .think summary::-webkit-details-marker{display:none}
 .think summary::before{content:"▸";transition:transform .15s}
@@ -135,10 +148,21 @@ td{color:var(--fg2)}
 .txt{min-width:0}
 
 /* 工具卡片 */
-.tool{border:1px solid var(--tool-line);border-radius:10px;margin:8px 0;background:var(--tool-bg);overflow:hidden}
+.tool{border:1px solid var(--tool-line);border-radius:10px;margin:6px 0;background:var(--tool-bg);overflow:hidden}
+/* 连续的工具调用折成一行摘要（≥2 个时出现），点开看每一步；有待你确认的、失败的、带图片的组自动展开 */
+.tgroup{margin:8px 0}
+.tg-head{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;font:inherit;font-size:12.5px;
+  background:var(--tool-bg);border:1px solid var(--tool-line);border-radius:10px;color:var(--fg2);text-align:start;cursor:pointer}
+.tg-head .chev{color:var(--fg3);font-size:10px;transition:transform .15s}
+.tg-count{color:var(--fg);font-weight:600;flex:0 0 auto}
+.tgroup.single .tg-head{display:none}
+.tgroup:not(.single):not(.open):not(:has(.perm:not(.done),.tool.open,.tool-peek)) .tg-body{display:none}
+.tgroup.open .tg-head .chev,.tgroup:has(.perm:not(.done),.tool.open,.tool-peek) .tg-head .chev{transform:rotate(90deg)}
+.tg-body>.think{margin:6px 0}
+.tgroup:not(.single) .tg-body{margin-inline-start:12px;padding-inline-start:8px;border-inline-start:1px solid var(--tool-line)}
 .tool-head{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px;cursor:pointer;user-select:none}
-.tool-name{color:var(--tool);font-weight:600;font-family:"SF Mono",Menlo,monospace;font-size:12px}
-.tool-arg{color:var(--fg3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"SF Mono",Menlo,monospace;font-size:11.5px}
+.tool-name{color:var(--tool);font-weight:600;font-family:var(--mono);font-size:12px}
+.tool-arg{color:var(--fg3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:11.5px}
 .tool-state{font-size:11px;color:var(--fg3);flex:0 0 auto}
 .tool-state.run{color:var(--warn)} .tool-state.ok{color:var(--ok)} .tool-state.err{color:var(--err)}
 .tool-head .chev{color:var(--fg3);font-size:10px;transition:transform .15s}
@@ -150,7 +174,7 @@ td{color:var(--fg2)}
 
 /* 系统/命令结果 */
 .cmd-card{border:1px solid var(--sys-line);border-radius:10px;background:var(--cmd-bg);padding:10px 12px}
-.cmd-name{color:var(--purple);font-weight:600;font-family:"SF Mono",Menlo,monospace;font-size:12.5px;margin-bottom:7px}
+.cmd-name{color:var(--purple);font-weight:600;font-family:var(--mono);font-size:12.5px;margin-bottom:7px}
 
 .err-box{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-fg);border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
 
@@ -161,22 +185,23 @@ td{color:var(--fg2)}
 @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-4px);opacity:1}}
 
 /* 消息操作 */
-.msg-acts{display:flex;gap:6px;margin-top:6px;opacity:.6}
+.msg-acts{display:flex;gap:2px;margin-top:4px}
 .msg-acts button{
-  background:transparent;border:1px solid var(--line);color:var(--fg3);
-  border-radius:7px;font-size:11px;padding:3px 9px;
+  background:transparent;border:0;color:var(--fg3);display:grid;place-items:center;
+  width:32px;height:30px;border-radius:8px;padding:0;
 }
+.msg-acts button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .msg-acts button:active{background:var(--bg3);color:var(--fg)}
 
 /* ── 输入区 ── */
 #composer{
   border-top:1px solid var(--line);background:var(--bar-bg2);
-  backdrop-filter:blur(12px);padding:8px 10px calc(var(--safe-b) + 8px);
+ padding:8px 10px calc(var(--safe-b) + 8px);
   position:sticky;bottom:0;z-index:20;
 }
 #composer-inner{
   display:flex;align-items:flex-end;gap:6px;max-width:900px;margin:0 auto;
-  background:var(--bg2);border:1px solid var(--line);border-radius:22px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:22px;box-shadow:0 1px 6px var(--shadow);
   padding:5px 5px 5px 8px;transition:border-color .15s;
 }
 #composer-inner:focus-within{border-color:var(--accent-dim)}
@@ -184,7 +209,7 @@ td{color:var(--fg2)}
   flex:1;background:transparent;border:0;outline:0;color:var(--fg);
   font:inherit;font-size:15.5px;resize:none;max-height:180px;padding:8px 0;line-height:1.45;
 }
-#input::placeholder{color:var(--fg3)}
+#input::placeholder{color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini-btn{
   width:32px;height:32px;flex:0 0 32px;border:0;background:transparent;
   color:var(--fg2);display:grid;place-items:center;border-radius:50%;
@@ -220,7 +245,7 @@ td{color:var(--fg2)}
 #perm-bar .pb-note{border-color:var(--line);color:var(--fg2)}
 #perm-bar .pb-txt,#perm-bar .pb-note span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #perm-bar .pb-note span{white-space:normal}
-#perm-bar .mono{font-family:"SF Mono",Menlo,monospace;font-size:11.5px;color:var(--fg2)}
+#perm-bar .mono{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
 #perm-bar .pb-more{font-size:11.5px;color:var(--fg3);padding:0 10px;display:flex;gap:8px;align-items:center}
 #perm-bar button,.perm-acts button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 11px;font-size:12.5px;flex:0 0 auto}
 #perm-bar button.primary,.perm-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -229,11 +254,11 @@ td{color:var(--fg2)}
 .perm.busy{opacity:.6;pointer-events:none}
 .perm-head{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px}
 .perm-kind{color:var(--warn);font-weight:600}
-.perm-tool{color:var(--tool);font-family:"SF Mono",Menlo,monospace;font-size:12px}
+.perm-tool{color:var(--tool);font-family:var(--mono);font-size:12px}
 .perm-body{padding:0 10px 4px}
 .perm-cmd,.perm-diff{margin:0 0 6px;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
 .perm-diff .del{color:var(--err)} .perm-diff .add{color:var(--ok)}
-.perm-path{font-family:"SF Mono",Menlo,monospace;font-size:11.5px;color:var(--fg2);margin:2px 0 4px;overflow-wrap:anywhere}
+.perm-path{font-family:var(--mono);font-size:11.5px;color:var(--fg2);margin:2px 0 4px;overflow-wrap:anywhere}
 .perm-sub{font-size:11.5px;color:var(--fg3);margin:2px 0 4px;overflow-wrap:anywhere}
 .perm-plan{max-height:50vh;overflow:auto;font-size:13.5px}
 .perm-q{margin:4px 0 10px}
@@ -274,7 +299,7 @@ td{color:var(--fg2)}
 #popup-list{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:5px}
 .pitem{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;font-size:13.5px}
 .pitem:active,.pitem.sel{background:var(--bg4)}
-.pitem .pi-name{font-family:"SF Mono",Menlo,monospace;font-size:12.5px;color:var(--fg)}
+.pitem .pi-name{font-family:var(--mono);font-size:12.5px;color:var(--fg)}
 .pitem .pi-name.cmd{color:var(--purple)}
 .pitem .pi-desc{color:var(--fg3);font-size:11.5px;margin-inline-start:auto;text-align:end;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pitem .pi-cat{font-size:10px;color:var(--fg3);border:1px solid var(--line);border-radius:5px;padding:1px 5px;flex:0 0 auto}
@@ -357,7 +382,7 @@ td{color:var(--fg2)}
 .chip{
   background:var(--bg);border:1px solid var(--line);border-radius:8px;
   padding:4px 9px;font-size:11.5px;color:var(--fg2);
-  font-family:"SF Mono",Menlo,monospace;
+  font-family:var(--mono);
 }
 .chip.hl{color:var(--purple);border-color:var(--sys-line)}
 .pill{font-size:10px;background:var(--bg4);border-radius:9px;padding:1px 7px;color:var(--fg3);margin-inline-start:4px}
@@ -397,7 +422,7 @@ td{color:var(--fg2)}
 .missing-img{
   display:inline-block;font-size:11.5px;color:var(--fg3);
   border:1px dashed var(--line);border-radius:6px;padding:1px 6px;text-decoration:none;
-  font-family:"SF Mono",Menlo,monospace;
+  font-family:var(--mono);
 }
 
 /* ── 图片查看器 ── */
@@ -424,7 +449,7 @@ td{color:var(--fg2)}
 .att img{width:54px;height:54px;object-fit:cover;border-radius:7px;background:#000;cursor:zoom-in}
 .att-ico{
   width:54px;height:54px;display:grid;place-items:center;border-radius:7px;
-  background:var(--bg4);color:var(--fg3);font-size:11px;font-family:"SF Mono",Menlo,monospace;
+  background:var(--bg4);color:var(--fg3);font-size:11px;font-family:var(--mono);
 }
 .att-name{font-size:9.5px;color:var(--fg3);max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .att-x{

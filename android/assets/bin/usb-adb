@@ -56,6 +56,11 @@ def main(argv):
     # adb 服务只在启动时读一次 TERMUX_USB_FD，所以先停掉旧服务
     subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     env = dict(os.environ, TERMUX_USB_FD=str(fd))
+    # adb 只把 "localhost" 认作本机：服务地址写成 tcp:127.0.0.1:端口 时 start-server 会报
+    # "cannot start server on remote host"。起服务这一下统一换成 localhost（客户端连 127.0.0.1 不受影响）
+    spec = env.get("ADB_SERVER_SOCKET", "")
+    if spec.startswith(("tcp:127.0.0.1:", "tcp:[::1]:")):
+        env["ADB_SERVER_SOCKET"] = "tcp:localhost:" + spec.rsplit(":", 1)[1]
     rc = subprocess.run(["adb", "start-server"], env=env, pass_fds=(fd,)).returncode
     os.close(fd)
     if rc == 0:

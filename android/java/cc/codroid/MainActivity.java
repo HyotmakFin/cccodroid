@@ -71,6 +71,8 @@ public class MainActivity extends Activity {
     private android.widget.Button retry, stuck;
 
     @Override protected void onCreate(Bundle b) {
+        // 安装页、空白 WebView 都按界面里选的外观（浅 / 深 / 跟随系统）上色，别再"界面浅色、启动页深色"
+        setTheme(uiDark() ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(b);
         env = new Env(this);
         buildSetupUi();
@@ -199,10 +201,15 @@ public class MainActivity extends Activity {
         return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
             == android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
+    /** 界面里选的外观：theme.js 每次定下来都经 CCApp.themePref 存一份；没存过（第一次装）= 跟随系统 */
+    private boolean uiDark() {
+        String p = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "auto");
+        return "dark".equals(p) || (!"light".equals(p) && systemNight());
+    }
     /** 状态栏 / 导航栏跟着界面换色；浅色时图标改深色 */
     private void applyBars(boolean dark) {
         android.view.Window w = getWindow();
-        int bg = dark ? Color.parseColor("#0d1117") : Color.WHITE;
+        int bg = dark ? Color.parseColor("#1f1e1d") : Color.parseColor("#faf9f5");
         w.setNavigationBarColor(bg);           // 状态栏保持透明（见 edgeToEdge），只换图标深浅
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             int m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
@@ -392,27 +399,36 @@ public class MainActivity extends Activity {
 
     // ── 界面 ───────────────────────────────────────────────────────────
     private void buildSetupUi() {
+        boolean dark = uiDark();
+        int accent = Color.parseColor(dark ? "#d97757" : "#c96442");
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#0d1117"));
+        root.setBackgroundColor(Color.parseColor(dark ? "#1f1e1d" : "#faf9f5"));
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(20), dp(40), dp(20), dp(20));
         TextView title = new TextView(this);
         title.setText("cccodroid");
-        title.setTextSize(24);
-        title.setTextColor(Color.parseColor("#f0883e"));
+        title.setTextSize(26);
+        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        title.setPadding(0, 0, 0, dp(10));
+        title.setTextColor(accent);
         col.addView(title);
         bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setIndeterminate(true);
-        col.addView(bar, new LinearLayout.LayoutParams(-1, dp(12)));
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
+        bar.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(accent));
+        bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor(dark ? "#3a3935" : "#e0dcd0")));
+        col.addView(bar, new LinearLayout.LayoutParams(-1, dp(8)));
         stat = new TextView(this);
-        stat.setTextColor(Color.parseColor("#8b949e"));
-        stat.setTextSize(12);
+        stat.setTextColor(Color.parseColor(dark ? "#ece9e1" : "#29261f"));
+        stat.setTextSize(12.5f);
+        stat.setPadding(0, dp(6), 0, dp(10));
         stat.setTypeface(android.graphics.Typeface.MONOSPACE);
         col.addView(stat);
         log = new TextView(this);
-        log.setTextColor(Color.parseColor("#c9d1d9"));
-        log.setTextSize(12);
+        log.setTextColor(Color.parseColor(dark ? "#aaa59b" : "#5d594f"));   // 原始输出压暗一档，进度和结论靠上面那行
+        log.setTextSize(11.5f);
+        log.setLineSpacing(0, 1.15f);
         log.setTypeface(android.graphics.Typeface.MONOSPACE);
         logScroll = new ScrollView(this);
         logScroll.addView(log);
@@ -439,6 +455,7 @@ public class MainActivity extends Activity {
         col.addView(acts, new LinearLayout.LayoutParams(-1, -2));
         root.addView(col);
         setContentView(root);
+        applyBars(dark);
     }
 
     private void say(String m) {
@@ -488,7 +505,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        web.setBackgroundColor(Color.parseColor("#0d1117"));
+        web.setBackgroundColor(Color.parseColor(uiDark() ? "#1f1e1d" : "#faf9f5"));
         // 本机网关之外的地址一律交给系统浏览器：登录授权页、"去官网创建 Key" 之类。
         // 在 WebView 里打开登录页会被 Google 等拒绝，而且 OAuth 回调要回到浏览器才能跳 localhost。
         web.setWebViewClient(new WebViewClient() {
@@ -527,6 +544,11 @@ public class MainActivity extends Activity {
             }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
+            /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
+            @android.webkit.JavascriptInterface public void themePref(String p) {
+                if ("auto".equals(p) || "light".equals(p) || "dark".equals(p))
+                    getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).apply();
+            }
             /** 「保存到」：弹系统文件面板（ACTION_CREATE_DOCUMENT），用户挑好位置后把文件复制过去。
              *  不需要存储权限，也不会落进用户打不开的私有目录。结果回调页面的 __ccSaved(ok, 说明) */
             @android.webkit.JavascriptInterface public void saveAs(String path, String name, String mime) {

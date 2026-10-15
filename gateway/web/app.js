@@ -454,14 +454,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     (parent || liveEl).appendChild(el);
     return el;
   }
+  const ICONS = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    share: '<path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/>',
+    resend: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>',
+  };
+  const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
   function renderUser(text, parent) {
     const b = mkMsg("user", null, parent);
     setHtml(b, renderMd(text));
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = `<button data-a="copy">${t("复制")}</button><button data-a="resend">${t("重发")}</button>`;
+    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发"));
     acts.addEventListener("click", (e) => {
-      const a = e.target.dataset.a;
+      const a = e.target.closest("button")?.dataset.a;
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
     });
@@ -576,6 +582,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
     return {
       kind: "think",
+      el,
       append(t) { thinking += t; tick(); },
       set(t) { thinking = t; done = true; label.textContent = fmtChars(thinking.length); },
       finish() {
@@ -623,8 +630,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const api = {
       kind: "tool",
       el: card,
+      name, summary: summarizeTool(name, input), state: live ? "run" : "ok",
+      onChange: null,
       result(ok, text) {
         result = { ok, text: String(text || "") };
+        api.state = ok ? "ok" : "err";
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : t("失败");
         if (built) { built = false; build(); }
@@ -640,8 +650,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           if (imgs.length) peek.replaceChildren(...imgs);
           else peek.remove();
         }
+        api.onChange && api.onChange();
       },
-      stop() { if (!result) { st.className = "tool-state err"; st.textContent = t("中断"); } },
+      stop() { if (!result) { api.state = "err"; st.className = "tool-state err"; st.textContent = t("中断"); api.onChange && api.onChange(); } },
       finish() { if (!result && !live) { st.textContent = "—"; } },
     };
     if (id) {
@@ -650,6 +661,37 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (pend) { PENDING_RESULTS.delete(id); api.result(pend.ok, pend.text); }
     }
     return api;
+  }
+  /** 两段正文之间的工具调用（连同夹在中间的思考）收进一组：≥2 个工具时顶上出一行摘要
+   *  （几步 · 最近一步 · 状态），默认收起。有待确认的权限卡、失败后自动展开的卡、带图片预览的卡时，
+   *  样式（:has）让这一组保持展开。 */
+  function ToolGroup(parent) {
+    const el = document.createElement("div");
+    el.className = "tgroup single";
+    el.innerHTML = `<button class="tg-head" type="button"></button><div class="tg-body"></div>`;
+    parent.appendChild(el);
+    const head = el.firstChild, body = el.lastChild, members = [], inner = [];
+    head.addEventListener("click", () => el.classList.toggle("open"));
+    function refresh() {
+      const n = members.length;
+      el.classList.toggle("single", n < 2);
+      if (n < 2) return;
+      const lastM = members[n - 1];
+      const run = members.some((m) => m.state === "run"), err = members.some((m) => m.state === "err");
+      const [cls, txt] = run ? ["run", t("运行中")] : err ? ["err", t("有失败")] : ["ok", t("完成")];
+      head.innerHTML = `<span class="chev">▶</span><span class="tg-count">${esc(t("{n} 个步骤", { n }))}</span>` +
+        `<span class="tool-arg">${esc(lastM.name + (lastM.summary ? " " + lastM.summary : ""))}</span>` +
+        `<span class="tool-state ${cls}">${esc(txt)}</span>`;
+    }
+    return {
+      kind: "tgroup",
+      body,
+      get lastInner() { return inner[inner.length - 1]; },
+      add(m) { members.push(m); inner.push(m); m.onChange = refresh; refresh(); },
+      addThink(b) { inner.push(b); if (b.el.parentNode !== body) body.appendChild(b.el); },
+      finish() { for (const b of inner) b.finish && b.finish(); refresh(); },
+      stop() { for (const m of members) m.stop(); },
+    };
   }
   function toolResult(id, ok, text) {
     const c = TOOL_CARDS.get(id);
@@ -941,6 +983,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch (err) { toast(err.message, true); }
   }
 
+  // 回复底下的「复制 / 转发」：只取正文（Markdown 原文，多段之间空一行），思考和工具调用不算。
+  // 转发走外壳的系统分享面板（CCApp.shareText）；外壳没有这个接口时退回 Web Share，都没有就不显示。
+  const canShareText = () => !!((window.CCApp && CCApp.shareText) || navigator.share);
+  function replyActs(msgEl, getText) {
+    if (!getText() || msgEl.querySelector(":scope > .msg-acts")) return;
+    const acts = document.createElement("div");
+    acts.className = "msg-acts";
+    acts.innerHTML = actBtn("copy", t("复制")) + (canShareText() ? actBtn("share", t("转发")) : "");
+    acts.addEventListener("click", (e) => {
+      const a = e.target.closest("button")?.dataset.a, text = getText();
+      if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
+      if (a === "share") {
+        if (window.CCApp && CCApp.shareText) CCApp.shareText(text);
+        else navigator.share({ text }).catch(() => {});
+      }
+    });
+    msgEl.appendChild(acts);
+  }
+
   /** 一条 Claude 回复：思考 / 正文 / 工具按真实顺序交错排列 */
   function AssistantView(parent, live) {
     const bubble = mkMsg("bot", null, parent);
@@ -952,14 +1013,30 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const undot = () => { if (dots) { dots.remove(); dots = null; } };
     const push = (b) => { undot(); blocks.push(b); last = b; any = true; return b; };
     const textB = () => (last && last.kind === "text" ? last : push(TextBlock(bubble, live)));
-    const thinkB = () => (last && last.kind === "think" ? last : push(ThinkBlock(bubble)));
+    // 正在攒的步骤组（工具 + 中间的思考）；一出正文就收口
+    const inGroup = () => last && last.kind === "tgroup";
+    const groupThink = () => { const b = ThinkBlock(last.body); last.addThink(b); return b; };
+    const thinkB = () => {
+      if (inGroup()) { const li = last.lastInner; return li && li.kind === "think" ? li : groupThink(); }
+      return last && last.kind === "think" ? last : push(ThinkBlock(bubble));
+    };
     return {
       msgEl, bubble,
       delta(t) { textB().append(t); },
       text(t) { push(TextBlock(bubble, live)).set(t); },
       thinkDelta(t) { thinkB().append(t); },
-      thinking(t) { push(ThinkBlock(bubble)).set(t); },
-      tool(id, name, input) { push(ToolBlock(bubble, id, name, input, live)); scrollDown(); },
+      thinking(t) { (inGroup() ? groupThink() : push(ThinkBlock(bubble))).set(t); },
+      tool(id, name, input) {
+        let g = last;
+        if (!inGroup()) {
+          const prev = last && last.kind === "think" ? last : null;      // 紧挨着的那段思考也收进来
+          g = ToolGroup(bubble);
+          if (prev) { blocks.splice(blocks.indexOf(prev), 1); g.addThink(prev); }
+          push(g);
+        }
+        g.add(ToolBlock(g.body, id, name, input, live));
+        scrollDown();
+      },
       error(msg) {
         undot(); any = true; last = null;
         bubble.insertAdjacentHTML("beforeend", `<div class="err-box">${esc(msg)}</div>`);
@@ -972,6 +1049,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         for (const b of blocks) { b.finish && b.finish(); if (aborted && b.stop) b.stop(); }
         undot();
         if (!any && live && !aborted) bubble.innerHTML = '<p class="muted">' + t("（无输出）") + '</p>';
+        replyActs(msgEl, () => blocks.filter((b) => b.kind === "text").map((b) => b.text.trim()).filter(Boolean).join("\n\n"));
       },
       get empty() { return !any; },
       get ended() { return ended; },
@@ -3789,7 +3867,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     el.className = "term-screen";
     $("term-screens").appendChild(el);
     const xt = new window.Terminal({
-      fontSize: TERM.font, fontFamily: "ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace",
+      fontSize: TERM.font, fontFamily: "'CC Mono', ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace",
       theme: termTheme(), scrollback: 5000, cursorBlink: true, allowProposedApi: false,
       macOptionIsMeta: true, convertEol: false,
       // claude 打的 OSC 8 超链接（登录授权页等）：交给系统浏览器，别在 WebView 里开

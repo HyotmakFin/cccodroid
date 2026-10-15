@@ -35,9 +35,11 @@
     const root = document.documentElement;
     if (root.dataset.theme !== name) root.dataset.theme = name;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? "#0d1117" : "#ffffff";
+    if (meta) meta.content = dark ? "#1f1e1d" : "#faf9f5";
     const a = app();
     if (a && typeof a.setBars === "function") { try { a.setBars(dark); } catch {} }
+    // 外壳记下这个选择，下次启动的安装页 / 空白页照着上色（cccodroid 0.1.20 起有）
+    if (a && typeof a.themePref === "function") { try { a.themePref(pref); } catch {} }
     const s = document.getElementById("set-theme");
     if (s && s.value !== pref) s.value = pref;
     return name;

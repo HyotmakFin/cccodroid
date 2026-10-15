@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 冷启动那一下（进程还没起来、系统先画的窗口）只能跟系统深浅走；进来以后按界面里选的外观重新上色（MainActivity.uiDark） -->
+<resources>
+    <style name="Launch" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_bg</item>
+        <item name="android:colorAccent">#c96442</item>
+    </style>
+    <color name="launch_bg">#faf9f5</color>
+</resources>
