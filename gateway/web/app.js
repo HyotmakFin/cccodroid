@@ -1810,16 +1810,56 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (miss.length && c.state !== "ok") desc += '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>";
       if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
+      if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
       return extItem(name, meta, acts, desc + bar)
         .replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
         .replace("<button data-c=\"remove\"", "<button data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
     box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
-      (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "");
+      (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "") +
+      (r.indexError ? '<div class="it-acts"><button class="btn ghost sm" data-c="reindex">' + t("重试") + "</button></div>" : "");
+    if ($("gh-auth")) loadGhAuth(refresh);
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
     if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
       compTimer = setTimeout(loadComponents, 1000);
+  }
+
+  // ── gh 登录卡：设备码流程。令牌只在 gh 自己那儿，网关只回账号名与状态 ──
+  const ghAuth = { html: "", at: 0, timer: 0, polling: false };
+  async function loadGhAuth(force) {
+    clearTimeout(ghAuth.timer);
+    // 组件列表下载时一秒刷一次，gh auth status 要联网验令牌，别跟着每秒跑
+    if (!force && !ghAuth.polling && Date.now() - ghAuth.at < 30000) return;
+    ghAuth.at = Date.now();
+    const r = await api("/api/gh/auth").catch((e) => ({ installed: true, accounts: [], error: e.message }));
+    const j = r.job, wasPolling = ghAuth.polling;
+    ghAuth.polling = !!j && ["starting", "waiting"].includes(j.state);
+    if (wasPolling && j && j.state === "done") toast(j.git ? t("GitHub 已登录，git 推送已配好") : t("GitHub 已登录，但 git 凭据没配上，可在终端运行 gh auth setup-git"), !j.git);
+    let h = "";
+    if (j && j.state === "starting") h = '<div class="tiny">' + t("正在向 GitHub 申请一次性码…") + "</div>" + '<div class="it-acts"><button data-g="cancel">' + t("取消") + "</button></div>";
+    else if (j && j.state === "waiting") {
+      h = '<div class="tiny">' + t("在浏览器里输入这个一次性码，授权后这里会自动完成：") + "</div>" +
+        '<div class="gh-code" data-g="copy">' + esc(j.code) + "</div>" +
+        '<div class="it-acts"><button data-g="open" data-code="' + esc(j.code) + '" data-url="' + esc(j.url || "https://github.com/login/device") + '">' + t("复制并打开浏览器") + "</button>" +
+        '<button data-g="cancel">' + t("取消") + "</button></div>";
+    } else {
+      const acc = r.accounts || [];
+      h = acc.length ? acc.map((a) => '<div class="gh-acc"><span>@' + esc(a.login) + "</span>" +
+          (a.active && acc.length > 1 ? '<span class="badge">' + t("当前") + "</span>" : "") +
+          (a.ok ? "" : '<span class="warn">' + t("登录已失效") + "</span>") +
+          (a.active ? "" : '<button data-g="switch" data-user="' + esc(a.login) + '">' + t("切换到这个") + "</button>") +
+          '<button data-g="logout" data-user="' + esc(a.login) + '">' + t("退出") + "</button></div>").join("")
+        : '<div class="tiny">' + t("还没登录 GitHub。登录后 gh 和 git 推送都能用。") + "</div>";
+      if (j && j.state === "error") h += '<div class="tiny err">' + (j.error === "timeout" ? t("一次性码过期了，重新登录吧") : t("登录失败：{msg}", { msg: esc(j.error) })) + "</div>";
+      if (r.error) h += '<div class="tiny err">' + esc(r.error) + "</div>";
+      h += '<div class="it-acts"><button data-g="login">' + (acc.length ? t("再登录一个账号") : t("登录 GitHub")) + "</button></div>";
+    }
+    ghAuth.html = h;
+    const box = $("gh-auth");
+    if (box) box.innerHTML = h;
+    if (ghAuth.polling && box && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+      ghAuth.timer = setTimeout(loadGhAuth, 2000);
   }
 
   async function loadExtPlugins() {
@@ -1931,9 +1971,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   $("tab-ext").addEventListener("click", async (e) => {
     if (e.target.classList.contains("ext-more-btn")) return searchPlugins(true);
+    const g = e.target.closest("[data-g]");
+    if (g && !g.disabled) {
+      const a = g.dataset.g;
+      if (a === "copy") { navigator.clipboard?.writeText(g.textContent.trim()); return toast(t("已复制")); }
+      if (a === "open") { navigator.clipboard?.writeText(g.dataset.code); toast(t("一次性码已复制，在打开的页面里粘贴")); return openExternal(g.dataset.url); }
+      if (a === "logout" && !confirm(t("退出 GitHub 账号 {name}？gh 会删掉它保存的令牌。", { name: g.dataset.user }))) return;
+      g.disabled = true;
+      const r = await post("/api/gh/" + a, { user: g.dataset.user || "" }).catch((err) => ({ ok: false, message: err.message }));
+      if (!r.ok) toast(t("失败：{msg}", { msg: r.message || "" }), true);
+      if (a === "login") ghAuth.polling = true;
+      return loadGhAuth(true);
+    }
     const cb = e.target.closest("button[data-c]");
     if (cb && !cb.disabled) {
       const c = cb.dataset.c, id = cb.dataset.id;
+      if (c === "reindex") { cb.disabled = true; return loadComponents(true); }
       const nm = (cb.closest(".item")?.querySelector(".it-title")?.textContent || id).trim();
       if (c === "install" && cb.dataset.unverified && !confirm(t("{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？", { name: nm }))) return;
       if (c === "remove" && cb.dataset.usedby) return toast(t("{names} 要用它，先卸载那些组件", { names: cb.dataset.usedby }), true);

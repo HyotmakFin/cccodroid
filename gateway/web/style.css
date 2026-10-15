@@ -296,7 +296,7 @@ td{color:var(--fg2)}
 .item .it-title{font-size:13.5px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .it-meta{font-size:10.5px;color:var(--fg3);display:flex;gap:8px;flex-wrap:wrap}
 .item .it-acts{display:flex;gap:6px;margin-top:4px}
-.item .it-acts button{
+.item .it-acts button,.gh-acc button{
   background:transparent;border:1px solid var(--line);color:var(--fg3);
   border-radius:6px;font-size:10.5px;padding:2px 8px;
 }
@@ -652,3 +652,10 @@ code a.fpath{border-bottom-style:dotted}
 .comp-bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
 .tiny.err{color:var(--err)}
 .item .it-meta span.warn,.item .tiny.warn{color:var(--warn)}
+/* gh 登录卡：一次性码要大、能点着复制；账号一行一个 */
+.gh-auth{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.gh-code{font:600 20px/1.4 ui-monospace,monospace;letter-spacing:2px;margin:4px 0;cursor:pointer;user-select:all}
+.gh-acc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:3px 0;font-size:12.5px}
+.gh-acc .warn{color:var(--warn);font-size:11px}
+.gh-acc button{margin-left:auto}
+.gh-acc button + button{margin-left:0}
