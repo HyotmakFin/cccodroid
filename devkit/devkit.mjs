@@ -637,7 +637,13 @@ if (cmd === "build" || cmd === "component") {
     tw.add({ name: p, type: "0", mode: 0o755, mtime: 0, data: Buffer.from("#!" + R.to + "files/usr/bin/sh\n" + text.replace(/\n?$/, "\n")) });
   }
   // 仓库之外的上游原件（如 ensurepip 的 pip wheel）：下载、核对哈希、原样放进去
+  // mode 可给（如 755 的可执行文件），source 只是记账用（默认 pypi），和解包体积也会算进 installed
+  let fetchedBytes = 0;
+  if (Object.keys((COMP ? COMP.fetch : MAN.fetch) || {}).length) fs.mkdirSync(CACHE, { recursive: true });
   for (const [p, f] of Object.entries(COMP ? COMP.fetch || {} : MAN.fetch || {})) {
+    // link：只做一个软链（如 libOpenCL.so.1 → libOpenCL.so，库的 SONAME 是 .so.1 时要用）。
+    // 目标写相对名即可（App 用真 tar 解包，同目录相对链最稳）；不进 MANIFEST，也不算体积。
+    if (f.link) { tw.add({ name: p, type: "2", mode: 0o777, mtime: 0, link: f.link }); continue; }
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {
@@ -645,8 +651,9 @@ if (cmd === "build" || cmd === "component") {
       if (sha256(b) !== f.sha256) throw new Error(`${p}: 哈希不符`);
       fs.writeFileSync(dest, b);
     }
-    tw.add({ name: p, type: "0", mode: 0o644, mtime: 0, data: b });
-    lock.push({ name: path.basename(p), version: path.basename(p).split("-")[1], source: "pypi", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why });
+    tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: b });
+    lock.push({ name: path.basename(p), version: f.version || path.basename(p).split("-")[1], source: f.source || "pypi", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why });
+    fetchedBytes += b.length;
   }
   // 组件自带的文件（入口包装、给 Claude 的 skill）：{{PREFIX}} 换成本应用的前缀
   for (const [p, f] of Object.entries((COMP && COMP.files) || {})) {
@@ -688,7 +695,7 @@ if (cmd === "build" || cmd === "component") {
       name: COMP.name, desc: COMP.desc, kind: COMP.kind || "termux", needs: COMP.needs || {}, license: COMP.license || "",
       tar: { file: path.basename(tarFile), ...tarInfo },
       gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
-      installed: itotal, snapshot: idx.date, packages: lock,
+      installed: itotal + fetchedBytes, snapshot: idx.date, packages: lock,
     }, null, 2));
     console.log(`\n✓ ${tarFile}  ${mb(tarInfo.bytes)} → .gz ${mb(gzInfo.bytes)}  ${lock.length} 个包  用时 ${((Date.now() - t0) / 1000) | 0}s`);
     process.exit(0);
