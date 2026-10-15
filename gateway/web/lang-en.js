@@ -651,4 +651,10 @@ window.I18N_DICT.en = {
   "官方 MCP 注册表": "Official MCP registry",
   "registry.modelcontextprotocol.io：任何人都能发布，没有人审核。本机能装远程服务和 npm 包；npm 包会在本机运行，装之前看清命令和来源。": "registry.modelcontextprotocol.io: anyone can publish and nothing is reviewed. This device can install remote servers and npm packages; npm packages run locally, so check the command and source first.",
   "搜索 MCP 服务器（名字或用途）": "Search MCP servers (name or purpose)",
+  "通知": "Notifications",
+  "任务跑完时通知（应用在后台时才发）": "Notify when a task finishes (only while the app is in the background)",
+  "等你确认时通知（命令、计划、选择题；通知里只能拒绝，允许要回到应用里看完整内容再点）": "Notify when Claude needs you (commands, plans, questions; you can only reject from the notification — to allow, open the app and read the full request first)",
+  "去系统通知设置": "Open system notification settings",
+  "系统设置里关掉了本应用的通知，上面的开关不起作用。": "Notifications for this app are turned off in system settings, so these switches have no effect.",
+  "系统设置里关掉了其中一类通知（「等你确认」或「任务完成」）。": "One kind of notification (\"Needs you\" or \"Task finished\") is turned off in system settings.",
 };

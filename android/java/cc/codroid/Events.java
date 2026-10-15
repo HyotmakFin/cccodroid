@@ -15,6 +15,7 @@ import android.util.Log;
  * 应用内部的回调（不导出，别的应用发不进来）：
  *   ACTION_INSTALLED  PackageInstaller 会话的结果（要用户确认时由这里弹系统确认页）
  *   ACTION_PAIR       通知栏里填的无线调试配对码
+ *   Notify.ACTION_DENY 通知里点「拒绝」（权限确认 / 计划）
  */
 public class Events extends BroadcastReceiver {
     static final String ACTION_INSTALLED = "cc.codroid.INSTALLED";
@@ -23,6 +24,13 @@ public class Events extends BroadcastReceiver {
 
     @Override public void onReceive(Context c, Intent i) {
         String a = i.getAction();
+        if (Notify.ACTION_DENY.equals(a)) {
+            // 通知里点「拒绝」：网络请求不能在主线程，挂住广播直到转给网关
+            PendingResult pr = goAsync();
+            String id = i.getStringExtra("id");
+            new Thread(() -> { try { if (id != null) Notify.deny(c, id); } finally { pr.finish(); } }, "perm-deny").start();
+            return;
+        }
         if (ACTION_PAIR.equals(a)) {
             Bundle r = RemoteInput.getResultsFromIntent(i);
             CharSequence code = r == null ? null : r.getCharSequence(KEY_CODE);

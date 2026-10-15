@@ -628,4 +628,10 @@ window.I18N_DICT["fr"] = {
   "官方 MCP 注册表": "Registre MCP officiel",
   "registry.modelcontextprotocol.io：任何人都能发布，没有人审核。本机能装远程服务和 npm 包；npm 包会在本机运行，装之前看清命令和来源。": "registry.modelcontextprotocol.io : n'importe qui peut publier, rien n'est vérifié. Cet appareil peut installer des serveurs distants et des paquets npm ; les paquets npm s'exécutent en local, vérifiez la commande et la source avant.",
   "搜索 MCP 服务器（名字或用途）": "Rechercher des serveurs MCP (nom ou usage)",
+  "通知": "Notifications",
+  "任务跑完时通知（应用在后台时才发）": "Notifier quand une tâche se termine (seulement si l'app est en arrière-plan)",
+  "等你确认时通知（命令、计划、选择题；通知里只能拒绝，允许要回到应用里看完整内容再点）": "Notifier quand Claude a besoin de vous (commandes, plans, questions ; depuis la notification on peut seulement refuser — pour autoriser, ouvrez l'app et lisez la demande en entier)",
+  "去系统通知设置": "Ouvrir les réglages de notification du système",
+  "系统设置里关掉了本应用的通知，上面的开关不起作用。": "Les notifications de cette app sont désactivées dans les réglages du système : ces interrupteurs n'ont aucun effet.",
+  "系统设置里关掉了其中一类通知（「等你确认」或「任务完成」）。": "Un type de notification (« Besoin de vous » ou « Tâche terminée ») est désactivé dans les réglages du système.",
 };

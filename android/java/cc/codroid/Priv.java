@@ -307,6 +307,15 @@ final class Priv {
                 case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
                 case "upd_verify": resp = Updater.get(ctx).verifyAsync(req.optBoolean("full", true)); break;
                 case "upd_repair": resp = Updater.get(ctx).repair(); break;
+                // 通知（Notify）：两个开关 + 跳系统的通知设置
+                case "notify_status": resp = Notify.get(ctx).status(); break;
+                case "notify_set": Notify.get(ctx).set(req); resp = Notify.get(ctx).status(); break;
+                case "notify_settings": {
+                    ctx.startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    resp = new JSONObject().put("ok", true);
+                    break;
+                }
                 case "share_logs": resp = Share.send(ctx, Share.bundleLogs(ctx), "application/zip"); break;
                 case "share_file": resp = Share.send(ctx, new java.io.File(req.optString("path")), req.optString("mime", "application/octet-stream")); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）

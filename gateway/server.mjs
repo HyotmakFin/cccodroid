@@ -776,6 +776,8 @@ function claudeEnv() {
     ].join(":"),
     CCAPP_TOOLCHAIN: PATHS.toolchain,
     CCAPP_PROVIDER: p.id,
+    // 标记：这棵进程树是网关拉起的 claude 运行（子孙都继承）。网关重启时据此认出上一任留下的孤儿，见 reapOrphans
+    CCAPP_RUN: "1",
     LD_LIBRARY_PATH: PREFIX ? "" : PATHS.nodeLib,   // 只给 node 用；glibc 走 --library-path
     // 前缀布局下 glibc 的 resolv.conf 是齐的，不需要本地桥：直连厂商
     ANTHROPIC_BASE_URL: NO_BRIDGE ? (p.baseUrl || "") : `http://127.0.0.1:${CFG.bridgePort}`,
@@ -885,6 +887,40 @@ function killTree(child) {
   for (const p of tree) {
     try { process.kill(-p, "SIGKILL"); } catch {}
     try { process.kill(p, "SIGKILL"); } catch {}
+  }
+}
+
+/** 网关启动时清掉上一任留下的孤儿（v0.2.0 设计 A3）。
+ *  上一任网关被杀 / 崩溃时，它拉起的 claude 和 claude 另开进程组的子 shell 会被 init 收养（PPID=1），
+ *  没人读它们的输出却还在干活：推提交、跑构建、占内存。新网关接不回它们，只能清掉。
+ *  认法：本 uid、PPID=1，且环境里带 CCAPP_RUN=1（claudeEnv 打的标记，子孙都继承），
+ *  或命令行就是我们的 claude（打标记之前的版本留下的）。连子孙一起、按进程组杀（同 killTree）。
+ *  只在 cccodroid 做：开发端换网关（gw-swap.sh）时上一任的运行还要接着用。 */
+function reapOrphans() {
+  if (!PREFIX) return;
+  const uid = process.getuid(), victims = [];
+  let names = [];
+  try { names = fs.readdirSync("/proc"); } catch { return; }
+  for (const n of names) {
+    if (!/^\d+$/.test(n) || +n === process.pid) continue;
+    try {
+      if (fs.statSync("/proc/" + n).uid !== uid) continue;
+      const st = fs.readFileSync("/proc/" + n + "/stat", "utf8");
+      if (+st.slice(st.lastIndexOf(")") + 2).split(" ")[1] !== 1) continue;
+      const env = "\0" + fs.readFileSync("/proc/" + n + "/environ", "latin1");
+      const cmd = fs.readFileSync("/proc/" + n + "/cmdline", "utf8");
+      if (env.includes("\0CCAPP_RUN=1\0") || cmd.includes(PATHS.claude)) victims.push([+n, cmd.replace(/\0/g, " ").trim().slice(0, 80)]);
+    } catch {}
+  }
+  for (const [pid, cmd] of victims) {
+    const tree = descendants(pid);
+    try { process.kill(-pid, "SIGKILL"); } catch {}
+    try { process.kill(pid, "SIGKILL"); } catch {}
+    for (const p of tree) {
+      try { process.kill(-p, "SIGKILL"); } catch {}
+      try { process.kill(p, "SIGKILL"); } catch {}
+    }
+    log(`  清掉上一任留下的孤儿 pid=${pid}（连子孙 ${tree.length} 个）：${cmd}`);
   }
 }
 
@@ -1663,7 +1699,7 @@ function ptyCommand() {
 /** 终端里的环境：与 claude 的工具子进程同一套 PATH / TMPDIR / terminfo，但它是给人用的 —— 要颜色，不要 CI 标记。 */
 function termEnv() {
   const env = claudeEnv();
-  for (const k of ["CI", "NO_COLOR", "CLAUDE_CODE_SHELL", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[k];
+  for (const k of ["CI", "NO_COLOR", "CLAUDE_CODE_SHELL", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CCAPP_RUN"]) delete env[k];   // 终端里用户自己起的东西不算 claude 运行，网关重启时别当孤儿清
   env.TERM = "xterm-256color";
   env.COLORTERM = "truecolor";
   // C.UTF-8 是 glibc 内建的（开发端的 bash 是 glibc 版，没带 locale 数据）；不设的话 readline 把中文显示成 \344\270…
@@ -4158,7 +4194,7 @@ const server = http.createServer(async (req, res) => {
     // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
     if (p.startsWith("/api/app/")) {
       const op = p.slice(9);
-      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack"];
+      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack", "notify_status", "notify_set", "notify_settings"];
       if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: "未知操作" });
       const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
       if (!PREFIX) return sendJson(res, 200, await devApp(op, b));
@@ -4271,6 +4307,7 @@ server.listen(CFG.port, "127.0.0.1", () => {
   if (!fs.existsSync(PATHS.claude)) log(`  ⚠️ 未找到 claude: ${PATHS.claude}`);
   if (!fs.existsSync(PATHS.loader)) log(`  ⚠️ 未找到 glibc loader: ${PATHS.loader}`);
   log(`  历史会话 ${listSessions(500).length} 个`);
+  try { reapOrphans(); } catch (e) { log("孤儿进程清理失败: " + e.message); }
   try { expireTrash(); } catch (e) { log("回收站清理失败: " + e.message); }
 });
 

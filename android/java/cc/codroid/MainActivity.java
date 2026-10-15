@@ -158,8 +158,10 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onResume() { super.onResume(); visible = true;
-        getSystemService(android.app.NotificationManager.class).cancel(41); }   // Priv.toFront 的「点此回来」
-    @Override protected void onPause() { visible = false; super.onPause(); }
+        getSystemService(android.app.NotificationManager.class).cancel(41);    // Priv.toFront 的「点此回来」
+        Notify.get(this).onForeground(); }                                    // 确认卡就在眼前，通知撤掉
+    @Override protected void onPause() { visible = false; super.onPause();
+        Notify.get(this).onBackground(); }                                    // 还有没答的确认：现在补发通知
 
     // ── 外观：界面（theme.js）定浅 / 深，系统夜间模式只有原生层知道 ──
     private boolean systemNight() {
@@ -195,6 +197,14 @@ public class MainActivity extends Activity {
         if (ACTION_APPLY_DEVKIT.equals(a) || ACTION_UPDATE.equals(a) && "devkit".equals(i.getStringExtra("item"))) applyDevkitUi();
         else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
         else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
+        else if (Notify.ACTION_OPEN.equals(a)) openSession(i.getStringExtra("session"));
+    }
+
+    /** 从「已完成」通知点进来：切到那个会话（界面正显示它就不动）。页面可能还在启动，等 __cc 就绪 */
+    private void openSession(String sid) {
+        if (web == null || sid == null || !sid.matches("[0-9A-Za-z-]{8,64}")) return;
+        web.evaluateJavascript("(function f(n){var c=window.__cc;if(c&&c.view){setTimeout(function(){if(c.view.sessionId!==\"" + sid
+            + "\")c.openSession(\"" + sid + "\")},n?800:0)}else if(n<50)setTimeout(function(){f(n+1)},200)})(0)", null);
     }
 
     /** 替换工具包：网关要停，界面切回进度页，装完再回来 */
@@ -477,8 +487,13 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (web != null && web.canGoBack()) web.goBack();
-        else moveTaskToBack(true);   // 返回键不结束界面，网关本来也不靠界面活着
+        if (web == null) { moveTaskToBack(true); return; }
+        // 先让页面关最上层的浮层（侧栏 / 查看器 / 终端 / 弹窗…，见 app.js __ccBack），都没开才退
+        web.evaluateJavascript("window.__ccBack?__ccBack():false", v -> {
+            if ("true".equals(v)) return;
+            if (web != null && web.canGoBack()) web.goBack();
+            else moveTaskToBack(true);   // 返回键不结束界面，网关本来也不靠界面活着
+        });
     }
 
     private int dp(int v) { return Math.round(getResources().getDisplayMetrics().density * v); }

@@ -2917,6 +2917,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
     followUpd(); setTimeout(loadUpd, 500);
   });
+  // ── 通知（只有 cccodroid：GatewayService 订阅事件流发通知）──
+  async function loadNotify() {
+    let st;
+    try { st = await api("/api/app/notify_status"); } catch { return; }
+    if (!st.ok) return;                              // 开发端 / 旧版：没有这项
+    $("ntf-field").classList.remove("hidden");
+    $("ntf-done").checked = !!st.done;
+    $("ntf-ask").checked = !!st.ask;
+    // 系统层面关掉了（整个应用 / 单个渠道）：开关开着也收不到，说清楚并给个入口
+    const off = !st.system ? t("系统设置里关掉了本应用的通知，上面的开关不起作用。")
+      : (st.ask && !st.chAsk) || (st.done && !st.chDone) ? t("系统设置里关掉了其中一类通知（「等你确认」或「任务完成」）。") : "";
+    $("ntf-off").textContent = off;
+    $("ntf-off").classList.toggle("hidden", !off);
+    $("ntf-actions").classList.toggle("hidden", !off);
+  }
+  for (const k of ["done", "ask"])
+    $("ntf-" + k).addEventListener("change", (e) => post("/api/app/notify_set", { [k]: e.target.checked }).then(loadNotify).catch(() => {}));
+  $("ntf-sys").addEventListener("click", () => post("/api/app/notify_settings").catch(() => {}));
+
   $("upd-check").addEventListener("click", async () => {
     await post("/api/app/upd_check").catch((e2) => toast(e2.message, true));
     followUpd(); setTimeout(loadUpd, 300);
@@ -3200,7 +3219,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "sessions") loadSessions();
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
   $("btn-menu").addEventListener("click", () => openDrawer("sessions"));
@@ -3891,6 +3910,36 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   // 调试口：外部测试壳用它读状态，不参与任何逻辑
+  // 触摸诊断（常驻、只读）：最近 100 条触摸 / 指针取消 / 滚动事件，排查"偶发上下滑不动、按钮照常能点"用。
+  // 冻住时经 WebView 调试读 window.__touchLog —— 这个 bug 没法预约复现，临时埋点等不到现场。
+  (() => {
+    const L = (window.__touchLog = []), T0 = performance.now();
+    const who = (t) => (t && (t.id || (typeof t.className === "string" && t.className.split(" ")[0]) || t.tagName)) || "?";
+    const add = (s) => { L.push(Math.round(performance.now() - T0) + " " + s); if (L.length > 100) L.shift(); };
+    for (const ty of ["touchstart", "touchend", "touchcancel", "pointercancel"])
+      document.addEventListener(ty, (e) => add(ty + " " + who(e.target) + (e.touches ? " n=" + e.touches.length : "")), { capture: true, passive: true });
+    let last = 0;
+    document.addEventListener("scroll", (e) => { const n = performance.now(); if (n - last > 300) { last = n; add("scroll " + who(e.target)); } }, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", () => add("visibility " + document.visibilityState));
+  })();
+
+  // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。
+  // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
+  window.__ccBack = () => {
+    const open = (id) => !$(id).classList.contains("hidden");
+    const steps = [
+      ["lightbox", () => $("lightbox").classList.add("hidden")],
+      ["term-textview", () => $("term-textview").classList.add("hidden")],
+      ["term", closeTerm],
+      ["viewer", closeViewer],          // 有未保存修改会先问；选了不丢弃也算处理过，别把界面退到后台
+      ["files", closeFiles],
+      ["popup", hidePopup],
+      ["sheet", () => $("sheet").classList.add("hidden")],
+      ["drawer", closeDrawer],
+    ];
+    for (const [id, close] of steps) if (open(id)) { close(); return true; }
+    return false;
+  };
   window.__cc = { view, srv, state, send, abort, openSession, newConversation };
 
   // ── 启动 ──────────────────────────────────────────────────────────
