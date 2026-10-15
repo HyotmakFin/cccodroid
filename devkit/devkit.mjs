@@ -536,12 +536,14 @@ function loadRecipe(dir) {
 const compVersion = (up) => (RECIPE_DIR ? `${COMP.version || up}-r${COMP.revision || 1}` : COMP.version || up);
 const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
 const idx = await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
+let baseDeps = [];          // 组件依赖链里、由底座提供的包（名字 + 底座里的版本）：市场据此判断换底座后要不要重新真机验证
 let { names, missing } = closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
 if (COMP) {
   // 底座已经有的包不再打；底座里的版本和仓库现在的不一样时提醒（组件可能要求更新的库）
   const inBase = new Map(BASE.packages.map((p) => [p.name, p.version]));
   const drift = names.filter((n) => inBase.has(n) && inBase.get(n) !== idx.pkgs.get(n).version);
   if (drift.length) console.log("⚠ 底座与仓库版本不同（组件按底座的版本用）: " + drift.map((n) => `${n} ${inBase.get(n)}→${idx.pkgs.get(n).version}`).join(", "));
+  baseDeps = names.filter((n) => inBase.has(n)).sort().map((n) => ({ name: n, version: inBase.get(n) }));
   names = names.filter((n) => !inBase.has(n));
 }
 const total = names.reduce((s, n) => s + idx.pkgs.get(n).size, 0);
@@ -711,7 +713,7 @@ if (cmd === "build" || cmd === "component") {
       name: COMP.name, desc: COMP.desc, kind: COMP.kind || "termux", needs: COMP.needs || {}, license: COMP.license || "",
       tar: { file: path.basename(tarFile), ...tarInfo },
       gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
-      installed: itotal + fetchedBytes, snapshot: idx.date, packages: lock,
+      installed: itotal + fetchedBytes, snapshot: idx.date, packages: lock, baseDeps,
     }, null, 2));
     console.log(`\n✓ ${tarFile}  ${mb(tarInfo.bytes)} → .gz ${mb(gzInfo.bytes)}  ${lock.length} 个包  用时 ${((Date.now() - t0) / 1000) | 0}s`);
     process.exit(0);
