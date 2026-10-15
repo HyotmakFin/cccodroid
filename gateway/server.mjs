@@ -2433,13 +2433,59 @@ function setPermMode(mode) {
 function snapshot() {
   return {
     run: runInfo(activeRun),
-    queue: QUEUE.map((q) => ({ id: q.id, cid: q.cid, text: q.message.slice(0, 500), sessionId: q.sessionId, follow: q.follow, at: q.at, held: !!q.held })),
+    queue: QUEUE.map((q) => ({ id: q.id, cid: q.cid, text: q.message.slice(0, 500), sessionId: q.sessionId, follow: q.follow, at: q.at, held: !!q.held, intr: !!q.intr })),
     provider: PROVIDER.id,
     model: SETTINGS.model || PROVIDER.defaultModel || null,
     lastSessionId: LAST_SESSION ? LAST_SESSION.id : null,
+    interrupted: INTERRUPTED,
   };
 }
-const publishState = () => publish({ type: "state", ...snapshot() });
+const publishState = () => { saveRunMark(); publish({ type: "state", ...snapshot() }); };
+
+// ── 被系统杀掉后接得上（A2）──────────────────────────────────────────
+// 正在跑的这一轮 + 排队的消息，每次状态变化都落盘；正常收尾、队列清空时删掉。
+// App 连同网关被系统结束时它留下来：下次启动把那一轮记成「已中断」（前端给「继续」），
+// 排队的消息原样放回队列、一律挂起 —— 杀掉之后不许自己发出去，用户点 ⚡ 才发。
+const RUN_MARK = path.join(CFG.home, "ccapp-run-mark.json");
+const INTR_FILE = path.join(CFG.home, "ccapp-interrupted.json");
+function saveRunMark() {
+  try {
+    if (!activeRun && !QUEUE.length) return fs.rmSync(RUN_MARK, { force: true });
+    const r = activeRun;
+    fs.writeFileSync(RUN_MARK + ".tmp", JSON.stringify({
+      run: r && !r.ended ? { id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt } : null,
+      // 已经写进 stdin、claude 还没吃进去的插话也算排队的：一起留下
+      queue: [...(r && r.pendingInject || []).map((it) => ({ ...it, injected: false })), ...QUEUE],
+    }), { mode: 0o600 });
+    fs.renameSync(RUN_MARK + ".tmp", RUN_MARK);
+  } catch {}
+}
+let INTERRUPTED = (() => {
+  try { const j = JSON.parse(fs.readFileSync(INTR_FILE, "utf8")); if (j && j.id) return j; } catch {}
+  return null;
+})();
+function setInterrupted(v) {
+  INTERRUPTED = v;
+  try { v ? fs.writeFileSync(INTR_FILE, JSON.stringify(v), { mode: 0o600 }) : fs.rmSync(INTR_FILE, { force: true }); } catch {}
+}
+/** 启动时调一次：上一任留下的标记 → 中断记录 + 挂起的队列 */
+function recoverRunMark() {
+  let m;
+  try { m = JSON.parse(fs.readFileSync(RUN_MARK, "utf8")); } catch { return; }
+  finally { try { fs.rmSync(RUN_MARK, { force: true }); } catch {} }
+  if (m.run && m.run.id) {
+    setInterrupted({ ...m.run, at: Date.now() });
+    if (m.run.sessionId) RUN_SESSIONS.set(m.run.id, m.run.sessionId);
+    log(`⚠️ 上一轮没跑完就被结束了（会话 ${m.run.sessionId || "未建立"}），已标为中断`);
+  }
+  for (const q of Array.isArray(m.queue) ? m.queue : []) {
+    if (!q || !q.id || typeof q.message !== "string") continue;
+    if (!q.sessionId && q.follow && RUN_SESSIONS.get(q.follow)) q.sessionId = RUN_SESSIONS.get(q.follow);
+    QUEUE.push({ ...q, held: true, intr: true });   // intr：前端据此说「被系统中断」而不是「点了停止」
+  }
+  if (QUEUE.length) { log(`  排队的 ${QUEUE.length} 条消息已放回队列（挂起，等用户点 ⚡）`); saveRunMark(); }
+}
+recoverRunMark();
 
 // 逐字增量太碎：攒 40ms 合成一条再发，其它事件到来前先冲掉，保证顺序不乱
 function runEmit(run, ev) {
@@ -2486,7 +2532,7 @@ function abortRun(run) {
   run.aborted = true;
   // 停止要和排队的消息严格隔开：此刻排着的一律挂起，不许这一轮一结束就自动发出去
   // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
-  for (const q of QUEUE) q.held = true;
+  for (const q of QUEUE) { q.held = true; q.intr = false; }
   if (run.child) killTree(run.child);
   return true;
 }
@@ -2742,6 +2788,8 @@ async function startRun(item) {
   };
   activeRun = run;                       // 同步占槽，中间不许有 await
   runFlag(true);
+  // 在被中断的那个会话里又跑起来了（点了「继续」或者直接接着聊）：中断提示就不用再挂着了
+  if (INTERRUPTED && (INTERRUPTED.sessionId ? INTERRUPTED.sessionId === run.sessionId : !run.sessionId)) setInterrupted(null);
   if (run.sessionId) RUN_SESSIONS.set(run.id, run.sessionId);
   const emit = (ev) => runEmit(run, ev);
   emit({ type: "run_start", text: run.text, sessionId: run.sessionId, follow: run.follow, cid: run.cid, startedAt: run.startedAt });
@@ -2900,6 +2948,7 @@ async function startRun(item) {
     RUN_SESSIONS.set(run.id, run.sessionId);
     if (RUN_SESSIONS.size > 500) RUN_SESSIONS.delete(RUN_SESSIONS.keys().next().value);
     rememberSession(run.sessionId);
+    saveRunMark();                       // 标记里补上会话号：被杀之后「继续」要靠它 --resume
     if (!SESSIONS.has(init.session_id)) {
       SESSIONS.set(init.session_id, { id: init.session_id, title: message.slice(0, 60), createdAt: Date.now() });
     }
@@ -4243,6 +4292,12 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (!setPermMode(String(b.mode || ""))) return sendJson(res, 400, { error: "bad mode" });
       return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: !!activeRun });
+    }
+
+    if (req.method === "POST" && p === "/api/interrupted/dismiss") {
+      setInterrupted(null);
+      publishState();
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === "POST" && p === "/api/abort") {

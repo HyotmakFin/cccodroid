@@ -62,6 +62,8 @@ public class MainActivity extends Activity {
     private TextView stat;
     private WebView web;
     private ValueCallback<Uri[]> fileCb;
+    /** 「保存到」：等系统文件面板回来时要复制的源文件。static：挑位置期间界面被回收重建也还在 */
+    private static File savePending;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -459,7 +461,18 @@ public class MainActivity extends Activity {
             }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
+            /** 「保存到」：弹系统文件面板（ACTION_CREATE_DOCUMENT），用户挑好位置后把文件复制过去。
+             *  不需要存储权限，也不会落进用户打不开的私有目录。结果回调页面的 __ccSaved(ok, 说明) */
+            @android.webkit.JavascriptInterface public void saveAs(String path, String name, String mime) {
+                ui.post(() -> startSaveAs(path, name, mime));
+            }
         }, "CCApp");
+        // 兜底：没走 saveAs 的下载链接（<a download> 指向本机网关的 /api/file）也改成「保存到」
+        web.setDownloadListener((url, ua, cd, mime, len) -> {
+            Uri u = Uri.parse(url);
+            String p = u.getQueryParameter("path");
+            if (p != null && url.startsWith("http://127.0.0.1:" + Env.PORT + "/api/file")) startSaveAs(p, new File(p).getName(), mime);
+        });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
@@ -479,7 +492,50 @@ public class MainActivity extends Activity {
         catch (Exception e) { android.widget.Toast.makeText(this, "没有可用的浏览器：" + url, android.widget.Toast.LENGTH_LONG).show(); }
     }
 
+    private void startSaveAs(String path, String name, String mime) {
+        File f = path == null ? null : new File(path);
+        if (f == null || !f.isFile()) { savedJs(false, "missing"); return; }
+        savePending = f;
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime)
+            .putExtra(Intent.EXTRA_TITLE, name == null || name.isEmpty() ? f.getName() : name);
+        try { startActivityForResult(i, 8); }
+        catch (Exception e) { savePending = null; savedJs(false, "nopicker"); }
+    }
+
+    /** 复制放后台线程：大文件（几百 MB 的导出包）别卡住界面 */
+    private void finishSaveAs(Uri dst) {
+        File src = savePending;
+        savePending = null;
+        if (src == null) return;
+        new Thread(() -> {
+            boolean ok = false;
+            String msg;
+            try (InputStream in = new java.io.FileInputStream(src); OutputStream out = getContentResolver().openOutputStream(dst, "w")) {
+                if (out == null) throw new java.io.IOException("openOutputStream 返回 null");
+                byte[] buf = new byte[1 << 16];
+                for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+                ok = true;
+                msg = src.getName();
+            } catch (Exception e) {
+                msg = String.valueOf(e.getMessage());
+                try { android.provider.DocumentsContract.deleteDocument(getContentResolver(), dst); } catch (Exception ignore) {}
+            }
+            final boolean fok = ok; final String fmsg = msg;
+            ui.post(() -> savedJs(fok, fmsg));
+        }, "save-as").start();
+    }
+
+    private void savedJs(boolean ok, String msg) {
+        if (web != null) web.evaluateJavascript("window.__ccSaved&&__ccSaved(" + ok + "," + org.json.JSONObject.quote(msg) + ")", null);
+    }
+
     @Override protected void onActivityResult(int req, int res, Intent data) {
+        if (req == 8) {
+            if (res == RESULT_OK && data != null && data.getData() != null) finishSaveAs(data.getData());
+            else { savePending = null; savedJs(false, "cancel"); }
+            return;
+        }
         if (req == 7 && fileCb != null) {
             fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
             fileCb = null;

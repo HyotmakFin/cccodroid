@@ -73,6 +73,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.add("hidden"), isErr ? 4200 : 3200);
   }
+  // ── 保存到（A4）：外壳有 CCApp.saveAs 时，下载 / 导出一律走系统「保存到」面板 ──
+  //  不要存储权限，也不会把文件落进用户打不开的私有目录。结果由外壳回调 __ccSaved
+  const canSaveAs = () => !!(window.CCApp && window.CCApp.saveAs);
+  const canShare = () => !!(state.serverStatus && state.serverStatus.product === "cccodroid");
+  function saveAs(path, mime) { window.CCApp.saveAs(path, path.split("/").pop(), mime || ""); }
+  window.__ccSaved = (ok, msg) => {
+    if (ok) return toast(t("已保存：{name}", { name: msg }));
+    if (msg === "cancel") return;
+    toast(t("保存失败：{msg}", { msg: msg === "missing" ? t("文件不存在") : msg === "nopicker" ? t("系统里没有可用的文件面板") : msg }), true);
+  };
+  // 页面里所有指向 /api/file 的下载链接（文件浏览器的 ⤓、查看器的「下载」）：WebView 自己不会处理下载
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[download]");
+    if (!a || !canSaveAs()) return;
+    const u = new URL(a.href, location.href);
+    const p = u.pathname === "/api/file" && u.searchParams.get("path");
+    if (!p) return;
+    e.preventDefault();
+    saveAs(p);
+  }, true);
+
   function setStatus(text, cls) { subEl.textContent = text; subEl.className = cls || ""; }
 
   // ── 跨刷新要记住的东西 ────────────────────────────────────────────
@@ -1257,6 +1278,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (ev.run.sessionId) view.sessionId = ev.run.sessionId;
       else { view.sessionId = null; view.runIds.add(ev.run.id); }
       saveUiState();
+    } else if (helloCount === 1 && !ev.run && ev.interrupted?.sessionId && !view.sessionId) {
+      // 刚打开、上一轮是被系统杀掉的：直接回到那个会话，「继续」卡就挂在它底下
+      view.sessionId = ev.interrupted.sessionId;
+      saveUiState();
     }
     const keepRuns = new Set(view.runIds), keepCids = new Set(view.cids);
     const sid = view.sessionId;
@@ -1265,6 +1290,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     renderSessions();
     if (sid) loadOlder(true);
     else if (!(ev.run && keepRuns.has(ev.run.id))) showWelcome();
+    renderInterrupted(ev.interrupted);   // resetView 清掉了 liveEl，重挂一次
     setStatus(t("已连接"), "ok");
   }
 
@@ -1318,6 +1344,35 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (busy) setStatus(srv.run.sessionId === view.sessionId || view.runIds.has(srv.run.id)
       ? t("生成中…") : t("另一个会话正在生成…"), "warn");
     renderPermBar();                 // 放最后：有待确认项时状态栏要显示「等你确认」
+    renderInterrupted(s.interrupted);
+  }
+
+  /** 上一轮被系统结束（App 连同网关被杀）：在那个会话底部挂一张卡，给「继续」 */
+  function renderInterrupted(it) {
+    let el = $("intr-card");
+    const here = it && !srv.run && (it.sessionId ? it.sessionId === view.sessionId : !view.sessionId);
+    if (!here) { el?.remove(); return; }
+    if (el && el.dataset.id === it.id && el.parentNode === liveEl) return;
+    el?.remove();
+    const b = mkMsg("sys", t("已中断"), liveEl);
+    el = b.closest(".msg"); el.id = "intr-card"; el.dataset.id = it.id;
+    const when = new Date(it.startedAt || it.at).toLocaleString();
+    setHtml(b, `<p>${esc(t("这一轮没跑完：App 在后台被系统结束了（{when} 开始的）。", { when }))}</p>
+      <blockquote>${esc(String(it.text || "").slice(0, 300))}</blockquote>
+      <p class="perm-sub">${esc(it.sessionId
+        ? t("已经做完的部分都在会话里。点「继续」让 Claude 从断开的地方接着做。")
+        : t("会话还没来得及建立，Claude 没收到这条消息。点「重发」把它放回输入框。"))}</p>
+      <div class="perm-acts"><button class="primary" data-a="go">${esc(it.sessionId ? t("继续") : t("重发"))}</button>
+      <button data-a="no">${esc(t("忽略"))}</button></div>`);
+    b.querySelector(".perm-acts").addEventListener("click", async (e) => {
+      const a = e.target.closest("button")?.dataset.a;
+      if (!a) return;
+      el.remove();
+      if (a === "go" && it.sessionId) return send(t("上一轮被系统中断了，请从断开的地方接着做完。"));
+      if (a === "go") { inputEl.value = it.text || ""; autoGrow(); inputEl.focus(); }
+      api("/api/interrupted/dismiss", { method: "POST" }).catch(() => {});
+    });
+    scrollDown(true);
   }
   const isBusy = () => !!srv.run;
 
@@ -1335,7 +1390,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     queueStrip.innerHTML = q.length ? `
       <div class="q-head">
         <span>${q.some((it) => it.held)
-          ? t("点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
+          ? q.some((it) => it.intr)
+            ? t("上一轮被系统中断，{n} 条排队的消息已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
+            : t("点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
           : t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })}</span>
         <button class="q-clear">${t("全部清除")}</button>
       </div>
@@ -1901,6 +1958,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <span class="tiny">${t("已选 {n} 个", { n })}</span>
         <button class="btn sm" data-b="export" ${n ? "" : "disabled"}>${t("导出所选")}</button>
         <button class="btn ghost sm danger" data-b="trash" ${n ? "" : "disabled"}>${t("删除所选")}</button>`;
+    } else if (sess.mode === "exported") {
+      const r = sess.exported;
+      bar.innerHTML = `<span class="tiny">${t("已导出 {n} 个会话", { n: r.count })}</span>
+        ${canSaveAs() ? `<button class="btn sm" data-b="save">${t("保存到…")}</button>` : ""}
+        ${canShare() ? `<button class="btn sm" data-b="share">${t("分享…")}</button>` : ""}
+        <button class="btn ghost sm" data-b="done">${t("完成")}</button>
+        ${canSaveAs() || canShare() ? "" : `<div class="tiny">${esc(r.file)}</div>`}`;
     } else if (sess.mode === "trash") {
       bar.innerHTML = `<span class="tiny">${t("删除的会话在这里保留 {n} 天，之后自动清除。", { n: sess.keepDays })}</span>
         ${sess.trash.length ? `<button class="btn ghost sm danger" data-b="empty">${t("清空回收站")}</button>` : ""}`;
@@ -1973,13 +2037,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       try { r = await post("/api/sessions/export", { ids: [...sess.sel] }); }
       catch (err) { return toast(t("导出失败：{msg}", { msg: err.message }), true); }
       if (!r.ok) return toast(t("导出失败：{msg}", { msg: r.message || "" }), true);
-      toast(t("已导出 {n} 个会话：{file}", { n: r.count, file: r.file }));
-      // cccodroid：直接弹系统分享面板（发到网盘、聊天、另一台设备）
-      if (state.serverStatus && state.serverStatus.product === "cccodroid")
-        post("/api/app/share_file", { path: r.file, mime: "application/zip" }).catch(() => {});
-      sess.mode = "list"; sess.sel.clear(); renderSessions();
+      // 导出包在网关这边；交给用户选：「保存到」（系统文件面板，挑哪都行）或「分享」（网盘、聊天、另一台设备）
+      sess.exported = r; sess.mode = "exported"; sess.sel.clear(); renderSessions();
+      if (canSaveAs()) saveAs(r.file, "application/zip");
+      else if (!canShare()) toast(t("已导出 {n} 个会话：{file}", { n: r.count, file: r.file }));
       return;
     }
+    if (act === "save") return saveAs(sess.exported.file, "application/zip");
+    if (act === "share") return post("/api/app/share_file", { path: sess.exported.file, mime: "application/zip" })
+      .then((j) => { if (!j.ok) toast(j.message || t("分享失败"), true); }).catch((err) => toast(err.message, true));
+    if (act === "done") { sess.mode = "list"; sess.exported = null; return renderSessions(); }
     if (act === "trash") {
       if (!confirm(t("把选中的 {n} 个会话移进回收站？{d} 天内可以恢复。", { n: sess.sel.size, d: sess.keepDays }))) return;
       const r = await post("/api/sessions/trash", { ids: [...sess.sel] }).catch((err) => ({ done: [], failed: [], err }));
