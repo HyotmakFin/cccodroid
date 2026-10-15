@@ -86,6 +86,19 @@ t "less/file" "file a"
 t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
 t "pkg 是说明替身" "pkg install x 2>&1 | head -1 | grep -q 'pkg / apt' && echo 替身正常"
 t "su/sudo 不应存在" "! command -v sudo"
+echo "== 音视频（ffmpeg）"
+if command -v ffmpeg >/dev/null; then
+  t "ffmpeg" "ffmpeg -hide_banner -version | head -1"
+  t "ffmpeg 软编 x264 + ffprobe" "ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=duration=1:size=320x240:rate=15 -c:v libx264 -pix_fmt yuv420p sw.mp4 && ffprobe -v error -count_frames -select_streams v -show_entries stream=codec_name,nb_read_frames -of csv=p=0 sw.mp4"
+  # MediaCodec 硬件编码因机型而异（看芯片和厂商驱动）：只报告，不算失败
+  for c in h264 hevc; do
+    out=$(timeout -k 5 60 ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -c:v ${c}_mediacodec -pix_fmt nv12 hw_$c.mp4 2>&1 </dev/null && ffprobe -v error -count_frames -select_streams v -show_entries stream=nb_read_frames -of csv=p=0 hw_$c.mp4 2>&1)
+    if [ $? -eq 0 ]; then [ -z "$Q" ] && echo "INFO MediaCodec 硬编 $c :: 可用（${out} 帧）"
+    else echo "INFO MediaCodec 硬编 $c :: 本机不可用，用软编（libx264 / libx265）即可 :: $(echo "$out" | tr '\n' ' ' | cut -c1-160)"; fi
+  done
+else
+  echo "INFO ffmpeg :: 工具包较旧，没有 ffmpeg（设置 → 更新开发工具包后再测）"
+fi
 echo "== 残留路径"
 t "残留 com.termux 文本" "n=\$(rg -l --no-messages -uu 'com\\.termux' \$PREFIX/bin \$PREFIX/etc \$PREFIX/lib/python3*/site-packages 2>/dev/null | head -20 | tee /dev/stderr | wc -l); echo \$n 个"
 t "/tmp 硬编码" "rg -l --no-messages -uu '\"/tmp' \$PREFIX/bin 2>/dev/null | head -5 | wc -l"

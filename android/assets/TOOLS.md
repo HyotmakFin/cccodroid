@@ -22,6 +22,7 @@
 - **Node 26 + npm 11**：npm install、npx、`node_modules/.bin` 均可（项目要放在工作区，不能放 /sdcard）。
 - **Java / 安卓构建**：openjdk-21（java、javac、jar、keytool），aapt2、d8、apksigner。没有自带 `android.jar`（Android SDK 平台包需用户自行下载，许可不允许随包分发）—— 但 `aapt2 link` 可以拿设备自带的 `/system/framework/framework-res.apk` 顶替（`-I` 参数），资源链接能正常完成。
 - **版本控制与网络**：git（https / ssh）、curl、openssl、ssh、ssh-keygen。
+- **音视频**：ffmpeg / ffprobe 9（x264、x265、vpx、aom、opus、mp3 等编解码器）。**硬件编码**用 `-c:v h264_mediacodec`（或 `hevc_mediacodec`），配 `-pix_fmt nv12`，比 libx264 快约 3 倍；个别机型没有硬件编码器，就退回 libx264。
 - **命令行工具**：rg、fd、bat、delta、hx（+ `hx-grammar` 装语法）、jq、yq、sqlite3、typst、duckdb、magick（ImageMagick）、man、file、tar、xz、zstd、zip / unzip。交互式 bash 里 tab 补全可用。
 - **Claude Code** 本身：终端里 `claude` 命令可用。
 

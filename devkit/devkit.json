@@ -63,6 +63,20 @@
       "man",
       "bash-completion"
     ],
+    "graphics": [
+      "mesa",
+      "libglvnd",
+      "libdrm",
+      "libwayland",
+      "libxfixes",
+      "libxshmfence",
+      "libxxf86vm",
+      "vulkan-loader",
+      "vulkan-loader-generic"
+    ],
+    "media": [
+      "ffmpeg"
+    ],
     "extra": [
       "typst",
       "duckdb",
@@ -83,6 +97,8 @@
     "lang",
     "android",
     "cli",
+    "graphics",
+    "media",
     "claude"
   ],
   "external": [
