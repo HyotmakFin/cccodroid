@@ -198,14 +198,11 @@ public class MainActivity extends Activity {
 
     // ── 外观：界面（theme.js）定浅 / 深，系统夜间模式只有原生层知道 ──
     private boolean systemNight() {
-        return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+        return (android.content.res.Resources.getSystem().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
             == android.content.res.Configuration.UI_MODE_NIGHT_YES;
     }
     /** 界面里选的外观：theme.js 每次定下来都经 CCApp.themePref 存一份；没存过（第一次装）= 跟随系统 */
-    private boolean uiDark() {
-        String p = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "auto");
-        return "dark".equals(p) || (!"light".equals(p) && systemNight());
-    }
+    private boolean uiDark() { return BrowserPane.night(this); }
     /** 状态栏 / 导航栏跟着界面换色；浅色时图标改深色 */
     private void applyBars(boolean dark) {
         android.view.Window w = getWindow();
@@ -499,7 +496,9 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     private void showWeb() {
         askNotifications();
-        WebView.setWebContentsDebuggingEnabled(true);
+        // 网页调试默认关：开着时任何连上 adb 的电脑都能读页面（含网关令牌）。
+        // 要调试就在终端里 touch ~/.webdebug，重开应用生效；只有本机终端写得进私有目录
+        WebView.setWebContentsDebuggingEnabled(new File(env.home, ".webdebug").exists());
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -548,6 +547,8 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void themePref(String p) {
                 if ("auto".equals(p) || "light".equals(p) || "dark".equals(p))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).apply();
+                // 之后新开的系统控件（下拉框的选项窗、对话框）也跟着换深浅，不用重开应用
+                ui.post(() -> setTheme(uiDark() ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar));
             }
             /** 「保存到」：弹系统文件面板（ACTION_CREATE_DOCUMENT），用户挑好位置后把文件复制过去。
              *  不需要存储权限，也不会落进用户打不开的私有目录。结果回调页面的 __ccSaved(ok, 说明) */
@@ -568,11 +569,50 @@ public class MainActivity extends Activity {
                 try { startActivityForResult(p.createIntent(), 7); } catch (Exception e) { fileCb = null; return false; }
                 return true;
             }
+            // 页面里的 alert / confirm / prompt：系统默认的对话框标题是「网址为 http://127.0.0.1 的网页显示」，
+            // 换成不带标题、跟着界面外观的对话框；按钮文字用系统自带的（随系统语言）
+            @Override public boolean onJsAlert(WebView v, String url, String msg, android.webkit.JsResult r) {
+                jsDialog(msg, false, null, r, null); return true;
+            }
+            @Override public boolean onJsConfirm(WebView v, String url, String msg, android.webkit.JsResult r) {
+                jsDialog(msg, true, null, r, null); return true;
+            }
+            @Override public boolean onJsPrompt(WebView v, String url, String msg, String def, android.webkit.JsPromptResult r) {
+                jsDialog(msg, true, def == null ? "" : def, r, r); return true;
+            }
         });
         web.loadUrl(Env.uiUrl());
         root.removeAllViews();
         root.addView(web);
         root.requestApplyInsets();            // 顶部留白交给页面（--safe-t）
+    }
+
+    private void jsDialog(String msg, boolean withCancel, String def, android.webkit.JsResult r, android.webkit.JsPromptResult pr) {
+        final android.widget.EditText in = def == null ? null : new android.widget.EditText(this);
+        if (in != null) in.setText(def);
+        boolean dark = uiDark();
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this,
+                dark ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert)
+            .setMessage(msg).setCancelable(true)
+            .setOnCancelListener(d -> r.cancel());
+        if (in != null) b.setView(in);
+        b.setPositiveButton(android.R.string.ok, (d, w) -> { if (pr != null) pr.confirm(in.getText().toString()); else r.confirm(); });
+        if (withCancel) b.setNegativeButton(android.R.string.cancel, (d, w) -> r.cancel());
+        try {
+            android.app.AlertDialog d = b.show();
+            int accent = Color.parseColor(dark ? "#d97757" : "#c96442");
+            d.getWindow().setBackgroundDrawable(roundBg(Color.parseColor(dark ? "#262624" : "#faf9f5")));
+            for (int k : new int[] { android.app.AlertDialog.BUTTON_POSITIVE, android.app.AlertDialog.BUTTON_NEGATIVE }) {
+                android.widget.Button bt = d.getButton(k);
+                if (bt != null) bt.setTextColor(accent);
+            }
+        } catch (Exception e) { r.cancel(); }
+    }
+    private android.graphics.drawable.Drawable roundBg(int color) {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(dp(16));
+        return new android.graphics.drawable.InsetDrawable(g, dp(16));
     }
 
     private void openExternal(String url) {

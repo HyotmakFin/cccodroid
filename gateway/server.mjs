@@ -2431,6 +2431,7 @@ const runInfo = (r) => r && {
 /** 改权限模式：存进设置（下一轮沿用），正在跑的那一轮当场切（set_permission_mode） */
 function setPermMode(mode) {
   if (!PERM_MODES.includes(mode)) return false;
+  if (SETTINGS.permissionMode !== mode) log(`权限模式 ${SETTINGS.permissionMode} → ${mode}`);   // 排障时看得出是谁、何时切的
   SETTINGS.permissionMode = mode;
   saveSettings();
   if (activeRun && activeRun.setMode) activeRun.setMode(mode);

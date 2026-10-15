@@ -26,13 +26,14 @@ public class BrowserActivity extends Activity implements BrowserPane.Host {
     }
 
     @Override protected void onCreate(Bundle b) {
+        boolean night = BrowserPane.night(this);       // 跟界面里选的外观走
+        setTheme(night ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(b);
         Log.i(BrowserPane.TAG, "onCreate saved=" + (b != null));
-        boolean night = BrowserPane.night(this);
-        int bg = night ? Color.parseColor("#1f1e1d") : Color.parseColor("#f5f4ef");
+        int bg = Color.parseColor(night ? "#1f1e1d" : "#faf9f5");
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
-        if (!night) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        if (!night) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         pane = new BrowserPane(this, this, 8);
         setContentView(pane);
         if (b != null) pane.restoreState(b);

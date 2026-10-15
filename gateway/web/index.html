@@ -92,6 +92,7 @@
         <button class="tab" data-tab="settings" data-i18n>设置</button>
         <button class="tab" data-tab="caps" data-i18n>能力</button>
         <button class="tab" data-tab="ext" data-i18n>扩展</button>
+        <button class="tab" data-tab="help" data-i18n>帮助</button>
       </div>
             <button id="btn-close-drawer" class="icon-btn" aria-label="关闭" data-i18n-attr="aria-label">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -311,6 +312,12 @@
                 <button id="btn-refresh-mcp" class="btn ghost sm" data-i18n>查询 MCP</button></div>
             <div class="field"><label data-i18n>插件</label>
         <div id="caps-plugins" class="chips"></div></div>
+    </section>
+
+    <!-- 帮助：第一次点开才去取 help/<语言>.md 渲染（懒加载），目录点了跳到对应小节 -->
+    <section id="tab-help" class="tab-pane hidden">
+      <nav id="help-toc" class="help-toc"></nav>
+      <div id="help-body" class="help-body"></div>
     </section>
 
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->

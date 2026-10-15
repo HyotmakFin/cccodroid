@@ -16,6 +16,8 @@ window.I18N_DICT["es"] = {
   "命令": "Comando",
   "重发": "Reenviar",
   "转发": "Compartir",
+  "帮助": "Ayuda",
+  "回到目录": "Volver al índice",
   "{n} 个步骤": "{n} pasos",
   "有失败": "Con errores",
   "{n} 字": "{n} caracteres",

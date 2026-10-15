@@ -19,6 +19,8 @@ window.I18N_DICT.en = {
   "命令": "Command",
   "重发": "Resend",
   "转发": "Share",
+  "帮助": "Help",
+  "回到目录": "Back to contents",
   "{n} 个步骤": "{n} steps",
   "有失败": "Some failed",
   "{n} 字": "{n} chars",

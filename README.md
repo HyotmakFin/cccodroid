@@ -24,7 +24,9 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Messages sent while Claude is working wait at the end of the chat marked *Queued*; **Send now** delivers one into the running turn without interrupting it. **Stop only stops** — queued messages are paused, never sent automatically.
   - `/compact`, `/context` and other built-in commands show their results immediately.
   - Each reply shows a live generation timer that settles to the total time when it finishes.
-  - Light / dark appearance, or follow the system (status bar included).
+  - Light / dark appearance, or follow the system (status bar included); the launch screen, first-run setup screen and in-app browser follow it too. Warm palette, with the CC Mono monospace font in the UI and terminal.
+  - Your messages sit on the right and replies span the width, as in the desktop app. Tool calls between two pieces of reply text fold into one "N steps" line; tap to see each step. Groups with a pending approval or a failure open by themselves. Under each reply: **Copy** (the raw Markdown) and **Share** (system share sheet).
+  - **Built-in help** (sidebar → Help): a full user guide and advanced tips, with a table of contents, in Chinese and English.
   - **Tablets in landscape and unfolded foldables**: depending on the window width, the layout becomes two columns (chat plus a workspace on the right) or three (plus a docked sidebar). Files, the viewer, the terminal and the in-app browser open on the right without covering the chat, and you can drag the divider between them. Phones in portrait and narrow split screens look the same as before.
   - **Work survives the background**: you get a system notification when a turn finishes or Claude is waiting for your approval. It shows no heads-up banner. The notification only offers *Deny* and *Open*; to allow a command you have to return to the app and read it in full. If the system kills the app, reopening it marks the unfinished turn as *Interrupted* with a *Continue* button, and queued messages are still there.
   - **Session management**: deleted sessions go to a recycle bin first (restorable for 30 days). Pick sessions one by one or all at once and export them as a zip — save it anywhere with the system *Save to* picker, or share it directly — then import the zip on another device and carry on where you left off.
@@ -78,7 +80,11 @@ See **[Design philosophy](docs/design-philosophy.md)**.
 3. Choose how to connect in Settings: sign in with a Claude account, or enter an API key.
 4. (Optional) Install and start Shizuku, then grant it in Settings to enable `priv` and stronger keep-alive.
 
-Requirements: Android 8.0+ (tested on Android 14 / 15), arm64, about 4 GB free space.
+Requirements: Android 8.0+, arm64, about 4 GB free space.
+
+Tested devices: Lenovo TB320FC (Snapdragon 8+ Gen 1, Android 15) and Red Magic 9 Pro NX769J (Snapdragon 8 Gen 3, Android 14, installed from scratch following this section). Non-Snapdragon chips and Android 12 / 13 have not been tested on real hardware yet; reports are welcome.
+
+Versions with a suffix (such as `v0.2.0-rc1`) are pre-releases. In-app updates only offer stable releases; download pre-releases from Releases by hand.
 
 **Allow background running on vendor ROMs**: some vendors' power savers ignore foreground services and freeze the whole app in the background
 (measured on RedMagic: frozen about 90 s after leaving the foreground), stopping any running task. When cccodroid detects a freeze during a running task, Settings tells you exactly where to fix it.
@@ -119,7 +125,7 @@ cccodroid aims to follow [Anthropic's terms for products that run Claude Code](h
 - **Signing in with a Claude subscription.** Sign-in is Claude Code's own `claude auth login`. You authorize on Anthropic's page in your browser, Claude Code writes the token to its own `~/.claude/.credentials.json` (the app never reads that file), and while signed in Claude Code talks to api.anthropic.com directly, not through any process of ours. In practice this is the same as SSHing into a Linux machine you own, running Claude Code there and signing in: here the Linux machine is the phone, and the app is the screen and keyboard. Every turn is a message you send yourself; the app has no scheduled or unattended runs. Anthropic's terms cover this case explicitly: they do not prevent "an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code".
 - **The one-time authorization code.** Normally the browser hands the code back to Claude Code automatically, on this device, without passing through the app. If that fails (for example you authorized on another device), the app opens its built-in terminal and runs `claude auth login` there; you paste the code into Claude Code's own prompt. The terminal is a generic byte channel, like Termux or SSH; the app has no field that accepts the code and never parses, saves or logs it.
 - **Permission prompts.** Like the official CLI, Claude asks before editing files, running commands or going online, and you answer in the chat. The default mode is "Ask each time"; "Allow everything" is available but asks for confirmation first.
-- **The name.** The "cc" in cccodroid comes from Claude Code (the name is modelled on C4droid). The project does not use the Claude or Anthropic names or logos in its name, icon or package name, and does not claim to be made, endorsed or partnered with by Anthropic. If Anthropic asks, the project will be renamed.
+- **The name.** cccodroid stands for "Claude Code CLI On droid", modelled on the long-standing Android C/C++ IDE C4droid. The project does not use the Claude or Anthropic names or logos in its name, icon or package name, and does not claim to be made, endorsed or partnered with by Anthropic. If Anthropic asks, the project will be renamed.
 - **No resale, no middleman.** cccodroid is free and open source, has no server, and does not provide, pay for or resell any Claude usage: you sign in with your own account or bring your own API key, and usage is billed to you directly. The author has a Claude Console account and has accepted Anthropic's Commercial Terms, which the terms above require for products that run Claude Code.
 
 ## Build

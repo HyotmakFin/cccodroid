@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 安卓 12+ 不经桌面图标动画启动（am start、通知、别的应用拉起）时，系统会先盖一层启动画面：
+     默认灰底 + 白方块里的图标，淡出时压在安装页上很违和。改成和安装页同色、不放图标，看起来就是直接进来 -->
+<resources>
+    <style name="Launch" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_bg</item>
+        <item name="android:colorAccent">#c96442</item>
+        <item name="android:windowSplashScreenBackground">@color/launch_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/launch_bg</item>
+    </style>
+</resources>

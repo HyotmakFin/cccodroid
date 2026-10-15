@@ -62,9 +62,12 @@ public class BrowserPane extends LinearLayout {
         super(a);
         act = a; host = h; this.fileReq = fileReq;
         boolean night = night(a);
-        int bg = night ? Color.parseColor("#1f1e1d") : Color.parseColor("#f5f4ef");
-        int fg = night ? Color.parseColor("#e8e6e1") : Color.parseColor("#2b2a27");
-        int field = night ? Color.parseColor("#2c2b29") : Color.WHITE;
+        // 和对话界面同一套暖色（style.css 的 --bg / --fg / --bg3 / --fg3 / --accent）
+        int bg = Color.parseColor(night ? "#1f1e1d" : "#faf9f5");
+        int fg = Color.parseColor(night ? "#ece9e1" : "#29261f");
+        int field = Color.parseColor(night ? "#2f2e2b" : "#efece4");
+        int hint = Color.parseColor(night ? "#7f7a70" : "#8b867a");
+        int accent = Color.parseColor(night ? "#d97757" : "#c96442");
         setOrientation(VERTICAL);
         setBackgroundColor(bg);
 
@@ -79,9 +82,13 @@ public class BrowserPane extends LinearLayout {
         bar.setSingleLine(true);
         bar.setTextSize(14);
         bar.setTextColor(fg);
-        bar.setHintTextColor(Color.GRAY);
+        bar.setHintTextColor(hint);
         bar.setHint("网址，或 127.0.0.1:端口");
-        bar.setBackground(new ColorDrawable(field));
+        android.graphics.drawable.GradientDrawable fieldBg = new android.graphics.drawable.GradientDrawable();
+        fieldBg.setColor(field);
+        fieldBg.setCornerRadius(dp(10));
+        bar.setBackground(fieldBg);
+        bar.setHighlightColor((accent & 0x00ffffff) | 0x55000000);
         bar.setPadding(dp(10), dp(6), dp(10), dp(6));
         bar.setImeOptions(EditorInfo.IME_ACTION_GO);
         bar.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
@@ -97,10 +104,12 @@ public class BrowserPane extends LinearLayout {
 
         prog = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
         prog.setMax(100);
+        prog.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
+        prog.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(bg));
         addView(prog, new LayoutParams(LayoutParams.MATCH_PARENT, dp(3)));
 
         web = new WebView(a);
-        web.setBackgroundColor(night ? Color.parseColor("#1f1e1d") : Color.WHITE);
+        web.setBackgroundColor(night ? bg : Color.WHITE);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -169,8 +178,12 @@ public class BrowserPane extends LinearLayout {
         });
     }
 
+    /** 跟界面里选的外观走（theme.js → CCApp.themePref 存在 prefs "ui"），没选过才看系统 */
     static boolean night(Context c) {
-        return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        String p = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("theme", "auto");
+        if ("dark".equals(p)) return true;
+        if ("light".equals(p)) return false;
+        return (android.content.res.Resources.getSystem().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
     /** 打开 url；为空就回到上次看的那页，没有上次就停在空白页、光标进地址栏 */

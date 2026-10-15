@@ -26,6 +26,10 @@ These are problems whose root cause we have **not found and cannot fully rule ou
 
 The wide layout does not avoid the hinge precisely, because the build chain lacks Jetpack WindowManager. See "Foldable hinge: help wanted" in [large-screen.md](large-screen.md).
 
+## 4. A brief grey scrim when not launched from the home screen
+
+When the app is cold-started without the launcher icon animation (adb, a notification, another app), Android 12+ first draws a system splash screen. Since 0.2.0-rc1 it uses the setup screen colour and no icon, but on a Red Magic 9 Pro a translucent grey scrim still covers the page for about half a second as the window opens. It is probably the ROM's own window animation; not confirmed. Launching from the home screen icon does not show it.
+
 ## For developers: tests can create fake bugs
 
 Items 1 and 2 are both tied to automated testing. Before fixing one, make sure it **also happens with no tests running**:

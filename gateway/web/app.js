@@ -3436,14 +3436,50 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 切到哪个标签就加载哪个的数据 —— 点标签和 openDrawer 都走这里
   // （以前加载只写在 openDrawer 里，点"设置"标签进去 Shizuku / 更新几块永远不出来）
   function switchTab(name) {
+    const cur = document.querySelector(".tab.active")?.dataset.tab;
+    if (cur && cur !== name) { const pn = document.querySelector(".drawer-panel"); if (pn) pn.scrollTop = 0; }   // 换标签从顶上看起
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
     document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
     if (name === "sessions") loadSessions();
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
+    if (name === "help") loadHelp();
     if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+  // ── 帮助 ── 文档是 web/help/zh.md、en.md（其他语言先用英文）。第一次点开才取、才渲染；
+  // 「## 」小节做成目录，点了在侧栏里滚到那一节；每节标题旁一个 ↑ 回目录。换了界面语言下次点开重新取。
+  let helpLang = "";
+  async function loadHelp() {
+    const lang = /^zh/.test((window.I18N && I18N.lang) || "zh") ? "zh" : "en";
+    if (helpLang === lang) return;
+    const body = $("help-body"), toc = $("help-toc");
+    body.innerHTML = `<p class="muted">${esc(t("加载中…"))}</p>`;
+    try {
+      const r = await fetch("/help/" + lang + ".md", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      setHtml(body, renderMd(await r.text()));
+      helpLang = lang;
+    } catch (e) { body.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+    toc.textContent = "";
+    body.querySelectorAll("h3").forEach((h, i) => {        // renderMd 把 ## 渲染成 h3
+      h.id = "help-" + i;
+      const a = document.createElement("button");
+      a.type = "button";
+      a.className = "help-link";
+      a.textContent = h.textContent;
+      a.onclick = () => h.scrollIntoView({ block: "start", behavior: "smooth" });
+      toc.appendChild(a);
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "help-up";
+      up.textContent = "↑";
+      up.title = t("回到目录");
+      up.onclick = () => toc.scrollIntoView({ block: "start", behavior: "smooth" });
+      h.appendChild(up);
+    });
+  }
   $("btn-menu").addEventListener("click", () => { if (!(window.CCLayout && CCLayout.toggleDock())) openDrawer("sessions"); });
   // ── 文件查看 / 编辑器 ──────────────────────────────────────────────
   // 文本 / 代码：直接改，保存时带上打开那一刻的 mtime —— Claude 在这期间改过就先问，别互相覆盖。
