@@ -587,6 +587,19 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .ext-more summary{cursor:pointer;font-size:12.5px;color:var(--fg2);padding:4px 0}
 .ext-form{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .ext-more-btn{margin-top:4px}
+/* 扩展页四节：折叠容器（摘要行就是节标题）+ 横向滚动的分类索引条 */
+.ext-sec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--fg2);font-weight:600;padding:4px 0;margin-bottom:5px;user-select:none}
+.ext-sec>summary::-webkit-details-marker{display:none}
+.ext-sec>summary::before{content:"▸";display:inline-block;width:1em;color:var(--fg3);transition:transform .15s}
+.ext-sec[open]>summary::before{transform:rotate(90deg)}
+[dir=rtl] .ext-sec>summary::before{transform:scaleX(-1)}
+[dir=rtl] .ext-sec[open]>summary::before{transform:rotate(90deg)}
+.ext-idx{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:2px 0 6px;margin:0 0 2px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.ext-idx::-webkit-scrollbar{display:none}
+.idx-chip{flex:none;white-space:nowrap;font-size:12px;line-height:1;padding:6px 10px;border-radius:14px;border:1px solid var(--line);background:var(--bg3);color:var(--fg2);cursor:pointer}
+.idx-chip span{margin-inline-start:5px;color:var(--fg3);font-variant-numeric:tabular-nums}
+.idx-chip.on{background:var(--accent-dim);border-color:var(--accent-dim);color:var(--fg)}
+.idx-chip.on span{color:var(--fg)}
 /* 安全模式横条 / 修复账本 */
 .safe-bar{flex:none;background:var(--err-bg);color:var(--err-fg);border-top:1px solid var(--err-line);font-size:12.5px;padding:6px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between}
 .item.ledger.bad{border-color:var(--err-line)}

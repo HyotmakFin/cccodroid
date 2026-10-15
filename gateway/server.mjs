@@ -1927,6 +1927,7 @@ async function compList(force) {
       source: e ? e.source : (rec && rec.source) || "", signed: e ? !!e.signed : true,
       verified: e ? e.source === "preset" || !!(b && b.verified) : true,
       license: (e && e.license) || "", homepage: (e && e.homepage) || "", needs: (e && e.needs) || {},
+      category: (e && e.category) || "",          // 扩展页分类索引条用（配方的 category）
       // 依赖：requires 了哪些组件、各自装好没有；谁在依赖它（卸载前要先卸那些）；本机能不能用
       requires: ((e && e.requires) || (rec && rec.requires) || []).map((rid) => ({ id: rid, name: compName(rid, comps), ok: compDepOk(rid, comps, dk) })),
       usedBy: rec ? compUsers(id).map((rid) => ({ id: rid, name: compName(rid, comps) })) : [],
@@ -3460,20 +3461,33 @@ async function removeMcp(name) {
 
 // 技能：~/.claude/skills/<名字>/SKILL.md（开头 YAML 里有 name / description）
 const SKILLS_DIR = path.join(CFG.home, ".claude", "skills");
+// SKILL.md 开头的 YAML：只取顶层的单个键；支持 description: > / | 这类多行块
+function fmField(md, k) {
+  const fm = String(md).replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---/);
+  if (!fm) return "";
+  const lines = fm[1].split("\n"), i = lines.findIndex((l) => l.startsWith(k + ":"));
+  if (i < 0) return "";
+  const v = lines[i].slice(k.length + 1).trim();
+  if (!/^[>|][+-]?$/.test(v)) return v.replace(/^["']|["']$/g, "").trim();
+  const body = [];
+  for (const l of lines.slice(i + 1)) { if (l.trim() && !/^\s/.test(l)) break; body.push(l.trim()); }
+  return (v[0] === ">" ? body.join(" ") : body.join("\n")).replace(/\s+$/, "").trim();
+}
 function skillMeta(dir) {
   try {
     const s = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8").slice(0, 4000);
-    const fm = s.match(/^---\n([\s\S]*?)\n---/);
-    const get = (k) => { const m = fm && fm[1].match(new RegExp("^" + k + ":\\s*(.*)$", "m")); return m ? m[1].replace(/^["']|["']$/g, "").trim() : ""; };
-    return { name: get("name"), description: get("description").slice(0, 300) };
+    return { name: fmField(s, "name"), description: fmField(s, "description").slice(0, 300) };
   } catch { return null; }
 }
 function listSkills() {
   let ents = [];
   try { ents = fs.readdirSync(SKILLS_DIR, { withFileTypes: true }); } catch { return []; }
+  // 哪些是组件带来的：组件的安装记录里有 skill 名（分类索引条分「组件自带 / 自己装的」）
+  const fromComp = new Map();
+  try { for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) { const r = compRecord(f.slice(0, -5)); if (r && r.skill) fromComp.set(r.skill, f.slice(0, -5)); } } catch {}
   return ents.filter((d) => d.isDirectory() || d.isSymbolicLink()).map((d) => {
     const m = skillMeta(path.join(SKILLS_DIR, d.name));
-    return m ? { dir: d.name, name: m.name || d.name, description: m.description } : null;
+    return m ? { dir: d.name, name: m.name || d.name, description: m.description, component: fromComp.get(d.name) || "", official: (skillSource(d.name) || {}).repo === SKILL_REPO } : null;
   }).filter(Boolean);
 }
 function deleteSkill(dir) {
@@ -3483,6 +3497,91 @@ function deleteSkill(dir) {
   fs.rmSync(p, { recursive: true, force: true });
   return { ok: true };
 }
+// ── 官方目录：技能（anthropics/skills）与 MCP 注册表（registry.modelcontextprotocol.io）──
+// 只读公开目录；装卸都落在用户自己的 ~/.claude：技能拷进 skills/，MCP 走 claude mcp add（见 addMcp）。
+const SKILL_REPO = "anthropics/skills";
+let skillCat = null;                 // { at, sha, items }：一小时内复用，GitHub 未登录的 API 一小时只给 60 次
+const ghGet = async (url, json) => {
+  const r = await fetch(url, { headers: { "User-Agent": "cccodroid", ...(json ? { Accept: "application/vnd.github+json" } : {}) }, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return json ? r.json() : Buffer.from(await r.arrayBuffer());
+};
+async function skillCatalog(force) {
+  if (!force && skillCat && Date.now() - skillCat.at < 3600e3) return skillCat;
+  const tree = await ghGet(`https://api.github.com/repos/${SKILL_REPO}/git/trees/HEAD?recursive=1`, true);
+  const blobs = (tree.tree || []).filter((e) => e.type === "blob");
+  const names = [...new Set(blobs.map((e) => /^skills\/([^/]+)\/SKILL\.md$/.exec(e.path)?.[1]).filter((n) => n && SID_RE.test(n)))].sort();
+  const items = await Promise.all(names.map(async (n) => {
+    const files = blobs.filter((e) => e.path.startsWith(`skills/${n}/`)).map((e) => ({ path: e.path.slice(`skills/${n}/`.length), size: e.size || 0 }));
+    let meta = { name: n, description: "" };
+    try {
+      const md = String(await ghGet(`https://raw.githubusercontent.com/${SKILL_REPO}/${tree.sha}/skills/${n}/SKILL.md`)).slice(0, 4000);
+      meta = { name: fmField(md, "name") || n, description: fmField(md, "description").slice(0, 300) };
+    } catch {}
+    return { dir: n, ...meta, files, bytes: files.reduce((a, x) => a + x.size, 0), license: files.some((x) => /^LICENSE/i.test(x.path)) };
+  }));
+  return (skillCat = { at: Date.now(), sha: tree.sha, items });
+}
+const skillSource = (dir) => { try { return JSON.parse(fs.readFileSync(path.join(SKILLS_DIR, dir, ".cc-source.json"), "utf8")); } catch { return null; } };
+async function listSkillCatalog(force) {
+  try {
+    const c = await skillCatalog(force);
+    return { ok: true, repo: SKILL_REPO, items: c.items.map(({ files, ...x }) => ({ ...x,
+      installed: fs.existsSync(path.join(SKILLS_DIR, x.dir, "SKILL.md")), official: (skillSource(x.dir) || {}).repo === SKILL_REPO })) };
+  } catch (e) { return { ok: false, message: "取不到官方技能目录：" + e.message }; }
+}
+/** 装一个官方技能：按目录树逐个下载到临时目录，齐了再改名就位（不会留下半截）；超过 50 MB 不装 */
+async function installCatalogSkill(dir) {
+  if (!SID_RE.test(dir)) return { ok: false, message: "bad name" };
+  const c = await skillCatalog().catch((e) => null);
+  const it = c && c.items.find((x) => x.dir === dir);
+  if (!it) return { ok: false, message: "官方目录里没有这个技能" };
+  const dest = path.join(SKILLS_DIR, dir);
+  if (fs.existsSync(dest)) return { ok: false, message: "已经有同名技能，先删掉再装" };
+  if (it.bytes > 50 << 20) return { ok: false, message: "太大了（超过 50 MB）" };
+  const tmp = path.join(SKILLS_DIR, `.tmp-${dir}-${process.pid}`);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  try {
+    for (const f of it.files) {
+      const out = path.resolve(tmp, f.path);
+      if (!out.startsWith(tmp + path.sep)) throw new Error("bad path " + f.path);
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, await ghGet(`https://raw.githubusercontent.com/${SKILL_REPO}/${c.sha}/skills/${dir}/${f.path.split("/").map(encodeURIComponent).join("/")}`));
+    }
+    fs.writeFileSync(path.join(tmp, ".cc-source.json"), JSON.stringify({ repo: SKILL_REPO, sha: c.sha, path: "skills/" + dir, at: new Date().toISOString() }) + "\n");
+    fs.renameSync(tmp, dest);
+    return { ok: true };
+  } catch (e) { fs.rmSync(tmp, { recursive: true, force: true }); return { ok: false, message: e.message }; }
+}
+
+// MCP 注册表：任何人都能发布，没人审 —— 界面写明，装 npm 包前把命令亮给人看。
+// 本机能直接用的两种：远程（streamable-http / sse）和 npm 包（npx 起 stdio）。pypi / docker 的标成装不了
+const onPath = (bin) => String(claudeEnv().PATH || "").split(":").some((d) => d && fs.existsSync(path.join(d, bin)));
+async function listMcpCatalog(q, cursor) {
+  const u = new URL("https://registry.modelcontextprotocol.io/v0/servers");
+  u.searchParams.set("version", "latest"); u.searchParams.set("limit", "30");
+  if (q) u.searchParams.set("search", String(q).slice(0, 100));
+  if (cursor) u.searchParams.set("cursor", String(cursor).slice(0, 300));
+  let j;
+  try { j = await ghGet(u.href, true); } catch (e) { return { ok: false, message: "取不到 MCP 注册表：" + e.message }; }
+  const field = (x) => ({ name: String(x.name || ""), description: String(x.description || "").slice(0, 200), required: !!x.isRequired, secret: !!x.isSecret });
+  const items = (j.servers || []).map(({ server: v }) => {
+    const options = [
+      ...(v.remotes || []).filter((r) => ["streamable-http", "sse"].includes(r.type) && /^https:\/\//.test(r.url || "")).map((r) => ({
+        kind: "remote", transport: r.type === "sse" ? "sse" : "http", target: r.url, headers: (r.headers || []).map(field) })),
+      ...(v.packages || []).filter((p) => p.registryType === "npm" && (p.transport?.type || "stdio") === "stdio" && /^[@a-z0-9][\w./@-]*$/i.test(p.identifier || "")).map((p) => ({
+        kind: "npm", transport: "stdio", package: p.identifier, version: p.version || "",
+        target: ["npx", "-y", p.identifier + (p.version ? "@" + p.version : ""),
+          ...(p.packageArguments || []).filter((a) => a.type === "positional" && (a.value || a.default)).map((a) => String(a.value || a.default))].join(" "),
+        env: (p.environmentVariables || []).map(field) })),
+    ];
+    const other = [...new Set((v.packages || []).filter((p) => p.registryType !== "npm").map((p) => p.registryType))];
+    return { name: v.name, title: v.title || "", description: String(v.description || "").slice(0, 300), version: v.version || "",
+      homepage: (v.repository && v.repository.url) || v.websiteUrl || "", options, other };
+  });
+  return { ok: true, items, next: (j.metadata && j.metadata.nextCursor) || "", npx: onPath("npx") };
+}
+
 /** 从 zip 装技能：包里找 SKILL.md，它所在的目录就是技能根（兼容「包一层文件夹」和「直接打包」两种） */
 function importSkill(buf) {
   const files = zipRead(buf);
@@ -3745,6 +3844,9 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "POST" && p === "/api/ext/mcp/add") return sendJson(res, 200, await addMcp(body));
         if (req.method === "POST" && p === "/api/ext/mcp/remove") return sendJson(res, 200, await removeMcp(body.name));
         if (req.method === "GET" && p === "/api/ext/skills") return sendJson(res, 200, { items: listSkills(), dir: SKILLS_DIR });
+        if (req.method === "GET" && p === "/api/ext/catalog/skills") return sendJson(res, 200, await listSkillCatalog(u.searchParams.get("refresh") === "1"));
+        if (req.method === "POST" && p === "/api/ext/catalog/skills/install") return sendJson(res, 200, await installCatalogSkill(String(body.dir || "")));
+        if (req.method === "GET" && p === "/api/ext/catalog/mcp") return sendJson(res, 200, await listMcpCatalog(u.searchParams.get("q"), u.searchParams.get("cursor")));
         if (req.method === "POST" && p === "/api/ext/skills/delete") return sendJson(res, 200, deleteSkill(String(body.dir || "")));
         if (req.method === "POST" && p === "/api/ext/skills/import") return sendJson(res, 200, importSkill(await readBodyBuf(req, 64 * 1024 * 1024)));
       } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }

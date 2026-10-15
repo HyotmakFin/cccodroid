@@ -296,15 +296,18 @@
 
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
     <section id="tab-ext" class="tab-pane hidden">
-      <div class="field hidden" id="comp-field"><label><span data-i18n>可选组件</span></label>
+      <!-- 四节都是折叠容器（展开状态记在本机），每节一条横向滚动的分类索引条：点一下只看那一类 -->
+      <details class="field ext-sec hidden" id="comp-field" data-sec="comp" open><summary><span data-i18n>可选组件</span> <span id="comp-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。</div>
+        <div class="ext-idx" id="comp-idx"></div>
         <div id="comp-list" class="list"></div>
-      </div>
+      </details>
       <div class="field hidden" id="gh-field"><label><span>GitHub</span></label>
         <div id="gh-field-box" class="list"></div>
       </div>
       <div class="tiny" data-i18n>改动在下一条消息生效。插件和 MCP 由 claude 自己的命令装卸，这里只是替你敲命令。</div>
-      <div class="field"><label><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></label>
+      <details class="field ext-sec" data-sec="plugin" open><summary><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></summary>
+        <div class="ext-idx" id="plugin-idx"></div>
         <div id="ext-plugins" class="list"></div>
         <div class="row-actions">
           <input id="ext-p-q" placeholder="搜索插件（官方目录与已添加的市场）" data-i18n-attr="placeholder" autocomplete="off">
@@ -318,16 +321,30 @@
             <button id="ext-m-add" class="btn sm ghost" data-i18n>添加市场</button>
           </div>
         </details>
-      </div>
-      <div class="field"><label><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></label>
+      </details>
+      <details class="field ext-sec" data-sec="skill" open><summary><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></summary>
+        <div class="ext-idx" id="skill-idx"></div>
         <div id="ext-skills" class="list"></div>
         <div class="row-actions">
           <button id="ext-s-import" class="btn sm ghost" data-i18n>从 zip 安装技能</button>
           <input id="ext-s-file" type="file" accept=".zip,application/zip" hidden>
         </div>
-      </div>
-      <div class="field"><label><span data-i18n>MCP 服务器</span> <span id="ext-m-count" class="pill"></span></label>
+        <details class="ext-more" id="ext-s-catbox"><summary data-i18n>官方技能（anthropics/skills）</summary>
+          <div class="tiny" data-i18n>Anthropic 官方的技能仓库，装进 ~/.claude/skills；删除在上面的列表里。各个技能的许可证不同，装前可以点链接看一眼。</div>
+          <div id="ext-s-cat" class="list"></div>
+        </details>
+      </details>
+      <details class="field ext-sec" data-sec="mcp" open><summary><span data-i18n>MCP 服务器</span> <span id="ext-m-count" class="pill"></span></summary>
+        <div class="ext-idx" id="mcp-idx"></div>
         <div id="ext-mcp" class="list"><div class="tiny" data-i18n>查询中…（要逐个试连，稍等几秒）</div></div>
+        <details class="ext-more" id="ext-mcp-catbox"><summary data-i18n>官方 MCP 注册表</summary>
+          <div class="tiny" data-i18n>registry.modelcontextprotocol.io：任何人都能发布，没有人审核。本机能装远程服务和 npm 包；npm 包会在本机运行，装之前看清命令和来源。</div>
+          <div class="row-actions">
+            <input id="ext-mcp-q" placeholder="搜索 MCP 服务器（名字或用途）" data-i18n-attr="placeholder" autocomplete="off">
+            <button id="ext-mcp-search" class="btn sm" data-i18n>搜索</button>
+          </div>
+          <div id="ext-mcp-cat" class="list"></div>
+        </details>
         <details class="ext-more"><summary data-i18n>添加 MCP 服务器</summary>
           <div class="ext-form">
             <input id="ext-mcp-name" placeholder="名字（字母、数字、- _ .）" data-i18n-attr="placeholder" autocomplete="off">
@@ -337,7 +354,7 @@
             <button id="ext-mcp-add" class="btn sm" data-i18n>添加</button>
           </div>
         </details>
-      </div>
+      </details>
     </section>
   </div>
 </aside>

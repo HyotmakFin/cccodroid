@@ -2043,13 +2043,46 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 扩展：插件 / 技能 / MCP ──────────────────────────────────────────
   const ext = { q: "", offset: 0, busy: false };
-  const extItem = (title, meta, acts, desc) => `<div class="item">
+  const extItem = (title, meta, acts, desc, tags) => `<div class="item"${tags ? ` data-tags="${esc(tags.join(" "))}"` : ""}>
       <div class="it-title">${title}</div>
       ${meta ? `<div class="it-meta">${meta}</div>` : ""}
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
   function loadExt() { loadComponents(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+
+  // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
+  // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面
+  const tg = (s) => encodeURIComponent(String(s));
+  const extPick = {}, extLabels = {};
+  const CAT = () => ({ dev: t("开发工具"), office: t("文档办公"), media: t("图像影音"), science: t("科学计算"), eda: t("电子设计"),
+    cad: t("3D 与建模"), ai: t("AI 推理"), gpu: t("GPU 与驱动"), net: t("网络"), other: t("其他") });
+  function renderIdx(sec, labels) {
+    if (labels) extLabels[sec] = labels; else labels = extLabels[sec] || [];
+    const bar = $(sec + "-idx"); if (!bar) return;
+    const items = [...document.querySelectorAll(`details[data-sec="${sec}"] .item[data-tags]`)];
+    const count = new Map();
+    for (const it of items) for (const g of it.dataset.tags.split(" ")) count.set(g, (count.get(g) || 0) + 1);
+    const known = new Set(labels.map(([g]) => g));
+    const chips = [...labels.filter(([g]) => count.get(g)),
+      ...[...count.keys()].filter((g) => !known.has(g)).sort().map((g) => [g, decodeURIComponent(g.replace(/^[a-z]+:/, ""))])];
+    if (extPick[sec] && !count.get(extPick[sec])) extPick[sec] = "";
+    const cur = extPick[sec] || "";
+    bar.classList.toggle("hidden", chips.length < 2 && !cur);      // 只有一类时没什么可切的
+    bar.innerHTML = [["", t("全部"), items.length], ...chips.map(([g, l]) => [g, l, count.get(g)])]
+      .map(([g, l, n]) => `<button class="idx-chip${g === cur ? " on" : ""}" data-sec="${sec}" data-idx="${esc(g)}">${esc(l)}<span>${n}</span></button>`).join("");
+    for (const it of items) it.classList.toggle("hidden", !!cur && !it.dataset.tags.split(" ").includes(cur));
+  }
+  $("tab-ext").addEventListener("click", (e) => {
+    const c = e.target.closest(".idx-chip"); if (!c) return;
+    extPick[c.dataset.sec] = c.dataset.idx; renderIdx(c.dataset.sec);
+  });
+  // 折叠状态记在本机：收起的下次还是收起
+  const extOpen = (() => { try { return JSON.parse(localStorage.getItem("cc.extOpen") || "{}"); } catch { return {}; } })();
+  for (const d of document.querySelectorAll("#tab-ext details.ext-sec")) {
+    if (extOpen[d.dataset.sec] === false) d.open = false;
+    d.addEventListener("toggle", () => { extOpen[d.dataset.sec] = d.open; try { localStorage.setItem("cc.extOpen", JSON.stringify(extOpen)); } catch {} });
+  }
 
   // ── 可选组件（浏览器组件 = 无头 Chromium）：下载 → 校验 → 换进工具包，进度靠轮询 ──
   let compTimer = 0;
@@ -2104,13 +2137,18 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
       if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
-      return extItem(name, meta, acts, desc + bar)
+      const tags = ["cat:" + (c.category && CAT()[c.category] ? c.category : "other")];
+      if (c.state === "ok") tags.push("inst");
+      if (["update", "outdated", "damaged", "error"].includes(c.state)) tags.push("upd");
+      return extItem(name, meta, acts, desc + bar, tags)
         .replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
         .replace("<button data-c=\"remove\"", "<button data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
     box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
       (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "") +
       (r.indexError ? '<div class="it-acts"><button class="btn ghost sm" data-c="reindex">' + t("重试") + "</button></div>" : "");
+    $("comp-count").textContent = (r.items || []).length || "";
+    renderIdx("comp", [["inst", t("已装")], ["upd", t("要更新")], ...Object.entries(CAT()).map(([k, v]) => ["cat:" + k, v])]);
     if ($("gh-auth")) loadGhAuth(refresh);
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
     if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
@@ -2172,8 +2210,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       esc(p.id.split("@")[0]) + (p.enabled ? "" : ` <span class="badge">${t("已停用")}</span>`),
       `<span>${esc(p.id.split("@")[1] || "")}</span><span>${esc(String(p.version || "").slice(0, 16))}</span><span>${esc(p.scope || "")}</span>`,
       `<button data-x="${p.enabled ? "disable" : "enable"}" data-id="${esc(p.id)}">${p.enabled ? t("停用") : t("启用")}</button>
-       <button data-x="uninstall" data-id="${esc(p.id)}">${t("卸载")}</button>`)).join("")
+       <button data-x="uninstall" data-id="${esc(p.id)}">${t("卸载")}</button>`, "", [p.enabled ? "on" : "off", "m:" + tg(p.id.split("@")[1] || "")])).join("")
       : `<div class="tiny">${t("还没装插件。在下面搜索可安装的。")}</div>`;
+    renderIdx("plugin", [["on", t("已启用")], ["off", t("已停用")]]);
   }
 
   async function searchPlugins(more) {
@@ -2187,12 +2226,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       esc(p.name),
       `<span>${esc(p.marketplace)}</span>${p.version ? `<span>${esc(p.version)}</span>` : ""}`,
       `<button data-x="install" data-id="${esc(p.id)}">${t("安装")}</button>`,
-      `<div class="tiny ext-desc">${esc(p.description)}</div>`)).join("");
+      `<div class="tiny ext-desc">${esc(p.description)}</div>`, ["m:" + tg(p.marketplace)])).join("");
     const old = box.querySelector(".ext-more-btn"); if (old) old.remove();
     if (!more) box.innerHTML = `<div class="tiny">${t("找到 {n} 个", { n: r.total || 0 })}</div>` + html;
     else box.insertAdjacentHTML("beforeend", html);
     ext.offset += (r.available || []).length;
     if (ext.offset < (r.total || 0)) box.insertAdjacentHTML("beforeend", `<button class="btn ghost sm ext-more-btn">${t("再显示 40 个")}</button>`);
+    renderIdx("plugin");
   }
 
   async function installPlugin(id, btn) {
@@ -2220,8 +2260,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("ext-s-count").textContent = (r.items || []).length;
     $("ext-skills").innerHTML = (r.items || []).map((s) => extItem(esc(s.name), "",
       `<button data-x="skill-rm" data-id="${esc(s.dir)}">${t("删除")}</button>`,
-      `<div class="tiny ext-desc">${esc(s.description)}</div>`)).join("")
+      `<div class="tiny ext-desc">${esc(s.description)}</div>`, [s.component ? "comp" : s.official ? "official" : "user"])).join("")
       || `<div class="tiny">${t("~/.claude/skills 里还没有技能。插件也可能自带技能。")}</div>`;
+    renderIdx("skill", [["official", t("官方")], ["comp", t("组件自带")], ["user", t("自己装的")]]);
+    if ($("ext-s-catbox").open) loadSkillCat();
   }
 
   async function loadExtMcp() {
@@ -2232,9 +2274,107 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       esc(m.name) + (m.cloud ? ` <span class="badge">${t("账户连接器")}</span>` : ""),
       `<span class="mono">${esc(m.target)}</span>`,
       m.cloud ? "" : `<button data-x="mcp-rm" data-id="${esc(m.name)}">${t("移除")}</button>`,
-      `<div class="tiny ext-st ${m.ok ? "ok" : "warn"}">${esc(m.status)}</div>`)).join("")
+      `<div class="tiny ext-st ${m.ok ? "ok" : "warn"}">${esc(m.status)}</div>`,
+      m.cloud ? ["cloud"] : [m.ok ? "ok" : "bad", /^https?:/i.test(m.target || "") ? "remote" : "local"])).join("")
       || `<div class="tiny">${esc(r.err || t("还没有 MCP 服务器。"))}</div>`;
+    renderIdx("mcp", [["ok", t("已连接")], ["bad", t("连不上")], ["cloud", t("账户连接器")], ["local", t("本地")], ["remote", t("远程")]]);
   }
+
+  // ── 官方技能目录（anthropics/skills）：展开时才拉；装好后上面「技能」列表跟着刷新 ──
+  const KB = (n) => (n < 1048576 ? Math.max(1, Math.ceil((n || 0) / 1024)) + " KB" : MB(n));
+  async function loadSkillCat(force) {
+    const box = $("ext-s-cat");
+    if (!box.children.length || force) box.innerHTML = `<div class="tiny">${t("正在拉取官方技能目录…")}</div>`;
+    const r = await api("/api/ext/catalog/skills" + (force ? "?refresh=1" : "")).catch((e) => ({ ok: false, message: e.message }));
+    if (!r.ok) { box.innerHTML = `<div class="tiny err">${esc(r.message || "")}</div><div class="it-acts"><button data-x="skillcat-retry">${t("重试")}</button></div>`; return; }
+    box.innerHTML = r.items.map((x) => extItem(esc(x.name),
+      `<span>${KB(x.bytes)}</span>${x.installed ? `<span>${t("已安装")}</span>` : ""}`,
+      x.installed ? "" : `<button data-x="skillcat-install" data-id="${esc(x.dir)}">${t("安装")}</button>`,
+      `<div class="tiny ext-desc">${esc(x.description)}</div><div class="tiny"><a class="weblink" href="https://github.com/${esc(r.repo)}/tree/main/skills/${esc(x.dir)}">${t("源码与许可证")}</a></div>`)).join("")
+      || `<div class="tiny">${t("官方目录是空的。")}</div>`;
+  }
+  $("ext-s-catbox").addEventListener("toggle", () => { if ($("ext-s-catbox").open) loadSkillCat(); });
+
+  // ── 官方 MCP 注册表：搜索 → 条目里展开小表单（名字、装法、环境变量 / 请求头）→ 交给 claude mcp add ──
+  const mcpCat = { q: "", next: "", npx: false, items: new Map() };
+  const mcpShort = (n) => (String(n).split("/").pop() || "mcp").replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+  async function searchMcpCat(more) {
+    const box = $("ext-mcp-cat");
+    if (!more) { mcpCat.q = $("ext-mcp-q").value.trim(); mcpCat.next = ""; mcpCat.items.clear(); box.innerHTML = `<div class="tiny">${t("正在查注册表…")}</div>`; }
+    const r = await api(`/api/ext/catalog/mcp?q=${encodeURIComponent(mcpCat.q)}&cursor=${encodeURIComponent(more ? mcpCat.next : "")}`).catch((e) => ({ ok: false, message: e.message }));
+    const old = box.querySelector(".mcpcat-more"); if (old) old.remove();
+    if (!r.ok) { box.insertAdjacentHTML(more ? "beforeend" : "afterbegin", `<div class="tiny err">${esc(r.message || "")}</div>`); if (!more) box.querySelector(".tiny:not(.err)")?.remove(); return; }
+    mcpCat.npx = r.npx; mcpCat.next = r.next;
+    const html = r.items.filter((m) => !mcpCat.items.has(m.name)).map((m) => {
+      mcpCat.items.set(m.name, m);
+      const usable = m.options.filter((o) => o.kind === "remote" || r.npx);
+      const meta = (m.version ? `<span>${esc(m.version)}</span>` : "") +
+        m.options.map((o) => `<span>${o.kind === "remote" ? esc(t("远程") + " · " + o.transport) : "npm"}</span>`).join("") +
+        (m.other.length ? `<span class="warn">${t("另有 {kinds} 装法，本机用不了", { kinds: esc(m.other.join(" / ")) })}</span>` : "");
+      const acts = usable.length ? `<button data-x="mcpcat-add" data-id="${esc(m.name)}">${t("添加")}</button>`
+        : `<span class="tiny warn">${m.options.length ? t("要 npx（cccodroid 的工具包里有）") : t("本机装不了")}</span>`;
+      return extItem(esc(m.title || m.name), meta, acts,
+        `<div class="tiny mono">${esc(m.name)}</div><div class="tiny ext-desc">${esc(m.description)}</div>` +
+        (m.homepage ? `<div class="tiny"><a class="weblink" href="${esc(m.homepage)}">${esc(m.homepage)}</a></div>` : "") + `<div class="mcpcat-form hidden"></div>`);
+    }).join("");
+    if (!more) box.innerHTML = html || `<div class="tiny">${t("没找到。换个关键词试试（英文更全）。")}</div>`;
+    else box.insertAdjacentHTML("beforeend", html);
+    if (r.next) box.insertAdjacentHTML("beforeend", `<button class="btn ghost sm mcpcat-more">${t("再显示 30 个")}</button>`);
+  }
+  function mcpCatForm(m, form, oi = 0) {
+    const usable = m.options.filter((o) => o.kind === "remote" || mcpCat.npx), o = usable[oi];
+    const fields = (o.kind === "npm" ? o.env : o.headers) || [];
+    form.innerHTML = `<div class="ext-form">
+      ${usable.length > 1 ? `<select data-f="opt">${usable.map((x, i) => `<option value="${i}"${i === oi ? " selected" : ""}>${x.kind === "npm" ? "npm · " + esc(x.package) : esc(t("远程") + " · " + x.target)}</option>`).join("")}</select>` : ""}
+      <input data-f="name" value="${esc(mcpShort(m.name))}" placeholder="${esc(t("名字（字母、数字、- _ .）"))}" autocomplete="off">
+      <div class="tiny mono">${esc(o.target)}</div>
+      ${fields.map((x) => `<input data-k="${esc(x.name)}" data-req="${x.required ? 1 : ""}" type="${x.secret ? "password" : "text"}" autocomplete="off"
+        placeholder="${esc(x.name + (x.required ? " *" : "") + (x.description ? " — " + x.description : ""))}">`).join("")}
+      <button class="btn sm" data-x="mcpcat-go" data-id="${esc(m.name)}" data-oi="${oi}">${t("确认添加")}</button></div>`;
+    form.classList.remove("hidden");
+  }
+  $("tab-ext").addEventListener("change", (e) => {
+    if (e.target.dataset.f !== "opt") return;
+    const form = e.target.closest(".mcpcat-form"), id = form.parentElement.querySelector("[data-x=mcpcat-add]")?.dataset.id;
+    if (id) mcpCatForm(mcpCat.items.get(id), form, Number(e.target.value));
+  });
+  $("tab-ext").addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.classList.contains("mcpcat-more")) return searchMcpCat(true);
+    const x = b.dataset.x;
+    if (x === "skillcat-retry") return loadSkillCat(true);
+    if (x === "skillcat-install") {
+      b.disabled = true; b.textContent = t("安装中…");
+      const r = await post("/api/ext/catalog/skills/install", { dir: b.dataset.id }).catch((er) => ({ ok: false, message: er.message }));
+      toast(r.ok ? t("已安装 {name}，下一条消息生效", { name: b.dataset.id }) : t("安装失败：{msg}", { msg: r.message || "" }), !r.ok);
+      if (r.ok) loadExtSkills(); else { b.disabled = false; b.textContent = t("安装"); }
+      return;
+    }
+    if (x === "mcpcat-add") {
+      const form = b.closest(".item").querySelector(".mcpcat-form");
+      if (!form.classList.contains("hidden")) return form.classList.add("hidden");
+      return mcpCatForm(mcpCat.items.get(b.dataset.id), form);
+    }
+    if (x === "mcpcat-go") {
+      const m = mcpCat.items.get(b.dataset.id), form = b.closest(".mcpcat-form");
+      const o = m.options.filter((y) => y.kind === "remote" || mcpCat.npx)[Number(b.dataset.oi) || 0];
+      const vals = [...form.querySelectorAll("input[data-k]")].map((i) => [i.dataset.k, i.value.trim(), !!i.dataset.req]);
+      const lack = vals.filter(([, v, req]) => req && !v).map(([k]) => k);
+      if (lack.length) return toast(t("要先填：{names}", { names: lack.join(", ") }), true);
+      const filled = vals.filter(([, v]) => v);
+      const body = { name: form.querySelector("[data-f=name]").value.trim(), transport: o.transport, target: o.target,
+        env: o.kind === "npm" ? filled.map(([k, v]) => k + "=" + v) : [], headers: o.kind === "remote" ? filled.map(([k, v]) => k + ": " + v) : [] };
+      if (o.kind === "npm" && !confirm(t("这个 MCP 服务器会在本机运行下面的 npm 包（注册表里任何人都能发布，没人审核），确认是你信任的来源再继续：\n\n{cmd}", { cmd: o.target }))) return;
+      b.disabled = true;
+      const r = await post("/api/ext/mcp/add", body).catch((er) => ({ ok: false, message: er.message }));
+      b.disabled = false;
+      toast(r.ok ? t("已添加 {name}", { name: body.name }) : t("添加失败：{msg}", { msg: r.message || "" }), !r.ok);
+      if (r.ok) { form.classList.add("hidden"); loadExtMcp(); }
+    }
+  });
+  $("ext-mcp-search").addEventListener("click", () => searchMcpCat(false));
+  $("ext-mcp-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchMcpCat(false); });
+  $("ext-mcp-catbox").addEventListener("toggle", () => { if ($("ext-mcp-catbox").open && !$("ext-mcp-cat").children.length) searchMcpCat(false); });
 
   $("ext-p-search").addEventListener("click", () => searchPlugins(false));
   $("ext-p-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPlugins(false); });
