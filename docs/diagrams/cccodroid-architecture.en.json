@@ -1,445 +1,562 @@
 {
-  "schema_version": 1,
-  "diagram_type": "architecture",
-  "meta": {
-    "title": "cccodroid runtime architecture",
-    "output": "cccodroid-architecture.en.html",
-    "quality_profile": "showcase",
-    "locale": "en",
-    "repository": {
-      "url": "https://github.com/greyoak111/cccodroid",
-      "provider": "github",
-      "link_mode": "web",
-      "revision": "1f3fd447a3f34f5e93780168fd2a2bb092ea7b32"
-    }
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "cccodroid runtime architecture",
+  "output": "cccodroid-architecture.en.html",
+  "quality_profile": "showcase",
+  "locale": "en",
+  "repository": {
+   "url": "https://github.com/greyoak111/cccodroid",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "6706b6e9fa6fd672be6ddb9567b48e65bb8a9628"
+  }
+ },
+ "components": [
+  {
+   "id": "user",
+   "type": "external",
+   "label": "User",
+   "sublabel": "phone / tablet",
+   "pos": [
+    20,
+    200
+   ],
+   "size": [
+    120,
+    64
+   ]
   },
-  "components": [
+  {
+   "id": "ui",
+   "type": "frontend",
+   "label": "UI",
+   "sublabel": "WebView + app.js",
+   "tag": "8 languages",
+   "pos": [
+    220,
+    196
+   ],
+   "size": [
+    160,
+    72
+   ],
+   "sources": [
     {
-      "id": "user",
-      "type": "external",
-      "label": "User",
-      "sublabel": "phone / tablet",
-      "pos": [
-        40,
-        200
-      ],
-      "size": [
-        120,
-        64
-      ]
+     "path": "android/java/cc/codroid/MainActivity.java",
+     "line": 441,
+     "end_line": 454
     },
     {
-      "id": "ui",
-      "type": "frontend",
-      "label": "UI",
-      "sublabel": "WebView + app.js",
-      "tag": "8 languages",
-      "pos": [
-        220,
-        196
-      ],
-      "size": [
-        160,
-        72
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/MainActivity.java",
-          "line": 354,
-          "end_line": 367
-        },
-        {
-          "path": "android/java/cc/codroid/Env.java",
-          "line": 26,
-          "end_line": 30
-        },
-        {
-          "path": "gateway/web/app.js",
-          "line": 116,
-          "end_line": 116
-        }
-      ]
+     "path": "android/java/cc/codroid/Env.java",
+     "line": 26,
+     "end_line": 30
     },
     {
-      "id": "svc",
-      "type": "backend",
-      "label": "GatewayService",
-      "sublabel": "foreground service · freeze watch",
-      "pos": [
-        460,
-        40
-      ],
-      "size": [
-        170,
-        64
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/GatewayService.java",
-          "line": 59,
-          "end_line": 72
-        },
-        {
-          "path": "android/java/cc/codroid/GatewayService.java",
-          "line": 150,
-          "end_line": 151
-        }
-      ]
-    },
-    {
-      "id": "gw",
-      "type": "backend",
-      "label": "Gateway server.mjs",
-      "sublabel": "Node · 127.0.0.1:8791",
-      "tag": "token · queue",
-      "pos": [
-        460,
-        196
-      ],
-      "size": [
-        170,
-        72
-      ],
-      "sources": [
-        {
-          "path": "gateway/server.mjs",
-          "line": 2273,
-          "end_line": 2310
-        },
-        {
-          "path": "gateway/server.mjs",
-          "line": 1493,
-          "end_line": 1520
-        },
-        {
-          "path": "gateway/server.mjs",
-          "line": 2625,
-          "end_line": 2630
-        }
-      ]
-    },
-    {
-      "id": "claude",
-      "type": "backend",
-      "label": "Claude Code",
-      "sublabel": "official, unmodified binary",
-      "tag": "seccomp shim",
-      "pos": [
-        740,
-        196
-      ],
-      "size": [
-        160,
-        72
-      ],
-      "sources": [
-        {
-          "path": "gateway/server.mjs",
-          "line": 1812,
-          "end_line": 1815
-        },
-        {
-          "path": "android/java/cc/codroid/Env.java",
-          "line": 98,
-          "end_line": 99
-        }
-      ]
-    },
-    {
-      "id": "api",
-      "type": "cloud",
-      "label": "Model API",
-      "sublabel": "official account or 3rd-party provider",
-      "pos": [
-        990,
-        196
-      ],
-      "size": [
-        170,
-        72
-      ],
-      "sources": [
-        {
-          "path": "gateway/server.mjs",
-          "line": 780,
-          "end_line": 790
-        },
-        {
-          "path": "gateway/server.mjs",
-          "line": 72,
-          "end_line": 74
-        }
-      ]
-    },
-    {
-      "id": "upd",
-      "type": "backend",
-      "label": "Updater / Installer",
-      "sublabel": "first install & updates",
-      "pos": [
-        740,
-        40
-      ],
-      "size": [
-        160,
-        64
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/Updater.java",
-          "line": 33,
-          "end_line": 35
-        },
-        {
-          "path": "android/java/cc/codroid/Updater.java",
-          "line": 215,
-          "end_line": 215
-        },
-        {
-          "path": "android/java/cc/codroid/Installer.java",
-          "line": 20,
-          "end_line": 42
-        }
-      ]
-    },
-    {
-      "id": "dl",
-      "type": "cloud",
-      "label": "Release sources",
-      "sublabel": "GitHub Releases · downloads.claude.ai",
-      "pos": [
-        990,
-        40
-      ],
-      "size": [
-        170,
-        64
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/Updater.java",
-          "line": 33,
-          "end_line": 33
-        }
-      ]
-    },
-    {
-      "id": "priv",
-      "type": "security",
-      "label": "Priv relay",
-      "sublabel": "checks caller uid",
-      "pos": [
-        220,
-        380
-      ],
-      "size": [
-        160,
-        64
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/Priv.java",
-          "line": 30,
-          "end_line": 44
-        },
-        {
-          "path": "gateway/server.mjs",
-          "line": 1952,
-          "end_line": 1960
-        }
-      ]
-    },
-    {
-      "id": "home",
-      "type": "database",
-      "label": "home/",
-      "sublabel": "sessions · settings · token",
-      "pos": [
-        470,
-        380
-      ],
-      "size": [
-        150,
-        64
-      ],
-      "sources": [
-        {
-          "path": "gateway/server.mjs",
-          "line": 58,
-          "end_line": 58
-        },
-        {
-          "path": "gateway/server.mjs",
-          "line": 2273,
-          "end_line": 2273
-        }
-      ]
-    },
-    {
-      "id": "devkit",
-      "type": "database",
-      "label": "devkit toolchain",
-      "sublabel": "$PREFIX · relocated Termux pkgs",
-      "pos": [
-        740,
-        380
-      ],
-      "size": [
-        160,
-        64
-      ],
-      "sources": [
-        {
-          "path": "devkit/devkit.mjs",
-          "line": 1,
-          "end_line": 16
-        },
-        {
-          "path": "android/java/cc/codroid/Installer.java",
-          "line": 168,
-          "end_line": 198
-        }
-      ]
-    },
-    {
-      "id": "shz",
-      "type": "external",
-      "label": "Shizuku",
-      "sublabel": "shell identity, uid 2000",
-      "pos": [
-        220,
-        540
-      ],
-      "size": [
-        160,
-        60
-      ],
-      "sources": [
-        {
-          "path": "android/java/cc/codroid/ShizukuSetup.java",
-          "line": 43,
-          "end_line": 50
-        }
-      ]
+     "path": "gateway/web/app.js",
+     "line": 116,
+     "end_line": 116
     }
-  ],
-  "boundaries": [
+   ]
+  },
+  {
+   "id": "svc",
+   "type": "backend",
+   "label": "GatewayService",
+   "sublabel": "foreground service · freeze watch",
+   "pos": [
+    460,
+    40
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "sources": [
     {
-      "kind": "region",
-      "label": "cc.codroid app sandbox (private dirs only)",
-      "wraps": [
-        "ui",
-        "svc",
-        "gw",
-        "claude",
-        "upd",
-        "priv",
-        "home",
-        "devkit"
-      ]
+     "path": "android/java/cc/codroid/GatewayService.java",
+     "line": 59,
+     "end_line": 72
+    },
+    {
+     "path": "android/java/cc/codroid/GatewayService.java",
+     "line": 150,
+     "end_line": 151
     }
-  ],
-  "connections": [
+   ]
+  },
+  {
+   "id": "gw",
+   "type": "backend",
+   "label": "Gateway server.mjs",
+   "sublabel": "Node · 127.0.0.1:8791",
+   "tag": "token · queue",
+   "pos": [
+    460,
+    196
+   ],
+   "size": [
+    170,
+    72
+   ],
+   "sources": [
     {
-      "id": "touch",
-      "from": "user",
-      "to": "ui",
-      "label": "use",
-      "variant": "emphasis"
+     "path": "gateway/server.mjs",
+     "line": 3519,
+     "end_line": 3556
     },
     {
-      "id": "ui-gw",
-      "from": "ui",
-      "to": "gw",
-      "label": "HTTP+SSE",
-      "variant": "emphasis"
+     "path": "gateway/server.mjs",
+     "line": 2471,
+     "end_line": 2498
     },
     {
-      "id": "gw-claude",
-      "from": "gw",
-      "to": "claude",
-      "label": "stream-json",
-      "variant": "emphasis"
-    },
-    {
-      "id": "claude-api",
-      "from": "claude",
-      "to": "api",
-      "label": "HTTPS",
-      "variant": "emphasis"
-    },
-    {
-      "id": "svc-gw",
-      "from": "svc",
-      "to": "gw",
-      "label": "spawn · restart"
-    },
-    {
-      "id": "upd-dl",
-      "from": "upd",
-      "to": "dl",
-      "label": "download",
-      "variant": "dashed"
-    },
-    {
-      "id": "upd-claude",
-      "from": "upd",
-      "to": "claude",
-      "label": "install / upgrade"
-    },
-    {
-      "id": "gw-home",
-      "from": "gw",
-      "to": "home",
-      "label": "read/write"
-    },
-    {
-      "id": "claude-devkit",
-      "from": "claude",
-      "to": "devkit",
-      "label": "Bash tool"
-    },
-    {
-      "id": "gw-priv",
-      "from": "gw",
-      "to": "priv",
-      "label": "local socket",
-      "variant": "security"
-    },
-    {
-      "id": "priv-shz",
-      "from": "priv",
-      "to": "shz",
-      "label": "binder",
-      "variant": "security"
+     "path": "gateway/server.mjs",
+     "line": 3999,
+     "end_line": 4004
     }
-  ],
-  "cards": [
+   ]
+  },
+  {
+   "id": "claude",
+   "type": "backend",
+   "label": "Claude Code",
+   "sublabel": "official, unmodified binary",
+   "tag": "seccomp shim",
+   "pos": [
+    740,
+    196
+   ],
+   "size": [
+    160,
+    72
+   ],
+   "sources": [
     {
-      "dot": "emerald",
-      "title": "Main path",
-      "items": [
-        "The UI only subscribes: runs belong to the gateway and survive reloads and backgrounding",
-        "Queued messages wait at the end of the chat; Stop only stops",
-        "Claude Code is the official build, byte-for-byte unmodified"
-      ]
+     "path": "gateway/server.mjs",
+     "line": 2778,
+     "end_line": 2781
     },
     {
-      "dot": "rose",
-      "title": "Security",
-      "items": [
-        "Gateway /api/* requires a 256-bit token; Host and Origin are checked",
-        "Signed-in sessions talk to Anthropic directly, never through a local relay",
-        "priv only accepts calls from the app's own uid"
-      ]
-    },
-    {
-      "dot": "cyan",
-      "title": "Toolchain",
-      "items": [
-        "devkit is assembled from official Termux packages and relocated in place (same-length prefix)",
-        "Entries inside zip/jmod archives are relocated too"
-      ]
+     "path": "android/java/cc/codroid/Env.java",
+     "line": 100,
+     "end_line": 101
     }
-  ]
+   ]
+  },
+  {
+   "id": "api",
+   "type": "cloud",
+   "label": "Model API",
+   "sublabel": "official account or 3rd-party provider",
+   "pos": [
+    990,
+    196
+   ],
+   "size": [
+    170,
+    72
+   ],
+   "sources": [
+    {
+     "path": "gateway/server.mjs",
+     "line": 800,
+     "end_line": 810
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 74,
+     "end_line": 76
+    }
+   ]
+  },
+  {
+   "id": "upd",
+   "type": "backend",
+   "label": "Updater / Installer",
+   "sublabel": "first install & updates",
+   "pos": [
+    740,
+    40
+   ],
+   "size": [
+    160,
+    64
+   ],
+   "sources": [
+    {
+     "path": "android/java/cc/codroid/Updater.java",
+     "line": 33,
+     "end_line": 35
+    },
+    {
+     "path": "android/java/cc/codroid/Updater.java",
+     "line": 252,
+     "end_line": 252
+    },
+    {
+     "path": "android/java/cc/codroid/Installer.java",
+     "line": 20,
+     "end_line": 42
+    }
+   ]
+  },
+  {
+   "id": "dl",
+   "type": "cloud",
+   "label": "Release sources",
+   "sublabel": "GitHub Releases · downloads.claude.ai",
+   "pos": [
+    990,
+    40
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "sources": [
+    {
+     "path": "android/java/cc/codroid/Updater.java",
+     "line": 33,
+     "end_line": 33
+    }
+   ]
+  },
+  {
+   "id": "priv",
+   "type": "security",
+   "label": "Priv relay",
+   "sublabel": "checks caller uid",
+   "pos": [
+    220,
+    380
+   ],
+   "size": [
+    160,
+    64
+   ],
+   "sources": [
+    {
+     "path": "android/java/cc/codroid/Priv.java",
+     "line": 30,
+     "end_line": 44
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 2977,
+     "end_line": 2985
+    }
+   ]
+  },
+  {
+   "id": "home",
+   "type": "database",
+   "label": "home/",
+   "sublabel": "sessions · settings · token",
+   "pos": [
+    470,
+    380
+   ],
+   "size": [
+    150,
+    64
+   ],
+   "sources": [
+    {
+     "path": "gateway/server.mjs",
+     "line": 60,
+     "end_line": 60
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 3519,
+     "end_line": 3519
+    }
+   ]
+  },
+  {
+   "id": "devkit",
+   "type": "database",
+   "label": "devkit toolchain",
+   "sublabel": "$PREFIX · relocated Termux pkgs",
+   "pos": [
+    740,
+    380
+   ],
+   "size": [
+    160,
+    64
+   ],
+   "sources": [
+    {
+     "path": "devkit/devkit.mjs",
+     "line": 1,
+     "end_line": 16
+    },
+    {
+     "path": "android/java/cc/codroid/Installer.java",
+     "line": 170,
+     "end_line": 200
+    }
+   ]
+  },
+  {
+   "id": "shz",
+   "type": "external",
+   "label": "Shizuku",
+   "sublabel": "shell identity, uid 2000",
+   "pos": [
+    20,
+    380
+   ],
+   "size": [
+    160,
+    60
+   ],
+   "sources": [
+    {
+     "path": "android/java/cc/codroid/ShizukuSetup.java",
+     "line": 43,
+     "end_line": 50
+    }
+   ]
+  },
+  {
+   "id": "comp",
+   "type": "backend",
+   "label": "Component manager",
+   "sublabel": "verify · install · clean removal",
+   "tag": "ed25519",
+   "pos": [
+    740,
+    540
+   ],
+   "size": [
+    160,
+    64
+   ],
+   "sources": [
+    {
+     "path": "gateway/server.mjs",
+     "line": 1803,
+     "end_line": 1812
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 1836,
+     "end_line": 1846
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 2043,
+     "end_line": 2071
+    }
+   ]
+  },
+  {
+   "id": "skills",
+   "type": "database",
+   "label": "~/.claude/skills",
+   "sublabel": "skills shipped by components",
+   "pos": [
+    470,
+    540
+   ],
+   "size": [
+    150,
+    64
+   ],
+   "sources": [
+    {
+     "path": "gateway/server.mjs",
+     "line": 2072,
+     "end_line": 2083
+    },
+    {
+     "path": "gateway/server.mjs",
+     "line": 3461,
+     "end_line": 3462
+    }
+   ]
+  },
+  {
+   "id": "market",
+   "type": "cloud",
+   "label": "Component market",
+   "sublabel": "recipe → CI audit → build → signed index",
+   "pos": [
+    990,
+    540
+   ],
+   "size": [
+    190,
+    64
+   ]
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "cc.codroid app sandbox (private dirs only)",
+   "wraps": [
+    "ui",
+    "svc",
+    "gw",
+    "claude",
+    "upd",
+    "priv",
+    "home",
+    "devkit",
+    "comp",
+    "skills"
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "touch",
+   "from": "user",
+   "to": "ui",
+   "label": "use",
+   "variant": "emphasis"
+  },
+  {
+   "id": "ui-gw",
+   "from": "ui",
+   "to": "gw",
+   "label": "HTTP+SSE",
+   "variant": "emphasis"
+  },
+  {
+   "id": "gw-claude",
+   "from": "gw",
+   "to": "claude",
+   "label": "stream-json",
+   "variant": "emphasis"
+  },
+  {
+   "id": "claude-api",
+   "from": "claude",
+   "to": "api",
+   "label": "HTTPS",
+   "variant": "emphasis"
+  },
+  {
+   "id": "svc-gw",
+   "from": "svc",
+   "to": "gw",
+   "label": "spawn · restart"
+  },
+  {
+   "id": "upd-dl",
+   "from": "upd",
+   "to": "dl",
+   "label": "download",
+   "variant": "dashed"
+  },
+  {
+   "id": "upd-claude",
+   "from": "upd",
+   "to": "claude",
+   "label": "install / upgrade"
+  },
+  {
+   "id": "gw-home",
+   "from": "gw",
+   "to": "home",
+   "label": "read/write"
+  },
+  {
+   "id": "claude-devkit",
+   "from": "claude",
+   "to": "devkit",
+   "label": "Bash tool"
+  },
+  {
+   "id": "gw-priv",
+   "from": "gw",
+   "to": "priv",
+   "label": "local socket",
+   "variant": "security"
+  },
+  {
+   "id": "priv-shz",
+   "from": "priv",
+   "to": "shz",
+   "label": "binder",
+   "variant": "security"
+  },
+  {
+   "id": "gw-comp",
+   "from": "gw",
+   "to": "comp",
+   "label": "/api/components"
+  },
+  {
+   "id": "comp-market",
+   "from": "comp",
+   "to": "market",
+   "label": "index + packages · verified",
+   "variant": "dashed"
+  },
+  {
+   "id": "comp-devkit",
+   "from": "comp",
+   "to": "devkit",
+   "label": "into $PREFIX"
+  },
+  {
+   "id": "comp-skills",
+   "from": "comp",
+   "to": "skills",
+   "label": "copy skill"
+  },
+  {
+   "id": "claude-skills",
+   "from": "claude",
+   "to": "skills",
+   "label": "learns new tools",
+   "variant": "emphasis"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "emerald",
+   "title": "Main path",
+   "items": [
+    "The UI only subscribes: runs belong to the gateway and survive reloads and backgrounding",
+    "Queued messages wait at the end of the chat; Stop only stops",
+    "Claude Code is the official build, byte-for-byte unmodified",
+    "Tool calls that need approval show a card; per-call approval by default, as upstream"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Security",
+   "items": [
+    "Gateway /api/* requires a 256-bit token; Host and Origin are checked",
+    "Signed-in sessions talk to Anthropic directly, never through a local relay",
+    "priv only accepts calls from the app's own uid"
+   ]
+  },
+  {
+   "dot": "cyan",
+   "title": "Toolchain",
+   "items": [
+    "devkit is assembled from official Termux packages and relocated in place (same-length prefix)",
+    "Entries inside zip/jmod archives are relocated too"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Component ecosystem",
+   "items": [
+    "A component adds commands plus a skill, so Claude learns to use them on its own",
+    "Community recipes reference Termux packages or upstream files pinned by sha256",
+    "CI audits every build and grades it green / amber / red, so humans review only what matters",
+    "The app trusts only the ed25519-signed index, which pins every package's sha256"
+   ]
+  }
+ ]
 }

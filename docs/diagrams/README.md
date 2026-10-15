@@ -40,6 +40,17 @@ it draws each SVG onto a 2× canvas and posts the PNG back to the server. Rename
 PNG：`node png-server.mjs .`（端口 8799）起一个服务，任意浏览器打开 `http://127.0.0.1:8799/render-png.html`，在控制台执行 `go()`，
 它把每张 SVG 画到 2 倍大小的画布上，再把 PNG 传回服务端落盘。最后改名为 `cccodroid-architecture.<语言>-<主题>.png`。
 
+PNG without a browser (what the current PNGs were made with): flatten the SVG for [resvg](https://github.com/linebender/resvg) — CSS variables, `color-mix()` and theme selectors resolved — then render at 2× with the system fonts.
+`resvg-wasm` is fetched from npm (`@resvg/resvg-wasm`, MPL-2.0) and not vendored here:
+
+不用浏览器出 PNG（现在这几张就是这么出的）：先把 SVG 化简成 [resvg](https://github.com/linebender/resvg) 能吃的（代入 CSS 变量、算出 `color-mix()`、按主题化简选择器），再用系统字体按 2 倍渲染。
+`resvg-wasm` 从 npm 取（`@resvg/resvg-wasm`，MPL-2.0），不放进本仓库：
+
+```sh
+node flatten-svg.mjs en-light.svg f-en-light.svg
+node resvg-png.mjs <resvg-wasm 解包目录> f-en-light.svg cccodroid-architecture.en-light.png
+```
+
 ### On Android · 在安卓上
 
 Archify publishes files atomically with hard links and checks inode identity. Android's SELinux forbids regular apps from creating hard links in their private directories (`link` → `EACCES`), and the kernel exposes no real file birth time (Node reports ctime instead).

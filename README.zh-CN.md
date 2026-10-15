@@ -86,7 +86,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/cccodroid-architecture.zh-CN-dark.png">
-  <img alt="cccodroid 架构：用户在界面（WebView 里的 app.js）上操作，界面经 HTTP 与 SSE 连 127.0.0.1 上的 Node 网关；网关由前台服务 GatewayService 拉起和崩溃重启，读写 home/ 下的会话、设置与令牌，经本地套接字通过 Priv 提权中转调用 Shizuku，并以 stream-json 驱动官方原版 Claude Code；Claude Code 经 HTTPS 调用模型 API，用 Bash 工具调用 devkit 工具链；Updater / Installer 从 GitHub Releases 与 downloads.claude.ai 下载，安装和升级 Claude Code" src="docs/diagrams/cccodroid-architecture.zh-CN-light.png">
+  <img alt="cccodroid 架构：用户在界面（WebView 里的 app.js）上操作，界面经 HTTP 与 SSE 连 127.0.0.1 上的 Node 网关；网关由前台服务 GatewayService 拉起和崩溃重启，读写 home/ 下的会话、设置与令牌，经本地套接字通过 Priv 提权中转调用 Shizuku，并以 stream-json 驱动官方原版 Claude Code；Claude Code 经 HTTPS 调用模型 API，用 Bash 工具调用 devkit 工具链；Updater / Installer 从 GitHub Releases 与 downloads.claude.ai 下载，安装和升级 Claude Code；组件管理从组件市场取 ed25519 签名的索引和组件包，装进 devkit，并把组件带的 skill 拷进 ~/.claude/skills，Claude Code 读到后就学会用新工具" src="docs/diagrams/cccodroid-architecture.zh-CN-light.png">
 </picture>
 
 可交互版本（引导视图、深浅色、导出）：下载 [`docs/diagrams/cccodroid-architecture.zh-CN.html`](docs/diagrams/cccodroid-architecture.zh-CN.html) 用浏览器打开；
