@@ -2712,7 +2712,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 账户登录卡 ──
   async function renderLoginCard(box, p) {
-    box.innerHTML = `<div class="sub">${esc(p.label)}</div>
+    box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
       <div class="prov-state" id="login-state">${t("查询登录状态…")}</div>
       <div class="row-actions" id="login-actions"></div>
       <div id="login-flow"></div>
@@ -2820,7 +2820,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 密钥卡（Claude API Key 与第三方厂商）──
   function renderKeyCard(box, p) {
-    box.innerHTML = `<div class="sub">${esc(p.label)}</div>
+    box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
       ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">${t("线路")}</div>
         <select id="pc-endpoint">${p.endpoints.map((e) =>
           `<option value="${esc(e.id)}" ${e.id === p.endpoint ? "selected" : ""}>${esc(pLabel(e))}</option>`).join("")}</select>` : ""}
@@ -3103,7 +3103,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 自定义接口卡（任何讲 Anthropic Messages 协议的端点）──
   function renderCustomCard(box, p) {
     const v = p || { label: "", baseUrl: "", authStyle: "bearer", modelsUrl: "", defaultModel: "", fastModel: "" };
-    box.innerHTML = `<div class="sub">${p ? esc(p.label) : t("新增自定义接口")}</div>
+    box.innerHTML = `<div class="sub">${p ? esc(pLabel(p)) : t("新增自定义接口")}</div>
       <input id="cc-label" placeholder="${t("名字（比如：公司网关）")}" value="${esc(v.label)}">
       <input id="cc-base" placeholder="${t("端点地址，如")} https://example.com/anthropic" value="${esc(v.baseUrl)}">
       <select id="cc-auth">
@@ -4065,6 +4065,47 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     let last = 0;
     document.addEventListener("scroll", (e) => { const n = performance.now(); if (n - last > 300) { last = n; add("scroll " + who(e.target)); } }, { capture: true, passive: true });
     document.addEventListener("visibilitychange", () => add("visibility " + document.visibilityState));
+
+    // 兜底：手指在对话区竖着拖了一段、对话区却纹丝不动（而它明明还能往那个方向滚）→ 判定冻住了。
+    // 先「踢」一下滚动容器（overflow 关了再开，让浏览器重建滚动状态），这一下手势剩下的部分由这里接管、照手指挪 scrollTop。
+    // 不用重开 App；根因还没定位，每次触发都记进 __touchLog（"assist"）留着查。
+    // 拖的是对话区里自己能滚的东西（长代码块、排队消息、思考块）时不接管，免得两边一起滚。
+    let g = null;
+    const innerScroller = (el) => {
+      for (; el && el !== chatEl; el = el.parentElement) {
+        if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return true;
+      }
+      return false;
+    };
+    chatEl.addEventListener("touchstart", (e) => {
+      g = null;
+      if (e.touches.length !== 1 || innerScroller(e.target)) return;
+      const t = e.touches[0];
+      g = { x0: t.clientX, y0: t.clientY, y: t.clientY, top0: chatEl.scrollTop, assist: false, frames: 0 };
+    }, { passive: true });
+    chatEl.addEventListener("touchmove", (e) => {
+      if (!g || e.touches.length !== 1) return;
+      const t = e.touches[0], dy = g.y - t.clientY;
+      g.y = t.clientY;
+      if (g.assist) {
+        // 浏览器自己也滚起来了（误判 / 踢活了）：立刻撒手，免得两边一起滚、页面乱跳
+        if (Math.abs(chatEl.scrollTop - g.exp) > 2) { add("assist off"); g = null; return; }
+        chatEl.scrollTop += dy; g.exp = chatEl.scrollTop; return;
+      }
+      const ty = g.y0 - t.clientY, tx = g.x0 - t.clientX;
+      if (Math.abs(ty) < 40 || Math.abs(ty) < Math.abs(tx) * 1.5) return;          // 还没拖够、或者是横着拖
+      if (++g.frames < 3) return;                                                   // 给浏览器几帧时间先自己滚
+      const max = chatEl.scrollHeight - chatEl.clientHeight;
+      const canMove = ty > 0 ? chatEl.scrollTop < max - 1 : chatEl.scrollTop > 0;
+      if (!canMove || chatEl.scrollTop !== g.top0) { g = null; return; }           // 到头了 / 正常在滚：不管
+      g.assist = true;
+      add("assist dy=" + Math.round(ty) + " top=" + Math.round(chatEl.scrollTop));
+      chatEl.style.overflowY = "hidden";
+      requestAnimationFrame(() => { chatEl.style.overflowY = ""; });
+      chatEl.scrollTop += ty; g.exp = chatEl.scrollTop;
+    }, { passive: true });
+    chatEl.addEventListener("touchend", () => { g = null; }, { passive: true });
+    chatEl.addEventListener("touchcancel", () => { g = null; }, { passive: true });
   })();
 
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。

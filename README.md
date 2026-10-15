@@ -25,26 +25,29 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - `/compact`, `/context` and other built-in commands show their results immediately.
   - Each reply shows a live generation timer that settles to the total time when it finishes.
   - Light / dark appearance, or follow the system (status bar included).
-  - **Session management**: deleted sessions go to a recycle bin first (restorable for 30 days). Pick sessions one by one or all at once and export them as a zip — handed straight to the system share sheet — then import the zip on another device and carry on where you left off.
+  - **Tablets in landscape and unfolded foldables**: depending on the window width, the layout becomes two columns (chat plus a workspace on the right) or three (plus a docked sidebar). Files, the viewer, the terminal and the in-app browser open on the right without covering the chat, and you can drag the divider between them. Phones in portrait and narrow split screens look the same as before.
+  - **Work survives the background**: you get a system notification when a turn finishes or Claude is waiting for your approval. It shows no heads-up banner. The notification only offers *Deny* and *Open*; to allow a command you have to return to the app and read it in full. If the system kills the app, reopening it marks the unfinished turn as *Interrupted* with a *Continue* button, and queued messages are still there.
+  - **Session management**: deleted sessions go to a recycle bin first (restorable for 30 days). Pick sessions one by one or all at once and export them as a zip — save it anywhere with the system *Save to* picker, or share it directly — then import the zip on another device and carry on where you left off.
   - **Terminal** (top bar): a real terminal with tabs, running the same bash and toolchain Claude uses — hx (Helix), less, top, git and the rest. A row of extra keys supplies what phone keyboards lack (Esc, Tab, sticky Ctrl / Alt, arrows, Home / End, PgUp / PgDn, paste, font size); a text view lets you long-press to select and copy output. Terminals keep running when you close the panel and replay their output when you come back.
   - **File viewer / editor** (from the file browser): edit text and code and save — if the file changed on disk after you opened it (say Claude edited it), you are asked before anything is overwritten. Markdown renders with an edit toggle; images open fit-to-screen and tap to 1:1; PDFs render with [pdf.js](https://mozilla.github.io/pdf.js/) (CJK text and password-protected files included), pages drawn only as they scroll into view.
   - A **↓ button** appears when you scroll up through a long chat; tap it to jump to the latest message. A dot on it means new output arrived meanwhile.
   - **Paths in replies are links**: tap an absolute path such as `/storage/emulated/0/…/report.pdf` (or `file.js:12`) and it opens in the viewer; a folder opens in the file browser. Claude is told to write full paths so this always works. Tool cards that read or write a file get a ↗ button too.
-  - **In-app browser** (globe in the top bar): web links in replies open inside the app — handy for checking a dev server at `http://127.0.0.1:<port>/`. It uses the system WebView, so it adds no download. Sign-in pages still go to your normal browser.
+  - **In-app browser** (globe in the top bar): web links in replies open inside the app — handy for checking a dev server at `http://127.0.0.1:<port>/`. On wide screens it opens in the workspace on the right, next to the chat. It uses the system WebView, so it adds no download. Sign-in pages still go to your normal browser.
   - UI in 9 languages: 简体中文, 繁體中文, English, Français, Español, Русский, العربية (RTL), 日本語, 한국어.
 - **Optional components** (Extensions → Optional components): large tools that don't ship with the app; download them only if you need them. Each build matches a specific toolchain release, is checked against its SHA-256 and a per-file manifest before anything is installed, and uninstalls cleanly.
-  - **Browser component (headless Chromium 155)**, about 290 MB to download and 873 MB installed: lets Claude open pages headlessly — screenshots, PDF export, the rendered DOM, and scripted browsing with puppeteer-core. It comes with a skill that tells Claude how to use it.
-  - **Community components** from the [cccodroid-components](https://github.com/greyoak111/cccodroid-components) repository. Currently **GitHub CLI (gh)**, about 14 MB: pull requests, issues, releases and Actions; once signed in, git pushes over https work too. Indexes are ed25519-signed and rejected if they do not check out; community components are labelled as such, and builds nobody has verified on a real device ask first.
+  - **Browser component (headless Chromium 155)**, about 254 MB to download and 750 MB installed: lets Claude open pages headlessly — screenshots, PDF export, the rendered DOM, and scripted browsing with puppeteer-core. It comes with a skill that tells Claude how to use it.
+  - **Community components** from the [cccodroid-components](https://github.com/greyoak111/cccodroid-components) repository. There are currently 13, including GitHub CLI (gh), Godot (headless runs, APK export), LibreOffice (headless document conversion), llama.cpp (local LLM inference), OpenSCAD, ngspice / gnucap (circuit simulation), Icarus Verilog / Yosys (digital design), a Snapdragon GPU driver (Vulkan / OpenGL / OpenCL) and GPU benchmarks. See the [full list](https://github.com/greyoak111/cccodroid-components#components). Indexes are ed25519-signed and rejected if they do not check out; community components are labelled as such, and builds nobody has verified on a real device ask first.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically. The account card shows your 5-hour and weekly usage limits with their reset times (taken from what Claude Code itself reports after each turn — the app never queries anything with your credentials).
   - Claude API key.
   - The official Anthropic-compatible endpoints of DeepSeek, Zhipu GLM, Qwen and Kimi.
   - Any other compatible third-party endpoint you add.
-- **A complete development toolchain** (about 200 components, taken from the official [Termux](https://termux.dev) repositories):
+- **A complete development toolchain** (about 250 packages, taken from the official [Termux](https://termux.dev) repositories):
   - C/C++: clang 21 / lld, make / cmake / ninja, gdb / strace.
   - Languages: Python 3.14 (pip, venv), Node 26 (npm, npx).
   - Android builds: OpenJDK 21, aapt2 / d8 / apksigner — build APKs on the phone.
   - VCS and network: git, ssh, curl.
+  - Audio and video: ffmpeg 9 (x264 / x265 / VP9 / AV1 / Opus…) with hardware encoding on the phone (`h264_mediacodec` / `hevc_mediacodec`), more than 3× faster than software encoding.
   - CLI tools: rg / fd / bat / jq / sqlite3 / typst / ImageMagick… Tab completion works in interactive bash; `hx-grammar` installs just the Helix syntax grammars you need; typst finds the system CJK fonts out of the box.
 - **System privileges (optional)**: [Shizuku](https://shizuku.rikka.app) integration. In the terminal, `priv '<cmd>'` runs pm / am / settings / logcat / screencap… as the shell user.
   - One-tap install and activation from Settings: downloaded from Shizuku's official release (signing certificate verified), installed with the system installer,
@@ -59,16 +62,17 @@ See **[Design philosophy](docs/design-philosophy.md)**.
 - **Extensions**: install, enable, disable and uninstall Claude Code plugins (search the official directory or add other marketplaces), install skills from a zip, and add or remove MCP servers — all from the Extensions tab. Everything goes through Claude Code’s own `claude plugin` / `claude mcp` commands; a plugin that needs to run a command to install shows it to you first.
 - **Troubleshooting**:
   - **Safe mode**: if a hook, plugin, MCP server or CLAUDE.md breaks things, turn on safe mode and Claude Code starts with its built-in `--safe-mode` — no customizations loaded, while sign-in, keys, sessions and model stay as they are. Nothing is moved or edited; turning it off restores everything.
-  - **One-tap log share**: diagnostics, the app log, the gateway log and the repair ledger, packed into a zip and handed to the system share sheet. Keys, tokens and email addresses are scrubbed first.
+  - **I'm stuck · bundle diagnostics** (in Settings, and on the install-failure screen): diagnostics, the app log, the gateway log and the repair ledger, packed into a zip and handed to the system share sheet. Before packing, you see a list of what goes in. Keys, tokens, email addresses and the content of your messages to Claude are scrubbed first, and conversation transcripts are not included.
+  - **Plain-language first-install errors**: the app checks free space before downloading and tells you how much it needs. Failures such as being offline, rate limiting or a checksum mismatch are explained in plain words. *Retry* resumes from what was already downloaded.
   - **Repair ledger**: every toolchain install, verification, repair and startup recovery is recorded (what was found, what was done, the result) and can be read in Settings.
 - **USB debugging of another device**: connect it with an OTG cable and run `usb-adb`, then `adb devices / install / shell` as usual.
-- **Self-test**: `cccodroid-selftest` exercises 71 tools and usages; the tool notes are injected into Claude's system prompt so it knows what it has.
+- **Self-test**: `cccodroid-selftest` exercises 73 tools and usages (including ffmpeg and a hardware-encoding probe); the tool notes are injected into Claude's system prompt so it knows what it has.
 
 ## Install
 
 1. Download `cccodroid.apk` from [Releases](https://github.com/greyoak111/cccodroid/releases) and install it.
 2. Open the app. The first launch automatically:
-   - downloads the toolchain (about 600 MB, resumable, sha256-verified, then unpacked);
+   - downloads the toolchain (about 650 MB, resumable, sha256-verified, then unpacked);
    - downloads Claude Code from Anthropic's official channel (about 230 MB).
 3. Choose how to connect in Settings: sign in with a Claude account, or enter an API key.
 4. (Optional) Install and start Shizuku, then grant it in Settings to enable `priv` and stronger keep-alive.

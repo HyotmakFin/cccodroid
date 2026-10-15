@@ -26,26 +26,29 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - `/compact`、`/context` 等内置命令的结果当场显示。
   - 每条回复带生成计时，生成中实时跳动，结束后定格为总用时。
   - 外观可选浅色 / 深色 / 跟随系统（状态栏一起换）。
-  - **会话管理**：删除先进回收站（30 天内可恢复）；可逐条勾选或全选，打包导出成 zip，直接经系统分享发走；在另一台设备上导入就能接着聊。
+  - **平板横屏 / 折叠屏展开**：按窗口宽度自动变成两栏（对话 + 右侧工作区）或三栏（再加常驻侧栏）。文件、查看器、终端、应用内浏览器都开在右侧，不盖住对话；分隔条可拖。手机竖屏和窄分屏与以前一样。
+  - **切到后台不丢活**：一轮跑完、或 Claude 等你确认时发系统通知（不弹横幅；通知里只有「拒绝」和「打开查看」，放行必须回到应用看完整命令）。应用被系统杀掉后重开，没跑完的那一轮会标明「被中断」并给「继续」按钮，排队的消息也都还在。
+  - **会话管理**：删除先进回收站（30 天内可恢复）；可逐条勾选或全选，打包导出成 zip，用系统的「保存到」存到任意位置或直接分享；在另一台设备上导入就能接着聊。
   - **终端**（顶栏）：真正的终端，可开多个标签，跑的是 Claude 用的同一个 bash 与工具链 —— hx（Helix）、less、top、git 等都能用。底下一排补上手机键盘没有的键（Esc、Tab、粘住的 Ctrl / Alt、方向键、Home / End、PgUp / PgDn、粘贴、字号）；「文本视图」可长按选择复制输出。关掉面板终端照样在跑，回来时回放输出。
   - **文件查看 / 编辑器**（从文件浏览器打开）：文本、代码直接改、直接存 —— 打开之后磁盘上的文件被改过（比如 Claude 改了），保存前会先问你，不会悄悄覆盖。Markdown 渲染显示，可切到编辑；图片适应屏幕，点一下看原始大小；PDF 用 [pdf.js](https://mozilla.github.io/pdf.js/) 渲染（含中日韩文字与带密码的文件），翻到哪页才画哪页。
   - 往上翻长对话时右下角出一个 **↓ 圆钮**，点一下回到最新消息；翻着的时候有新输出，钮上会亮一个点。
   - **回复里的路径能点**：像 `/storage/emulated/0/…/report.pdf`（或 `file.js:12`）这样的绝对路径，点一下就在查看器里打开；目录则打开文件浏览器。已要求 Claude 一律写完整路径。读写文件的工具卡片上也有 ↗ 按钮。
-  - **应用内浏览器**（顶栏地球按钮）：回复里的网页链接直接在应用里打开，看本机开发服务 `http://127.0.0.1:<端口>/` 很方便。用的是系统 WebView，不额外下载任何东西；登录授权页仍交给系统浏览器。
+  - **应用内浏览器**（顶栏地球按钮）：回复里的网页链接直接在应用里打开，看本机开发服务 `http://127.0.0.1:<端口>/` 很方便；宽屏时开在右侧工作区，边看网页边看对话。用的是系统 WebView，不额外下载任何东西；登录授权页仍交给系统浏览器。
   - 界面 9 种语言：简体中文、繁體中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
 - **可选组件**（扩展 → 可选组件）：体积大的工具不随应用安装，用得上再下载。每个组件包都对应特定版本的工具包，装之前先核对 SHA-256 和逐文件清单，卸载干净。
-  - **浏览器组件（无头 Chromium 155）**：下载约 290 MB，装好后约 873 MB。让 Claude 在后台打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页。附带一个技能，告诉 Claude 怎么用。
-  - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前有 **GitHub CLI（gh）**，下载约 14 MB：开 PR、看 Issue、管 Release、跑 Actions；登录后 git 的 https 推送直接可用。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
+  - **浏览器组件（无头 Chromium 155）**：下载约 254 MB，装好后约 750 MB。让 Claude 在后台打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页。附带一个技能，告诉 Claude 怎么用。
+  - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前 13 个：GitHub CLI（gh）、Godot（无头运行 / 导出 APK）、LibreOffice（无头文档转换）、llama.cpp（本地大模型推理）、OpenSCAD、ngspice / gnucap（电路仿真）、Icarus Verilog / Yosys（数字电路）、骁龙 GPU 驱动（Vulkan / OpenGL / OpenCL）与 GPU 跑分，见[完整列表](https://github.com/greyoak111/cccodroid-components/blob/main/README.zh-CN.md#组件列表)。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
 - **多种接入方式**：
   - Claude 账户登录：应用内完成，浏览器授权后自动回到应用。账户卡片显示 5 小时额度与每周额度的占用和重置时间（取自 Claude Code 每轮自己回报的数据，应用不拿你的凭据去查任何东西）。
   - Claude API Key。
   - DeepSeek、智谱 GLM、通义千问、Kimi 的官方 Anthropic 兼容接口。
   - 可以继续添加任意第三方兼容接口。
-- **完整的开发工具链**（约 200 个组件，取自 [Termux](https://termux.dev) 官方仓库）：
+- **完整的开发工具链**（约 250 个包，取自 [Termux](https://termux.dev) 官方仓库）：
   - C/C++：clang 21 / lld、make / cmake / ninja、gdb / strace。
   - 语言：Python 3.14（pip、venv）、Node 26（npm、npx）。
   - 安卓构建：OpenJDK 21、aapt2 / d8 / apksigner，可以在手机上打 APK。
   - 版本控制与网络：git、ssh、curl。
+  - 音视频：ffmpeg 9（x264 / x265 / VP9 / AV1 / Opus…），支持手机硬件编码（`h264_mediacodec` / `hevc_mediacodec`，比软件编码快 3 倍多）。
   - 命令行工具：rg / fd / bat / jq / sqlite3 / typst / ImageMagick… 交互式 bash 里 tab 补全可用；`hx-grammar` 只装你要的 Helix 语法；typst 开箱就能找到系统中文字体。
 - **系统权限（可选）**：集成 [Shizuku](https://shizuku.rikka.app)。终端里用 `priv '<命令>'` 以 shell 身份执行 pm / am / settings / logcat / screencap 等。
   - 设置页一键安装并激活：从 Shizuku 官方 Release 下载（核对官方签名证书），用系统安装器装好；
@@ -60,16 +63,17 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 - **扩展**：在「扩展」页安装、启用、停用、卸载 Claude Code 插件（搜索官方目录，或添加别的插件市场），从 zip 安装技能，添加 / 移除 MCP 服务器。全部经 Claude Code 自己的 `claude plugin` / `claude mcp` 命令完成；需要执行命令才能装的插件，会先把命令给你过目。
 - **排障**：
   - **安全模式**：钩子、插件、MCP 或 CLAUDE.md 把东西弄坏了，就开安全模式 —— Claude Code 用自带的 `--safe-mode` 启动，自定义项一概不加载；登录、Key、会话、模型照旧。不挪、不改任何文件，关掉即恢复。
-  - **一键分享日志**：诊断信息、应用日志、网关日志与修复账本打成 zip，交给系统分享面板。密钥、令牌与邮箱先抹掉。
+  - **我卡住了 · 打包诊断**（设置页，安装失败页也有）：诊断信息、应用日志、网关日志与修复账本打成 zip，交给系统分享面板。打包前先列出包里有什么；密钥、令牌、邮箱和你发给 Claude 的消息内容都先抹掉，会话记录不在包里。
+  - **首次安装出错讲人话**：下载前先算空间，不够直接说要多少；断网、限流、校验不过等失败原因写明白，「重试」接着已下载的部分续传。
   - **修复账本**：开发工具包的每次安装、校验、修复与启动时的恢复都记一笔（发现了什么、做了什么、结果如何），设置页可查。
 - **USB 调试另一台设备**：OTG 线连上后运行 `usb-adb`，就能照常 `adb devices / install / shell`。
-- **自检**：`cccodroid-selftest` 逐项实测 71 个工具与用法；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
+- **自检**：`cccodroid-selftest` 逐项实测 73 个工具与用法（含 ffmpeg 与硬件编码探测）；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
 
 ## 安装
 
 1. 从 [Releases](https://github.com/greyoak111/cccodroid/releases) 下载 `cccodroid.apk` 并安装。
 2. 打开应用，首次启动会自动完成：
-   - 下载开发工具包（约 600 MB，断点续传，校验 sha256 后解压）；
+   - 下载开发工具包（约 650 MB，断点续传，校验 sha256 后解压）；
    - 从 Anthropic 官方渠道下载 Claude Code（约 230 MB）。
 3. 在设置页选择接入方式：登录 Claude 账户，或填入 API Key。
 4. （可选）装好并启动 Shizuku，在设置页授权，即可使用 `priv` 和保活增强。
