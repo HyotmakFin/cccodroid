@@ -13,6 +13,7 @@ When the window narrows (split screen, folding the device) the panes fall back t
 
 - The divider between the chat and the workspace can be dragged; the ratio is remembered. Double-tap it to reset.
 - With several panes open, tabs at the top of the workspace switch between them.
+- The built-in browser is a native window, not a pane. On a wide screen (≥ 840dp) that is not already in split screen, it opens as its own task with `FLAG_ACTIVITY_LAUNCH_ADJACENT`, and the system places it next to the chat in split screen. Closing it returns to full screen. If you already split the screen with another app, it opens in the cccodroid window as before, so your other app is not replaced.
 - Back gesture: on wide screens the most recently opened pane closes first. The docked sidebar is not treated as an overlay.
 
 ## Where the code lives

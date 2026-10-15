@@ -40,10 +40,12 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
-        <!-- 应用内浏览器（系统 WebView，见 BrowserActivity.java）：分屏 / 转屏不重建，免得页面重载 -->
+        <!-- 应用内浏览器（系统 WebView，见 BrowserActivity.java）：分屏 / 转屏不重建，免得页面重载。
+             taskAffinity：宽屏时它以单独任务开在对话旁边（LAUNCH_ADJACENT）；窄屏不带 NEW_TASK，仍在对话的任务里 -->
         <activity
             android:name=".BrowserActivity"
             android:exported="false"
+            android:taskAffinity="cc.codroid.browser"
             android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize"
