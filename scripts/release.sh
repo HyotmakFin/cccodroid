@@ -39,7 +39,7 @@ const read = (p) => (p ? fs.readFileSync(p, "utf8").trim() + "\n\n" : "");
 const devkitLink = "[" + DEVKIT + "](https://github.com/" + REPO + "/releases/tag/" + DEVKIT + ")";
 const body = "**简体中文** · [English](#english)\n\n" + read(NOTES) + [
   "### 安装",
-  "下载 `cccodroid.apk` 安装。首次打开会自动下载开发工具包（约 600 MB，断点续传）与官方 Claude Code（约 230 MB）。",
+  "下载 `cccodroid.apk` 安装。首次打开会自动下载开发工具包（约 650 MB，断点续传）与官方 Claude Code（约 230 MB）。",
   "",
   "### 校验",
   "- `cccodroid.apk` sha256：`" + SHA + "`",
@@ -47,7 +47,7 @@ const body = "**简体中文** · [English](#english)\n\n" + read(NOTES) + [
   "- 源码提交：" + COMMIT,
 ].join("\n") + "\n\n---\n\n## English\n\n" + read(NOTES_EN) + [
   "### Install",
-  "Download and install `cccodroid.apk`. The first launch downloads the toolchain (about 600 MB, resumable) and the official Claude Code (about 230 MB).",
+  "Download and install `cccodroid.apk`. The first launch downloads the toolchain (about 650 MB, resumable) and the official Claude Code (about 230 MB).",
   "",
   "### Verification",
   "- `cccodroid.apk` sha256: `" + SHA + "`",
