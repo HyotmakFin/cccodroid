@@ -42,6 +42,32 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 分组见 `devkit.json`：基础包是 `core build vcs lang android cli`，共 145 个包，下载约 300 MB，解包后约 1.3 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
+## 组件（`component`）
+
+工具包之外的选装件（市场配方、预置组件）用这个子命令打：
+
+```sh
+node devkit.mjs component <组件 id> --target <10字符包名> --base <工具包的 devkit.lock.json>
+node devkit.mjs component --recipe <配方目录> --target <10字符包名> --base <...> [--dry]
+```
+
+一个组件 = 底座之外的包（底座里已有的不重复打）+ 组件自带的文件（`files`，内容里的 `{{PREFIX}}` 会替换）+
+**仓库之外的上游原件（`fetch`）**。产出 `component-<id>.json`（App 与索引用的清单）和
+`component-<id>-<包名>.tar.gz`（里面 `MANIFEST` 逐文件记 sha256，App 解包后照它核对）。
+
+`fetch` 的每条是「落地路径 → 来源」，路径只能在 `usr/` 下：
+
+```jsonc
+"usr/glibc/lib/libOpenCL.so": { "url": "https://…", "sha256": "…", "why": "是什么、为什么不能走 Termux 仓库" },
+"usr/glibc/bin/clspv":        { "url": "https://…", "sha256": "…", "mode": "755" },
+"usr/glibc/lib/libOpenCL.so.1": { "link": "libOpenCL.so" }
+```
+
+- 下载后**先核对 sha256** 才放进包里（与 `devkit.json` 里 pip wheel 那条同一套）。
+- `mode` 给权限（默认 644）——要装可执行文件就得写 `"755"`。
+- `link` 不下载，只做一条软链；上游库的 SONAME 是 `libX.so.1`、而文件叫 `libX.so` 时用它补上。
+- `source` / `version` / `why` 只记账（进锁文件，便于查出处）；fetch 的体积也算进 `installed`。
+
 ## 构建时做的事（devkit.mjs）
 
 1. **校验索引**：取 `Release`，用它核对 `Packages.gz` 的 SHA256。InRelease 的 GPG 签名暂未验证，见 TODO。
