@@ -105,7 +105,17 @@ cccodroid.apk（Java 外壳：安装器 + 前台服务 + WebView）
 - **等长前缀改写**：Termux 的程序在编译期写死了 `/data/data/com.termux/` 前缀。包名 `cc.codroid` 与 `com.termux` 一样是 10 个字符，于是逐字节替换就能让 RUNPATH、shebang、配置路径全部指对，不需要 `LD_LIBRARY_PATH`、包装脚本或二进制补丁。zip / jmod 归档内部的条目同样改写。详见 [devkit/README.md](devkit/README.md)。
 - **seccomp**：安卓给应用进程装了系统调用白名单，白名单外的调用直接用 SIGSYS 杀进程。Android 14 不放行 `epoll_pwait2`，Claude Code 一启动就会被杀。[`seccomp-enosys.c`](android/native/seccomp-enosys.c) 把这类调用改成返回 ENOSYS，让程序走自己的回退路径；静态二进制用 `enosys-run` 从外面（ptrace）做同一件事。
 - **网关访问控制**：网关只监听 127.0.0.1，且 `/api/*` 必须带应用私有目录里的 256 位令牌，并校验 Host 与 Origin。手机上别的应用、浏览器里的网页都驱动不了它。
-- **凭据**：账户登录由 Claude Code 自己完成。网关只把授权地址交给系统浏览器，不读取、不保存、不中转 claude.ai 的凭据。第三方 API Key 存在应用私有目录，通过 `apiKeyHelper` 交给 claude，不进环境变量。
+- **凭据**：账户登录由 Claude Code 自己完成。网关只把授权地址交给系统浏览器，不读取、不保存 claude.ai 的凭据；唯一可能经过它的，是你手动粘贴的一次性授权码（见[条款与合规](#条款与合规)）。第三方 API Key 存在应用私有目录，通过 `apiKeyHelper` 交给 claude，不进环境变量。
+
+## 条款与合规
+
+cccodroid 力求遵守 [Anthropic 对运行 Claude Code 的产品的条款](https://code.claude.com/docs/en/legal-and-compliance)。条款里有解释空间的地方，下面如实写明应用实际怎么做，你可以自己判断：
+
+- **程序怎么运行。** Claude Code 的程序文件与官方 linux-arm64 版逐字节一致：按官方 sha256 清单校验，不打任何补丁。安卓没有 `/lib/ld-linux-aarch64.so.1`，所以由工具链的 glibc 加载器启动，并预加载一个 61 行的小库（[`seccomp-enosys.c`](android/native/seccomp-enosys.c)），把安卓 seccomp 过滤器禁止的系统调用改成返回 ENOSYS。这个库不读、不改 Claude Code 的代码和内存，只让进程不被系统杀掉。
+- **用 Claude 订阅登录。** 登录就是 Claude Code 自己的 `claude auth login`：你在浏览器里的 Anthropic 页面上授权，令牌由 Claude Code 写进它自己的 `~/.claude/.credentials.json`（应用从不读这个文件）；登录状态下，Claude Code 直连 api.anthropic.com，不经过我们的任何进程。实际上这和"SSH 到一台自己的 Linux 机器上运行 Claude Code 并登录"是一回事：这台 Linux 机器就是手机，应用是屏幕和键盘。每一轮都是你自己发出的消息，应用没有定时或无人值守运行的功能。如果 Anthropic 认为这超出了条款允许的范围，应用会去掉订阅登录，API Key 和其他接口照常可用。
+- **一次性授权码。** 正常情况下，浏览器会自动把授权码交回 Claude Code。自动回传失败、你把授权码粘贴进应用时，应用会把它写进正在运行的 `claude auth login` 的标准输入，和在终端里手动输入完全一样，不保存、不记日志。
+- **名字。** cccodroid 里的 "cc" 取自 Claude Code（起名方式参照 C4droid）。项目名、图标、包名都不使用 Claude 或 Anthropic 的名称和标志，也不声称由 Anthropic 制作、认可或与其合作。如果 Anthropic 提出要求，项目会改名。
+- **不转售、不中转。** cccodroid 免费开源，没有服务端，不提供、不代付、不转售任何 Claude 用量：你用自己的账户登录或填自己的 API Key，费用直接记在你自己名下。像这样免费的本机启动器，作者是否还需要同意 Anthropic 的商业条款，目前还没有向 Anthropic 确认；确认后会照办。
 
 ## 构建
 
