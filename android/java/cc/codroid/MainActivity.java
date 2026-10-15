@@ -521,6 +521,10 @@ public class MainActivity extends Activity {
                 if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
                     ui.post(() -> BrowserActivity.open(MainActivity.this, url));
             }
+            /** 回复底下的「转发」：把正文交给系统分享面板 */
+            @android.webkit.JavascriptInterface public void shareText(String text) {
+                if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
+            }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
             /** 「保存到」：弹系统文件面板（ACTION_CREATE_DOCUMENT），用户挑好位置后把文件复制过去。
@@ -614,6 +618,13 @@ public class MainActivity extends Activity {
         lp.width = Math.round(w * d); lp.height = Math.round(h * d);
         pane.setLayoutParams(lp);
         pane.setVisibility(View.VISIBLE);
+    }
+    /** 系统分享面板。正文太长会撑爆 Binder 事务（约 1 MB），截到 100k 字符 */
+    private void shareTextNow(String text) {
+        if (text.length() > 100000) text = text.substring(0, 100000);
+        Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
+        try { startActivity(Intent.createChooser(i, null)); }
+        catch (Exception e) { android.util.Log.w("cccodroid", "分享失败", e); }
     }
     /** fromPane = 用户点了窗格自己的 ✕（或渲染进程崩了）：要告诉页面把占位撤掉 */
     private void closePane(boolean fromPane) {
