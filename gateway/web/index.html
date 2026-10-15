@@ -479,12 +479,16 @@
   </div>
 </div>
 
+<!-- ── 大屏：右侧工作区的标签与分隔条（layout.js 管）── -->
+<div id="ws-tabs"></div>
+<div id="ws-split" title="拖动调整宽度，双击复原" data-i18n-attr="title"></div>
 <div id="toast" class="hidden"></div>
 <div id="dropzone" class="hidden"><div data-i18n>松手即附加</div></div>
 
-<!-- 顺序要紧：语言注册表 → i18n（定义 I18N.t，按需插入当前语言的词典并翻译静态标记）→ app.js -->
+<!-- 顺序要紧：语言注册表 → i18n（定义 I18N.t，按需插入当前语言的词典并翻译静态标记）→ layout（大屏分档）→ app.js -->
 <script src="/langs.js"></script>
 <script src="/i18n.js"></script>
+<script src="/layout.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

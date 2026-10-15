@@ -692,4 +692,6 @@ window.I18N_DICT.en = {
   "打一个诊断包，经系统分享发出去。\n\n包里有：\n· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n· 开发工具包：装的是哪一版、更新与自检状态\n· 最近的日志：本应用的系统日志、网关日志的最后一段\n· 修复账本：安装、校验、修复做过哪些、成没成\n\n已经去掉：\n· 密钥、令牌、登录凭据、邮箱\n· 你发给 Claude 的消息内容\n· 会话记录本身不在包里\n\n继续？": "Create a diagnostics bundle and send it through the system share sheet.\n\nIncluded:\n· Version and device: cccodroid / Android version, model, chip, free space\n· Dev toolkit: which build is installed, update and self-check status\n· Recent logs: this app's system log, the tail of the gateway log\n· Repair ledger: installs, checks and repairs, and whether they worked\n\nRemoved:\n· Keys, tokens, login credentials, email addresses\n· The content of your messages to Claude\n· Conversation transcripts are not included\n\nContinue?",
   "我卡住了 · 打包诊断": "I'm stuck · bundle diagnostics",
   "遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。": "Can't install, nothing runs, or an error you can't make sense of: create a diagnostics bundle and share it with whoever is helping you (or attach it to a GitHub issue). You'll see what's inside before it's created; keys, tokens, email addresses and your message content are removed first.",
+  // ── 大屏布局 ──
+  "拖动调整宽度，双击复原": "Drag to resize, double-tap to reset",
 };

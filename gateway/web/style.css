@@ -729,3 +729,54 @@ code a.fpath{border-bottom-style:dotted}
 .setup-guide{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .setup-paths{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
 .setup-path{flex:1 1 220px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+
+/* ── 大屏布局（逻辑在 layout.js）：宽屏时浮层变停靠窗格 ──
+   --lw 左侧常驻侧栏宽，--rw 右侧工作区宽；窄屏这些类都不在，以上规则原样生效 */
+html.dock-l body{padding-inline-start:var(--lw)}
+html.has-right body{padding-inline-end:var(--rw)}
+html.dock-l #drawer{inset-inline-end:auto;width:var(--lw);background:none;backdrop-filter:none;z-index:40}
+html.dock-l .drawer-panel{inset:0;width:auto;animation:none;border-inline-start:0;border-inline-end:1px solid var(--line)}
+html.has-right #files,html.has-right #viewer,html.has-right #term,html.has-right #term-textview{
+  inset-inline-start:auto;width:var(--rw);border-inline-start:1px solid var(--line);z-index:70;
+}
+html.has-right #files.ws-top,html.has-right #viewer.ws-top,html.has-right #term.ws-top{z-index:71}
+html.has-right #term-textview{z-index:73}
+html.has-right #files{padding:calc(var(--safe-t) + 8px) 12px calc(var(--safe-b) + 8px)}
+html.has-right #popup{inset-inline-end:calc(var(--rw) + 22px)}
+html.ws-multi #files,html.ws-multi #viewer,html.ws-multi #term,html.ws-multi #term-textview{padding-top:calc(var(--safe-t) + 44px)}
+#ws-tabs{display:none}
+html.ws-multi #ws-tabs{
+  display:flex;gap:4px;position:fixed;top:calc(var(--safe-t) + 6px);inset-inline-end:8px;
+  width:calc(var(--rw) - 16px);z-index:74;overflow-x:auto;
+}
+.ws-tab{
+  flex:0 0 auto;padding:5px 14px;border-radius:9px;border:1px solid var(--line);
+  background:var(--bg2);color:var(--fg2);font-size:12.5px;
+}
+.ws-tab.active{background:var(--bg3);color:var(--fg);border-color:var(--accent-dim)}
+#ws-split{display:none}
+html.has-right #ws-split{
+  display:block;position:fixed;top:0;bottom:0;inset-inline-end:calc(var(--rw) - 6px);width:12px;
+  z-index:75;cursor:col-resize;touch-action:none;
+}
+html.has-right #ws-split::after{
+  content:"";position:absolute;top:50%;left:4px;width:4px;height:44px;margin-top:-22px;
+  border-radius:2px;background:var(--line);
+}
+html.ws-drag #ws-split::after{background:var(--accent)}
+html.ws-drag body{user-select:none}
+/* 窗格窄时，文件浏览器的预览别跟列表并排（原规则按整个窗口宽度判断） */
+#files{container-type:inline-size}
+@container (max-width:699px){
+  #fs-body{flex-direction:column}
+  #fs-body .fs-preview{flex:0 0 auto;max-height:46vh}
+}
+/* 手机横屏：矮，不加栏，只压缩顶栏和输入区 */
+html.short #topbar{padding-top:calc(var(--safe-t) + 4px);padding-bottom:4px}
+html.short #composer{padding-top:5px;padding-bottom:calc(var(--safe-b) + 5px)}
+html.short #hint-row{display:none}
+/* 侧栏变窄（常驻左栏 / 小手机）时：标签和按钮别把字挤成竖排，放不下就换行 */
+.tab,.row-actions .btn{white-space:nowrap}
+.row-actions{flex-wrap:wrap}
+html.dock-l .drawer-panel{padding-inline:12px}
+html.dock-l .tab{padding:6px 10px}

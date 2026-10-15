@@ -3332,7 +3332,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     refreshStatus();
     if (!tab) { loadSessions(); loadCaps(); }
   }
-  function closeDrawer() { drawerEl.classList.add("hidden"); }
+  // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点 ✕ / 菜单键（force）才收
+  function closeDrawer(force) { if (!force && window.CCLayout && CCLayout.docked()) return; drawerEl.classList.add("hidden"); }
   // 切到哪个标签就加载哪个的数据 —— 点标签和 openDrawer 都走这里
   // （以前加载只写在 openDrawer 里，点"设置"标签进去 Shizuku / 更新几块永远不出来）
   function switchTab(name) {
@@ -3344,7 +3345,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
-  $("btn-menu").addEventListener("click", () => openDrawer("sessions"));
+  $("btn-menu").addEventListener("click", () => { if (!(window.CCLayout && CCLayout.toggleDock())) openDrawer("sessions"); });
   // ── 文件查看 / 编辑器 ──────────────────────────────────────────────
   // 文本 / 代码：直接改，保存时带上打开那一刻的 mtime —— Claude 在这期间改过就先问，别互相覆盖。
   // Markdown：默认渲染，可切到编辑。图片：点一下在「适应屏幕」和「原始大小」之间切。
@@ -3961,7 +3962,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   $("btn-files").addEventListener("click", () => openFiles());
   $("btn-palette").addEventListener("click", () => { openCmdPalette(""); inputEl.focus(); });
-  $("btn-close-drawer").addEventListener("click", closeDrawer);
+  $("btn-close-drawer").addEventListener("click", () => { if (window.CCLayout && CCLayout.docked()) CCLayout.collapse(); closeDrawer(true); });
   drawerEl.addEventListener("click", (e) => { if (e.target === drawerEl) closeDrawer(); });
   $("btn-refresh-sessions").addEventListener("click", () => { loadSessions(); toast(t("已刷新")); });
   $("btn-close-session").addEventListener("click", () => {
@@ -4059,9 +4060,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["sheet", () => $("sheet").classList.add("hidden")],
       ["drawer", closeDrawer],
     ];
-    for (const [id, close] of steps) if (open(id)) { close(); return true; }
+    // 宽屏：文件 / 查看器 / 终端并排停在右边，先关最近打开的那个，而不是按 z-index；常驻的侧栏不算浮层
+    const L = window.CCLayout;
+    const recent = L ? L.openPanes() : [];
+    if (recent.length) {
+      const order = recent.slice().reverse();
+      const panes = steps.filter(([id]) => order.includes(id)).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+      const at = steps.findIndex(([id]) => order.includes(id));
+      steps.splice(0, steps.length, ...steps.slice(0, at).filter(([id]) => !order.includes(id)), ...panes, ...steps.slice(at).filter(([id]) => !order.includes(id)));
+    }
+    for (const [id, close] of steps) {
+      if (id === "drawer" && L && L.docked()) continue;
+      if (open(id)) { close(); return true; }
+    }
     return false;
   };
+  if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
   window.__cc = { view, srv, state, send, abort, openSession, newConversation };
 
   // ── 启动 ──────────────────────────────────────────────────────────
