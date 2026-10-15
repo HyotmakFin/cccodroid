@@ -39,7 +39,7 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 - `devkit.lock.json`：每个包的版本、文件名、SHA256、配方链接，加上仓库快照时间
 - `SBOM.tsv`：同上，表格形式
 
-分组见 `devkit.json`：基础包是 `core build vcs lang android cli`，共 145 个包，下载约 300 MB，解包后约 1.3 GB。
+分组见 `devkit.json`：基础包是 `core build vcs lang android cli graphics`（graphics = Mesa、Vulkan 加载器等 9 个公共图形包：浏览器与 GPU 组件共用，2026-10-15 并进底座），共 145 个包，下载约 300 MB，解包后约 1.3 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
 ## 组件（`component`）
