@@ -59,14 +59,16 @@ node devkit.mjs component --recipe <配方目录> --target <10字符包名> --ba
 
 ```jsonc
 "usr/glibc/lib/libOpenCL.so": { "url": "https://…", "sha256": "…", "why": "是什么、为什么不能走 Termux 仓库" },
-"usr/glibc/bin/clspv":        { "url": "https://…", "sha256": "…", "mode": "755" },
+"usr/glibc/bin/clspv":        { "url": "https://…", "sha256": "…", "mode": "755", "why": "…" },
 "usr/glibc/lib/libOpenCL.so.1": { "link": "libOpenCL.so" }
 ```
 
 - 下载后**先核对 sha256** 才放进包里（与 `devkit.json` 里 pip wheel 那条同一套）。
 - `mode` 给权限（默认 644）——要装可执行文件就得写 `"755"`。
-- `link` 不下载，只做一条软链；上游库的 SONAME 是 `libX.so.1`、而文件叫 `libX.so` 时用它补上。
+- `link` 不下载，只做一条软链，**只能写同目录的文件名**（不许绝对路径、不许带 `/`）；上游库的 SONAME 是 `libX.so.1`、而文件叫 `libX.so` 时用它补上。
+- 配方里的 fetch 条目 devkit 自己也校验一遍（`usr/` 下、https、sha256 写全、写 why、mode 是八进制），不全指望配方仓库的检查。
 - `source` / `version` / `why` 只记账（进锁文件，便于查出处）；fetch 的体积也算进 `installed`。
+- 配方的发布版本是 `<上游版本>-r<revision>`；配方顶层写了 `version` 就用它当上游版本（fetch 型组件的版本来自上游构件），修订号照样接在后面。
 
 ## 构建时做的事（devkit.mjs）
 

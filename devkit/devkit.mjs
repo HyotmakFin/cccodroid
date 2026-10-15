@@ -510,14 +510,30 @@ function loadRecipe(dir) {
   for (const n of r.repos || []) if (!MAN.extraRepos[n]) throw new Error("不认识的仓库: " + n);
   r.files = { ...(r.files || {}) };
   for (const p of Object.keys(r.files)) if (!p.startsWith("usr/") || p.includes("..")) throw new Error("files 只能放进 usr/ 下: " + p);
+  if (r.version !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(r.version)) throw new Error("version 不合法: " + r.version);
+  // fetch（仓库外的上游原件）：和市场的 check-recipes 同一套规矩，这里再挡一遍，别全指望配方仓库那边
+  for (const [p, f] of Object.entries(r.fetch || {})) {
+    if (!p.startsWith("usr/") || p.includes("..")) throw new Error("fetch 只能放进 usr/ 下: " + p);
+    if (f.link !== undefined) {
+      // 软链只许指向同目录的一个文件名：绝对路径、带 / 的都不行
+      if (!/^[A-Za-z0-9._+-]+$/.test(f.link) || f.link === "." || f.link === ".." || f.url || f.sha256) throw new Error("fetch 的 link 只能是同目录的文件名，且不带 url/sha256: " + p);
+      continue;
+    }
+    if (!/^https:\/\/\S+$/.test(f.url || "")) throw new Error("fetch 的 url 必须是 https: " + p);
+    if (!/^[0-9a-f]{64}$/.test(f.sha256 || "")) throw new Error("fetch 的 sha256 要写全: " + p);
+    if (!f.why) throw new Error("fetch 要写 why: " + p);
+    if (f.mode !== undefined && !/^[0-7]{3,4}$/.test(String(f.mode))) throw new Error("fetch 的 mode 是八进制三位/四位: " + p);
+  }
   const sk = path.join(dir, "skill");
   if (fs.existsSync(path.join(sk, "SKILL.md"))) {
     r.skill = `usr/share/cccodroid/components/${r.id}/skill`;
     for (const f of fs.readdirSync(sk)) r.files[`${r.skill}/${f}`] = { src: path.join("skill", f) };
   }
-  // 版本：上游版本 + 配方修订号（配方改了但上游没变时也能发新版）
   return r;
 }
+// 发布版本：上游版本（配方可用 version 自己指定，fetch 型组件就靠它）+ 配方修订号 —— 修订号一直生效，
+// 上游没变、只改了 skill 或包装脚本时加一就能发新版。预置组件（devkit.json）没有修订号。
+const compVersion = (up) => (RECIPE_DIR ? `${COMP.version || up}-r${COMP.revision || 1}` : COMP.version || up);
 const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
 const idx = await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
 let { names, missing } = closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
@@ -538,7 +554,7 @@ if (missing.length && RECIPE_DIR) { console.error("✗ 配方的依赖有满足�
 if (cmd === "resolve" || (COMP && args.includes("--dry"))) {
   if (COMP) {          // 给 CI 用：先算出这次会打成哪个版本，已发布过就跳过
     const v = idx.pkgs.get(COMP.roots[0]).version;
-    console.log("COMPONENT_VERSION=" + (COMP.version || (RECIPE_DIR ? `${v}-r${COMP.revision || 1}` : v)));
+    console.log("COMPONENT_VERSION=" + compVersion(v));
   }
   for (const n of names) { const p = idx.pkgs.get(n); console.log(`  ${n.padEnd(28)} ${p.version.padEnd(18)} ${mb(p.isize)}`); }
   process.exit(0);
@@ -689,7 +705,7 @@ if (cmd === "build" || cmd === "component") {
     // 组件清单：App 据此判断能不能装（底座要对得上）、装后跑哪个 first-run、哪些是入口命令
     const pkgVer = idx.pkgs.get(COMP.roots[0]).version;
     fs.writeFileSync(path.join(OUT, `component-${COMP_ID}.json`), JSON.stringify({
-      id: COMP_ID, version: COMP.version || (RECIPE_DIR ? `${pkgVer}-r${COMP.revision || 1}` : pkgVer), upstream: pkgVer, target, compat: 1,
+      id: COMP_ID, version: compVersion(pkgVer), upstream: COMP.version || pkgVer, target, compat: 1,
       base: { snapshot: BASE.snapshot, gz: BASE.gz.sha256 },
       bin: COMP.bin || [], skill: COMP.skill || "", selftest: COMP.selftest || "", files: manifest.size,
       name: COMP.name, desc: COMP.desc, kind: COMP.kind || "termux", needs: COMP.needs || {}, license: COMP.license || "",
