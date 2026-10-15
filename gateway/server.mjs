@@ -100,9 +100,10 @@ const BUILTIN_PROVIDER = {
 // 配置文件只存用户自己的东西（密钥、选的线路、改过的默认模型）；目录本身随版本更新。
 const PRESETS = {
   anthropic: {
-    label: "Claude 账户登录", group: "claude", login: true, nativeModels: true,
+    label: "Claude 账户登录", labelEn: "Claude account sign-in", group: "claude", login: true, nativeModels: true,
     baseUrl: "https://api.anthropic.com", authStyle: "x-api-key", defaultModel: null,
     hint: "用 Claude 订阅账户（Pro / Max / Team）。登录由 Claude Code 自己完成，网关不碰凭据。",
+    hintEn: "Use a Claude subscription (Pro / Max / Team). Claude Code signs in by itself; the gateway never touches your credentials.",
   },
   "anthropic-key": {
     label: "Claude API Key", group: "claude", nativeModels: true,
@@ -110,6 +111,7 @@ const PRESETS = {
     modelsUrl: "https://api.anthropic.com/v1/models", modelsAuth: "x-api-key", defaultModel: null,
     keyUrl: "https://platform.claude.com/settings/keys",
     hint: "Claude 开发者平台的 API Key，按量计费。",
+    hintEn: "An API key from the Claude Developer Platform, billed per use.",
   },
   deepseek: {
     label: "DeepSeek", group: "third", authStyle: "bearer", modelsAuth: "bearer",
@@ -122,13 +124,13 @@ const PRESETS = {
     ],
   },
   glm: {
-    label: "智谱 GLM", group: "third", authStyle: "bearer", modelsAuth: "bearer",
+    label: "智谱 GLM", labelEn: "Zhipu GLM", group: "third", authStyle: "bearer", modelsAuth: "bearer",
     defaultModel: "glm-5.2", fastModel: "glm-4.7",
     extraEnv: { API_TIMEOUT_MS: "3000000" },
     endpoints: [
-      { id: "cn", label: "国内 · open.bigmodel.cn", baseUrl: "https://open.bigmodel.cn/api/anthropic",
+      { id: "cn", label: "国内 · open.bigmodel.cn", labelEn: "China · open.bigmodel.cn", baseUrl: "https://open.bigmodel.cn/api/anthropic",
         modelsUrl: "https://open.bigmodel.cn/api/paas/v4/models", keyUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys" },
-      { id: "intl", label: "国际 · z.ai", baseUrl: "https://api.z.ai/api/anthropic",
+      { id: "intl", label: "国际 · z.ai", labelEn: "International · z.ai", baseUrl: "https://api.z.ai/api/anthropic",
         modelsUrl: "https://api.z.ai/api/paas/v4/models", keyUrl: "https://z.ai/manage-apikey/apikey-list" },
     ],
     fallbackModels: [
@@ -137,10 +139,10 @@ const PRESETS = {
     ],
   },
   qwen: {
-    label: "通义千问 Qwen", group: "third", authStyle: "bearer", modelsAuth: "bearer",
+    label: "通义千问 Qwen", labelEn: "Alibaba Qwen", group: "third", authStyle: "bearer", modelsAuth: "bearer",
     keyUrl: "https://bailian.console.aliyun.com/?tab=model#/api-key",
     endpoints: [
-      { id: "payg", label: "按量计费 · dashscope", baseUrl: "https://dashscope.aliyuncs.com/apps/anthropic",
+      { id: "payg", label: "按量计费 · dashscope", labelEn: "Pay as you go · dashscope", baseUrl: "https://dashscope.aliyuncs.com/apps/anthropic",
         modelsUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/models", defaultModel: "qwen3.7-max", fastModel: "qwen3.6-flash" },
       { id: "coding", label: "Coding Plan", baseUrl: "https://coding.dashscope.aliyuncs.com/apps/anthropic",
         defaultModel: "qwen3.7-plus", fastModel: "qwen3.7-plus" },
@@ -157,9 +159,9 @@ const PRESETS = {
     label: "Kimi", group: "third", authStyle: "bearer", modelsAuth: "bearer",
     defaultModel: "kimi-k3", fastModel: "kimi-k2.7-code-highspeed",
     endpoints: [
-      { id: "cn", label: "国内 · moonshot.cn", baseUrl: "https://api.moonshot.cn/anthropic",
+      { id: "cn", label: "国内 · moonshot.cn", labelEn: "China · moonshot.cn", baseUrl: "https://api.moonshot.cn/anthropic",
         modelsUrl: "https://api.moonshot.cn/v1/models", keyUrl: "https://platform.kimi.com/console/api-keys" },
-      { id: "intl", label: "国际 · moonshot.ai", baseUrl: "https://api.moonshot.ai/anthropic",
+      { id: "intl", label: "国际 · moonshot.ai", labelEn: "International · moonshot.ai", baseUrl: "https://api.moonshot.ai/anthropic",
         modelsUrl: "https://api.moonshot.ai/v1/models", keyUrl: "https://platform.moonshot.ai/console/api-keys" },
     ],
     fallbackModels: [
@@ -222,12 +224,12 @@ let PROVIDERS_CFG = loadProviders();
 function providerView(id, v) {
   const key = String(v.apiKey || "").trim();
   return {
-    id, label: v.label || id, group: v.group || "custom", custom: !!v.custom,
+    id, label: v.label || id, labelEn: v.labelEn || "", group: v.group || "custom", custom: !!v.custom,
     login: !!v.login, nativeModels: !!v.nativeModels,
     baseUrl: v.baseUrl || "", modelsUrl: v.modelsUrl || "", authStyle: v.authStyle || "bearer",
-    endpoints: (v.endpoints || []).map((e) => ({ id: e.id, label: e.label })), endpoint: v.endpoint || null,
+    endpoints: (v.endpoints || []).map((e) => ({ id: e.id, label: e.label, labelEn: e.labelEn || "" })), endpoint: v.endpoint || null,
     defaultModel: v.defaultModel || null, fastModel: v.fastModel || null,
-    keyUrl: v.keyUrl || null, hint: v.hint || "",
+    keyUrl: v.keyUrl || null, hint: v.hint || "", hintEn: v.hintEn || "",
     hasKey: !!key, keyTail: key ? key.slice(-4) : "",
     active: id === PROVIDER.id,
   };

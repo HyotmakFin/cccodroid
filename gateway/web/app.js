@@ -2643,7 +2643,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 接口（厂商）────────────────────────────────────────────────────
   // 下拉框只决定"看哪一家的配置卡"；真正切换要在卡上点「使用这个接口」——
   // 配置和切换分开，免得填密钥填到一半就把正在用的接口换掉了。
-  const GROUP_NAME = { claude: "Claude", third: t("第三方（填 Key 即用）"), custom: t("自定义接口") };
+  // 选接口这张单子：界面不是中文时整张用英文（厂商名、线路名本来就是英文世界的叫法，逐语言翻反而对不上官网）
+  const provEn = () => !/^zh/.test((window.I18N && I18N.lang) || "zh");
+  const pLabel = (x) => (provEn() && x.labelEn) || x.label;
+  const pHint = (x) => (provEn() && x.hintEn) || x.hint || "";
+  const GROUP_NAME = provEn() ? { claude: "Claude", third: "Third-party (just add a key)", custom: "Custom endpoints" }
+    : { claude: "Claude", third: t("第三方（填 Key 即用）"), custom: t("自定义接口") };
   const post = (p, body) => api(p, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}),
   });
@@ -2661,16 +2666,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       for (const p of state.providers) (groups[p.group] = groups[p.group] || []).push(p);
       const opt = (p) => {
         const tag = p.active ? "● " : "";
-        const st = p.login ? "" : (p.hasKey ? "" : t(" · 未配 Key"));
-        return `<option value="${esc(p.id)}">${tag}${esc(p.label)}${st}</option>`;
+        const st = p.login ? "" : (p.hasKey ? "" : (provEn() ? " · no key yet" : t(" · 未配 Key")));
+        return `<option value="${esc(p.id)}">${tag}${esc(pLabel(p))}${st}</option>`;
       };
       sel.innerHTML = ["claude", "third", "custom"].map((g) =>
         `<optgroup label="${GROUP_NAME[g]}">` + (groups[g] || []).map(opt).join("") +
-        (g === "custom" ? `<option value="__new__">${t("＋ 新增自定义接口…")}</option>` : "") + `</optgroup>`).join("");
+        (g === "custom" ? `<option value="__new__">${provEn() ? "+ Add a custom endpoint…" : t("＋ 新增自定义接口…")}</option>` : "") + `</optgroup>`).join("");
       sel.value = state.provView;
       $("provider-count").textContent = t("{n} 个", { n: state.providers.length });
       const cur = state.providers.find((p) => p.id === r.active) || {};
-      $("provider-info").innerHTML = t("当前在用：<b>{name}</b>　<code>{url}</code>", { name: esc(cur.label || r.active), url: esc(cur.baseUrl || "") });
+      $("provider-info").innerHTML = t("当前在用：<b>{name}</b>　<code>{url}</code>", { name: esc(pLabel(cur) || r.active), url: esc(cur.baseUrl || "") });
       renderProvCard();
     } catch (e) {
       $("provider-info").textContent = t("读取接口清单失败：{msg}", { msg: e.message });
@@ -2711,7 +2716,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="prov-state" id="login-state">${t("查询登录状态…")}</div>
       <div class="row-actions" id="login-actions"></div>
       <div id="login-flow"></div>
-      <div class="tiny">${esc(p.hint || "")}</div>`;
+      <div class="tiny">${esc(pHint(p))}</div>`;
     let st;
     try { st = await api("/api/login/status"); } catch (e) { $("login-state").textContent = t("查询失败：{msg}", { msg: e.message }); return; }
     if (state.provView !== p.id) return;      // 查询期间用户换了卡
@@ -2818,7 +2823,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     box.innerHTML = `<div class="sub">${esc(p.label)}</div>
       ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">${t("线路")}</div>
         <select id="pc-endpoint">${p.endpoints.map((e) =>
-          `<option value="${esc(e.id)}" ${e.id === p.endpoint ? "selected" : ""}>${esc(e.label)}</option>`).join("")}</select>` : ""}
+          `<option value="${esc(e.id)}" ${e.id === p.endpoint ? "selected" : ""}>${esc(pLabel(e))}</option>`).join("")}</select>` : ""}
       <input id="pc-key" type="password" autocomplete="off"
         placeholder="${p.hasKey ? t("已保存（…{tail}），留空则不改", { tail: esc(p.keyTail) }) : t("粘贴 API Key")}">
       <div class="row-actions">
@@ -2830,7 +2835,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="prov-state" id="pc-result"></div>
       <div class="tiny">${t("端点")} <code>${esc(p.baseUrl)}</code>${p.defaultModel ? ` · ${t("默认模型")} <code>${esc(p.defaultModel)}</code>` : ""}
         ${p.keyUrl ? `<br><a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${t("去官网创建 Key ↗")}</a>` : ""}
-        <br>${esc(p.hint || t("Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。"))}</div>`;
+        <br>${esc(pHint(p) || t("Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。"))}</div>`;
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;

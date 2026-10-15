@@ -306,6 +306,8 @@ td{color:var(--fg2)}
 .field input:focus,.field select:focus{border-color:var(--accent-dim)}
 .field select{
   appearance:none;
+  /* 三角画在背景上、离右边 12–22px：右侧留出 32px，长文字截成省略号，别再压到三角上 */
+  padding-inline-end:32px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;
   background-image:linear-gradient(45deg,transparent 50%,var(--fg3) 50%),linear-gradient(135deg,var(--fg3) 50%,transparent 50%);
   background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;
   background-size:5px 5px,5px 5px;background-repeat:no-repeat;
@@ -787,3 +789,4 @@ html.short #hint-row{display:none}
 html.dock-l .drawer-panel{padding-inline:12px}
 html.dock-l .tab{padding:6px 10px}
 html.has-right #browser{padding-inline-start:6px}   /* 原生浏览器会盖住分隔条的右半边，留一条给手指 */
+html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右往左的语言：三角在左边 */
