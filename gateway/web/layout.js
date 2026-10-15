@@ -16,8 +16,10 @@
   "use strict";
   const W2 = 840, W3 = 1000, SHORT = 500;
   const MIN_CHAT = 380, MIN_PANE = 320;
-  const PANES = ["files", "viewer", "term"];              // 宽屏时进右侧工作区的
-  const NAMES = { files: "文件", viewer: "查看", term: "终端" };
+  const PANES = ["files", "viewer", "term", "browser"];   // 宽屏时进右侧工作区的
+  const NAMES = { files: "文件", viewer: "查看", term: "终端", browser: "浏览器" };
+  // 浏览器窗格是外壳的原生视图，永远浮在页面上面 —— 这些浮层开着时得先把它藏起来，不然会被它挡住
+  const COVERS = ["lightbox", "sheet", "popup", "drawer", "dropzone"];
   const LS_RATIO = "cc_lay_ratio", LS_DOCK = "cc_lay_dock";
   const root = document.documentElement;
   const $ = (id) => document.getElementById(id);
@@ -67,9 +69,29 @@
     const top = open[open.length - 1];
     for (const id of PANES) { const el = $(id); if (el) el.classList.toggle("ws-top", right && id === top); }
     renderTabs(right ? open : [], top);
+    placeBrowser();
 
     // 查看器里的 PDF 靠 window resize 重排；终端自己有 ResizeObserver
     if (was !== tier || right) { clearTimeout(rz); rz = setTimeout(() => { busy = true; dispatchEvent(new Event("resize")); busy = false; }, 120); }
+  }
+
+  // 浏览器：把占位框的位置报给外壳（CSS px，相对页面左上角）；不在最上面、或被浮层盖着就报 0 让它先藏起来
+  let lastB = "";
+  function placeBrowser() {
+    if (!(window.CCApp && CCApp.paneBounds)) return;
+    let r = null;
+    const open = recent.filter(isOpen);
+    const covered = COVERS.some((id) => isOpen(id)
+      && !(id === "drawer" && root.classList.contains("dock-l"))     // 常驻左栏不挡
+      && !(id === "popup" && tier >= 2));                            // 宽屏时补全弹窗挪到了窗格左边
+    if (isOpen("browser") && open[open.length - 1] === "browser" && !covered) {
+      const b = $("browser-slot").getBoundingClientRect();
+      if (b.width > 0 && b.height > 0) r = [b.left, b.top, b.width, b.height].map((v) => Math.round(v * 10) / 10);
+    }
+    const k = r ? r.join(",") : "0";
+    if (k === lastB) return;
+    lastB = k;
+    if (r) CCApp.paneBounds(r[0], r[1], r[2], r[3]); else CCApp.paneBounds(0, 0, 0, 0);
   }
 
   function renderTabs(open, top) {
@@ -107,7 +129,7 @@
       }
       apply();
     });
-    for (const id of PANES.concat("drawer")) { const el = $(id); if (el) mo.observe(el, { attributes: true, attributeFilter: ["class"], attributeOldValue: true }); }
+    for (const id of PANES.concat(COVERS.filter((c) => c !== "drawer"), "drawer")) { const el = $(id); if (el) mo.observe(el, { attributes: true, attributeFilter: ["class"], attributeOldValue: true }); }
   }
 
   // 分隔条：拖动改右侧宽度，比例记在 localStorage；双击回到默认
@@ -123,6 +145,7 @@
       rw = Math.max(MIN_PANE, Math.min(avail - MIN_CHAT, rw));
       localStorage.setItem(LS_RATIO, (rw / avail).toFixed(4));
       root.style.setProperty("--rw", rw + "px");
+      placeBrowser();
     });
     const end = () => { if (!drag) return; drag = false; root.classList.remove("ws-drag"); apply(); };
     s.addEventListener("pointerup", end);
@@ -139,7 +162,9 @@
     tier: () => tier,
     docked,
     // 宽屏下处于停靠状态的右侧窗格，按"最近打开在后"排；返回手势先关最后一个
-    openPanes: () => (tier >= 2 ? recent.filter(isOpen) : []),
+    // 窄屏照旧按 z-index 关；但开着浏览器时它是原生视图、总在最上面，也得按打开顺序来
+    openPanes: () => (tier >= 2 || isOpen("browser") ? recent.filter(isOpen) : []),
+    raise,
     // 三栏时顶栏菜单键：常驻 ↔ 收起
     toggleDock() {
       if (tier < 3) return false;

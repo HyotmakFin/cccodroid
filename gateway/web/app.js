@@ -373,10 +373,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // 网页链接：有应用内浏览器就在里面开（cccodroid / 开发端外壳提供），否则照常新窗口
   const hasBrowser = () => !!(window.CCApp && window.CCApp.openBrowser);
+  // 宽屏（两栏起）且外壳支持嵌入：浏览器开在右侧工作区，和文件 / 终端并列；窄屏照旧全屏窗口。
+  // 已经开着窗格时，窄屏下的新链接也送进窗格，别再叠一个全屏窗口
+  const browserEl = $("browser");
+  const hasPane = () => !!(window.CCApp && window.CCApp.hasPane && window.CCLayout);
   function openWeb(url) {
+    if (hasPane() && (CCLayout.tier() >= 2 || !browserEl.classList.contains("hidden"))) {
+      browserEl.classList.remove("hidden");
+      CCLayout.raise("browser");
+      window.CCApp.paneOpen(url || "");
+      return;
+    }
     if (hasBrowser()) return window.CCApp.openBrowser(url || "");
     if (url) window.open(url, "_blank", "noopener");
   }
+  function closeBrowser() {
+    if (window.CCApp && CCApp.paneCanBack && CCApp.paneCanBack()) return CCApp.paneGoBack();   // 返回手势先在网页里后退
+    browserEl.classList.add("hidden");
+    if (window.CCApp && CCApp.paneClose) CCApp.paneClose();
+  }
+  window.__ccBrowserClosed = () => browserEl.classList.add("hidden");    // 窗格自己的 ✕
   const onWebLink = (e) => {
     const a = e.target.closest("a.weblink");
     if (!a || !hasBrowser()) return;
@@ -4053,6 +4069,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const steps = [
       ["lightbox", () => $("lightbox").classList.add("hidden")],
       ["term-textview", () => $("term-textview").classList.add("hidden")],
+      ["browser", closeBrowser],
       ["term", closeTerm],
       ["viewer", closeViewer],          // 有未保存修改会先问；选了不丢弃也算处理过，别把界面退到后台
       ["files", closeFiles],

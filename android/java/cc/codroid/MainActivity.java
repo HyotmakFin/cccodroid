@@ -61,6 +61,9 @@ public class MainActivity extends Activity {
     private ProgressBar bar;
     private TextView stat;
     private WebView web;
+    /** 宽屏时嵌在右侧工作区的浏览器（null = 没开）。位置、显隐全听页面的（layout.js → CCApp.paneBounds） */
+    private BrowserPane pane;
+    private volatile boolean paneCanBack;
     private ValueCallback<Uri[]> fileCb;
     /** 「保存到」：等系统文件面板回来时要复制的源文件。static：挑位置期间界面被回收重建也还在 */
     private static File savePending;
@@ -184,9 +187,11 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onResume() { super.onResume(); visible = true;
+        if (pane != null) pane.resume();
         getSystemService(android.app.NotificationManager.class).cancel(41);    // Priv.toFront 的「点此回来」
         Notify.get(this).onForeground(); }                                    // 确认卡就在眼前，通知撤掉
     @Override protected void onPause() { visible = false; super.onPause();
+        if (pane != null) pane.pause();
         Notify.get(this).onBackground(); }                                    // 还有没答的确认：现在补发通知
 
     // ── 外观：界面（theme.js）定浅 / 深，系统夜间模式只有原生层知道 ──
@@ -498,6 +503,19 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void openUrl(String url) {
                 if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) ui.post(() -> openExternal(url));
             }
+            // ── 嵌入式浏览器窗格（宽屏）：页面决定开不开、摆在哪；关掉（✕）回调 __ccBrowserClosed ──
+            @android.webkit.JavascriptInterface public boolean hasPane() { return true; }
+            @android.webkit.JavascriptInterface public void paneOpen(String url) {
+                if (url != null && !url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) return;
+                ui.post(() -> openPane(url));
+            }
+            /** 页面坐标（CSS px，相对对话 WebView 左上角）；w <= 0 = 先藏起来（被别的窗格 / 浮层盖住时） */
+            @android.webkit.JavascriptInterface public void paneBounds(float x, float y, float w, float h) {
+                ui.post(() -> placePane(x, y, w, h));
+            }
+            @android.webkit.JavascriptInterface public boolean paneCanBack() { return paneCanBack; }
+            @android.webkit.JavascriptInterface public void paneGoBack() { ui.post(() -> { if (pane != null) pane.back(); }); }
+            @android.webkit.JavascriptInterface public void paneClose() { ui.post(() -> closePane(false)); }
             /** 应用内浏览器（回复里的网页链接、本机开发服务）；url 为空 = 回到上次那页 */
             @android.webkit.JavascriptInterface public void openBrowser(String url) {
                 if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
@@ -574,7 +592,48 @@ public class MainActivity extends Activity {
         if (web != null) web.evaluateJavascript("window.__ccSaved&&__ccSaved(" + ok + "," + org.json.JSONObject.quote(msg) + ")", null);
     }
 
+    // ── 嵌入式浏览器窗格 ──
+    private void openPane(String url) {
+        if (web == null) return;
+        if (pane == null) {
+            pane = new BrowserPane(this, new BrowserPane.Host() {
+                @Override public void onPaneClose() { closePane(true); }
+            }, 9);
+            pane.setVisibility(View.GONE);               // 等页面报来位置再显示，免得先闪一下全屏
+            root.addView(pane, new FrameLayout.LayoutParams(0, 0));
+            pane.load(url);
+            tickPaneBack();
+        } else if (url != null && !url.isEmpty()) pane.load(url);
+    }
+    private void placePane(float x, float y, float w, float h) {
+        if (pane == null) return;
+        if (w <= 0 || h <= 0) { pane.setVisibility(View.GONE); return; }
+        float d = getResources().getDisplayMetrics().density;
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) pane.getLayoutParams();
+        lp.leftMargin = Math.round(x * d); lp.topMargin = Math.round(y * d);
+        lp.width = Math.round(w * d); lp.height = Math.round(h * d);
+        pane.setLayoutParams(lp);
+        pane.setVisibility(View.VISIBLE);
+    }
+    /** fromPane = 用户点了窗格自己的 ✕（或渲染进程崩了）：要告诉页面把占位撤掉 */
+    private void closePane(boolean fromPane) {
+        if (pane == null) return;
+        root.removeView(pane);
+        pane.destroy();
+        pane = null;
+        paneCanBack = false;
+        if (fromPane && web != null) web.evaluateJavascript("window.__ccBrowserClosed&&__ccBrowserClosed()", null);
+    }
+    /** 返回手势要同步问"网页能不能后退"，JS 桥在别的线程上，这里定时把答案备好 */
+    private void tickPaneBack() {
+        if (pane == null) return;
+        paneCanBack = pane.canBack();
+        final BrowserPane p = pane;
+        ui.postDelayed(() -> { if (pane == p) tickPaneBack(); }, 500);
+    }
+
     @Override protected void onActivityResult(int req, int res, Intent data) {
+        if (req == 9) { if (pane != null) pane.onResult(res, data); return; }
         if (req == 8) {
             if (res == RESULT_OK && data != null && data.getData() != null) finishSaveAs(data.getData());
             else { savePending = null; savedJs(false, "cancel"); }

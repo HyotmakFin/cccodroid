@@ -765,6 +765,12 @@ html.has-right #ws-split::after{
 }
 html.ws-drag #ws-split::after{background:var(--accent)}
 html.ws-drag body{user-select:none}
+#browser{position:fixed;inset:0;z-index:72;background:var(--bg);display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
+#browser-slot{flex:1;min-height:0}
+html.has-right #browser{inset-inline-start:auto;width:var(--rw);border-inline-start:1px solid var(--line);z-index:70}
+html.has-right #browser.ws-top{z-index:71}
+html.ws-multi #browser{padding-top:calc(var(--safe-t) + 44px)}
+html:not(.ws-multi) #browser{padding-top:var(--safe-t)}
 /* 窗格窄时，文件浏览器的预览别跟列表并排（原规则按整个窗口宽度判断） */
 #files{container-type:inline-size}
 @container (max-width:699px){
@@ -780,3 +786,4 @@ html.short #hint-row{display:none}
 .row-actions{flex-wrap:wrap}
 html.dock-l .drawer-panel{padding-inline:12px}
 html.dock-l .tab{padding:6px 10px}
+html.has-right #browser{padding-inline-start:6px}   /* 原生浏览器会盖住分隔条的右半边，留一条给手指 */
