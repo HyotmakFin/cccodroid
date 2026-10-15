@@ -1899,6 +1899,7 @@ async function compList(force) {
       progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total } : null,
       error: job && job.error ? job.error : "",
       bin: (b && b.bin) || (rec && rec.bin) || [],
+      selftest: (b && b.selftest) || "",
       // 来源与可信度：预置组件由 cccodroid 发布、随版本测过；社区组件看 verified（真机验证记录）
       source: e ? e.source : (rec && rec.source) || "", signed: e ? !!e.signed : true,
       verified: e ? e.source === "preset" || !!(b && b.verified) : true,
