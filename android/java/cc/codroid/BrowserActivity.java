@@ -51,33 +51,17 @@ public class BrowserActivity extends Activity {
     private TextView back, fwd;
     private ValueCallback<Uri[]> fileCb;
 
-    /** 浏览器眼下是不是单独一个任务（宽屏时开在对话旁边的那种）——是的话后面的链接都送过去，别在对话那半边再开一个 */
-    private static boolean ownTask;
-
-    /** 从对话界面打开：url 为空就回到上次看的那页。
-     *  宽屏（≥ 840dp，和界面两栏同一个门槛）且没在分屏：用 LAUNCH_ADJACENT 开成单独任务，系统把它分屏到对话旁边，
-     *  对话和网页同时看；关掉浏览器分屏自动收回。已经在分屏里（用户自己分的，另一半是别的应用）就照旧开在本窗口里，
-     *  别把用户另一半的应用顶掉。系统不支持从全屏直接分屏时，效果等于全屏打开，和以前一样。 */
+    /** 从对话界面打开：url 为空就回到上次看的那页 */
     static void open(Context c, String url) {
         Intent i = new Intent(c, BrowserActivity.class);
         if (url != null && url.length() > 0) i.putExtra(EXTRA_URL, url);
-        if (ownTask) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        else if (c instanceof Activity && sideBySide((Activity) c))
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
-        Log.i(TAG, "open flags=0x" + Integer.toHexString(i.getFlags()));
         c.startActivity(i);
-    }
-
-    static boolean sideBySide(Activity a) {
-        return android.os.Build.VERSION.SDK_INT >= 24 && !a.isInMultiWindowMode()
-            && a.getResources().getConfiguration().screenWidthDp >= 840;
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        Log.i(TAG, "onCreate saved=" + (b != null) + " root=" + isTaskRoot());
-        if (isTaskRoot()) ownTask = true;
+        Log.i(TAG, "onCreate saved=" + (b != null));
         boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         int bg = night ? Color.parseColor("#1f1e1d") : Color.parseColor("#f5f4ef");
         int fg = night ? Color.parseColor("#e8e6e1") : Color.parseColor("#2b2a27");
@@ -288,7 +272,6 @@ public class BrowserActivity extends Activity {
     @Override protected void onPause() { super.onPause(); web.onPause(); CookieManager.getInstance().flush(); }
     @Override protected void onResume() { super.onResume(); web.onResume(); }
     @Override protected void onDestroy() {
-        if (isTaskRoot()) ownTask = false;
         if (web != null) { web.stopLoading(); web.setWebChromeClient(null); web.destroy(); }
         super.onDestroy();
     }
