@@ -66,6 +66,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - **我卡住了 · 打包诊断**（设置页，安装失败页也有）：诊断信息、应用日志、网关日志与修复账本打成 zip，交给系统分享面板。打包前先列出包里有什么；密钥、令牌、邮箱和你发给 Claude 的消息内容都先抹掉，会话记录不在包里。
   - **首次安装出错讲人话**：下载前先算空间，不够直接说要多少；断网、限流、校验不过等失败原因写明白，「重试」接着已下载的部分续传。
   - **修复账本**：开发工具包的每次安装、校验、修复与启动时的恢复都记一笔（发现了什么、做了什么、结果如何），设置页可查。
+  - **已知问题**：还没查清、也没完全排除的问题，以及目前知道的情况，列在 [docs/known-issues.zh-CN.md](docs/known-issues.zh-CN.md)。
 - **USB 调试另一台设备**：OTG 线连上后运行 `usb-adb`，就能照常 `adb devices / install / shell`。
 - **自检**：`cccodroid-selftest` 逐项实测 73 个工具与用法（含 ffmpeg 与硬件编码探测）；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
 
@@ -142,6 +143,8 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `gateway/` | 网关与界面（源头目前在作者的另一个仓库，由 `scripts/sync-shared.sh` 同步） |
 | `devkit/` | 开发工具包构建脚本与清单 |
 | `docs/design-philosophy.zh-CN.md` | 项目为什么存在、背后的原则 |
+| `docs/large-screen.md` | 大屏布局（平板、折叠屏）与代码位置（英文） |
+| `docs/known-issues.zh-CN.md` | 已知问题与未排除的隐患，以及会制造假问题的测试动作 |
 | `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 浅色 / 深色 PNG） |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
 

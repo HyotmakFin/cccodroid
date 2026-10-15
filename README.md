@@ -65,6 +65,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - **I'm stuck · bundle diagnostics** (in Settings, and on the install-failure screen): diagnostics, the app log, the gateway log and the repair ledger, packed into a zip and handed to the system share sheet. Before packing, you see a list of what goes in. Keys, tokens, email addresses and the content of your messages to Claude are scrubbed first, and conversation transcripts are not included.
   - **Plain-language first-install errors**: the app checks free space before downloading and tells you how much it needs. Failures such as being offline, rate limiting or a checksum mismatch are explained in plain words. *Retry* resumes from what was already downloaded.
   - **Repair ledger**: every toolchain install, verification, repair and startup recovery is recorded (what was found, what was done, the result) and can be read in Settings.
+  - **Known issues**: problems not yet fully explained or ruled out, and what we know about each, are listed in [docs/known-issues.md](docs/known-issues.md).
 - **USB debugging of another device**: connect it with an OTG cable and run `usb-adb`, then `adb devices / install / shell` as usual.
 - **Self-test**: `cccodroid-selftest` exercises 73 tools and usages (including ffmpeg and a hardware-encoding probe); the tool notes are injected into Claude's system prompt so it knows what it has.
 
@@ -141,6 +142,8 @@ Layout:
 | `gateway/` | Gateway and UI (currently sourced from the author's other repository and synced by `scripts/sync-shared.sh`) |
 | `devkit/` | Toolchain build script and manifests |
 | `docs/design-philosophy.md` | Why the project exists and the principles behind it |
+| `docs/large-screen.md` | Large-screen layout (tablets, foldables) and where its code lives |
+| `docs/known-issues.md` | Known issues and unresolved risks, plus test actions that create fake bugs |
 | `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → light / dark PNG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |
 
