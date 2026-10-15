@@ -1763,6 +1763,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   let compTimer = 0;
   const pickLang = (o) => (o && typeof o === "object" ? o[(window.I18N && I18N.lang) || "zh"] || o.en || o.zh || "" : o || "");
   const MB = (n) => Math.max(1, Math.round((n || 0) / 1048576)) + " MB";
+  // 「A、B 和 C」这种并列按当前语言的习惯拼
+  const listOf = (a) => { try { return new Intl.ListFormat((window.I18N && I18N.lang) || "zh", { type: "conjunction" }).format(a); } catch { return a.join(", "); } };
   async function loadComponents(refresh) {
     clearTimeout(compTimer);
     const r = await api("/api/components" + (refresh ? "?refresh=1" : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
@@ -1779,8 +1781,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         ok: t("已安装"), update: t("有新版本"), outdated: t("工具包已更新，需要重新安装"),
         damaged: t("安装不完整，需要重新安装"), error: t("安装失败"),
       }[c.state] || c.state;
+      // 依赖没装齐：安装按钮置灰，下面写明要先装哪个；只限骁龙的组件在别家 SoC 上干脆不给装
+      const miss = (c.requires || []).filter((d) => !d.ok).map((d) => esc(pickLang(d.name) || d.id));
+      const adreno = c.needs && c.needs.gpu === "adreno";
       let acts = "";
-      if (c.state === "absent" && c.available) acts = btn("install", c.id, t("下载安装"));
+      if (c.state === "absent" && c.available && !c.unsupported) acts = btn("install", c.id, t("下载安装"));
       else if (c.state === "downloading" || c.state === "verifying") acts = btn("cancel", c.id, t("取消"));
       else if (c.state === "ok") acts = btn("remove", c.id, t("卸载"));
       else if (["update", "outdated", "damaged", "error"].includes(c.state)) {
@@ -1798,12 +1803,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         // 社区组件标出来；没有真机验证记录的再加一个提醒
         (c.source === "community" ? "<span>" + t("社区") + "</span>" : "") +
         (!c.verified ? '<span class="warn">' + t("未经真机验证") + "</span>" : "") +
-        (c.license && c.state !== "ok" ? "<span>" + esc(c.license) + "</span>" : "");
+        (c.license && c.state !== "ok" ? "<span>" + esc(c.license) + "</span>" : "") +
+        (adreno && c.state !== "ok" ? (c.unsupported ? '<span class="warn">' + t("只限高通骁龙（Adreno GPU）设备，本机用不了") + "</span>" : "<span>" + t("骁龙专用") + "</span>") : "");
       let desc = '<div class="tiny ext-desc">' + esc(pickLang(c.desc)) + "</div>";
       if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
+      if (miss.length && c.state !== "ok") desc += '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>";
       if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
-      return extItem(name, meta, acts, desc + bar).replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\""));
+      const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
+      return extItem(name, meta, acts, desc + bar)
+        .replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
+        .replace("<button data-c=\"remove\"", "<button data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
     box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
       (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "");
@@ -1926,6 +1936,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const c = cb.dataset.c, id = cb.dataset.id;
       const nm = (cb.closest(".item")?.querySelector(".it-title")?.textContent || id).trim();
       if (c === "install" && cb.dataset.unverified && !confirm(t("{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？", { name: nm }))) return;
+      if (c === "remove" && cb.dataset.usedby) return toast(t("{names} 要用它，先卸载那些组件", { names: cb.dataset.usedby }), true);
       if (c === "remove" && !confirm(t("卸载组件 {name}？会删掉它装进工具包的文件，你自己的文件不受影响。", { name: nm }))) return;
       cb.disabled = true;
       const r = await post("/api/components/" + c, { id }).catch((err) => ({ ok: false, message: err.message }));

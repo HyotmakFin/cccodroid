@@ -512,4 +512,8 @@ window.I18N_DICT["es"] = {
   "未经真机验证": "No verificado en un dispositivo",
   "部分组件清单取不到：{msg}": "No se pudieron cargar algunas listas de componentes: {msg}",
   "{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？": "Nadie ha verificado {name} en un dispositivo real todavía. Puede que no se instale o no funcione. ¿Instalar de todos modos?",
+  "只限高通骁龙（Adreno GPU）设备，本机用不了": "Solo para dispositivos Snapdragon (GPU Adreno): no es compatible con este dispositivo",
+  "骁龙专用": "Solo Snapdragon",
+  "要先装：{names}": "Instala primero: {names}",
+  "{names} 要用它，先卸载那些组件": "Lo requiere {names}: desinstala primero esos componentes",
 };

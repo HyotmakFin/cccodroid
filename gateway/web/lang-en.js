@@ -533,4 +533,8 @@ window.I18N_DICT.en = {
   "未经真机验证": "Not verified on a device",
   "部分组件清单取不到：{msg}": "Some component lists couldn't be loaded: {msg}",
   "{name} 还没人在真机上验证过，可能装不上或用不了。仍然安装？": "No one has verified {name} on a real device yet. It may fail to install or not work. Install anyway?",
+  "只限高通骁龙（Adreno GPU）设备，本机用不了": "Snapdragon (Adreno GPU) devices only — not supported on this device",
+  "骁龙专用": "Snapdragon only",
+  "要先装：{names}": "Install first: {names}",
+  "{names} 要用它，先卸载那些组件": "Required by {names} — uninstall those first",
 };

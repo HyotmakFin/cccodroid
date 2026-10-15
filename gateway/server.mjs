@@ -1863,6 +1863,24 @@ function compState(id, entry, dk) {
   return "ok";
 }
 
+// 只限骁龙的组件（needs.gpu 写 "adreno"）：Turnip 走 /dev/kgsl-3d0，别家 SoC 上没有这个节点，装了也用不了
+const compUnsupported = (e) => (e && e.needs && e.needs.gpu === "adreno" && !fs.existsSync("/dev/kgsl-3d0") ? "adreno" : "");
+// 依赖的组件装好了没有（有新版本可更新也算装好）
+const compDepOk = (rid, comps, dk) => ["ok", "update"].includes(compState(rid, comps[rid] || null, dk));
+const compName = (rid, comps) => (comps[rid] && comps[rid].name) || { zh: rid, en: rid };
+/** 已装的组件里，requires 了 id 的那些（卸载 id 会把它们弄坏） */
+function compUsers(id) {
+  const out = [];
+  try {
+    for (const f of fs.readdirSync(COMP_DIR)) {
+      if (!f.endsWith(".json") || f === id + ".json") continue;
+      const r = compRecord(f.slice(0, -5));
+      if (r && (r.requires || []).includes(id)) out.push(f.slice(0, -5));
+    }
+  } catch {}
+  return out;
+}
+
 async function compList(force) {
   if (!PREFIX) return { supported: false };
   const dk = devkitIdentity();
@@ -1885,6 +1903,10 @@ async function compList(force) {
       source: e ? e.source : (rec && rec.source) || "", signed: e ? !!e.signed : true,
       verified: e ? e.source === "preset" || !!(b && b.verified) : true,
       license: (e && e.license) || "", homepage: (e && e.homepage) || "", needs: (e && e.needs) || {},
+      // 依赖：requires 了哪些组件、各自装好没有；谁在依赖它（卸载前要先卸那些）；本机能不能用
+      requires: ((e && e.requires) || (rec && rec.requires) || []).map((rid) => ({ id: rid, name: compName(rid, comps), ok: compDepOk(rid, comps, dk) })),
+      usedBy: rec ? compUsers(id).map((rid) => ({ id: rid, name: compName(rid, comps) })) : [],
+      unsupported: compUnsupported(e),
     };
   });
   return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, items };
@@ -1932,11 +1954,62 @@ function compMoveIn(stageUsr, rel = "", moved = [], skipped = []) {
   return { moved, skipped };
 }
 
-function compRemoveFiles(rec) {
+const PKG_LIST = /^var\/lib\/dpkg\/info\/(.+)\.list$/;
+/** 磁盘上某个包现在的文件清单（devkit 给每个包写的 var/lib/dpkg/info/<包>.list，绝对路径 → 相对 $PREFIX） */
+function compPkgFiles(pkg) {
+  const out = [];
+  try {
+    for (const l of fs.readFileSync(path.join(PREFIX, "var/lib/dpkg/info", pkg + ".list"), "utf8").split("\n")) {
+      const i = l.indexOf("/files/usr/");
+      if (i >= 0 && l.length > i + 11) out.push(l.slice(i + 11));
+    }
+  } catch {}
+  return out;
+}
+
+/** 已装组件要用的全部文件：
+ *  · 自己放进去的（files）+ 装的时候已经在、没放的（shared）；0.1.10 及以前的记录没有 shared，拿包内 MANIFEST 补；
+ *  · 再加上它带的每个包「磁盘上现在那一版」的整份文件清单。两个组件带了同一个包、版本却不同时
+ *    （浏览器带 mesa 26.2.4、GPU 驱动带 26.2.5），后装的跳过了同名文件、用的是先装那版 —— 而那版还有
+ *    文件名带版本号的库（libgallium-26.2.4.so），光按路径比对会把它删掉，留下的同名文件就找不到它了 */
+function compNeeds(id, rec) {
+  const s = new Set([...(rec.files || []), ...(rec.shared || [])]);
+  if (!rec.shared) {
+    try {
+      for (const line of fs.readFileSync(path.join(PREFIX, "libexec/devkit/components", id, "MANIFEST"), "utf8").split("\n")) {
+        const rel = line.split(" ").slice(2).join(" ");
+        if (rel) s.add(rel);
+      }
+    } catch {}
+  }
+  for (const r of [...s]) { const m = PKG_LIST.exec(r); if (m) for (const f of compPkgFiles(m[1])) s.add(f); }
+  return s;
+}
+
+/** 删掉一个组件放进去的文件。两个组件带了同一个依赖包（浏览器和 GPU 驱动都带 mesa）时，
+ *  后装的那个跳过了已存在的文件、记录里没有它们 —— 所以删之前先看别的组件要不要用：要用的留下、记到它名下，
+ *  不然卸一个，另一个就悄悄坏了 */
+function compRemoveFiles(id, rec) {
+  const others = [];
+  try {
+    for (const f of fs.readdirSync(COMP_DIR)) {
+      if (!f.endsWith(".json") || f === id + ".json") continue;
+      const oid = f.slice(0, -5), orec = compRecord(oid);
+      if (orec) others.push({ id: oid, rec: orec, needs: compNeeds(oid, orec), gained: [] });
+    }
+  } catch {}
   const dirs = new Set();
   for (const r of rec.files || []) {
+    const keeper = others.find((o) => o.needs.has(r));
+    if (keeper) { keeper.gained.push(r); continue; }
     try { fs.unlinkSync(path.join(PREFIX, r)); } catch {}
     for (let d = path.dirname(r); d && d !== "."; d = path.dirname(d)) dirs.add(d);
+  }
+  for (const o of others) {
+    if (!o.gained.length) continue;
+    o.rec.files = [...new Set([...(o.rec.files || []), ...o.gained])];
+    compWriteRecord(o.id, o.rec);
+    log(`[comp] ${id}：${o.gained.length} 个文件 ${o.id} 也要用，留下归它`);
   }
   // 由深到浅删掉变空的目录（工具包自己的目录不空，自然删不掉）
   for (const d of [...dirs].sort((a, b) => b.length - a.length)) { try { fs.rmdirSync(path.join(PREFIX, d)); } catch {} }
@@ -1952,7 +2025,10 @@ async function compInstall(id) {
   const ix = await compIndex(true);
   const entry = ix.data && ix.data.components && ix.data.components[id];
   if (!entry) return { ok: false, message: ix.error || "没有这个组件" };
-  const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source };
+  if (compUnsupported(entry)) return { ok: false, message: "这个组件只能用在高通骁龙（Adreno GPU）的设备上，本机用不了" };
+  const miss = (entry.requires || []).filter((rid) => !compDepOk(rid, ix.data.components, dk));
+  if (miss.length) return { ok: false, message: "要先装：" + miss.map((rid) => compName(rid, ix.data.components).zh || rid).join("、") };
+  const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source, requires: entry.requires || [] };
   if (!b) return { ok: false, message: "这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试" };
   // 空间：压缩包 + 解开后的大小，再留 10%
   try {
@@ -2042,9 +2118,9 @@ async function compRunInstall(id, b, job) {
   // 3) 切换：先写"安装中"的记录（被打断就是 damaged，可以重装或卸载），再逐个搬进 $PREFIX
   job.phase = "installing";
   const old = compRecord(id);
-  if (old) compRemoveFiles(old);                    // 升级 / 重装：先清掉上一版
+  if (old) compRemoveFiles(id, old);                // 升级 / 重装：先清掉上一版（别的组件也要用的留下）
   const rec = { id, source: b.source || "", version: b.version, upstream: b.upstream, base: b.base, sha256: b.sha256, bin: b.bin || [],
-    skill: "", state: "installing", at: Date.now(), files: [] };
+    requires: b.requires || [], skill: "", state: "installing", at: Date.now(), files: [], shared: [] };
   // 先按包内文件清单记下"将要放进去的文件"：搬到一半被杀也能按它卸干净
   const list = [];
   (function walk(rel) {
@@ -2053,10 +2129,11 @@ async function compRunInstall(id, b, job) {
       if (d.isDirectory()) walk(r); else list.push(r);
     }
   })("");
-  rec.files = list.filter((r) => { try { fs.lstatSync(path.join(PREFIX, r)); return false; } catch { return true; } });
+  // 已经在的（工具包自带，或别的组件放进去的）不覆盖、不归我们，但记进 shared：那个组件卸载时要知道我们也在用
+  for (const r of list) { let have = false; try { fs.lstatSync(path.join(PREFIX, r)); have = true; } catch {} (have ? rec.shared : rec.files).push(r); }
   compWriteRecord(id, rec);
   const { skipped } = compMoveIn(path.join(tree, "usr"));
-  if (skipped.length) log(`[comp] ${id}：${skipped.length} 个与工具包同名的文件保留工具包的版本`);
+  if (skipped.length) log(`[comp] ${id}：${skipped.length} 个文件已经在了（工具包或别的组件放的），保留原样`);
   // 4) 首次运行配置（各包 postinst），失败不算安装失败
   const fr = path.join(PREFIX, lx, "first-run.sh");
   if (fs.existsSync(fr)) { try { await compRun(job, path.join(PREFIX, "bin", "sh"), [fr]); } catch (e) { log(`[comp] ${id} first-run：${e.message}`); } }
@@ -2083,7 +2160,12 @@ function compRemove(id) {
   if (job && !job.finished) return { ok: false, message: "busy" };
   const rec = compRecord(id);
   if (!rec) return { ok: false, message: "not installed" };
-  compRemoveFiles(rec);
+  const users = compUsers(id);
+  if (users.length) {
+    const comps = (compIndexCache.data && compIndexCache.data.components) || {};
+    return { ok: false, message: users.map((rid) => compName(rid, comps).zh || rid).join("、") + " 要用它，先卸载那些组件" };
+  }
+  compRemoveFiles(id, rec);
   fs.rmSync(compRecFile(id), { force: true });
   fs.rmSync(path.join(COMP_DIR, ".staging"), { recursive: true, force: true });
   COMP_JOBS.delete(id);
