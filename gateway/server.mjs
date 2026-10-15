@@ -1679,7 +1679,7 @@ function termInfo(t) {
   return { id: t.id, title: t.title, cols: t.cols, rows: t.rows, created: t.created, alive: t.alive, code: t.code };
 }
 
-function termNew({ cols, rows } = {}) {
+function termNew({ cols, rows, login } = {}) {
   for (const [id, t] of TERMS) if (!t.alive) TERMS.delete(id);   // 已退出的不占名额
   if (TERMS.size >= TERM_MAX) return { error: `too many terminals (${TERM_MAX})` };
   const pc = ptyCommand();
@@ -1689,9 +1689,14 @@ function termNew({ cols, rows } = {}) {
   const shell = ensureShell();
   let cwd = CFG.workspace;
   try { if (!fs.statSync(cwd).isDirectory()) cwd = CFG.home; } catch { cwd = CFG.home; }
+  // login：给手动登录用的终端。环境和账户登录一样清掉第三方厂商的地址 / 密钥 / 模型，
+  // 开好后替用户敲下 claude auth login —— 授权码由用户贴给 claude 自己的提示，网关只当字节通道
+  const env = termEnv();
+  if (login) for (const k of Object.keys(env)) if (/^ANTHROPIC_/.test(k)) delete env[k];
   const child = spawn(pc[0], [...pc.slice(1), String(rows), String(cols), shell], {
-    cwd, env: termEnv(), detached: true, stdio: ["pipe", "pipe", "pipe", "pipe"],
+    cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe", "pipe"],
   });
+  if (login) setTimeout(() => { try { child.stdin.write("claude auth login" + (login === "console" ? " --console" : "") + "\r"); } catch {} }, 400);
   const id = (++termSeq).toString(36) + Math.random().toString(36).slice(2, 6);
   const t = {
     id, title: `${path.basename(shell) === "bash" ? "bash" : "sh"} ${termSeq}`, cols, rows,
@@ -2503,8 +2508,10 @@ function tryInject(run, item) {
 //         交给"浏览器"，自己在那个端口等回调。手机浏览器和 claude 在同一台机器上，
 //         授权完浏览器跳回 localhost，claude 直接收到 —— 不用贴码。
 //         我们的"浏览器"是个小脚本，只把地址写进文件，由界面交给系统浏览器打开。
-//   手动：claude 同时打印一个回调到 platform.claude.com 的地址，那边页面显示授权码，
-//         贴回来写进它的 stdin。浏览器回不到 localhost 时（比如在别的设备上授权）用这条。
+//   手动：浏览器回不到 localhost 时（比如在别的设备上授权），页面会显示一个授权码。
+//         这个码网关**不经手**：界面打开一个终端跑 claude auth login，用户把码直接贴给 claude 自己的提示
+//         （终端只是通用的字节通道，和 Termux / SSH 一样）。以前的 /api/login/code 接收授权码再写进 stdin，
+//         条款要求登录走 Anthropic 自己的流程、开发者不得经手凭据，所以拿掉了。
 let LOGIN = null;
 const LOGIN_DIR = path.join(CFG.home, ".cache", "ccapp-login");
 
@@ -2523,8 +2530,7 @@ function loginStart(flag) {
   try { fs.unlinkSync(urlFile); } catch {}
   fs.writeFileSync(browser, '#!/system/bin/sh\nprintf "%s\\n" "$1" > "' + urlFile + '"\n', { mode: 0o700 });
   const env = { ...authEnv(), BROWSER: browser };
-  const child = spawn(PATHS.loader, claudeArgv(["auth", "login", flag]), { cwd: CFG.home, env, stdio: ["pipe", "pipe", "pipe"] });
-  child.stdin.on("error", () => {});
+  const child = spawn(PATHS.loader, claudeArgv(["auth", "login", flag]), { cwd: CFG.home, env, stdio: ["ignore", "pipe", "pipe"] });
   const L = LOGIN = { child, out: "", startedAt: Date.now(), done: false, ok: false, flag };
   const onData = (d) => { L.out += String(d); };
   child.stdout.on("data", onData); child.stderr.on("data", onData);
@@ -2548,23 +2554,6 @@ function loginStart(flag) {
           : { ok: false, message: "没拿到登录地址", output: L.out.slice(-1500) });
       }
     }, 200);
-  });
-}
-
-function loginCode(code) {
-  if (!LOGIN || LOGIN.done) return Promise.resolve({ ok: false, output: "没有进行中的登录，请先点「登录」" });
-  if (!code) return Promise.resolve({ ok: false, output: "授权码为空" });
-  const L = LOGIN, from = L.out.length;
-  L.child.stdin.write(code + "\n");
-  return new Promise((resolve) => {
-    const t0 = Date.now();
-    const tick = setInterval(() => {
-      const tail = L.out.slice(from);
-      if (L.done || /success|error|fail|invalid/i.test(tail) || Date.now() - t0 > 45000) {
-        clearInterval(tick);
-        resolve({ ok: /success/i.test(tail) || L.ok, output: tail.slice(-1500) });
-      }
-    }, 300);
   });
 }
 
@@ -4077,10 +4066,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/login/start") {
       const b = JSON.parse((await readBody(req)) || "{}");
       return sendJson(res, 200, await loginStart(b.method === "console" ? "--console" : "--claudeai"));
-    }
-    if (req.method === "POST" && p === "/api/login/code") {
-      const b = JSON.parse((await readBody(req)) || "{}");
-      return sendJson(res, 200, await loginCode(String(b.code || "").trim()));
     }
     if (req.method === "GET" && p === "/api/login/status") {
       const st = await authStatus(u.searchParams.get("refresh") === "1" || (LOGIN && LOGIN.done && !LOGIN.reported));

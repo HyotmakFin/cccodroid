@@ -588,4 +588,8 @@ window.I18N_DICT["fr"] = {
   "bypassPermissions · 全部放行": "bypassPermissions · tout autoriser",
   "默认逐项确认，和官方一致：改文件、跑命令前会在对话里问你。全部放行意味着 Claude 不问你就能删文件、跑任意命令。也可以点输入框下方的权限标签随时切换。": "Par défaut, Claude demande à chaque fois, comme la version officielle : il vous demande dans la conversation avant de modifier des fichiers ou d’exécuter des commandes. « Tout autoriser » signifie que Claude peut supprimer des fichiers et exécuter n’importe quelle commande sans demander. Vous pouvez aussi changer à tout moment via l’étiquette d’autorisation sous la zone de saisie.",
   "↩ 已退回修改": "↩ Renvoyé pour révision",
+  "在浏览器打开下面的地址完成授权，授权后浏览器跳回本机，登录自动完成：": "Ouvrez le lien ci-dessous dans le navigateur pour autoriser. Ensuite le navigateur revient sur cet appareil et la connexion se termine automatiquement :",
+  "浏览器跳不回来（比如在别的设备上授权）：打开终端运行 {cmd}，把页面给出的授权码直接贴给 claude。": "Si le navigateur ne peut pas revenir (par ex. autorisation sur un autre appareil) : ouvrez un terminal, lancez {cmd} et collez le code affiché sur la page directement dans claude.",
+  "浏览器没跳回来（或在别的设备上授权）？在终端里登录：授权码由你直接贴给 claude，本应用不经手。": "Le navigateur n’est pas revenu (ou autorisation sur un autre appareil) ? Connectez-vous depuis un terminal : vous collez le code directement dans claude ; cette app ne le manipule jamais.",
+  "在终端里登录": "Se connecter depuis un terminal",
 };

@@ -1375,7 +1375,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       newConversation(t("已清空上下文，开始新会话"));
       return;
     }
-    // 官方账户登录：OAuth 全程由 claude 自己完成，网关只转递授权页地址和用户贴回的码
+    // 官方账户登录：OAuth 全程由 claude 自己完成，网关只转递授权页地址；授权码不经手（要贴码就在终端里贴给 claude）
     if (text === "/login" || text === "/login console" || text.startsWith("/login ")) {
       if (fromInput) { inputEl.value = ""; autoGrow(); }
       const arg = text.slice(6).trim();
@@ -1383,16 +1383,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
       });
       try {
-        if (!arg || arg === "console") {
-          addNote(t("正在启动登录…"));
-          const j = await post("/api/login/start", { method: arg === "console" ? "console" : "claudeai" });
-          if (!j.ok) throw new Error(j.message || t("启动登录失败"));
-          addSysMsg(t("在浏览器打开下面的地址完成授权，然后把页面给出的授权码用 {cmd} 发回来：", { cmd: "`/login " + t("授权码") + "`" }) + `\n\n[${j.url}](${j.url})`, "/login");
-        } else {
-          addNote(t("正在提交授权码…"));
-          const j = await post("/api/login/code", { code: arg });
-          addSysMsg(j.ok ? t("✓ 已登录，可以开始对话了") : t("✗ 登录失败：") + "\n\n```\n" + (j.output || j.message || "") + "\n```", "/login");
-        }
+        addNote(t("正在启动登录…"));
+        const j = await post("/api/login/start", { method: arg === "console" ? "console" : "claudeai" });
+        if (!j.ok) throw new Error(j.message || t("启动登录失败"));
+        addSysMsg(t("在浏览器打开下面的地址完成授权，授权后浏览器跳回本机，登录自动完成：") + `\n\n[${j.url}](${j.url})\n\n` +
+          t("浏览器跳不回来（比如在别的设备上授权）：打开终端运行 {cmd}，把页面给出的授权码直接贴给 claude。", { cmd: "`claude auth login`" }), "/login");
       } catch (e) { toast(e.message, true); }
       return;
     }
@@ -2510,16 +2505,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         $("login-flow").innerHTML = `<div class="tiny">${t("已在浏览器打开授权页。授权后浏览器会跳回本机，登录自动完成。")}
         ${t("没自动打开？")}<a href="${esc(r.url)}" target="_blank" rel="noopener">${t("点这里打开")}</a></div>
       <div class="prov-manual">
-        <div class="tiny">${t("浏览器没跳回来（或在别的设备上授权）？打开下面这个地址，把页面给出的授权码贴回来：")}</div>
-        <div class="mono"><a href="${esc(r.manualUrl || r.url)}" target="_blank" rel="noopener">${esc(r.manualUrl || r.url)}</a></div>
-        <input id="login-code" placeholder="${t("粘贴授权码（形如 xxxx#yyyy）")}" autocomplete="off">
-        <button class="btn sm" id="btn-login-code">${t("提交授权码")}</button>
+        <div class="tiny">${t("浏览器没跳回来（或在别的设备上授权）？在终端里登录：授权码由你直接贴给 claude，本应用不经手。")}</div>
+        <button class="btn sm" id="btn-login-term">${t("在终端里登录")}</button>
       </div>`;
-    $("btn-login-code").onclick = async () => {
-      const code = $("login-code").value.trim();
-      if (!code) return toast(t("先粘贴授权码"), true);
-      const j = await post("/api/login/code", { code }).catch((e) => ({ ok: false, output: e.message }));
-      if (!j.ok) toast(t("登录失败：{msg}", { msg: (j.output || "").slice(-120) }), true);
+    $("btn-login-term").onclick = async () => {
+      await post("/api/login/cancel").catch(() => {});
+      clearInterval(state.loginTimer);
+      openLoginTerm(method === "console" ? "console" : "claudeai");
     };
     watchLogin(p);
   }
@@ -3432,7 +3424,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     TERM.inst.get(TERM.cur)?.xt.blur();
   }
 
-  async function newTerm() {
+  /** 手动登录：开一个新终端，网关替你敲好 claude auth login；授权码贴给 claude 自己的提示 */
+  async function openLoginTerm(method) {
+    termEl.classList.remove("hidden");
+    try { await loadXterm(); } catch (e) { toast(t("终端组件加载失败：{msg}", { msg: e.message }), true); return; }
+    try { const r = await api("/api/term/list"); TERM.list = (r.terms || []).filter((x) => x.alive || TERM.inst.has(x.id)); } catch {}
+    await newTerm({ login: method === "console" ? "console" : true });
+  }
+
+  async function newTerm(opts = {}) {
     const box = $("term-screens");
     // 先用一个探针算出这块地方能放几行几列，开出来就是对的大小，免得 shell 先按 80x24 画一遍
     let cols = 80, rows = 24;
@@ -3442,7 +3442,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       rows = Math.max(5, Math.floor((box.clientHeight - 4) / (TERM.font * 1.2)));
     }
     let r;
-    try { r = await api("/api/term/new", { method: "POST", body: JSON.stringify({ cols, rows }) }); }
+    try { r = await api("/api/term/new", { method: "POST", body: JSON.stringify({ cols, rows, ...(opts.login ? { login: opts.login } : {}) }) }); }
     catch (e) { toast(t("新建终端失败：{msg}", { msg: e.message }), true); return; }
     TERM.list.push(r.term);
     TERM.cur = r.term.id;
@@ -3489,6 +3489,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       fontSize: TERM.font, fontFamily: "ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace",
       theme: termTheme(), scrollback: 5000, cursorBlink: true, allowProposedApi: false,
       macOptionIsMeta: true, convertEol: false,
+      // claude 打的 OSC 8 超链接（登录授权页等）：交给系统浏览器，别在 WebView 里开
+      linkHandler: { activate: (e, uri) => openExternal(uri), allowNonHttpProtocols: false },
     });
     const fit = new window.FitAddon.FitAddon();
     xt.loadAddon(fit);
@@ -3497,6 +3499,30 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     TERM.inst.set(id, a);
 
     xt.onData((d) => termSend(a, termMods(d)));
+    // 终端里的网址点一下就用系统浏览器打开（登录授权页那种长地址会折成好几行，按折行拼回来再找）
+    xt.registerLinkProvider({
+      provideLinks(y, cb) {
+        const buf = xt.buffer.active;
+        let top = y - 1;
+        while (top > 0 && buf.getLine(top)?.isWrapped) top--;
+        let text = "", rows = [];
+        for (let i = top; i < buf.length; i++) {
+          const ln = buf.getLine(i);
+          if (!ln || (i > top && !ln.isWrapped)) break;
+          const s = ln.translateToString(false).padEnd(xt.cols).slice(0, xt.cols);
+          rows.push(i); text += s;
+        }
+        const out = [];
+        for (const m of text.matchAll(/https?:\/\/[^\s"'<>]+/g)) {
+          const at = (k) => ({ x: (k % xt.cols) + 1, y: rows[Math.floor(k / xt.cols)] + 1 });
+          const st = at(m.index), en = at(m.index + m[0].length - 1);
+          if (y < st.y || y > en.y) continue;
+          const url = m[0];
+          out.push({ range: { start: st, end: en }, text: url, activate: () => openExternal(url) });
+        }
+        cb(out.length ? out : undefined);
+      },
+    });
     xt.onTitleChange((s) => {
       const x = TERM.list.find((y) => y.id === id);
       if (x && s) { x.title = s.slice(0, 40); renderTermTabs(); }
