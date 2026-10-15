@@ -231,10 +231,10 @@
             <span data-i18n>安全模式：用 claude 自带的 --safe-mode 起，CLAUDE.md、技能、插件、钩子、MCP、自定义命令与输出风格一概不加载。登录、Key、会话、模型照旧，不改动任何文件，关掉即恢复</span>
           </label>
           <div class="row-actions">
-            <button class="btn sm ghost" id="btn-share-logs" data-i18n>一键分享日志</button>
+            <button class="btn sm" id="btn-share-logs" data-i18n>我卡住了 · 打包诊断</button>
             <button class="btn sm ghost" id="btn-ledger" data-i18n>修复账本</button>
           </div>
-          <div class="tiny" id="share-logs-hint" data-i18n>打包诊断信息、应用日志、网关日志与修复账本，经系统分享发出。密钥、令牌与邮箱会先抹掉；网关日志里有每次提问的开头几十个字。</div>
+          <div class="tiny" id="share-logs-hint" data-i18n>遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。</div>
           <div id="ledger-list" class="list hidden"></div>
         </div>
       </div>

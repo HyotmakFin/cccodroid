@@ -1110,9 +1110,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       view.loading = false;
       olderEl.textContent = t("加载更早的消息");
       if (e.status === 404 && initial) {
-        addNote(t("找不到这个会话的记录（可能已删除）—— 下一条消息会开新会话。"), histEl);
+        // 记着的会话已经不在了（删掉了 / 清过数据）：当新会话处理，回到欢迎页，别挂一条让人摸不着头脑的提示
         view.sessionId = null;
         saveUiState();
+        if (!liveEl.childElementCount) showWelcome();
       } else toast(t("读取历史失败：{msg}", { msg: e.message }), true);
       return;
     }
@@ -1142,15 +1143,65 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
+    const tips = [
+      ["📎", t("附加图片或文件，也可以直接粘贴、拖进来")],
+      ["/ @", t("输入 / 唤起斜杠命令，@ 引用文件路径")],
+      ["📁 >_ ‹›", t("顶栏：文件浏览器、终端、命令面板")],
+      ["☰", t("左上角：历史会话、设置、能力清单、扩展")],
+      ["🔒", t("输入框下方的权限标签：Claude 改文件、跑命令前要不要先问你，点一下就能换")],
+      ["⚡", t("生成中可以接着发：回车排队，⚡ 插话（不打断，并进当前这一轮）")],
+    ];
+    // 第一次不知道问什么：点一下填进输入框，自己看过、改过再发
+    const examples = [
+      t("看看这台设备上装了哪些开发工具，挑三个各演示一下"),
+      t("用 Python 统计工作区里各类文件的数量和总大小，整理成表格"),
+      t("写一个单文件的贪吃蛇网页小游戏，做好后在浏览器里打开给我看"),
+    ];
     b.innerHTML =
-            t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
-      `<ul style="color:var(--fg2);font-size:13.5px">
-         <li><strong>📎</strong> ${t("附加图片或文件（也可以直接粘贴、拖放）")}</li>
-         <li><code>/</code> ${t("唤起斜杠命令，")}<code>@</code> ${t("引用文件路径")}</li>
-         <li>${t("顶栏")} <strong>📁</strong> ${t("打开文件浏览器（可预览图片、插入路径）")}</li>
-         <li>${t("左上角")} <strong>☰</strong> ${t("管理历史会话 / 设置 / 查看能力清单")}</li>
-         <li>${t("生成中可以接着发：消息会排队；")}<strong>⚡</strong> ${t("插话（不打断，并进当前这一轮）")}</li>
-       </ul>`;
+      t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
+      `<ul class="welcome-tips">${tips.map(([k, v]) => `<li><strong>${esc(k)}</strong> ${esc(v)}</li>`).join("")}</ul>
+       <p class="welcome-ex-h">${esc(t("不知道从哪开始？点一个试试（只填进输入框，不会直接发）："))}</p>
+       <div class="welcome-ex">${examples.map((x) => `<button class="btn ghost sm">${esc(x)}</button>`).join("")}</div>
+       <div class="setup-guide hidden"></div>`;
+    fillSetupGuide(b.querySelector(".setup-guide"));
+    b.querySelector(".welcome-ex").addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      inputEl.value = btn.textContent;
+      autoGrow(); syncInterject(); inputEl.focus();
+    });
+  }
+
+  /** 还没接上模型（没登录、没填 Key）：欢迎页里把两条路并排摆出来，不替用户选 */
+  async function fillSetupGuide(box) {
+    let s = null;
+    try { s = await api("/api/status"); } catch { return; }
+    let ready = s.keyMode === "key";
+    if (s.keyMode === "login") { try { ready = !!(await api("/api/login/status")).loggedIn; } catch {} }
+    if (ready || !box.isConnected) return;
+    box.innerHTML = `<p><strong>${esc(t("开始之前，先接上模型（两条路选一条）："))}</strong></p>
+      <div class="setup-paths">
+        <div class="setup-path"><b>${esc(t("用 Claude 账户登录"))}</b>
+          <div class="tiny">${esc(t("有 Claude Pro / Max 订阅，或 Anthropic Console 账户：在浏览器里授权一次就好，不用填 Key。"))}</div>
+          <button class="btn sm" data-p="login">${esc(t("去登录"))}</button></div>
+        <div class="setup-path"><b>${esc(t("填 API Key"))}</b>
+          <div class="tiny">${esc(t("用 Anthropic 的 Key，或 DeepSeek、智谱 GLM、通义千问、Kimi 等兼容接口的 Key，按用量付费。"))}</div>
+          <button class="btn sm" data-p="key">${esc(t("去选接口、填 Key"))}</button></div>
+      </div>
+      <div class="tiny">${esc(t("两条路都在 ☰ → 设置 → 接口，以后随时能换。"))}</div>`;
+    box.classList.remove("hidden");
+    box.addEventListener("click", (e) => {
+      const p = e.target.dataset && e.target.dataset.p;
+      if (!p) return;
+      openDrawer("settings");
+      const sel = $("set-provider");
+      if (p === "login" && [...sel.options].some((o) => o.value === "anthropic")) {
+        sel.value = "anthropic";
+        sel.dispatchEvent(new Event("change"));
+      }
+      setTimeout(() => sel.scrollIntoView({ block: "center" }), 50);
+      if (p === "key") sel.focus();
+    });
   }
 
   // ── 事件总线 ──────────────────────────────────────────────────────
@@ -1310,6 +1361,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       setHtml(b, `<div class="cmd-card"><div class="cmd-name">${esc("/" + ev.localCommand)}</div>${renderMd(ev.resultText)}</div>`);
       if (ev.localCommand === "context") parseContextText(ev.resultText);
       if (ev.localCommand === "model" || ev.localCommand === "effort") loadSettings();
+      // 压缩线的刻度在 loadModels 里刷（以前只有切模型才会调它，所以设完要切一次模型才看得到）
+      if (ev.localCommand === "autocompact") loadModels();
     } else {
       av.finish(ev.aborted);
       if (ev.aborted) av.note(t("已中断"));
@@ -2548,6 +2601,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   $("safe-mode").addEventListener("change", (e) => setSafe(e.target.checked));
   $("btn-share-logs").addEventListener("click", async () => {
+    // 打包前给用户看清单：发出去的是什么、去掉了什么
+    if (!confirm(t("打一个诊断包，经系统分享发出去。\n\n包里有：\n· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n· 开发工具包：装的是哪一版、更新与自检状态\n· 最近的日志：本应用的系统日志、网关日志的最后一段\n· 修复账本：安装、校验、修复做过哪些、成没成\n\n已经去掉：\n· 密钥、令牌、登录凭据、邮箱\n· 你发给 Claude 的消息内容\n· 会话记录本身不在包里\n\n继续？"))) return;
     toast(t("正在打包日志…"));
     const r = await post("/api/app/share_logs").catch((e) => ({ ok: false, message: e.message }));
     if (!r.ok) toast(t("没分享成：{msg}", { msg: r.message || "" }), true);
@@ -3199,7 +3254,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   $("set-autocompact").addEventListener("change", (e) => {
     const v = e.target.value.trim();
-    saveSettings({ autoCompactWindow: v ? Number(v) : null });
+    saveSettings({ autoCompactWindow: v ? Number(v) : null }).then(() => loadModels());
   });
   $("btn-add-dir").addEventListener("click", () => {
     const v = $("inp-dir").value.trim();

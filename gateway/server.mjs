@@ -1138,6 +1138,11 @@ function trashSession(id) {
   }));
   PEEK_CACHE.delete(found.file);
   delete NAMES[id]; saveNames();
+  // 删的正好是「最近跑过的那条」：别让前端下次打开时又指回去（会显示「找不到这个会话」而不是欢迎页）
+  if (LAST_SESSION && LAST_SESSION.id === id) {
+    LAST_SESSION = null;
+    try { fs.rmSync(LAST_SESSION_FILE, { force: true }); } catch {}
+  }
   return { ok: true };
 }
 
@@ -2675,6 +2680,39 @@ async function handleLocalCommand(name, arg, reply) {
   const models = await fetchModels(true);
   const cur = models.find((m) => m.id === SETTINGS.model) || models[0];
 
+  // ── /autocompact ──
+  // 交给 claude 自己处理的话：它写进 ~/.claude/settings.json，但我们下发的 CLAUDE_CODE_AUTO_COMPACT_WINDOW
+  // 优先级更高（它会说 "env is set and takes precedence"），界面上的压缩线也要切一次模型才刷新。
+  // 所以由网关接住：存进设置（和设置页那一栏是同一个值），下一轮起生效，前端收到 run_end 就刷新刻度。
+  if (name === "autocompact") {
+    const win = Number(cur && cur.context_window) || 0;
+    const fmt = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(2) + "M" : Math.round(n / 1000) + "k");
+    if (!arg) {
+      const v = effectiveAutoCompact();
+      return reply(
+        `自动压缩线：**${v ? fmt(v) + " tokens" : "默认（由 claude 按模型窗口决定）"}**${win ? `　（当前模型窗口 ${fmt(win)}）` : ""}\n\n` +
+        "用法：`/autocompact 400k`、`/autocompact 1m`；恢复默认：`/autocompact off`。设置页「自动压缩」一栏是同一个值。",
+        "autocompact"
+      );
+    }
+    const a = arg.trim().toLowerCase();
+    let n = null;
+    if (!/^(off|default|reset|auto|0)$/.test(a)) {
+      const m = a.match(/^(\d+(?:\.\d+)?)\s*([km]?)$/);
+      if (!m) return reply(`看不懂 \`${arg.trim()}\`。写成 \`400k\`、\`1m\` 或纯数字；恢复默认用 \`off\`。`, "autocompact");
+      n = Math.round(Number(m[1]) * (m[2] === "m" ? 1e6 : m[2] === "k" ? 1e3 : 1));
+      if (n < 10000) return reply(`${fmt(n)} 太小了，压缩线至少 10k。`, "autocompact");
+    }
+    SETTINGS.autoCompactWindow = n;
+    saveSettings();
+    log(`⌘ /autocompact → ${n || "(默认)"}`);
+    return reply(
+      (n ? `自动压缩线已设为 **${fmt(n)} tokens**，下一轮起生效。` : "自动压缩线已恢复默认（由 claude 按模型窗口决定），下一轮起生效。") +
+      (n && win && n > win ? `\n\n> ⚠️ 比当前模型的窗口（${fmt(win)}）还大，实际会先撞上窗口上限。` : ""),
+      "autocompact"
+    );
+  }
+
   // ── /model ──
   if (name === "model" || name === "models") {
     if (!arg) {
@@ -2796,7 +2834,7 @@ async function startRun(item) {
   publishState();
 
   const message = run.text;
-  const local = message.trim().match(/^\/(model|models|effort)(?:\s+([\s\S]*))?$/);
+  const local = message.trim().match(/^\/(model|models|effort|autocompact)(?:\s+([\s\S]*))?$/);
   if (local) {
     log(`⌘ 本地命令 /${local[1]}${local[2] ? " " + local[2].trim() : ""}`);
     return handleLocalCommand(local[1], (local[2] || "").trim(),
@@ -2857,7 +2895,7 @@ async function startRun(item) {
   for (const d of dirs) argv.push("--add-dir", d);
 
   const isCmd = message.trim().startsWith("/");
-  log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60)}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${SETTINGS.effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
+  log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${SETTINGS.effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
   const t0 = Date.now();
 
   const child = spawn(PATHS.loader, claudeArgv(argv), {
@@ -2877,7 +2915,7 @@ async function startRun(item) {
     if (!run.inputOpen || run.ended || run.aborted) return false;
     try { writeUser(item.message); } catch { return false; }
     run.pendingInject.push(item);
-    log(`↪ 插话 ${item.message.trim().slice(0, 60)}`);
+    log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容
     return true;
   };
   // 每轮 result 之后：没有待送达的插话就关 stdin，claude 随即退出；有就留着，它会接着处理
@@ -4218,7 +4256,7 @@ const server = http.createServer(async (req, res) => {
       let b;
       try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
       if (!String(b.message || "").trim()) return sendJson(res, 400, { error: "empty message" });
-      if (!API_KEY && !PROVIDER.login && !/^\/(model|models|effort)\b/.test(String(b.message).trim())) {
+      if (!API_KEY && !PROVIDER.login && !/^\/(model|models|effort|autocompact)\b/.test(String(b.message).trim())) {
         return sendJson(res, 503, {
           error: "no_api_key",
           message: `「${PROVIDER.label || PROVIDER.id}」还没填 Key。到 设置 → 接口 里填好保存，或换一个接口。`,

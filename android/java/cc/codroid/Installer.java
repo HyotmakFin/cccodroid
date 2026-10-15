@@ -48,6 +48,13 @@ final class Installer {
                 lastBase = base; lastSha = sha;
                 JSONObject tarInfo = lock.optJSONObject("tar");
                 lastTarSha = tarInfo != null ? tarInfo.optString("sha256", null) : null;
+                // 空间先算清再下：下到一半才报「No space left」，用户白等十分钟还看不懂。
+                // 峰值 = 还没下完的压缩包 + 解开后的全部文件（压缩包解完才删）+ Claude Code 与余量
+                long have = done.isFile() ? done.length() : part.length();
+                long tarBytes = tarInfo != null ? tarInfo.optLong("bytes", 0) : 0;
+                long need = Math.max(0, size - have) + (tarBytes > 0 ? tarBytes : size * 3) + (400L << 20);
+                long free = new android.os.StatFs(env.files.getPath()).getAvailableBytes();
+                if (free < need) throw new NoSpace(need, free);
                 if (done.isFile() && done.length() == size && sha.equals(sha256(done))) return done;
                 // .part 属于别的版本就作废，别把两个版本拼在一起
                 if (!tag.isFile() || !sha.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
@@ -70,11 +77,20 @@ final class Installer {
                 tag.delete();
                 return done;
             } catch (Exception e) {
+                if (e instanceof NoSpace) throw (NoSpace) e;      // 换个下载地址也没用
                 last = e instanceof IOException ? (IOException) e : new IOException(e.getMessage(), e);
                 ui.step("  ✗ " + e.getMessage());
             }
         }
         throw last != null ? last : new IOException("没有可用的下载地址");
+    }
+
+    /** 存储空间不够：消息直接给用户看，写清要多少、还剩多少 */
+    static final class NoSpace extends IOException {
+        NoSpace(long need, long free) {
+            super(String.format(java.util.Locale.ROOT, "存储空间不够：安装需要约 %.1f GB，手机里目前只剩 %.1f GB。清理出空间后点「重试」即可（已下载的部分会保留）。",
+                need / 1073741824.0, free / 1073741824.0));
+        }
     }
 
     /** 最近一次 downloadDevkit 用的 Release 目录、gz 与 tar 的 sha256（installDevkit 记进 .devkit-ok，更新检查据此比对） */

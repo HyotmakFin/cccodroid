@@ -92,9 +92,25 @@ public final class Share extends ContentProvider {
     private static final Pattern SECRET = Pattern.compile(
         "(sk-[A-Za-z0-9_\\-]{4,}|sk-ant-[A-Za-z0-9_\\-]+|gh[pousr]_[A-Za-z0-9]{8,}|Bearer\\s+[A-Za-z0-9._\\-]{8,}|cc_t_\\d+=[^;\\s]+|X-CC-Token:?\\s*\\S+)");
     private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}");
+    // 网关日志里记着每条提问 / 插话的开头几十个字：那是用户的对话内容，诊断用不着，抹掉
+    private static final Pattern ASK = Pattern.compile("(▶ (?:提问|命令) ).*?(  \\((?:续 [0-9a-f]{8}|新会话)\\))", Pattern.DOTALL);
+    private static final Pattern INJ = Pattern.compile("(↪ 插话 ).*");
     static String scrub(String s) {
+        s = INJ.matcher(ASK.matcher(s).replaceAll("$1«内容已抹去»$2")).replaceAll("$1«内容已抹去»");
         return EMAIL.matcher(SECRET.matcher(s).replaceAll("«已抹去»")).replaceAll("«邮箱»");
     }
+
+    /** 包里有什么、去掉了什么 —— 「我卡住了」打包前给用户看的就是这份（README.txt 也放一份进包里） */
+    static final String CONTENTS =
+        "包里有：\n" +
+        "· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n" +
+        "· 开发工具包：装的是哪一版（校验哈希）、更新与自检状态\n" +
+        "· 最近的日志：本应用的系统日志、网关日志的最后一段\n" +
+        "· 修复账本：安装、校验、修复做过哪些、成没成\n" +
+        "\n已经去掉：\n" +
+        "· 密钥、令牌、登录凭据、邮箱\n" +
+        "· 你发给 Claude 的消息内容（日志里只留「提问了一次」）\n" +
+        "· 会话记录本身不在包里\n";
 
     /** 打包：诊断信息 + 本应用 logcat + 网关日志尾部 + 修复账本 → files/cache/share/cccodroid-logs-*.zip */
     static File bundleLogs(Context c) throws Exception {
@@ -107,6 +123,7 @@ public final class Share extends ContentProvider {
         File out = new File(dir, "cccodroid-logs-" + stamp + ".zip");
         JSONObject parts = new JSONObject();
         try (ZipOutputStream z = new ZipOutputStream(new FileOutputStream(out))) {
+            parts.put("README.txt", put(z, "README.txt", "cccodroid 诊断包（「我卡住了」）\n\n" + CONTENTS));
             parts.put("diagnostics.txt", put(z, "diagnostics.txt", diagnostics(c, env)));
             parts.put("logcat.txt", put(z, "logcat.txt", scrub(logcat())));
             if (env.log.isFile()) parts.put("gateway.log", put(z, "gateway.log", scrub(tail(env.log, 1024 * 1024))));

@@ -64,6 +64,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCb;
     /** 「保存到」：等系统文件面板回来时要复制的源文件。static：挑位置期间界面被回收重建也还在 */
     private static File savePending;
+    /** 安装失败时露出来；点了从头再走 boot（每一步都会跳过已经完成的部分） */
+    private android.widget.Button retry, stuck;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -148,10 +150,32 @@ public class MainActivity extends Activity {
                 // 后台快速自检：只看文件在不在，缺了就提示修复
                 if (!upd.devkitMoving() && !upd.devkitStaged()) upd.verifyAsync(false);
             } catch (Exception e) {
-                say("✗ " + e.getMessage());
-                say("（修好网络或文件后，划掉应用重新打开即可从这一步继续）");
+                android.util.Log.e("cccodroid-setup", "安装失败", e);
+                say("✗ " + humanize(e));
+                say("（下载过的部分都留着。处理好之后点「重试」，会从这一步接着来）");
+                ui.post(() -> { retry.setVisibility(View.VISIBLE); stuck.setVisibility(View.VISIBLE); });
             }
         }, "boot").start();
+    }
+
+    /** 安装失败的原因用人话说：原始异常常是一串英文，用户看不出该干什么（原文仍进 logcat） */
+    static String humanize(Throwable e) {
+        String raw = String.valueOf(e.getMessage());
+        for (Throwable c = e; c != null; c = c.getCause()) {
+            String m = String.valueOf(c.getMessage());
+            if (c instanceof Installer.NoSpace) return m;
+            if (m.contains("ENOSPC") || m.contains("No space left")) return "存储空间不够，写到一半满了。清理出 3 GB 左右的空间后点「重试」。";
+            if (c instanceof java.net.UnknownHostException)
+                return "连不上网络（找不到服务器）。检查 Wi-Fi / 移动数据是否能上网；开着 VPN 或代理的话，试试关掉或换个节点。";
+            if (c instanceof java.net.SocketTimeoutException || c instanceof java.net.ConnectException || c instanceof javax.net.ssl.SSLException
+                || m.contains("unexpected end of stream") || m.contains("Connection reset"))
+                return "网络不稳，下载中断了（" + c.getClass().getSimpleName() + "）。换个网络或稍后点「重试」，已下载的部分会接着续传。";
+            if (m.contains("sha256 不符"))
+                return "下载的文件没通过校验（可能被网络或代理改了内容），坏的那份已经删掉。点「重试」会重新下载。";
+            if (m.contains("HTTP 403") || m.contains("HTTP 429"))
+                return "下载服务器暂时拒绝了请求（" + m + "），多半是访问太频繁。过几分钟再点「重试」。";
+        }
+        return raw;
     }
 
     @Override protected void onNewIntent(Intent i) {
@@ -388,6 +412,26 @@ public class MainActivity extends Activity {
         logScroll = new ScrollView(this);
         logScroll.addView(log);
         col.addView(logScroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        retry = new android.widget.Button(this);
+        retry.setText("重试");
+        retry.setVisibility(View.GONE);
+        retry.setOnClickListener(v -> { retry.setVisibility(View.GONE); stuck.setVisibility(View.GONE); say("— 重试 —"); boot(); });
+        // 「我卡住了」：界面还没起来时（安装就失败了）也能把诊断包发出去
+        stuck = new android.widget.Button(this);
+        stuck.setText("我卡住了：分享诊断");
+        stuck.setVisibility(View.GONE);
+        stuck.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
+            .setTitle("打包诊断信息")
+            .setMessage(Share.CONTENTS)
+            .setPositiveButton("打包并分享", (d, w) -> new Thread(() -> {
+                try { Share.send(this, Share.bundleLogs(this), "application/zip"); }
+                catch (Exception e) { say("✗ 诊断包没打成：" + e.getMessage()); }
+            }, "stuck").start())
+            .setNegativeButton("取消", null).show());
+        LinearLayout acts = new LinearLayout(this);
+        acts.addView(retry, new LinearLayout.LayoutParams(-2, -2));
+        acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
+        col.addView(acts, new LinearLayout.LayoutParams(-1, -2));
         root.addView(col);
         setContentView(root);
     }
