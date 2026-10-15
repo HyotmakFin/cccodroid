@@ -585,6 +585,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
     const api = {
       kind: "tool",
+      el: card,
       result(ok, text) {
         result = { ok, text: String(text || "") };
         st.className = "tool-state " + (ok ? "ok" : "err");
@@ -617,6 +618,290 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const c = TOOL_CARDS.get(id);
     if (c) c.result(ok, text);
     else if (id) PENDING_RESULTS.set(id, { ok, text });   // 卡片在更早的一页里，翻到了再贴上
+  }
+
+  // ── 权限确认 ─────────────────────────────────────────────────────
+  //  claude 要跑需确认的工具时，网关把 can_use_tool 转成 perm_request 事件。
+  //  卡片挂在对应工具卡下面；输入框上方另有一条常驻提示（翻到上面去了、分屏切回来也看得见）。
+  //  参数一律以 claude 发来的为准，前端只回「允许 / 拒绝 / 始终允许 / 选项答案」。
+  const PERMS = new Map();          // id → { p, runId, el, done }
+  const permBar = $("perm-bar");
+  let permWaiting = false;          // 状态栏此刻显示的是「等你确认」
+  const MODE_KEYS = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"];
+  const modeLabel = (m) => ({
+    default: t("逐项确认"), acceptEdits: t("自动接受编辑"), plan: t("只做计划"),
+    auto: t("自动判断"), dontAsk: t("不询问"), bypassPermissions: t("全部放行"),
+  }[m] || m || "");
+  function setPermChip(m) {
+    if (!m) return;
+    state.permissionMode = m;
+    permEl.textContent = (m === "bypassPermissions" ? "⚠ " : "🔒 ") + modeLabel(m);
+    permEl.classList.toggle("danger", m === "bypassPermissions");
+  }
+
+  function permRules(p) {
+    const out = [];
+    for (const s of p.suggestions || []) {
+      if (s.type === "addRules") for (const r of s.rules || []) out.push(r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName);
+    }
+    return out;
+  }
+  const permSuggestsEdits = (p) => (p.suggestions || []).some((s) => s.type === "setMode" && s.mode === "acceptEdits");
+
+  function diffHtml(oldS, newS) {
+    const lines = (s, c) => String(s || "").split("\n").slice(0, 60).map((l) => `<span class="${c}">${c === "del" ? "-" : "+"} ${esc(l)}</span>`).join("\n");
+    return `<pre class="perm-diff">${lines(oldS, "del")}\n${lines(newS, "add")}</pre>`;
+  }
+  function permPreview(p) {
+    const i = p.input || {};
+    let h = "";
+    switch (p.tool) {
+      case "Bash":
+        h = `<pre class="perm-cmd">${esc(i.command || "")}</pre>` + (i.description ? `<div class="perm-sub">${esc(i.description)}</div>` : "");
+        break;
+      case "Edit":
+        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + diffHtml(i.old_string, i.new_string);
+        break;
+      case "MultiEdit":
+        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + (i.edits || []).slice(0, 8).map((e) => diffHtml(e.old_string, e.new_string)).join("");
+        break;
+      case "Write": {
+        const c = String(i.content || ""), ls = c.split("\n");
+        h = `<div class="perm-path">${esc(i.file_path || "")}</div><pre class="perm-diff">${ls.slice(0, 30).map((l) => `<span class="add">+ ${esc(l)}</span>`).join("\n")}${ls.length > 30 ? "\n" + esc(t("…（共 {n} 行）", { n: ls.length })) : ""}</pre>`;
+        break;
+      }
+      case "NotebookEdit":
+        h = `<div class="perm-path">${esc(i.notebook_path || "")}</div><pre class="perm-cmd">${esc(String(i.new_source || "").slice(0, 3000))}</pre>`;
+        break;
+      case "WebFetch": h = `<pre class="perm-cmd">${esc(i.url || "")}</pre>` + (i.prompt ? `<div class="perm-sub">${esc(i.prompt)}</div>` : ""); break;
+      case "WebSearch": h = `<pre class="perm-cmd">${esc(i.query || "")}</pre>`; break;
+      case "ExitPlanMode": h = `<div class="perm-plan">${renderMd(String(i.plan || ""))}</div>`; break;
+      case "AskUserQuestion":
+        h = (i.questions || []).map((q, qi) => `
+          <div class="perm-q" data-q="${qi}">
+            <div class="perm-qt">${esc(q.question || "")}</div>
+            <div class="perm-opts">${(q.options || []).map((o) => `
+              <label class="perm-opt"><input type="${q.multiSelect ? "checkbox" : "radio"}" name="pq-${esc(p.id)}-${qi}" value="${esc(o.label)}">
+                <span><b>${esc(o.label)}</b>${o.description ? `<small>${esc(o.description)}</small>` : ""}</span></label>`).join("")}
+            </div>
+            <input class="perm-other" placeholder="${t("或者直接写你的回答…")}">
+          </div>`).join("");
+        break;
+      default:
+        h = `<pre class="perm-cmd">${esc(JSON.stringify(i, null, 2).slice(0, 4000))}</pre>`;
+    }
+    if (p.blockedPath && !["Edit", "Write", "MultiEdit"].includes(p.tool) && !String(i.command || "").includes(p.blockedPath)) h += `<div class="perm-sub">${t("涉及路径：{p}", { p: esc(p.blockedPath) })}</div>`;
+    if (p.reason && typeof p.reason === "string") h += `<div class="perm-sub">${t("原因：{r}", { r: esc(p.reason) })}</div>`;
+    return h;
+  }
+
+  function permActions(p) {
+    if (p.tool === "ExitPlanMode") return `
+      <button class="pa-allow primary" data-mode="default">${t("批准，逐项确认执行")}</button>
+      <button class="pa-allow" data-mode="acceptEdits">${t("批准，自动接受编辑")}</button>
+      <button class="pa-more">${t("再改改 ▾")}</button>`;
+    if (p.tool === "AskUserQuestion") return `
+      <button class="pa-answer primary">${t("提交回答")}</button>
+      <button class="pa-more">${t("不回答 ▾")}</button>`;
+    const rules = permRules(p);
+    return `
+      <button class="pa-allow primary">${t("允许")}</button>
+      ${rules.length ? `<button class="pa-always" title="${esc(rules.join("\n"))}">${t("始终允许")} <code>${esc(rules[0].length > 40 ? rules[0].slice(0, 40) + "…" : rules[0])}</code></button>` : ""}
+      ${permSuggestsEdits(p) ? `<button class="pa-allow" data-mode="acceptEdits">${t("允许，之后的编辑都不再问")}</button>` : ""}
+      <button class="pa-more">${t("拒绝 ▾")}</button>`;
+  }
+
+  function PermCard(p, runId) {
+    const el = document.createElement("div");
+    el.className = "perm";
+    el.dataset.id = p.id;
+    const kind = p.tool === "ExitPlanMode" ? t("计划待批准") : p.tool === "AskUserQuestion" ? t("Claude 想问你") : t("需要确认");
+    el.innerHTML = `
+      <div class="perm-head"><span class="perm-kind">⏸ ${kind}</span><span class="perm-tool">${esc(p.tool)}</span>${p.agentId ? `<span class="perm-sub">${t("子代理")}</span>` : ""}</div>
+      <div class="perm-body">${permPreview(p)}</div>
+      <div class="perm-acts">${permActions(p)}</div>
+      <div class="perm-deny hidden">
+        <textarea rows="2" placeholder="${p.tool === "ExitPlanMode" ? t("说说要怎么改（会发回给 Claude）") : t("可选：告诉 Claude 为什么 / 该怎么做")}"></textarea>
+        <div class="perm-acts">
+          <button class="pa-deny">${p.tool === "ExitPlanMode" ? t("发回意见") : t("拒绝")}</button>
+          <button class="pa-stop">${t("拒绝并停止")}</button>
+        </div>
+      </div>`;
+    const tc = p.toolUseId && TOOL_CARDS.get(p.toolUseId);
+    if (tc && tc.el && tc.el.isConnected) tc.el.after(el);
+    else {
+      const rv = runViews.get(runId);
+      (rv ? rv.av.bubble : liveEl).appendChild(el);
+    }
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || el.classList.contains("done")) return;
+      if (b.classList.contains("pa-more")) {
+        el.querySelector(".perm-deny").classList.toggle("hidden");
+        el.querySelector(".perm-deny textarea").focus();
+        return;
+      }
+      const msg = el.querySelector(".perm-deny textarea").value.trim();
+      if (b.classList.contains("pa-allow")) return permAnswer(p.id, { behavior: "allow", mode: b.dataset.mode && b.dataset.mode !== state.permissionMode ? b.dataset.mode : undefined });
+      if (b.classList.contains("pa-always")) return permAnswer(p.id, { behavior: "allow", always: true });
+      if (b.classList.contains("pa-deny")) return permAnswer(p.id, { behavior: "deny", message: msg });
+      if (b.classList.contains("pa-stop")) return permAnswer(p.id, { behavior: "deny", message: msg, interrupt: true });
+      if (b.classList.contains("pa-answer")) {
+        const answers = {};
+        el.querySelectorAll(".perm-q").forEach((qe) => {
+          const q = (p.input.questions || [])[+qe.dataset.q];
+          const other = qe.querySelector(".perm-other").value.trim();
+          const picked = [...qe.querySelectorAll("input:checked")].map((x) => x.value);
+          const v = other || picked.join(", ");
+          if (q && v) answers[q.question] = v;
+        });
+        if (!Object.keys(answers).length) return toast(t("先选一个选项，或者写下你的回答"), true);
+        return permAnswer(p.id, { behavior: "allow", answers });
+      }
+    });
+    return el;
+  }
+
+  async function permAnswer(id, body) {
+    const it = PERMS.get(id);
+    if (!it || it.done) return;
+    it.el?.classList.add("busy");
+    try {
+      await api("/api/perm/answer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ runId: it.runId, id, ...body }) });
+      permDone(id, body.behavior, { always: body.always, interrupt: body.interrupt });
+    } catch (e) {
+      it.el?.classList.remove("busy");
+      if (e.status === 409) permDone(id, "gone");
+      else toast(e.message, true);
+    }
+  }
+
+  function permDone(id, behavior, o = {}) {
+    const it = PERMS.get(id);
+    if (!it || it.done) return;
+    it.done = true;
+    const p = it.p;
+    const what = p.tool === "Bash" ? (p.input.command || "") : (p.input.file_path || p.input.url || p.input.query || "");
+    const label = behavior === "allow"
+      ? (p.tool === "ExitPlanMode" ? t("✓ 已批准计划") : p.tool === "AskUserQuestion" ? t("✓ 已回答") : o.always ? t("✓ 已允许（始终）") : t("✓ 已允许"))
+      : behavior === "deny" ? (o.interrupt ? t("✗ 已拒绝并停止") : p.tool === "ExitPlanMode" ? t("↩ 已退回修改") : t("✗ 已拒绝"))
+      : behavior === "cancel" ? t("已撤回") : behavior === "stopped" ? t("已停止（这一轮结束了）") : t("已失效");
+    const tc = p.toolUseId && TOOL_CARDS.get(p.toolUseId);
+    if (it.el && tc && tc.el && tc.el.isConnected && p.tool !== "ExitPlanMode" && p.tool !== "AskUserQuestion") {
+      const tag = document.createElement("span");
+      tag.className = "perm-tag " + (behavior === "allow" ? "ok" : "no");
+      tag.textContent = label;
+      tc.el.querySelector(".tool-state")?.before(tag);
+      it.el.remove();
+      it.el = null;
+    } else if (it.el) {
+      it.el.classList.remove("busy");
+      it.el.classList.add("done", behavior === "allow" ? "ok" : "no");
+      // 收起成一行，留在记录里；计划和问答的正文还有用，留着
+      if (p.tool !== "ExitPlanMode" && p.tool !== "AskUserQuestion") it.el.querySelector(".perm-body").remove();
+      it.el.querySelectorAll(".perm-acts, .perm-deny").forEach((x) => x.remove());
+      it.el.querySelectorAll("input").forEach((x) => { x.disabled = true; });
+      it.el.querySelector(".perm-head").innerHTML = `<span class="perm-res">${label}</span><span class="perm-tool">${esc(p.tool)}</span><span class="tool-arg">${esc(String(what).slice(0, 90))}</span>`;
+    }
+    renderPermBar();
+  }
+
+  function onPermRequest(ev) {
+    const old = PERMS.get(ev.id);
+    if (old && old.el && old.el.isConnected) return;      // 重放来的重复事件
+    const it = { p: ev, runId: ev.runId, el: null, done: false };
+    PERMS.set(ev.id, it);
+    it.el = PermCard(ev, ev.runId);
+    renderPermBar();
+    scrollDown();
+  }
+
+  function pendingPerms() {
+    return [...PERMS.values()].filter((it) => !it.done && runViews.has(it.runId));
+  }
+  function renderPermBar() {
+    const list = pendingPerms();
+    permBar.classList.toggle("hidden", !list.length && !state.settings.permNotice);
+    if (!list.length) {
+      permBar.innerHTML = state.settings.permNotice ? `
+        <div class="pb-note"><span>${t("权限模式已改为「逐项确认」，与官方一致：改文件、跑命令前会先问你。想恢复全部放行，点下方的权限标签。")}</span>
+        <button class="pb-x" aria-label="${t("关闭")}">✕</button></div>` : "";
+      if (permWaiting && srv.run) setStatus(t("生成中…"), "warn");
+      permWaiting = false;
+      return;
+    }
+    const f = list[0].p, simple = (it) => it.p.tool !== "ExitPlanMode" && it.p.tool !== "AskUserQuestion";
+    const what = f.tool === "Bash" ? f.input.command : (f.input.file_path || f.input.url || f.input.query || "");
+    permBar.innerHTML = `
+      <div class="pb-main">
+        <span class="pb-txt">⏸ ${f.tool === "ExitPlanMode" ? t("计划待批准") : f.tool === "AskUserQuestion" ? t("Claude 想问你") : t("Claude 在等你确认") + " · "}${simple(list[0]) ? `<b>${esc(f.tool)}</b> <span class="mono">${esc(String(what || "").slice(0, 80))}</span>` : ""}</span>
+        ${simple(list[0]) ? `<button class="pb-allow primary">${t("允许")}</button>` : ""}
+        <button class="pb-view">${t("查看")}</button>
+      </div>
+      ${list.length > 1 ? `<div class="pb-more">${t("还有 {n} 项", { n: list.length - 1 })}
+        ${list.every(simple) ? `<button class="pb-all">${t("全部允许")}</button>` : ""}</div>` : ""}`;
+    setStatus(t("等你确认…"), "warn");
+    permWaiting = true;
+  }
+  permBar.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.classList.contains("pb-x")) {
+      state.settings.permNotice = false;
+      renderPermBar();
+      api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ permNotice: false }) }).catch(() => {});
+      return;
+    }
+    const list = pendingPerms();
+    if (!list.length) return;
+    if (b.classList.contains("pb-view")) { list[0].el?.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
+    if (b.classList.contains("pb-allow")) return permAnswer(list[0].p.id, { behavior: "allow" });
+    if (b.classList.contains("pb-all")) list.forEach((it) => permAnswer(it.p.id, { behavior: "allow" }));
+  });
+
+  // 顶栏（输入框下）的权限标签：点开切模式，对应官方 TUI 的 Shift+Tab
+  permEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    let m = $("perm-menu");
+    if (m) { m.remove(); return; }
+    m = document.createElement("div");
+    m.id = "perm-menu";
+    const desc = {
+      default: t("读文件不问；改文件、跑命令、联网前先问你"),
+      acceptEdits: t("改文件不问，跑命令还要问"),
+      plan: t("只读和出计划，等你批准再动手"),
+      auto: t("由 Claude 的分类器判断哪些要问（实验）"),
+      bypassPermissions: t("什么都不问。Claude 可以不经你同意删文件、跑任意命令"),
+    };
+    m.innerHTML = MODE_KEYS.map((k) => `
+      <button data-mode="${k}" class="${k === state.permissionMode ? "cur" : ""}${k === "bypassPermissions" ? " danger" : ""}">
+        <b>${modeLabel(k)}</b><small>${desc[k]}</small></button>`).join("");
+    document.body.appendChild(m);
+    const r = permEl.getBoundingClientRect();
+    m.style.bottom = (innerHeight - r.top + 6) + "px";
+    m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px";
+    m.addEventListener("click", async (ev) => {
+      const b = ev.target.closest("button");
+      if (!b) return;
+      m.remove();
+      changePermMode(b.dataset.mode);
+    });
+  });
+  document.addEventListener("click", (e) => { const m = $("perm-menu"); if (m && !m.contains(e.target)) m.remove(); });
+
+  async function changePermMode(mode) {
+    if (!mode || mode === state.permissionMode) return;
+    if (mode === "bypassPermissions" && !confirm(t("切到「全部放行」？\n\nClaude 将不再询问，可以直接改写、删除文件，运行任意命令，访问网络。只在你信任当前任务、且出了事能承受的时候用。"))) {
+      $("set-perm").value = state.permissionMode;
+      return;
+    }
+    try {
+      const r = await api("/api/perm/mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }) });
+      state.settings.permissionMode = r.mode;
+      setPermChip(r.mode);
+      $("set-perm").value = r.mode;
+      toast(r.live ? t("已切到「{m}」，这一轮当场生效", { m: modeLabel(r.mode) }) : t("已切到「{m}」", { m: modeLabel(r.mode) }));
+    } catch (err) { toast(err.message, true); }
   }
 
   /** 一条 Claude 回复：思考 / 正文 / 工具按真实顺序交错排列 */
@@ -919,10 +1204,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (!view.runIds.has(ev.runId)) return;
         if (!view.sessionId && ev.sessionId) { view.sessionId = ev.sessionId; saveUiState(); }
         if (ev.model) { state.model = ev.model; modelEl.textContent = ev.model; }
-        if (ev.permissionMode) { state.permissionMode = ev.permissionMode; permEl.textContent = ev.permissionMode; }
+        if (ev.permissionMode) setPermChip(ev.permissionMode);
         return;
       }
       case "run_end": return onRunEnd(ev);
+      case "perm_mode":
+        state.settings.permissionMode = ev.mode;
+        setPermChip(ev.mode);
+        if ($("set-perm")) $("set-perm").value = ev.mode;
+        return;
+      case "perm_request": if (runViews.has(ev.runId)) onPermRequest(ev); return;
+      case "perm_resolved": return permDone(ev.id, ev.behavior, ev);
     }
     const rv = runViews.get(ev.runId);
     if (!rv) return;
@@ -981,6 +1273,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!rv) { if (belongs(ev)) loadSessions(); return; }
     const av = rv.av;
     rv.timer?.stop();
+    for (const [id, it] of PERMS) if (it.runId === ev.runId && !it.done) permDone(id, "stopped");
     if (ev.sessionId && !view.sessionId && view.runIds.has(ev.runId)) { view.sessionId = ev.sessionId; saveUiState(); }
     if (ev.usage?.context_tokens) updateCtx(ev.usage.context_tokens, ev.usage.context_window || state.ctxTotal);
 
@@ -1019,8 +1312,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       : t("给 Claude 发消息，/ 命令，@ 引用文件…");
     syncInterject();
     renderQueue();
+    // 别的窗口（或网关那边）已经答掉的，这里也收起来
+    const live = new Set((srv.run?.perms || []).map((p) => p.id));
+    for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !live.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");
     if (busy) setStatus(srv.run.sessionId === view.sessionId || view.runIds.has(srv.run.id)
       ? t("生成中…") : t("另一个会话正在生成…"), "warn");
+    renderPermBar();                 // 放最后：有待确认项时状态栏要显示「等你确认」
   }
   const isBusy = () => !!srv.run;
 
@@ -2622,7 +2919,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   async function loadSettings() {
     try {
       state.settings = await api("/api/settings");
-      $("set-perm").value = state.settings.permissionMode || "bypassPermissions";
+      $("set-perm").value = state.settings.permissionMode || "default";
       // 输出风格清单由网关列（内置 + 自定义 .md），不再写死 —— 以前写死的 concise 根本不存在
       $("set-style").innerHTML = '<option value="">' + t("（默认）") + '</option>' +
         (state.settings.outputStyles || []).map((o) =>
@@ -2630,7 +2927,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("set-style").value = state.settings.outputStyle || "";
       // 没指定模型时别把顶栏写成 "—"：init 报过的真实模型更有用
       modelEl.textContent = state.settings.model || state.model || t("默认");
-      permEl.textContent = state.settings.permissionMode || "";
+      setPermChip(state.settings.permissionMode || "default");
+      renderPermBar();
       renderDirs();
       await loadProviders();
       await loadModels();
@@ -2660,7 +2958,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       });
       state.settings = { ...state.settings, ...(r.settings || {}) };
       modelEl.textContent = state.settings.model || state.model || t("默认");
-      permEl.textContent = state.settings.permissionMode || "";
+      setPermChip(state.settings.permissionMode || "default");
       renderDirs();
             toast(t("已保存"));
       return r;
@@ -2677,7 +2975,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     await loadModels();                                  // 换模型后 effort 档位可能不同
     $("set-effort").value = state.settings.effort || "";
   });
-  $("set-perm").addEventListener("change", (e) => saveSettings({ permissionMode: e.target.value }));
+  $("set-perm").addEventListener("change", (e) => changePermMode(e.target.value));
   $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
 

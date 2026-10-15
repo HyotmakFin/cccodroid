@@ -48,6 +48,8 @@
 
 <!-- ── 输入区 ── -->
 <div id="composer">
+  <!-- 权限确认提示条：有待确认项时常驻（见 app.js renderPermBar） -->
+  <div id="perm-bar" class="hidden" role="status"></div>
   <div id="composer-inner">
         <button id="btn-plus" class="mini-btn" aria-label="更多" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -67,7 +69,7 @@
   </div>
   <div id="hint-row">
     <span id="model-chip">—</span>
-    <span id="perm-chip"></span>
+    <span id="perm-chip" role="button" tabindex="0" title="切换权限模式" data-i18n-attr="title"></span>
     <span id="stat-chip"></span>
   </div>
 </div>
@@ -227,14 +229,14 @@
       <div class="field">
                 <label data-i18n>权限模式</label>
         <select id="set-perm">
-                    <option value="bypassPermissions" data-i18n>bypassPermissions · 全部放行（默认）</option>
+          <option value="default" data-i18n>default · 逐项确认（默认）</option>
           <option value="acceptEdits" data-i18n>acceptEdits · 自动接受编辑</option>
-          <option value="auto" data-i18n>auto · 自动判断</option>
           <option value="plan" data-i18n>plan · 只出计划不执行</option>
-          <option value="dontAsk" data-i18n>dontAsk · 不询问</option>
-          <option value="manual" data-i18n>manual · 手动确认</option>
+          <option value="auto" data-i18n>auto · 自动判断</option>
+          <option value="dontAsk" data-i18n>dontAsk · 不询问（要确认的一律拒绝）</option>
+          <option value="bypassPermissions" data-i18n>bypassPermissions · 全部放行</option>
         </select>
-                <div class="tiny" data-i18n>GUI 里没法点「允许」，所以默认全放行。想更保守可以选 plan。</div>
+                <div class="tiny" data-i18n>默认逐项确认，和官方一致：改文件、跑命令前会在对话里问你。全部放行意味着 Claude 不问你就能删文件、跑任意命令。也可以点输入框下方的权限标签随时切换。</div>
       </div>
 
       <div class="field">

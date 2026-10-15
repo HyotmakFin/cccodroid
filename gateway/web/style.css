@@ -210,7 +210,54 @@ td{color:var(--fg2)}
 #btn-send.busy .ico-send{display:none} #btn-send.busy .ico-stop{display:block}
 #hint-row{display:flex;gap:9px;justify-content:center;max-width:900px;margin:5px auto 0;font-size:10.5px;color:var(--fg3);flex-wrap:wrap}
 #model-chip{color:var(--accent)}
-#perm-chip{color:var(--warn)}
+#perm-chip{color:var(--fg3);cursor:pointer;border-bottom:1px dotted currentColor}
+#perm-chip.danger{color:var(--err);font-weight:600}
+
+/* ── 权限确认 ── */
+#perm-bar{max-width:900px;margin:0 auto 6px;display:flex;flex-direction:column;gap:4px}
+#perm-bar.hidden{display:none !important}
+#perm-bar .pb-main,#perm-bar .pb-note{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--warn);border-radius:10px;background:var(--bg2);font-size:12.5px}
+#perm-bar .pb-note{border-color:var(--line);color:var(--fg2)}
+#perm-bar .pb-txt,#perm-bar .pb-note span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#perm-bar .pb-note span{white-space:normal}
+#perm-bar .mono{font-family:"SF Mono",Menlo,monospace;font-size:11.5px;color:var(--fg2)}
+#perm-bar .pb-more{font-size:11.5px;color:var(--fg3);padding:0 10px;display:flex;gap:8px;align-items:center}
+#perm-bar button,.perm-acts button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 11px;font-size:12.5px;flex:0 0 auto}
+#perm-bar button.primary,.perm-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#perm-bar .pb-x{background:none;border:none;color:var(--fg3);padding:2px 6px}
+.perm{border:1px solid var(--warn);border-radius:10px;margin:-2px 0 10px;background:var(--bg2);overflow:hidden}
+.perm.busy{opacity:.6;pointer-events:none}
+.perm-head{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px}
+.perm-kind{color:var(--warn);font-weight:600}
+.perm-tool{color:var(--tool);font-family:"SF Mono",Menlo,monospace;font-size:12px}
+.perm-body{padding:0 10px 4px}
+.perm-cmd,.perm-diff{margin:0 0 6px;max-height:260px;overflow:auto;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.perm-diff .del{color:var(--err)} .perm-diff .add{color:var(--ok)}
+.perm-path{font-family:"SF Mono",Menlo,monospace;font-size:11.5px;color:var(--fg2);margin:2px 0 4px;overflow-wrap:anywhere}
+.perm-sub{font-size:11.5px;color:var(--fg3);margin:2px 0 4px;overflow-wrap:anywhere}
+.perm-plan{max-height:50vh;overflow:auto;font-size:13.5px}
+.perm-q{margin:4px 0 10px}
+.perm-qt{font-weight:600;margin-bottom:6px}
+.perm-opts{display:flex;flex-direction:column;gap:5px}
+.perm-opt{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.perm-opt small{display:block;color:var(--fg3);font-size:11.5px}
+.perm-other,.perm-deny textarea{width:100%;box-sizing:border-box;margin-top:6px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px}
+.perm-acts{display:flex;flex-wrap:wrap;gap:6px;padding:4px 10px 10px}
+.perm-acts code{font-size:11px}
+.perm-deny{padding:0 10px}
+.perm-deny.hidden{display:none}
+.perm-deny .perm-acts{padding:6px 0 10px}
+.perm.done{border-color:var(--line);background:transparent;margin:-4px 0 8px}
+.perm.done .perm-head{color:var(--fg3)}
+.perm.done.ok .perm-res{color:var(--ok)} .perm.done.no .perm-res{color:var(--err)}
+.perm.done .tool-arg{flex:1}
+.perm-tag{font-size:11px;flex:0 0 auto;white-space:nowrap}
+.perm-tag.ok{color:var(--ok)} .perm-tag.no{color:var(--err)}
+#perm-menu{position:fixed;z-index:70;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:4px;display:flex;flex-direction:column;min-width:240px;max-width:min(340px,calc(100vw - 16px));box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#perm-menu button{background:none;border:none;color:var(--fg);text-align:left;padding:8px 10px;border-radius:8px;font-size:13px}
+#perm-menu button small{display:block;color:var(--fg3);font-size:11.5px;margin-top:2px}
+#perm-menu button.cur{background:var(--bg3)}
+#perm-menu button.danger b{color:var(--err)}
 #stat-chip:empty{display:none}
 
 /* ── 补全浮层 ── */

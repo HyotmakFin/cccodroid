@@ -346,11 +346,15 @@ function loadApiKey(p) {
 
 let API_KEY = null;   // 在 SETTINGS 载入后按「生效厂商」解析
 
+/** claude 认的权限模式（2026-10 版二进制）。没有 manual */
+const PERM_MODES = ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"];
+
 // ── 设置（模型 / 权限模式 / 目录 …）──────────────────────────────────
 const SETTINGS = {
   // 不预填：CFG.model 是内置第三方厂商的兜底，预填进来会被带给官方账户（新装无设置文件时实测 400）
   model: null,
-  permissionMode: "bypassPermissions",
+  // 和官方一致：逐项确认。前端的确认卡片接的是 stream-json 控制协议（见 startRun 里的 can_use_tool）
+  permissionMode: "default",
   addDirs: [],
   outputStyle: null,
   effort: null,
@@ -364,9 +368,23 @@ const SETTINGS = {
 };
 
 function loadSettings() {
+  let had = false;
   try {
     Object.assign(SETTINGS, JSON.parse(fs.readFileSync(PATHS.settings, "utf8")));
+    had = true;
   } catch {}
+  // 权限模式一次性迁移：以前界面没法点「允许」，默认只能全部放行。设置里的 bypassPermissions
+  // 分不清是用户选的还是当年的默认值 —— 一律改回逐项确认，界面给一条可关的提示；之后再选回去就尊重用户。
+  // manual 是旧下拉里的无效值（claude 不认），同样改掉。
+  if (!SETTINGS.permMigrated) {
+    if (had && (!SETTINGS.permissionMode || SETTINGS.permissionMode === "bypassPermissions" || SETTINGS.permissionMode === "manual")) {
+      if (SETTINGS.permissionMode === "bypassPermissions") SETTINGS.permNotice = true;
+      SETTINGS.permissionMode = "default";
+    }
+    SETTINGS.permMigrated = 1;
+    if (had) setImmediate(saveSettings);
+  }
+  if (!PERM_MODES.includes(SETTINGS.permissionMode)) SETTINGS.permissionMode = "default";
   // 旧版面板存的是小写 explanatory / 不存在的 concise —— claude 只认 Explanatory、Learning 和自定义的
   if (SETTINGS.outputStyle === "explanatory") SETTINGS.outputStyle = "Explanatory";
   if (SETTINGS.outputStyle === "concise") SETTINGS.outputStyle = null;
@@ -2358,7 +2376,18 @@ const newRunId = () => `r${BOOT}${(++RUN_N).toString(36)}`;
 
 const runInfo = (r) => r && {
   id: r.id, cid: r.cid, text: r.text.slice(0, 2000), sessionId: r.sessionId, follow: r.follow, startedAt: r.startedAt,
+  perms: r.perms ? [...r.perms.values()] : [],
 };
+
+/** 改权限模式：存进设置（下一轮沿用），正在跑的那一轮当场切（set_permission_mode） */
+function setPermMode(mode) {
+  if (!PERM_MODES.includes(mode)) return false;
+  SETTINGS.permissionMode = mode;
+  saveSettings();
+  if (activeRun && activeRun.setMode) activeRun.setMode(mode);
+  publish({ type: "perm_mode", mode });
+  return true;
+}
 function snapshot() {
   return {
     run: runInfo(activeRun),
@@ -2715,7 +2744,8 @@ async function startRun(item) {
   let model = (item.model || SETTINGS.model || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
   // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
   if (PROVIDER.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
-  const permMode = (item.permissionMode || SETTINGS.permissionMode || "bypassPermissions").trim();
+  let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
+  if (!PERM_MODES.includes(permMode)) permMode = "default";
 
   const argv = [
     "-p",
@@ -2727,6 +2757,9 @@ async function startRun(item) {
     "--verbose",
     "--include-partial-messages",
     "--permission-mode", permMode,
+    // 要确认的工具调用走 stdout 的 control_request(can_use_tool) 来问我们，前端出卡片，用户点了再回 stdin。
+    // 不加这个，-p 模式下 claude 不问，直接按拒绝处理（实测：工具结果 "…needs approval"）
+    "--permission-prompt-tool", "stdio",
   ];
   if (model) argv.push("--model", model);
   if (run.sessionId) argv.push("--resume", String(run.sessionId));
@@ -2774,8 +2807,60 @@ async function startRun(item) {
     return true;
   };
   // 每轮 result 之后：没有待送达的插话就关 stdin，claude 随即退出；有就留着，它会接着处理
+  // ── 权限确认（stream-json 控制协议）──
+  // claude 要用需确认的工具时，往 stdout 发 control_request(can_use_tool) 然后等；我们回 control_response。
+  // 待答的请求存在 run.perms，同时作为 perm_request 事件发给前端（也进 run.log，断线重连能补到）。
+  run.perms = new Map();
+  const writeCtl = (o) => { try { child.stdin.write(JSON.stringify(o) + "\n"); return true; } catch { return false; } };
+  let ctlN = 0;
+  run.setMode = (mode) => run.inputOpen && writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "set_permission_mode", mode } });
+  run.answerPerm = (id, a) => {
+    const p = run.perms.get(id);
+    if (!p || run.ended || run.aborted) return false;
+    let resp;
+    if (a.behavior === "allow") {
+      // 参数一律用 claude 发来的原样，前端改不了命令；AskUserQuestion 只往里加 answers
+      const input = p.tool === "AskUserQuestion" && a.answers && typeof a.answers === "object"
+        ? { ...p.input, answers: Object.fromEntries(Object.entries(a.answers).map(([k, v]) => [String(k), String(v)])) }
+        : p.input;
+      resp = { behavior: "allow", updatedInput: input };
+      // 「始终允许」：只认 claude 自己给的建议（规则 + 目录），前端不能塞任意规则；切模式另走 a.mode
+      if (a.always) {
+        const ups = (p.suggestions || []).filter((x) => x && (x.type === "addRules" || x.type === "addDirectories"));
+        if (ups.length) resp.updatedPermissions = ups;
+      }
+    } else {
+      resp = { behavior: "deny", message: String(a.message || "").trim().slice(0, 2000) || "用户拒绝了这次操作。", ...(a.interrupt ? { interrupt: true } : {}) };
+    }
+    if (!writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: resp } })) return false;
+    run.perms.delete(id);
+    log(`${resp.behavior === "allow" ? "✓ 允许" : "✗ 拒绝"} ${p.tool}${a.always && resp.updatedPermissions ? "（始终）" : ""}${a.interrupt ? "（并停止）" : ""}`);
+    emit({ type: "perm_resolved", id, behavior: resp.behavior, always: !!resp.updatedPermissions, interrupt: !!a.interrupt });
+    if (a.mode && PERM_MODES.includes(a.mode)) setPermMode(a.mode);
+    publishState();
+    return true;
+  };
+  const onControl = (ev) => {
+    const id = ev.request_id, r = ev.request || {};
+    if (r.subtype === "can_use_tool" && id) {
+      const p = {
+        id, tool: String(r.tool_name || ""), input: r.input || {}, toolUseId: r.tool_use_id || null,
+        suggestions: Array.isArray(r.permission_suggestions) ? r.permission_suggestions : [],
+        reason: r.decision_reason || null, blockedPath: r.blocked_path || null, description: r.description || null,
+        interactive: !!r.requires_user_interaction, agentId: r.agent_id || null, at: Date.now(),
+      };
+      run.perms.set(id, p);
+      log(`⏸ 等确认 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
+      emit({ type: "perm_request", ...p });
+      publishState();
+      return;
+    }
+    // 别的控制请求（hook 回调、MCP elicitation…）我们不接：回错误，别让 claude 干等
+    if (id) writeCtl({ type: "control_response", response: { subtype: "error", request_id: id, error: `unsupported: ${r.subtype}` } });
+  };
+
   const closeInput = () => {
-    if (!run.inputOpen) return;
+    if (!run.inputOpen || run.perms.size) return;
     run.inputOpen = false;
     try { child.stdin.end(); } catch {}
   };
@@ -2815,6 +2900,12 @@ async function startRun(item) {
   };
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
+    if (ev.type === "control_request") return onControl(ev);
+    if (ev.type === "control_response") return;          // 我们发的 set_permission_mode 的回执
+    if (ev.type === "control_cancel_request") {           // claude 自己撤回了（比如被中断）
+      if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
+      return;
+    }
     translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
   };
 
@@ -2838,6 +2929,7 @@ async function startRun(item) {
     if (buf.trim()) feed(buf.trim());
     buf = "";
     run.inputOpen = false;
+    run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
     if (run.pendingInject.length) {
       log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
       QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));
@@ -3585,9 +3677,12 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, workspace: CFG.workspace, outputStyles: outputStyles() });
       if (req.method === "POST") {
         const b = JSON.parse((await readBody(req)) || "{}");
-        for (const k of ["model", "permissionMode", "outputStyle", "effort", "appendSystemPrompt"]) {
+        for (const k of ["model", "outputStyle", "effort", "appendSystemPrompt"]) {
           if (k in b) SETTINGS[k] = b[k] || null;
         }
+        // 权限模式只收 claude 认的值；正在跑的那一轮也当场切过去
+        if ("permissionMode" in b && b.permissionMode !== SETTINGS.permissionMode) setPermMode(String(b.permissionMode || "default"));
+        if (b.permNotice === false) SETTINGS.permNotice = false;
         if (Array.isArray(b.addDirs)) SETTINGS.addDirs = b.addDirs.filter((d) => typeof d === "string");
         if (Array.isArray(b.allowedTools)) SETTINGS.allowedTools = b.allowedTools;
         if (Array.isArray(b.disallowedTools)) SETTINGS.disallowedTools = b.disallowedTools;
@@ -4007,6 +4102,24 @@ const server = http.createServer(async (req, res) => {
       AUTH_CACHE = null;
       RATE_LIMITS = null; try { fs.unlinkSync(RL_FILE); } catch {}
       return sendJson(res, 200, { ok: r.code === 0, output: r.out.slice(-500) });
+    }
+
+    // ── 权限确认：回答 claude 的 can_use_tool ──
+    if (req.method === "POST" && p === "/api/perm/answer") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const run = activeRun && (!b.runId || b.runId === activeRun.id) ? activeRun : null;
+      if (!run || !run.answerPerm) return sendJson(res, 409, { error: "gone", message: "这一轮已经结束了" });
+      if (!run.answerPerm(String(b.id || ""), {
+        behavior: b.behavior === "allow" ? "allow" : "deny",
+        message: b.message, interrupt: !!b.interrupt, always: !!b.always,
+        answers: b.answers, mode: b.mode ? String(b.mode) : null,
+      })) return sendJson(res, 409, { error: "gone", message: "这项已经回答过了" });
+      return sendJson(res, 200, { ok: true });
+    }
+    if (req.method === "POST" && p === "/api/perm/mode") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      if (!setPermMode(String(b.mode || ""))) return sendJson(res, 400, { error: "bad mode" });
+      return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: !!activeRun });
     }
 
     if (req.method === "POST" && p === "/api/abort") {

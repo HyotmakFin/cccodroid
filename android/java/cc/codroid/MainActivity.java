@@ -66,8 +66,8 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         env = new Env(this);
-        getWindow().setStatusBarColor(Color.parseColor("#0d1117"));
         buildSetupUi();
+        edgeToEdge();
         pending = getIntent();
         java.util.List<String> want = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -170,8 +170,7 @@ public class MainActivity extends Activity {
     private void applyBars(boolean dark) {
         android.view.Window w = getWindow();
         int bg = dark ? Color.parseColor("#0d1117") : Color.WHITE;
-        w.setStatusBarColor(bg);
-        w.setNavigationBarColor(bg);
+        w.setNavigationBarColor(bg);           // 状态栏保持透明（见 edgeToEdge），只换图标深浅
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             int m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                   | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
@@ -326,6 +325,30 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return false; }
     }
 
+    // ── 系统栏：铺满窗口，顶部占位交给页面自己避让 ─────────────────────
+    //  以前由系统在顶上留一条状态栏高度的底色：分屏时下半屏没有状态栏，却也留着一条灰条。
+    //  现在窗口画到状态栏底下，系统报多少顶部占位（WindowInsets）就告诉页面多少（--safe-t），
+    //  顶栏的底色自己延伸上去；分屏没有状态栏时报 0，界面就占满。底部 / 左右 / 输入法仍由这里留白（adjustResize 不变）。
+    private int insetTop = 0;
+    private void edgeToEdge() {
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        View d = getWindow().getDecorView();
+        d.setSystemUiVisibility(d.getSystemUiVisibility()
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        root.setOnApplyWindowInsetsListener((v, in) -> {
+            insetTop = in.getSystemWindowInsetTop();
+            // 安装页没有网页来避让，顶部也由这里留白；界面起来以后交给 --safe-t
+            v.setPadding(in.getSystemWindowInsetLeft(), web == null ? insetTop : 0, in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
+            pushInsets();
+            return in.consumeSystemWindowInsets();
+        });
+    }
+    private void pushInsets() {
+        if (web == null) return;
+        float css = insetTop / getResources().getDisplayMetrics().density;
+        web.evaluateJavascript("document.documentElement.style.setProperty('--safe-t','" + css + "px')", null);
+    }
+
     // ── 界面 ───────────────────────────────────────────────────────────
     private void buildSetupUi() {
         root = new FrameLayout(this);
@@ -413,6 +436,7 @@ public class MainActivity extends Activity {
                 openExternal(url);
                 return true;
             }
+            @Override public void onPageFinished(WebView v, String url) { pushInsets(); }
         });
         web.addJavascriptInterface(new Object() {
             @android.webkit.JavascriptInterface public void openUrl(String url) {
@@ -437,6 +461,7 @@ public class MainActivity extends Activity {
         web.loadUrl(Env.uiUrl());
         root.removeAllViews();
         root.addView(web);
+        root.requestApplyInsets();            // 顶部留白交给页面（--safe-t）
     }
 
     private void openExternal(String url) {
