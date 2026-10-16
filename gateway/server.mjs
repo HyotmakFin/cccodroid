@@ -1890,7 +1890,9 @@ async function compFetchIndex(src) {
 /** 两个来源合并：预置（cccodroid 仓库）在前，社区（cccodroid-components）在后；id 撞了以预置为准。
  *  共享目录里放了 components/components.json 就代替预置来源（离线 / 测试），同样要签名。 */
 async function compIndex(force) {
-  if (!force && compIndexCache.data && Date.now() - compIndexCache.at < 10 * 60e3) return compIndexCache;
+  // force：true = 必拉；数字 = 缓存超过这么多毫秒才拉（打开扩展页用，刚合并的验证记录不用等 10 分钟）
+  const maxAge = typeof force === "number" ? force : force ? -1 : 10 * 60e3;
+  if (compIndexCache.data && Date.now() - compIndexCache.at < maxAge) return compIndexCache;
   const local = process.env.CCAPP_SHARED && path.join(process.env.CCAPP_SHARED, "components", "components.json");
   const sources = [
     { source: "preset", url: local && fs.existsSync(local) ? "file://" + local : COMP_INDEX },
@@ -2331,7 +2333,7 @@ async function handleGh(req, res, p) {
 }
 
 async function handleComponents(req, res, p, u) {
-  if (req.method === "GET" && p === "/api/components") return sendJson(res, 200, await compList(u.searchParams.get("refresh") === "1"));
+  if (req.method === "GET" && p === "/api/components") return sendJson(res, 200, await compList(((r) => r === "1" ? true : /^\d+$/.test(r || "") ? Number(r) * 1000 : false)(u.searchParams.get("refresh"))));
   if (req.method !== "POST") return sendJson(res, 405, { error: "method" });
   let body = {}; try { body = JSON.parse((await readBody(req)) || "{}"); } catch {}
   const id = String(body.id || "");

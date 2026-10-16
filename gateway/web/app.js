@@ -2326,7 +2326,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  function loadExt() { loadComponents(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+  function loadExt() { loadComponents(60); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
 
   // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
   // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面
@@ -2369,7 +2369,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const listOf = (a) => { try { return new Intl.ListFormat((window.I18N && I18N.lang) || "zh", { type: "conjunction" }).format(a); } catch { return a.join(", "); } };
   async function loadComponents(refresh) {
     clearTimeout(compTimer);
-    const r = await api("/api/components" + (refresh ? "?refresh=1" : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
+    const r = await api("/api/components" + (refresh ? "?refresh=" + (refresh === true ? 1 : refresh) : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
     $("comp-field").classList.toggle("hidden", !r.supported);
     if (!r.supported) return loadGhField();
     const box = $("comp-list");

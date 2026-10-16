@@ -361,6 +361,7 @@ td{color:var(--fg2)}
 }
 .tiny{font-size:11px;color:var(--fg3);margin-top:6px;line-height:1.6}
 .tiny code{font-size:11px}
+a.weblink{overflow-wrap:anywhere}
 
 /* 列表（会话、目录） */
 .list{display:flex;flex-direction:column;gap:6px}
