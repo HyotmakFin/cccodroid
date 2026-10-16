@@ -174,32 +174,30 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const pathLink = (p, line, label) =>
     `<a class="fpath" data-path="${p}" href="#" title="${t("在查看器中打开")}">${label || p + (line || "")}</a>`;
   function inlineMd(s) {
-    // 先把代码片段切出来：片段里整段是路径的照样能点，其余不动
-    return esc(s).split(/(`[^`\n]+`)/).map((part, i) => {
-      if (i % 2) {
-        const c = part.slice(1, -1);
+    // 代码片段先换成占位符（片段里整段是路径的照样能点），再统一处理链接、加粗：
+    // 这样 **`代码`** 这种跨着片段的加粗也能配上对，片段里的 * 也不会被当成强调
+    const keep = [];
+    const hold = (h) => "\u0000" + (keep.push(h) - 1) + "\u0000";
+    return esc(s)
+      .replace(/`([^`\n]+)`/g, (_, c) => {
         const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
-        return m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`;
-      }
-      const keep = [];
-      const hold = (h) => "\u0000" + (keep.push(h) - 1) + "\u0000";
-      return part
-        .replace(/\[([^\]]+)\]\((\/[^)\s]+)\)/g, (_, l, p) => hold(pathLink(p.replace(/:\d+(?::\d+)?$/, ""), "", l)))
-        .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, l, u) => hold(`<a class="weblink" href="${u}" target="_blank" rel="noopener">${l}</a>`))
-        // 裸网址也能点（本机开发服务 http://127.0.0.1:端口 最常见）；句末标点不算
-        .replace(/https?:\/\/[^\s<>"'`）)】」，。；、]+/g, (u) => {
-          const tail = (u.match(/[.,;:!?]+$/) || [""])[0];
-          const h = u.slice(0, u.length - tail.length);
-          return hold(`<a class="weblink" href="${h}" target="_blank" rel="noopener">${h}</a>`) + tail;
-        })
-        .replace(PATH_RE, (_, pre, p, line) => {
-          const tail = line ? "" : (p.match(/[.]+$/) || [""])[0];     // 句末的点不算路径
-          return pre + hold(pathLink(p.slice(0, p.length - tail.length), line)) + tail;
-        })
-        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-        .replace(/\u0000(\d+)\u0000/g, (_, n) => keep[n]);
-    }).join("");
+        return hold(m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`);
+      })
+      .replace(/\[([^\]]+)\]\((\/[^)\s]+)\)/g, (_, l, p) => hold(pathLink(p.replace(/:\d+(?::\d+)?$/, ""), "", l)))
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, l, u) => hold(`<a class="weblink" href="${u}" target="_blank" rel="noopener">${l}</a>`))
+      // 裸网址也能点（本机开发服务 http://127.0.0.1:端口 最常见）；句末标点不算
+      .replace(/https?:\/\/[^\s<>"'`）)】」，。；、\u0000]+/g, (u) => {
+        const tail = (u.match(/[.,;:!?]+$/) || [""])[0];
+        const h = u.slice(0, u.length - tail.length);
+        return hold(`<a class="weblink" href="${h}" target="_blank" rel="noopener">${h}</a>`) + tail;
+      })
+      .replace(PATH_RE, (_, pre, p, line) => {
+        const tail = line ? "" : (p.match(/[.]+$/) || [""])[0];     // 句末的点不算路径
+        return pre + hold(pathLink(p.slice(0, p.length - tail.length), line)) + tail;
+      })
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      .replace(/\u0000(\d+)\u0000/g, (_, n) => keep[n]);
   }
 
   /** 支持标题/列表/表格/代码块/引用/分隔线 */
@@ -1271,6 +1269,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["/ @", t("输入 / 唤起斜杠命令，@ 引用文件路径")],
       ["📁 >_ ‹›", t("顶栏：文件浏览器、终端、命令面板")],
       ["☰", t("左上角：历史会话、设置、能力清单、扩展")],
+      ["❄", t("页面滑不动、像卡住了：点顶栏的雪花就能恢复，不用重开应用")],
       ["🔒", t("输入框下方的权限标签：Claude 改文件、跑命令前要不要先问你，点一下就能换")],
       ["⚡", t("生成中可以接着发：回车排队，⚡ 插话（不打断，并进当前这一轮）")],
     ];
@@ -2711,7 +2710,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       cb.disabled = true;
       const r = await post("/api/components/" + c, { id }).catch((err) => ({ ok: false, message: err.message }));
       if (!r.ok) toast(t("失败：{msg}", { msg: r.message || "" }), true);
-      else if (c === "remove") toast(t("已卸载"));
+      else if (c === "remove") {
+        toast(t("已卸载"));
+        // 组件自己攒的运行数据（下载缓存、解开的运行环境）不随卸载删，问一句
+        if (r.data && r.data.bytes > 0 && confirm(t("{name} 还留着 {size} 运行数据（{path}：下载缓存、解开的运行环境等）。一起删掉？以后再装要重新下载。", { name: nm, size: fmtSize(r.data.bytes), path: r.data.path }))) {
+          const p = await post("/api/components/purge", { id }).catch((err) => ({ ok: false, message: err.message }));
+          toast(p.ok ? t("运行数据已删除") : t("失败：{msg}", { msg: p.message || "" }), !p.ok);
+        }
+      }
       return loadComponents();
     }
     const b = e.target.closest("button[data-x]");
@@ -3365,8 +3371,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
             return `<option value="${esc(m.id)}">${esc(m.id)} · ${esc(m.name || "")} · ${ctx}${img}</option>`;
           }).join("")
         : (dfltOpt ? "" : '<option value="">' + t("（该厂商不提供模型清单）") + '</option>')));
-      if (r.current) sel.value = r.current;
-      else if (r.nativeModels) sel.value = "";
+      if (r.current) {
+        sel.value = r.current;
+        // 当前模型不在厂商 /models 的清单里（比如 DeepSeek 的 deepseek-flash 是兼容端点认的别名）：
+        // 不补一项的话下拉框会显示空白，像是没选模型
+        if (sel.value !== r.current) {
+          sel.insertAdjacentHTML("afterbegin", `<option value="${esc(r.current)}">${esc(r.current)} · ${t("（当前，不在厂商清单里）")}</option>`);
+          sel.value = r.current;
+        }
+      } else if (r.nativeModels) sel.value = "";
       $("model-count").textContent = t("{n} 个", { n: MODELS.length });
       renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
 
@@ -4124,7 +4137,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   const TERM_KEYS = [
-    ["Esc", "\x1b"], ["Tab", "\t"], ["Ctrl", "ctrl"], ["Alt", "alt"],
+    ["Esc", "\x1b"], ["Tab", "\t"], ["⌫", "\x7f"], ["Del", "\x1b[3~"], ["Ctrl", "ctrl"], ["Alt", "alt"],
     ["←", "\x1b[D"], ["↓", "\x1b[B"], ["↑", "\x1b[A"], ["→", "\x1b[C"],
     ["Home", "\x1b[H"], ["End", "\x1b[F"], ["PgUp", "\x1b[5~"], ["PgDn", "\x1b[6~"],
     ["|", "|"], ["~", "~"], ["/", "/"], ["-", "-"],
@@ -4136,10 +4149,38 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       `<button class="tk ${(k === "ctrl" && TERM.ctrl) || (k === "alt" && TERM.alt) ? "on" : ""}" data-i="${i}">${esc(l)}</button>`).join("");
   }
 
-  $("term-keys").addEventListener("pointerdown", (e) => { if (e.target.closest(".tk")) e.preventDefault(); });  // 别抢走焦点，否则软键盘会收起
+  // 长按连发：退格、删除、方向键按住不放就一直发（先等 400ms，之后每 60ms 一下）
+  const TK_REPEAT = new Set(["\x7f", "\x1b[3~", "\x1b[D", "\x1b[B", "\x1b[A", "\x1b[C"]);
+  let tkHold = null;
+  const tkStop = () => { if (tkHold) { clearTimeout(tkHold.t); clearInterval(tkHold.iv); } };
+  $("term-keys").addEventListener("pointerdown", (e) => {
+    const b = e.target.closest(".tk");
+    if (!b) return;
+    e.preventDefault();   // 别抢走焦点，否则软键盘会收起
+    tkStop();
+    if (!TK_REPEAT.has(TERM_KEYS[Number(b.dataset.i)][1])) { tkHold = null; return; }
+    const h = tkHold = { fired: false, iv: 0 };
+    h.t = setTimeout(() => { h.fired = true; h.iv = setInterval(() => b.click(), 60); b.click(); }, 400);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("term-keys").addEventListener(ev, tkStop);
+  // 按住不放约半秒，WebView 会当成长按弹菜单，随即 pointercancel 把连发掐断：补键行上不要长按菜单
+  $("term-keys").addEventListener("contextmenu", (e) => e.preventDefault());
+  // 有的输入法（实测联想平板自带的）在键盘上沿往上还占着一窄条看不见的触摸区（约 22px），
+  // 盖住补键行中间几个键的下半截，点了没反应。键盘弹起时给补键行底下垫一点，把按钮整个抬过去。
+  // 判断键盘：同一宽度下窗口高度比见过的最大高度矮了两成以上
+  let tkW = 0, tkH = 0;
+  const tkKb = () => {
+    if (innerWidth !== tkW) { tkW = innerWidth; tkH = 0; }
+    tkH = Math.max(tkH, innerHeight);
+    $("term-keys").classList.toggle("kb-open", innerHeight < tkH * 0.8);
+  };
+  addEventListener("resize", tkKb);
+  tkKb();
   $("term-keys").addEventListener("click", async (e) => {
     const b = e.target.closest(".tk");
     if (!b) return;
+    // 连发过的那次松手，系统还会补一个 click，吞掉它
+    if (e.isTrusted && tkHold && tkHold.fired) { tkHold = null; return; }
     const k = TERM_KEYS[Number(b.dataset.i)][1];
     const a = TERM.inst.get(TERM.cur);
     if (k === "ctrl") { TERM.ctrl = !TERM.ctrl; return renderTermKeys(); }

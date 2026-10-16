@@ -23,6 +23,7 @@ import { spawn, execFile } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import vm from "node:vm";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -69,6 +70,51 @@ const log = (...a) => {
   console.log(line);
   try { fs.appendFileSync(LOG_FILE, line + "\n"); } catch {}
 };
+
+// ── 提示语的多语言 ────────────────────────────────────────────────────
+// 源语言是中文、键就是中文原句，和界面共用 web/lang-*.js 的词典（回退：当前语言 → 英文 → 中文）。
+// 要翻的提示语用 tz 包起来（第一个参数是带 {name} 占位的中文原句，第二个是变量）：它就是一个照常能拼接、能当 Error 消息的字符串，
+// 同时登记「拼好的中文 → 键和变量」。所以提示语哪怕先变成 e.message、再转几手，
+// sendJson 出门时（按请求头 X-CC-Lang）或推送时（按最近一次见到的语言）都还能认出来翻。
+// gateway.log 不翻。新键照 i18n/HANDOFF.md 的流程进词典（scan.mjs 也扫这里 tz 包着的原句）
+const TZ_SEEN = new Map();                      // 拼好的中文 → [键, 变量]，只留最近 300 条
+const tzFill = (k, v) => (v ? k.replace(/\{(\w+)\}/g, (m, n) => (n in v ? String(v[n]) : m)) : k);
+function tz(k, v) {
+  const s = tzFill(k, v);
+  TZ_SEEN.delete(s); TZ_SEEN.set(s, [k, v || null]);
+  if (TZ_SEEN.size > 300) TZ_SEEN.delete(TZ_SEEN.keys().next().value);
+  return s;
+}
+const LANG_DICTS = new Map();
+let LAST_LANG = "zh";
+function langDict(code) {
+  if (!LANG_DICTS.has(code)) {
+    let d = null;
+    try {
+      const sb = { window: {} };
+      vm.runInNewContext(fs.readFileSync(path.join(HERE, "web", `lang-${code}.js`), "utf8"), sb);
+      d = (sb.window.I18N_DICT || {})[code] || null;
+    } catch {}
+    LANG_DICTS.set(code, d);
+  }
+  return LANG_DICTS.get(code);
+}
+/** 请求带的界面语言；顺手记下来给推送和后台任务用 */
+function reqLang(req) {
+  const l = String((req && req.headers && req.headers["x-cc-lang"]) || "");
+  if (/^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(l)) LAST_LANG = l;
+  return LAST_LANG;
+}
+function tr(lang, msg) {
+  if (typeof msg !== "string" || !lang || lang === "zh") return msg;
+  const hit = TZ_SEEN.get(msg) || [msg, null];
+  for (const c of lang === "en" ? ["en"] : [lang, "en"]) {
+    const d = langDict(c), x = d && d[hit[0]];
+    if (x === undefined || x === null) continue;
+    try { return typeof x === "function" ? String(x(hit[1] || {})) : tzFill(String(x), hit[1]); } catch {}
+  }
+  return msg;
+}
 
 // ── 厂商配置（不写死任何一家）─────────────────────────────────────────
 // 端点 / 认证风格 / 模型清单来源 全部来自 ccapp-providers.json。
@@ -238,7 +284,7 @@ function providerView(id, v) {
 function upsertProvider(id, b) {
   const isNew = !id;
   if (isNew) {
-    if (!b.baseUrl) return { error: "need_baseUrl", message: "自定义接口至少要填端点地址" };
+    if (!b.baseUrl) return { error: "need_baseUrl", message: tz("自定义接口至少要填端点地址") };
     let n = 1; while (PROVIDERS_RAW.providers["custom-" + n] || PRESETS["custom-" + n]) n++;
     id = "custom-" + n;
   }
@@ -253,7 +299,7 @@ function upsertProvider(id, b) {
     if ("authStyle" in b) cur.authStyle = b.authStyle === "x-api-key" ? "x-api-key" : "bearer";
     cur.modelsAuth = cur.authStyle || "bearer";
     if (!cur.label) cur.label = id;
-    if (!/^https?:\/\//.test(cur.baseUrl || "")) return { error: "bad_baseUrl", message: "端点地址要以 http:// 或 https:// 开头" };
+    if (!/^https?:\/\//.test(cur.baseUrl || "")) return { error: "bad_baseUrl", message: tz("端点地址要以 http:// 或 https:// 开头") };
     cur.baseUrl = cur.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");   // claude 自己会补 /v1/messages
   }
   PROVIDERS_RAW.providers[id] = cur;
@@ -266,10 +312,10 @@ function upsertProvider(id, b) {
 /** 验密钥：有模型清单接口就拉清单（不花钱）；没有就发一条 max_tokens=1 的消息 */
 async function testProvider(id) {
   const v = PROVIDERS_CFG.providers[id];
-  if (!v) return { ok: false, message: "没有这家厂商" };
-  if (v.login) return { ok: false, message: "账户登录不用测密钥，看登录状态即可" };
+  if (!v) return { ok: false, message: tz("没有这家厂商") };
+  if (v.login) return { ok: false, message: tz("账户登录不用测密钥，看登录状态即可") };
   const key = String(v.apiKey || "").trim();
-  if (!key) return { ok: false, message: "还没填密钥" };
+  if (!key) return { ok: false, message: tz("还没填密钥") };
   const auth = v.authStyle === "x-api-key"
     ? { "x-api-key": key, "anthropic-version": "2023-06-01" }
     : { Authorization: `Bearer ${key}`, "anthropic-version": "2023-06-01" };
@@ -288,14 +334,14 @@ async function testProvider(id) {
     const text = await r.text();
     if (r.ok) {
       let n = 0; try { n = normalizeModels(JSON.parse(text)).length; } catch {}
-      return { ok: true, message: `密钥有效（${how}${n ? "，" + n + " 个模型" : ""}）` };
+      return { ok: true, message: n ? tz("密钥有效（{how}，{n} 个模型）", { how, n }) : tz("密钥有效（{how}）", { how }) };
     }
     let msg = text.slice(0, 200);
     try { const j = JSON.parse(text); msg = j.error?.message || j.message || j.msg || msg; } catch {}
     const why = r.status === 401 || r.status === 403 ? "密钥无效或与线路不匹配" : `HTTP ${r.status}`;
     return { ok: false, status: r.status, message: `${why}：${msg}` };
   } catch (e) {
-    return { ok: false, message: "连不上：" + e.message };
+    return { ok: false, message: tz("连不上：{err}", { err: e.message }) };
   }
 }
 let PROVIDER = BUILTIN_PROVIDER;
@@ -1235,12 +1281,12 @@ function zipBuild(entries) {
 function zipRead(buf) {
   let e = buf.length - 22;
   while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--;
-  if (e < 0) throw new Error("不是 zip 文件");
+  if (e < 0) throw new Error(tz("不是 zip 文件"));
   const n = buf.readUInt16LE(e + 10);
   let p = buf.readUInt32LE(e + 16);
   const out = [];
   for (let i = 0; i < n; i++) {
-    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("zip 目录损坏");
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error(tz("zip 目录损坏"));
     const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20);
     const nlen = buf.readUInt16LE(p + 28), xlen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
     const lo = buf.readUInt32LE(p + 42);
@@ -1249,7 +1295,7 @@ function zipRead(buf) {
     if (name.endsWith("/")) continue;
     const ds = lo + 30 + buf.readUInt16LE(lo + 26) + buf.readUInt16LE(lo + 28);
     const body = buf.subarray(ds, ds + csize);
-    if (method !== 0 && method !== 8) throw new Error("不支持的压缩方式：" + name);
+    if (method !== 0 && method !== 8) throw new Error(tz("不支持的压缩方式：{name}", { name }));
     out.push({ name, data: method === 8 ? zlib.inflateRawSync(body) : Buffer.from(body) });
   }
   return out;
@@ -1274,7 +1320,7 @@ function exportSessions(ids) {
     if (fs.existsSync(side)) walk(side, `sessions/${id}`);
     list.push({ id, title: NAMES[id] || meta.title, renamed: !!NAMES[id], cwd: meta.cwd, mtime: fs.statSync(found.file).mtimeMs });
   }
-  if (!list.length) throw new Error("没有可导出的会话");
+  if (!list.length) throw new Error(tz("没有可导出的会话"));
   entries.unshift({ name: "manifest.json", data: JSON.stringify({ format: "cccodroid-sessions", version: 1, exportedAt: Date.now(), sessions: list }, null, 1) });
   const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
   const dir = path.join(base, "exports");
@@ -1291,8 +1337,8 @@ function importSessions(buf) {
   const files = zipRead(buf);
   const man = files.find((f) => f.name === "manifest.json");
   let manifest = {};
-  try { manifest = JSON.parse(man.data.toString("utf8")); } catch { throw new Error("缺少 manifest.json，不是会话包"); }
-  if (manifest.format !== "cccodroid-sessions") throw new Error("不是 cccodroid 会话包");
+  try { manifest = JSON.parse(man.data.toString("utf8")); } catch { throw new Error(tz("缺少 manifest.json，不是会话包")); }
+  if (manifest.format !== "cccodroid-sessions") throw new Error(tz("不是 cccodroid 会话包"));
   const ws = realWorkspace();
   const dir = path.join(PATHS.projects, projectSlug(ws));
   fs.mkdirSync(dir, { recursive: true });
@@ -1341,7 +1387,7 @@ function transcriptItems(ev) {
   const out = [];
   if (!ev || ev.isSidechain || ev.isMeta) return out;
   if (ev.type === "user") {
-    if (ev.isCompactSummary) { out.push({ role: "note", text: "（此前的对话已被压缩成摘要）" }); return out; }
+    if (ev.isCompactSummary) { out.push({ role: "note", text: tr(LAST_LANG, tz("（此前的对话已被压缩成摘要）")) }); return out; }
     const c = ev.message?.content;
     if (typeof c === "string") {
       if (c && !c.startsWith("<")) out.push({ role: "user", text: c });
@@ -1967,7 +2013,7 @@ async function compList(force) {
       available: !!b, installedVersion: rec ? rec.version : null,
       state: compState(id, e, dk),
       progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total } : null,
-      error: job && job.error ? job.error : "",
+      error: job && job.error ? tr(LAST_LANG, job.error) : "",
       bin: (b && b.bin) || (rec && rec.bin) || [],
       selftest: (b && b.selftest) || "",
       // 来源与可信度：预置组件由 cccodroid 发布、随版本测过；社区组件看 verified（真机验证记录）
@@ -2093,20 +2139,20 @@ async function compInstall(id) {
   const cur = COMP_JOBS.get(id);
   if (cur && !cur.finished) return { ok: false, message: "busy" };
   const dk = devkitIdentity();
-  if (!dk || !dk.sha256) return { ok: false, message: "工具包还没装好（或是本地文件装的，没有版本身份），装不了组件" };
+  if (!dk || !dk.sha256) return { ok: false, message: tz("工具包还没装好（或是本地文件装的，没有版本身份），装不了组件") };
   const ix = await compIndex(true);
   const entry = ix.data && ix.data.components && ix.data.components[id];
-  if (!entry) return { ok: false, message: ix.error || "没有这个组件" };
-  if (compUnsupported(entry)) return { ok: false, message: "这个组件只能用在高通骁龙（Adreno GPU）的设备上，本机用不了" };
+  if (!entry) return { ok: false, message: ix.error || tz("没有这个组件") };
+  if (compUnsupported(entry)) return { ok: false, message: tz("这个组件只能用在高通骁龙（Adreno GPU）的设备上，本机用不了") };
   const miss = (entry.requires || []).filter((rid) => !compDepOk(rid, ix.data.components, dk));
-  if (miss.length) return { ok: false, message: "要先装：" + miss.map((rid) => compName(rid, ix.data.components).zh || rid).join("、") };
+  if (miss.length) return { ok: false, message: tz("要先装：{names}", { names: miss.map((rid) => compName(rid, ix.data.components).zh || rid).join("、") }) };
   const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source, requires: entry.requires || [] };
-  if (!b) return { ok: false, message: "这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试" };
+  if (!b) return { ok: false, message: tz("这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试") };
   // 空间：压缩包 + 解开后的大小，再留 10%
   try {
     const sf = fs.statfsSync(path.dirname(PREFIX));
     const need = (b.bytes + b.installed) * 1.1;
-    if (sf.bavail * sf.bsize < need) return { ok: false, message: `存储空间不够：需要约 ${Math.ceil(need / 1048576)} MB` };
+    if (sf.bavail * sf.bsize < need) return { ok: false, message: tz("存储空间不够：需要约 {n} MB", { n: Math.ceil(need / 1048576) }) };
   } catch {}
   const job = { phase: "downloading", done: 0, total: b.bytes, error: "", child: null, cancelled: false, finished: false };
   COMP_JOBS.set(id, job);
@@ -2168,7 +2214,7 @@ async function compRunInstall(id, b, job) {
     } finally { clearInterval(tick); }
     job.phase = "verifying"; job.done = 0; job.total = b.bytes;
     const got = await sha256File(part, job);
-    if (got !== b.sha256) { fs.rmSync(part, { force: true }); throw new Error("下载的文件校验不符（已删除，重试会重新下载）"); }
+    if (got !== b.sha256) { fs.rmSync(part, { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
     fs.renameSync(part, gz);
   }
   if (job.cancelled) throw new Error("cancelled");
@@ -2183,8 +2229,8 @@ async function compRunInstall(id, b, job) {
     if (job.cancelled) throw new Error("cancelled");
     const [h, n, ...rest] = line.split(" "), rel = rest.join(" ");
     const f = path.join(tree, "usr", rel);
-    let st; try { st = fs.statSync(f); } catch { throw new Error("组件包缺文件：" + rel); }
-    if (st.size !== Number(n) || (await sha256File(f)) !== h) throw new Error("组件包里的文件校验不符：" + rel);
+    let st; try { st = fs.statSync(f); } catch { throw new Error(tz("组件包缺文件：{file}", { file: rel })); }
+    if (st.size !== Number(n) || (await sha256File(f)) !== h) throw new Error(tz("组件包里的文件校验不符：{file}", { file: rel }));
     job.done += st.size;
   }
   // 3) 切换：先写"安装中"的记录（被打断就是 damaged，可以重装或卸载），再逐个搬进 $PREFIX
@@ -2220,7 +2266,7 @@ async function compRunInstall(id, b, job) {
 function compCancel(id) {
   const job = COMP_JOBS.get(id);
   if (!job || job.finished) return { ok: false, message: "not running" };
-  if (job.phase === "installing") return { ok: false, message: "正在放进工具包，这一步不能中断" };
+  if (job.phase === "installing") return { ok: false, message: tz("正在放进工具包，这一步不能中断") };
   job.cancelled = true;
   if (job.child) killTree(job.child);
   return { ok: true };
@@ -2235,13 +2281,60 @@ function compRemove(id) {
   const users = compUsers(id);
   if (users.length) {
     const comps = (compIndexCache.data && compIndexCache.data.components) || {};
-    return { ok: false, message: users.map((rid) => compName(rid, comps).zh || rid).join("、") + " 要用它，先卸载那些组件" };
+    return { ok: false, message: tz("{names} 要用它，先卸载那些组件", { names: users.map((rid) => compName(rid, comps).zh || rid).join("、") }) };
   }
   compRemoveFiles(id, rec);
   fs.rmSync(compRecFile(id), { force: true });
   fs.rmSync(path.join(COMP_DIR, ".staging"), { recursive: true, force: true });
   COMP_JOBS.delete(id);
   log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
+  return { ok: true };
+}
+
+// ── 组件的运行数据：约定放在 ~/.cccodroid/<id>/（blender 的 Debian 环境、下载缓存等），卸载组件不碰它。
+// 卸载后报出大小、问用户要不要一起删。目录名不一定等于 id（gpu-driver-glibc 用 gpu-driver 的目录），
+// 所以只认和 id 同名的目录，还装着 <id>-xxx 组件时当作共用、不提议删
+function compDataDir(id) { return path.join(CFG.home, ".cccodroid", id); }
+function compDataShared(id) {
+  try { return fs.readdirSync(COMP_DIR).some((f) => f.endsWith(".json") && f.startsWith(id + "-")); } catch { return false; }
+}
+async function compDuBytes(dir) {
+  let n = 0;
+  const walk = async (d) => {
+    let es; try { es = await fs.promises.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of es) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) await walk(p);
+      else { try { n += (await fs.promises.lstat(p)).size; } catch {} }
+    }
+  };
+  await walk(dir);
+  return n;
+}
+async function compDataInfo(id) {
+  const dir = compDataDir(id);
+  try { if (!fs.lstatSync(dir).isDirectory()) return null; } catch { return null; }
+  if (compRecord(id) || compDataShared(id)) return null;
+  return { path: "~/.cccodroid/" + id, bytes: await compDuBytes(dir) };
+}
+async function compPurgeData(id) {
+  if (compRecord(id)) return { ok: false, message: "still installed" };
+  if (compDataShared(id)) return { ok: false, message: "shared" };
+  const dir = compDataDir(id);
+  try { if (!fs.lstatSync(dir).isDirectory()) return { ok: true }; } catch { return { ok: true }; }
+  const rm = () => fs.promises.rm(dir, { recursive: true, force: true });
+  try { await rm(); }
+  catch {
+    // 解开的 Debian 包里有只读目录：先把目录都改成可写再删
+    const fix = async (d) => {
+      try { await fs.promises.chmod(d, 0o700); } catch {}
+      let es; try { es = await fs.promises.readdir(d, { withFileTypes: true }); } catch { return; }
+      for (const e of es) if (e.isDirectory()) await fix(path.join(d, e.name));
+    };
+    await fix(dir);
+    try { await rm(); } catch (e) { return { ok: false, message: e.message }; }
+  }
+  log(`[comp] ${id} 的运行数据已删除`);
   return { ok: true };
 }
 
@@ -2276,7 +2369,7 @@ async function ghStatus() {
 }
 function ghLogin() {
   const bin = ghBin();
-  if (!bin || !fs.existsSync(bin)) return { ok: false, message: "gh 没装" };
+  if (!bin || !fs.existsSync(bin)) return { ok: false, message: tz("gh 没装") };
   if (GH.job && ["starting", "waiting"].includes(GH.job.state)) return { ok: true };
   // 没有终端时 gh 不等回车、不开浏览器，只把一次性码和网址打到 stderr；-s workflow 让推 .github/workflows 也行
   const child = spawn(bin, ["auth", "login", "--web", "-h", "github.com", "-p", "https", "-s", "workflow"],
@@ -2302,7 +2395,7 @@ function ghLogin() {
     if (code !== 0) {
       // 只取最后一行报错给界面（剪贴板那两行提示是 gh 自己复制失败，不算错）
       const last = buf.split("\n").map((l) => l.trim()).filter((l) => l && !/clipboard|xsel|one-time code|Open this URL/i.test(l)).pop();
-      job.state = "error"; job.error = (last || "gh 退出码 " + code).slice(0, 300);
+      job.state = "error"; job.error = (last || tz("gh 退出码 {code}", { code })).slice(0, 300);
       return;
     }
     const s = await ghExec(["auth", "setup-git", "-h", "github.com"]);
@@ -2340,7 +2433,8 @@ async function handleComponents(req, res, p, u) {
   if (!/^[a-z0-9-]{1,40}$/.test(id)) return sendJson(res, 400, { ok: false, message: "bad id" });
   if (p === "/api/components/install") return sendJson(res, 200, await compInstall(id));
   if (p === "/api/components/cancel") return sendJson(res, 200, compCancel(id));
-  if (p === "/api/components/remove") return sendJson(res, 200, compRemove(id));
+  if (p === "/api/components/remove") { const r = compRemove(id); if (r.ok) r.data = await compDataInfo(id); return sendJson(res, 200, r); }
+  if (p === "/api/components/purge") return sendJson(res, 200, await compPurgeData(id));
   return sendJson(res, 404, { error: "not found" });
 }
 
@@ -2355,6 +2449,7 @@ function uiTag() {
 }
 
 function sendJson(res, code, obj) {
+  if (obj && typeof obj.message === "string" && res.req) obj = { ...obj, message: tr(reqLang(res.req), obj.message) };
   const b = Buffer.from(JSON.stringify(obj));
   res.writeHead(code, { "content-type": "application/json; charset=utf-8", "content-length": b.length });
   res.end(b);
@@ -2557,7 +2652,7 @@ function pump() {
   startRun(item).catch((e) => {
     log(`run 异常: ${e.stack || e.message}`);
     if (activeRun && activeRun.id === item.id) {
-      runEmit(activeRun, { type: "error", message: `内部错误：${e.message}` });
+      runEmit(activeRun, { type: "error", message: tr(LAST_LANG, tz("内部错误：{err}", { err: e.message })) });
       endRun(activeRun, { failed: true });
     }
   });
@@ -2646,7 +2741,7 @@ function loginStart(flag) {
         clearInterval(tick);
         resolve(auto || manual
           ? { ok: true, url: auto || manual, manualUrl: manual, auto: !!auto }
-          : { ok: false, message: "没拿到登录地址", output: L.out.slice(-1500) });
+          : { ok: false, message: tz("没拿到登录地址"), output: L.out.slice(-1500) });
       }
     }, 200);
   });
@@ -2849,11 +2944,11 @@ async function startRun(item) {
   }
 
   if (!API_KEY && !PROVIDER.login) {
-    emit({ type: "error", message: `未配置 API 密钥。请在设置里填入 ${PROVIDER.label || PROVIDER.id} 的密钥。` });
+    emit({ type: "error", message: tr(LAST_LANG, tz("未配置 API 密钥。请在设置里填入 {name} 的密钥。", { name: PROVIDER.label || PROVIDER.id })) });
     return endRun(run, { failed: true });
   }
   if (!isLoginMode() && !(await ensureBridge())) {
-    emit({ type: "error", message: "本地 DNS 桥启动失败，无法连接 API。" });
+    emit({ type: "error", message: tr(LAST_LANG, tz("本地 DNS 桥启动失败，无法连接 API。")) });
     return endRun(run, { failed: true });
   }
   if (run.aborted) return endRun(run, { failed: true });   // 等桥的时候就被停了
@@ -3091,7 +3186,7 @@ async function startRun(item) {
 
   child.on("error", (e) => {
     log(`spawn 出错: ${e.message}`);
-    emit({ type: "error", message: `无法启动 claude: ${e.message}` });
+    emit({ type: "error", message: tr(LAST_LANG, tz("无法启动 claude：{err}", { err: e.message })) });
     endRun(run, { failed: true });
   });
   child.on("close", finish);
@@ -3108,7 +3203,7 @@ function toFront(text) {
 /** 内存管家：跑 cc-mem 拿 JSON。cccodroid 里它和网关同在 app/bin；开发端在 files/opt/ccmem */
 function ccMem(args, timeoutMs = 90000) {
   const bin = [path.join(HERE, "bin", "cc-mem.mjs"), path.join(CFG.home, "..", "opt", "ccmem", "cc-mem.mjs")].find((f) => fs.existsSync(f));
-  if (!bin) return Promise.resolve({ ok: false, message: "找不到 cc-mem" });
+  if (!bin) return Promise.resolve({ ok: false, message: tz("找不到 cc-mem") });
   const env = claudeEnv();
   for (const k of Object.keys(env)) if (/^(ANTHROPIC|CLAUDE)_/.test(k)) delete env[k];
   env.CCAPP_HOME = CFG.home;
@@ -3124,11 +3219,11 @@ function privCall(req, timeoutMs = 20000) {
   return new Promise((resolve) => {
     if (!PREFIX) {
       if (req.op === "status") return devPrivStatus().then(resolve);
-      return resolve({ ok: false, state: "unsupported", message: "开发端的 Shizuku 由 Shizuku 应用自己管理（priv 走 rish）" });
+      return resolve({ ok: false, state: "unsupported", message: tz("开发端的 Shizuku 由 Shizuku 应用自己管理（priv 走 rish）") });
     }
     const s = net.connect({ path: "\0cc.codroid.priv" }, () => s.write(JSON.stringify(req) + "\n"));
     let buf = "";
-    const t = setTimeout(() => { s.destroy(); resolve({ ok: false, message: "超时" }); }, timeoutMs);
+    const t = setTimeout(() => { s.destroy(); resolve({ ok: false, message: tz("超时") }); }, timeoutMs);
     s.on("data", (d) => (buf += d));
     s.on("end", () => { clearTimeout(t); try { resolve(JSON.parse(buf)); } catch { resolve({ ok: false, message: buf.slice(0, 200) }); } });
     s.on("error", (e) => { clearTimeout(t); resolve({ ok: false, state: "unreachable", message: e.message }); });
@@ -3171,7 +3266,7 @@ async function devUpdCheck() {
     if (!c.current || c.state !== "installing") c.current = await claudeVersionOf(PATHS.claude);
     const r = await fetch(`${CC_BASE}/${devUpd.channel}`, { signal: AbortSignal.timeout(20000) });
     const v = (await r.text()).trim();
-    if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error("版本号不对：" + v.slice(0, 40));
+    if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error(tz("版本号不对：{v}", { v: v.slice(0, 40) }));
     c.latest = v;
     // 已装版本要和所选渠道「一致」：从 latest 切回 stable 时版本号变小，以前判成「已是最新」就一直停在 latest 上
     if (c.state !== "installing") {
@@ -3180,7 +3275,7 @@ async function devUpdCheck() {
       c.message = d < 0 && c.current ? `切回 ${devUpd.channel} 渠道：将换成 ${v}（比当前的 ${c.current} 旧）` : devUpd.channel === "latest" ? "latest 渠道" : "";
     }
     devUpd.lastCheck = Date.now();
-  } catch (e) { devUpd.error = "连不上 downloads.claude.ai：" + e.message; }
+  } catch (e) { devUpd.error = tz("连不上 downloads.claude.ai：{err}", { err: e.message }); }
   finally { devUpd.checking = false; devUpdSave(); }
 }
 
@@ -3196,7 +3291,7 @@ async function devUpdInstall() {
   try {
     const man = await (await fetch(`${CC_BASE}/${c.latest}/manifest.json`, { signal: AbortSignal.timeout(20000) })).json();
     const plat = man.platforms && man.platforms["linux-arm64"];
-    if (!plat || !/^[a-f0-9]{64}$/.test(plat.checksum)) throw new Error("清单里没有 linux-arm64");
+    if (!plat || !/^[a-f0-9]{64}$/.test(plat.checksum)) throw new Error(tz("清单里没有 linux-arm64"));
     c.total = plat.size;
     let have = 0;
     try { if (fs.readFileSync(tag, "utf8").trim() === plat.checksum) have = fs.statSync(part).size; } catch {}
@@ -3220,10 +3315,10 @@ async function devUpdInstall() {
     const h = crypto.createHash("sha256");
     for await (const b of fs.createReadStream(part)) h.update(b);
     const got = h.digest("hex");
-    if (got !== plat.checksum) { fs.rmSync(part, { force: true }); throw new Error(`sha256 不符（期望 ${plat.checksum.slice(0, 12)}…，实得 ${got.slice(0, 12)}…）`); }
+    if (got !== plat.checksum) { fs.rmSync(part, { force: true }); throw new Error(tz("sha256 不符（期望 {want}…，实得 {got}…）", { want: plat.checksum.slice(0, 12), got: got.slice(0, 12) })); }
     fs.chmodSync(part, 0o755);
     const v = await claudeVersionOf(part);
-    if (v !== c.latest) throw new Error(`新版试跑失败（--version 得到「${v}」）`);
+    if (v !== c.latest) throw new Error(tz("新版试跑失败（--version 得到「{v}」）", { v }));
     fs.rmSync(PATHS.claude + ".prev", { force: true });
     fs.renameSync(PATHS.claude, PATHS.claude + ".prev");
     fs.renameSync(part, PATHS.claude);
@@ -3282,12 +3377,12 @@ async function devApp(op, b) {
     return devUpdStatus();
   }
   if (op === "upd_apply") {
-    if (b.item !== "claude") return { ok: false, message: "开发端只管 Claude Code（应用本体由你在本机构建安装）" };
-    if (devUpd.claude.state !== "available" && devUpd.claude.state !== "error") return { ok: false, message: "没有可装的新版，先检查更新" };
+    if (b.item !== "claude") return { ok: false, message: tz("开发端只管 Claude Code（应用本体由你在本机构建安装）") };
+    if (devUpd.claude.state !== "available" && devUpd.claude.state !== "error") return { ok: false, message: tz("没有可装的新版，先检查更新") };
     devUpdInstall();
-    return { ok: true, message: "开始更新 Claude Code" };
+    return { ok: true, message: tz("开始更新 Claude Code") };
   }
-  return { ok: false, message: "开发端不支持：" + op };
+  return { ok: false, message: tz("开发端不支持：{op}", { op }) };
 }
 
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
@@ -3581,10 +3676,10 @@ async function listMcp() {
 
 async function addMcp(b) {
   const name = String(b.name || "").trim();
-  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name)) return { ok: false, message: "名字只能用字母、数字、点、下划线、横线" };
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name)) return { ok: false, message: tz("名字只能用字母、数字、点、下划线、横线") };
   const transport = ["stdio", "http", "sse"].includes(b.transport) ? b.transport : "stdio";
   const target = String(b.target || "").trim();
-  if (!target) return { ok: false, message: "缺少命令或地址" };
+  if (!target) return { ok: false, message: tz("缺少命令或地址") };
   // -e / --header 是可变参数，会把后面的名字吞掉：名字放前面，选项跟在后面、用 -- 收尾
   const args = ["mcp", "add", "-s", "user", "--transport", transport, name];
   if (transport !== "stdio") args.push(target);
@@ -3673,17 +3768,17 @@ async function listSkillCatalog(force) {
     const c = await skillCatalog(force);
     return { ok: true, repo: SKILL_REPO, items: c.items.map(({ files, ...x }) => ({ ...x,
       installed: fs.existsSync(path.join(SKILLS_DIR, x.dir, "SKILL.md")), official: (skillSource(x.dir) || {}).repo === SKILL_REPO })) };
-  } catch (e) { return { ok: false, message: "取不到官方技能目录：" + e.message }; }
+  } catch (e) { return { ok: false, message: tz("取不到官方技能目录：{err}", { err: e.message }) }; }
 }
 /** 装一个官方技能：按目录树逐个下载到临时目录，齐了再改名就位（不会留下半截）；超过 50 MB 不装 */
 async function installCatalogSkill(dir) {
   if (!SID_RE.test(dir)) return { ok: false, message: "bad name" };
   const c = await skillCatalog().catch((e) => null);
   const it = c && c.items.find((x) => x.dir === dir);
-  if (!it) return { ok: false, message: "官方目录里没有这个技能" };
+  if (!it) return { ok: false, message: tz("官方目录里没有这个技能") };
   const dest = path.join(SKILLS_DIR, dir);
-  if (fs.existsSync(dest)) return { ok: false, message: "已经有同名技能，先删掉再装" };
-  if (it.bytes > 50 << 20) return { ok: false, message: "太大了（超过 50 MB）" };
+  if (fs.existsSync(dest)) return { ok: false, message: tz("已经有同名技能，先删掉再装") };
+  if (it.bytes > 50 << 20) return { ok: false, message: tz("太大了（超过 50 MB）") };
   const tmp = path.join(SKILLS_DIR, `.tmp-${dir}-${process.pid}`);
   fs.rmSync(tmp, { recursive: true, force: true });
   try {
@@ -3708,7 +3803,7 @@ async function listMcpCatalog(q, cursor) {
   if (q) u.searchParams.set("search", String(q).slice(0, 100));
   if (cursor) u.searchParams.set("cursor", String(cursor).slice(0, 300));
   let j;
-  try { j = await ghGet(u.href, true); } catch (e) { return { ok: false, message: "取不到 MCP 注册表：" + e.message }; }
+  try { j = await ghGet(u.href, true); } catch (e) { return { ok: false, message: tz("取不到 MCP 注册表：{err}", { err: e.message }) }; }
   const field = (x) => ({ name: String(x.name || ""), description: String(x.description || "").slice(0, 200), required: !!x.isRequired, secret: !!x.isSecret });
   const items = (j.servers || []).map(({ server: v }) => {
     const options = [
@@ -3731,14 +3826,14 @@ async function listMcpCatalog(q, cursor) {
 function importSkill(buf) {
   const files = zipRead(buf);
   const md = files.filter((f) => /(^|\/)SKILL\.md$/.test(f.name)).sort((a, b) => a.name.length - b.name.length)[0];
-  if (!md) throw new Error("压缩包里没有 SKILL.md");
+  if (!md) throw new Error(tz("压缩包里没有 SKILL.md"));
   const root = md.name.slice(0, md.name.length - "SKILL.md".length);
   const text = md.data.toString("utf8");
   const nm = (text.match(/^---\n[\s\S]*?^name:\s*(.+)$/m) || [])[1];
   const dir = String(nm || root.replace(/\/$/, "").split("/").pop() || "skill").trim().replace(/^["']|["']$/g, "").replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
-  if (!SID_RE.test(dir) || dir === "." || dir === "..") throw new Error("技能名不合法");
+  if (!SID_RE.test(dir) || dir === "." || dir === "..") throw new Error(tz("技能名不合法"));
   const dst = path.join(SKILLS_DIR, dir);
-  if (fs.existsSync(dst)) throw new Error(`已有同名技能「${dir}」，先删掉旧的`);
+  if (fs.existsSync(dst)) throw new Error(tz("已有同名技能「{name}」，先删掉旧的", { name: dir }));
   for (const f of files) {
     if (!f.name.startsWith(root)) continue;
     const rel = f.name.slice(root.length);
@@ -3887,7 +3982,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/providers/delete") {
       const b = JSON.parse((await readBody(req)) || "{}");
       const id = String(b.id || "");
-      if (id === PROVIDER.id && activeRun) return sendJson(res, 409, { error: "busy", message: "这一家正在用，等这一轮跑完再删。" });
+      if (id === PROVIDER.id && activeRun) return sendJson(res, 409, { error: "busy", message: tz("这一家正在用，等这一轮跑完再删。") });
       if (PRESETS[id]) {
         // 预置厂商删不掉，只清空用户字段（密钥等）
         delete PROVIDERS_RAW.providers[id];
@@ -3948,7 +4043,7 @@ const server = http.createServer(async (req, res) => {
             if (activeRun) {
               return sendJson(res, 409, {
                 error: "busy",
-                message: "这一轮还在生成中，等它跑完再切厂商（切换会换掉正在用的密钥与模型）。",
+                message: tz("这一轮还在生成中，等它跑完再切厂商（切换会换掉正在用的密钥与模型）。"),
               });
             }
             SETTINGS.provider = want;
@@ -4083,7 +4178,7 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "DELETE" && !action) {
         if (!found) return sendJson(res, 404, { error: "not found" });
-        if (activeRun && activeRun.sessionId === id) return sendJson(res, 409, { error: "busy", message: "这个会话正在生成中。" });
+        if (activeRun && activeRun.sessionId === id) return sendJson(res, 409, { error: "busy", message: tz("这个会话正在生成中。") });
         // 删除先进回收站（30 天内可恢复），彻底删除走 /api/trash/purge
         let r;
         try { r = trashSession(id); } catch (e) { return sendJson(res, 500, { error: e.message }); }
@@ -4327,10 +4422,10 @@ const server = http.createServer(async (req, res) => {
       if (!API_KEY && !PROVIDER.login && !/^\/(model|models|effort|autocompact)\b/.test(String(b.message).trim())) {
         return sendJson(res, 503, {
           error: "no_api_key",
-          message: `「${PROVIDER.label || PROVIDER.id}」还没填 Key。到 设置 → 接口 里填好保存，或换一个接口。`,
+          message: tz("「{name}」还没填 Key。到 设置 → 接口 里填好保存，或换一个接口。", { name: PROVIDER.label || PROVIDER.id }),
         });
       }
-      if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: "排队的消息太多了。" });
+      if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });
       const item = enqueue(b);
       return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: !!activeRun && activeRun.id === item.id });
     }
@@ -4356,7 +4451,7 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith("/api/app/")) {
       const op = p.slice(9);
       const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack", "notify_status", "notify_set", "notify_settings"];
-      if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: "未知操作" });
+      if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: tz("未知操作") });
       const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
       if (!PREFIX) return sendJson(res, 200, await devApp(op, b));
       return sendJson(res, 200, await privCall({ ...b, op }));
@@ -4381,7 +4476,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
     if (req.method === "POST" && p === "/api/login/logout") {
-      if (activeRun && isLoginMode()) return sendJson(res, 409, { error: "busy", message: "这一轮还在生成，等它跑完再退出登录。" });
+      if (activeRun && isLoginMode()) return sendJson(res, 409, { error: "busy", message: tz("这一轮还在生成，等它跑完再退出登录。") });
       const r = await runAuth(["logout"]);
       AUTH_CACHE = null;
       RATE_LIMITS = null; try { fs.unlinkSync(RL_FILE); } catch {}
@@ -4392,12 +4487,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/perm/answer") {
       const b = JSON.parse((await readBody(req)) || "{}");
       const run = activeRun && (!b.runId || b.runId === activeRun.id) ? activeRun : null;
-      if (!run || !run.answerPerm) return sendJson(res, 409, { error: "gone", message: "这一轮已经结束了" });
+      if (!run || !run.answerPerm) return sendJson(res, 409, { error: "gone", message: tz("这一轮已经结束了") });
       if (!run.answerPerm(String(b.id || ""), {
         behavior: b.behavior === "allow" ? "allow" : "deny",
         message: b.message, interrupt: !!b.interrupt, always: !!b.always,
         answers: b.answers, mode: b.mode ? String(b.mode) : null,
-      })) return sendJson(res, 409, { error: "gone", message: "这项已经回答过了" });
+      })) return sendJson(res, 409, { error: "gone", message: tz("这项已经回答过了") });
       return sendJson(res, 200, { ok: true });
     }
     if (req.method === "POST" && p === "/api/perm/mode") {
