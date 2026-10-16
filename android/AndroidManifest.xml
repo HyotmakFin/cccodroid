@@ -34,6 +34,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:hasCode="true"
         android:hasFragileUserData="true"
+        android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:extractNativeLibs="true"
         android:largeHeap="true"
