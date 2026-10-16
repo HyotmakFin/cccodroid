@@ -206,6 +206,26 @@
         </div>
       </div>
 
+      <!-- 内存管家（cc-mem）：重活前清场、压住杀了又活的后台应用。默认关，经 Shizuku -->
+      <div class="field" id="mem-field">
+        <label data-i18n>内存管家</label>
+        <div class="prov-card">
+          <label class="tiny" style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="mem-on" style="width:auto;margin:0">
+            <span data-i18n>开启：允许停掉白名单以外的后台应用（需要 Shizuku）</span>
+          </label>
+          <div class="tiny" data-i18n-html>不会被停的：你正在看的、分屏的、挂着前台通知的（代理、音乐）、桌面、输入法、无障碍服务、VPN、Shizuku，以及它们依赖的组件，再加上下面的白名单。
+            终端里用 <code>cc-mem run -- 命令</code> 跑重活：开跑前清场，跑的时候谁复活就再停谁。</div>
+          <textarea id="mem-wl" rows="3" placeholder="白名单：每行一个包名，例如 com.tencent.mm" data-i18n-attr="placeholder" spellcheck="false" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:8px;font:inherit;font-size:13px"></textarea>
+          <div class="row-actions" id="mem-actions">
+            <button class="btn sm ghost" data-act="save" data-i18n>保存白名单</button>
+            <button class="btn sm ghost" data-act="status" data-i18n>查看内存</button>
+            <button class="btn sm" data-act="clear" data-i18n>立即清理</button>
+          </div>
+          <div class="prov-state" id="mem-result"></div>
+        </div>
+      </div>
+
       <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
       <div class="field hidden" id="upd-field">
                 <label data-i18n>更新</label>

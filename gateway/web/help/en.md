@@ -131,6 +131,19 @@ Sidebar → Capabilities lists the slash commands, tools, skills, subagents, MCP
 - After a reboot, cccodroid turns Wireless debugging back on and re-activates Shizuku by itself (Wi‑Fi required).
 - With Shizuku, keep-alive is more reliable and app updates can install silently when idle.
 
+## Memory manager (optional, off by default)
+
+During heavy work (compiling, rendering, transcoding), background apps that keep restarting themselves compete for memory. The memory manager can stop them first and keep them down until the job finishes. It needs Shizuku; turn it on in Settings.
+
+- **Never stopped**: whatever you are looking at, split-screen apps, apps with a foreground notification (proxy, music), the launcher, keyboard, accessibility services, VPN, Shizuku, system components, and anything those depend on. When Android stops an app it also kills every app that has it loaded, so dependencies are protected too.
+- **Allowlist**: add apps you always want messages from (such as chat apps), one package name per line. You can find package names in the system app info page, or tap "Check memory" first.
+- **Clean up now** stops the remaining background apps. The system may wake some of them again later.
+- **In the terminal**:
+  - `cc-mem status` shows where memory goes;
+  - `cc-mem run -- command` runs a heavy job: it clears the field first, stops anything that comes back while the job runs, and reports at the end;
+  - `cc-mem tame <package>` restricts an app's background activity for good, and `cc-mem untame` undoes it.
+- A stopped app may not deliver messages until you open it again. That is why the switch is off by default.
+
 ## Updates and repair
 
 - **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens, keeping anything you installed with pip / npm -g.

@@ -714,4 +714,25 @@ window.I18N_DICT.en = {
   "正在重新挂载界面…": "Remounting the interface…",
   "这个版本的应用还不能脱困，请更新应用；临时办法是重启网关": "This app version can't unfreeze yet. Please update the app; for now, restart the gateway",
   "滚动好像卡住了，可以点顶栏的雪花按钮脱困": "Scrolling seems stuck. Tap the snowflake button in the top bar to unfreeze",
+  // ── memory manager (cc-mem) ──
+  "内存管家": "Memory manager",
+  "开启：允许停掉白名单以外的后台应用（需要 Shizuku）": "On: allow stopping background apps that aren't on the allowlist (needs Shizuku)",
+  "不会被停的：你正在看的、分屏的、挂着前台通知的（代理、音乐）、桌面、输入法、无障碍服务、VPN、Shizuku，以及它们依赖的组件，再加上下面的白名单。 终端里用 <code>cc-mem run -- 命令</code> 跑重活：开跑前清场，跑的时候谁复活就再停谁。":
+    "Never stopped: whatever you're looking at, split-screen apps, apps with a foreground notification (proxy, music), the launcher, keyboard, accessibility services, VPN, Shizuku, the components they depend on, and the allowlist below. In the terminal, run heavy jobs with <code>cc-mem run -- command</code>: it clears the field first and stops anything that comes back while the job runs.",
+  "白名单：每行一个包名，例如 com.tencent.mm": "Allowlist: one package name per line, e.g. com.tencent.mm",
+  "保存白名单": "Save allowlist",
+  "查看内存": "Check memory",
+  "立即清理": "Clean up now",
+  "开启内存管家？\n\n开启后，清理时会停掉白名单以外的后台应用：它们要等你再打开、或被系统重新唤起才会恢复，这段时间可能收不到它们的消息。要一直收消息的应用（比如聊天软件）请加进白名单。":
+    "Turn on the memory manager?\n\nCleaning up will stop background apps that aren't on the allowlist. They stay stopped until you open them again or the system wakes them, so you may miss their messages in the meantime. Add apps you always need messages from (such as chat apps) to the allowlist.",
+  "✓ 已开启": "✓ On",
+  "✓ 已关闭": "✓ Off",
+  "不是合法的包名：{list}": "Not a valid package name: {list}",
+  "✓ 白名单已保存（{n} 个）": (v) => `✓ Allowlist saved (${v.n} app${v.n == 1 ? "" : "s"})`,
+  "正在统计…": "Measuring…",
+  "可用 {avail} / 共 {total}。可停的后台应用 {n} 个，约占 {sum}：{list}": "{avail} available of {total}. Background apps that can be stopped: {n}, using about {sum}: {list}",
+  "先打开上面的开关": "Turn on the switch above first",
+  "正在清理…": "Cleaning up…",
+  "✓ 停了 {n} 个，可用内存 {a} → {b}": "✓ Stopped {n}. Available memory {a} → {b}",
+  "没有可停的后台应用": "No background apps to stop",
 };

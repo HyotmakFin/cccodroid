@@ -367,6 +367,8 @@ const SETTINGS = {
   autoCompactWindow: null,
   // 生效厂商（ccapp-providers.json 里的 id）。留空 = 用配置文件里的 active。
   provider: null,
+  // 内存管家（cc-mem）：默认关。开了才允许停别的应用；白名单是用户额外保护的包名
+  memGuard: { enabled: false, whitelist: [] },
 };
 
 function loadSettings() {
@@ -3101,6 +3103,21 @@ function toFront(text) {
 }
 
 /** 问应用进程里的提权中转（Priv.java）。只在 cccodroid 布局下存在 */
+/** 内存管家：跑 cc-mem 拿 JSON。cccodroid 里它和网关同在 app/bin；开发端在 files/opt/ccmem */
+function ccMem(args, timeoutMs = 90000) {
+  const bin = [path.join(HERE, "bin", "cc-mem.mjs"), path.join(CFG.home, "..", "opt", "ccmem", "cc-mem.mjs")].find((f) => fs.existsSync(f));
+  if (!bin) return Promise.resolve({ ok: false, message: "找不到 cc-mem" });
+  const env = claudeEnv();
+  for (const k of Object.keys(env)) if (/^(ANTHROPIC|CLAUDE)_/.test(k)) delete env[k];
+  env.CCAPP_HOME = CFG.home;
+  return new Promise((resolve) => {
+    execFile(process.execPath, [bin, ...args], { env, timeout: timeoutMs, maxBuffer: 16 << 20 }, (err, out, errOut) => {
+      try { return resolve({ ok: true, ...JSON.parse(out) }); } catch {}
+      resolve({ ok: false, message: (errOut || out || (err && err.message) || "").trim().slice(0, 400) });
+    });
+  });
+}
+
 function privCall(req, timeoutMs = 20000) {
   return new Promise((resolve) => {
     if (!PREFIX) {
@@ -3900,6 +3917,15 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(b.addDirs)) SETTINGS.addDirs = b.addDirs.filter((d) => typeof d === "string");
         if (Array.isArray(b.allowedTools)) SETTINGS.allowedTools = b.allowedTools;
         if (Array.isArray(b.disallowedTools)) SETTINGS.disallowedTools = b.disallowedTools;
+        if (b.memGuard && typeof b.memGuard === "object") {
+          const g = SETTINGS.memGuard || {};
+          SETTINGS.memGuard = {
+            enabled: "enabled" in b.memGuard ? !!b.memGuard.enabled : !!g.enabled,
+            whitelist: Array.isArray(b.memGuard.whitelist)
+              ? [...new Set(b.memGuard.whitelist.map((x) => String(x).trim()).filter((x) => /^[A-Za-z][\w]*(\.[\w]+)+$/.test(x)))]
+              : (g.whitelist || []),
+          };
+        }
 
         // 自动压缩窗口：数字就设，空/0 就清除（交回给 claude 自己决定）
         if ("autoCompactWindow" in b) {
@@ -4311,6 +4337,12 @@ const server = http.createServer(async (req, res) => {
     // OAuth 全程由 claude 自己完成，令牌由它写进它自己的 ~/.claude/.credentials.json；
     // 我们只转交用户在授权页拿到的一次性授权码（等同于在终端里粘贴），不读、不存任何凭据。
     // ── Shizuku（调试提权）──
+    // ── 内存管家 ──
+    if (req.method === "GET" && p === "/api/mem/status") return sendJson(res, 200, await ccMem(["status", "--json"]));
+    if (req.method === "POST" && p === "/api/mem/clear") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      return sendJson(res, 200, await ccMem(["clear", "--json", ...(b.hard ? ["--hard"] : [])]));
+    }
     if (req.method === "GET" && p === "/api/priv/status") return sendJson(res, 200, await privCall({ op: "status" }));
     if (req.method === "POST" && p === "/api/priv/request") return sendJson(res, 200, await privCall({ op: "request" }));
     if (req.method === "POST" && p === "/api/priv/open") return sendJson(res, 200, await privCall({ op: "open_manager" }));

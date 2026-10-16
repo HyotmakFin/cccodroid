@@ -3241,6 +3241,62 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     loadPriv();
   });
 
+  // ── 内存管家（cc-mem）──
+  function fillMem() {
+    const g = (state.settings && state.settings.memGuard) || {};
+    $("mem-on").checked = !!g.enabled;
+    if (document.activeElement !== $("mem-wl")) $("mem-wl").value = (g.whitelist || []).join("\n");
+  }
+  function memOut(cls, text) { const o = $("mem-result"); o.className = "prov-state " + cls; o.textContent = text; }
+  const GB = (b) => (b / 1073741824).toFixed(1) + "G";
+  async function saveMem(patch) {
+    const g = { ...((state.settings && state.settings.memGuard) || {}), ...patch };
+    const r = await api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memGuard: g }) });
+    if (r && r.settings) state.settings.memGuard = r.settings.memGuard;
+    fillMem();
+    return r;
+  }
+  $("mem-on").addEventListener("change", async (e) => {
+    const on = e.target.checked;
+    if (on && !confirm(t("开启内存管家？\n\n开启后，清理时会停掉白名单以外的后台应用：它们要等你再打开、或被系统重新唤起才会恢复，这段时间可能收不到它们的消息。要一直收消息的应用（比如聊天软件）请加进白名单。"))) {
+      e.target.checked = false; return;
+    }
+    try { await saveMem({ enabled: on }); memOut("ok", on ? t("✓ 已开启") : t("✓ 已关闭")); }
+    catch (e2) { e.target.checked = !on; memOut("err", "✗ " + e2.message); }
+  });
+  $("mem-actions").addEventListener("click", async (e) => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (!act) return;
+    if (act === "save") {
+      const wl = $("mem-wl").value.split(/[\s,，]+/).map((x) => x.trim()).filter(Boolean);
+      const bad = wl.filter((x) => !/^[A-Za-z][\w]*(\.[\w]+)+$/.test(x));
+      if (bad.length) return memOut("err", t("不是合法的包名：{list}", { list: bad.join("、") }));
+      try { await saveMem({ whitelist: wl }); memOut("ok", t("✓ 白名单已保存（{n} 个）", { n: wl.length })); }
+      catch (e2) { memOut("err", "✗ " + e2.message); }
+      return;
+    }
+    if (act === "status") {
+      memOut("", t("正在统计…"));
+      const r = await api("/api/mem/status").catch((e2) => ({ ok: false, message: e2.message }));
+      if (!r.ok) return memOut("err", "✗ " + (r.message || t("失败")));
+      const stop = r.apps.filter((a) => !a.protect), sum = stop.reduce((n, a) => n + a.pss, 0);
+      memOut("ok", t("可用 {avail} / 共 {total}。可停的后台应用 {n} 个，约占 {sum}：{list}", {
+        avail: GB(r.mem.available), total: GB(r.mem.total), n: stop.length, sum: GB(sum),
+        list: stop.slice(0, 8).map((a) => a.pkg).join("、") + (stop.length > 8 ? " …" : ""),
+      }));
+      return;
+    }
+    if (act === "clear") {
+      if (!$("mem-on").checked) return memOut("err", t("先打开上面的开关"));
+      memOut("", t("正在清理…"));
+      const r = await api("/api/mem/clear", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch((e2) => ({ ok: false, message: e2.message }));
+      if (!r.ok) return memOut("err", "✗ " + (r.message || t("失败")));
+      memOut("ok", r.stopped.length
+        ? t("✓ 停了 {n} 个，可用内存 {a} → {b}", { n: r.stopped.length, a: GB(r.availableBefore), b: GB(r.availableAfter) })
+        : t("没有可停的后台应用"));
+    }
+  });
+
   // ── 自定义接口卡（任何讲 Anthropic Messages 协议的端点）──
   function renderCustomCard(box, p) {
     const v = p || { label: "", baseUrl: "", authStyle: "bearer", modelsUrl: "", defaultModel: "", fastModel: "" };
@@ -3365,6 +3421,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       setPermChip(state.settings.permissionMode || "default");
       renderPermBar();
       renderDirs();
+      fillMem();
       await loadProviders();
       await loadModels();
       $("set-model").value = state.settings.model || "";
