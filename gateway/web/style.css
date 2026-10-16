@@ -53,7 +53,12 @@ body{
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;
 }
 #title-block{flex:1;min-width:0}
-#app-title{font-weight:600;font-size:15px;letter-spacing:.2px}
+#app-title{font-weight:600;font-size:15px;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 手机窄屏：顶栏图标多（7 个），收紧按钮和间距，给标题留出位置 */
+@media (max-width:420px){
+  #topbar{gap:2px;padding-left:6px;padding-right:6px}
+  #topbar .icon-btn{width:34px;flex-basis:34px}
+}
 #sub-title{font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #sub-title.ok{color:var(--ok)} #sub-title.err{color:var(--err)} #sub-title.warn{color:var(--warn)}
 .icon-btn{
