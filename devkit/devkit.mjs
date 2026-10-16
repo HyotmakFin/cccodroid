@@ -524,6 +524,12 @@ function loadRecipe(dir) {
     if (!f.why) throw new Error("fetch 要写 why: " + p);
     if (f.mode !== undefined && !/^[0-7]{3,4}$/.test(String(f.mode))) throw new Error("fetch 的 mode 是八进制三位/四位: " + p);
   }
+  // npm（Termux 仓库没有、只在 npm 上发布的 Node 程序）：配方目录里要有 package.json + package-lock.json
+  if (r.npm !== undefined) {
+    if (!/^usr\/lib\/[a-z0-9][a-z0-9._-]*$/.test((r.npm && r.npm.dir) || "")) throw new Error("npm.dir 只能是 usr/lib/<名字>");
+    if (!r.npm.why) throw new Error("npm 要写 why");
+    for (const f of ["package.json", "package-lock.json"]) if (!fs.existsSync(path.join(dir, f))) throw new Error("npm 型组件缺 " + f);
+  }
   const sk = path.join(dir, "skill");
   if (fs.existsSync(path.join(sk, "SKILL.md"))) {
     r.skill = `usr/share/cccodroid/components/${r.id}/skill`;
@@ -672,6 +678,47 @@ if (cmd === "build" || cmd === "component") {
     tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: b });
     lock.push({ name: path.basename(p), version: f.version || path.basename(p).split("-")[1], source: f.source || "pypi", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why });
     fetchedBytes += b.length;
+  }
+  // npm：按配方提交的 package-lock.json 用 npm ci 装 —— 每个包的 sha512 由 npm 逐个核对、不跑安装脚本、
+  // 可选依赖只取 android/arm64 的（esbuild 这类按平台分包的）。整棵 node_modules 原样放进 npm.dir。
+  // 装出来的包若声明了不支持 android / arm64（npm 太老、忽略了 --os/--cpu 时会这样），直接失败，别打出一个装不了的包
+  if (COMP && COMP.npm) {
+    const w = fs.mkdtempSync(path.join(OUT, "npm-"));
+    for (const f of ["package.json", "package-lock.json"]) fs.copyFileSync(path.join(COMP_BASE, f), path.join(w, f));
+    console.log("  npm ci（android/arm64）…");
+    execFileSync("npm", ["ci", "--os=android", "--cpu=arm64", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund"], { cwd: w, stdio: "inherit" });
+    const plock = JSON.parse(fs.readFileSync(path.join(w, "package-lock.json"), "utf8")).packages || {};
+    const nm = path.join(w, "node_modules");
+    let nfiles = 0;
+    const add = (abs, rel) => {
+      const st = fs.lstatSync(abs), name = `${COMP.npm.dir}/node_modules/${rel}`;
+      if (st.isSymbolicLink()) {
+        const t = fs.readlinkSync(abs);
+        // .bin 里的入口是相对软链；指出 node_modules 的一律不要
+        if (path.isAbsolute(t) || path.relative(nm, path.resolve(path.dirname(abs), t)).startsWith("..")) throw new Error("npm 软链指出了 node_modules: " + rel + " → " + t);
+        tw.add({ name, type: "2", mode: 0o777, mtime: 0, link: t });
+      } else if (st.isDirectory()) {
+        tw.add({ name: name + "/", type: "5", mode: 0o755, mtime: 0 });
+        for (const e of fs.readdirSync(abs).sort()) add(path.join(abs, e), rel + "/" + e);
+      } else if (st.isFile()) {
+        const data = fs.readFileSync(abs);
+        tw.add({ name, type: "0", mode: st.mode & 0o111 ? 0o755 : 0o644, mtime: 0, data });
+        fetchedBytes += data.length; nfiles++;
+      }
+    };
+    tw.add({ name: `${COMP.npm.dir}/`, type: "5", mode: 0o755, mtime: 0 });
+    tw.add({ name: `${COMP.npm.dir}/node_modules/`, type: "5", mode: 0o755, mtime: 0 });
+    for (const e of fs.readdirSync(nm).sort()) if (e !== ".package-lock.json") add(path.join(nm, e), e);
+    for (const [k, p] of Object.entries(plock)) {
+      if (!k || !fs.existsSync(path.join(w, k, "package.json"))) continue;       // 别的平台的可选依赖：没装
+      const pj = JSON.parse(fs.readFileSync(path.join(w, k, "package.json"), "utf8"));
+      const okOs = !pj.os || pj.os.some((o) => o === "android" || (o.startsWith("!") && o !== "!android"));
+      const okCpu = !pj.cpu || pj.cpu.some((c) => c === "arm64" || (c.startsWith("!") && c !== "!arm64"));
+      if (!okOs || !okCpu) throw new Error(`npm 装了不支持 android/arm64 的包 ${k}（os=${pj.os} cpu=${pj.cpu}）—— npm 太老？要 10 以上`);
+      lock.push({ name: k.replace(/^.*node_modules\//, ""), version: p.version, source: "npm", homepage: p.resolved, recipe: "-", file: p.resolved, sha256: p.integrity, size: 0, why: COMP.npm.why });
+    }
+    fs.rmSync(w, { recursive: true, force: true });
+    console.log(`  npm：${lock.filter((l) => l.source === "npm").length} 个包、${nfiles} 个文件`);
   }
   // 组件自带的文件（入口包装、给 Claude 的 skill）：{{PREFIX}} 换成本应用的前缀
   for (const [p, f] of Object.entries((COMP && COMP.files) || {})) {
