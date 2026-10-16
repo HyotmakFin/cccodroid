@@ -588,7 +588,18 @@ final class Updater {
     }
 
     /** 1.2.10 > 1.2.9；非数字段忽略 */
+    /** 比版本号。带后缀的预发布版（0.2.0-rc1）排在同号正式版（0.2.0）前面。
+     *  0.2.0 以前把 "0.2.0-rc1" 整串拆成 0.2.0.1，判成比 0.2.0 还新，rc1 用户因此收不到 0.2.0 */
     static int cmpVer(String a, String b) {
+        String[] pa = a.split("-", 2), pb = b.split("-", 2);
+        int c = cmpNums(pa[0], pb[0]);
+        if (c != 0) return c;
+        boolean sa = pa.length > 1, sb = pb.length > 1;
+        if (sa != sb) return sa ? -1 : 1;
+        return sa ? cmpNums(pa[1], pb[1]) : 0;
+    }
+
+    private static int cmpNums(String a, String b) {
         String[] x = a.split("[^0-9]+"), y = b.split("[^0-9]+");
         for (int i = 0; i < Math.max(x.length, y.length); i++) {
             long p = i < x.length && !x[i].isEmpty() ? Long.parseLong(x[i]) : 0, q = i < y.length && !y[i].isEmpty() ? Long.parseLong(y[i]) : 0;
