@@ -813,6 +813,12 @@ html.short #hint-row{display:none}
 .row-actions{flex-wrap:wrap}
 html.dock-l .drawer-panel{padding-inline:12px}
 html.dock-l .tab{padding:6px 10px}
+/* 抽屉只许竖着滚：标签一多（加了「帮助」）就横向溢出，窄侧栏里一拖整块内容跑偏。标签条自己横滑，其余内容限宽 */
+.drawer-panel{overflow-x:hidden}
+.drawer-head .tabs{min-width:0;overflow-x:auto;scrollbar-width:none}
+.drawer-head .tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto}
+.tab-pane{min-width:0;max-width:100%}
 html.has-right #browser{padding-inline-start:6px}   /* 原生浏览器会盖住分隔条的右半边，留一条给手指 */
 html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右往左的语言：三角在左边 */
 
@@ -831,3 +837,4 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .help-body table{font-size:12.5px}
 .help-body td{white-space:normal}
 .help-up{margin-inline-start:auto;background:none;border:0;color:var(--fg3);font-size:14px;padding:2px 6px}
+.help-body pre,.help-body table{display:block;max-width:100%;overflow-x:auto}

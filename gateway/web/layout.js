@@ -31,7 +31,7 @@
   const rtl = () => root.getAttribute("dir") === "rtl";
   const docked = () => tier >= 3 && localStorage.getItem(LS_DOCK) !== "0";
 
-  function leftWidth() { return docked() ? Math.round(Math.min(380, Math.max(280, innerWidth * 0.24))) : 0; }
+  function leftWidth() { return docked() ? Math.round(Math.min(420, Math.max(300, innerWidth * 0.28))) : 0; }
 
   function rightWidth() {
     const lw = leftWidth(), avail = innerWidth - lw;
