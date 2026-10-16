@@ -4341,7 +4341,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/api/mem/status") return sendJson(res, 200, await ccMem(["status", "--json"]));
     if (req.method === "POST" && p === "/api/mem/clear") {
       const b = JSON.parse((await readBody(req)) || "{}");
-      return sendJson(res, 200, await ccMem(["clear", "--json", ...(b.hard ? ["--hard"] : [])]));
+      return sendJson(res, 200, await ccMem(["clear", "--json", ...(b.hard ? ["--hard"] : []), ...(b.dryRun ? ["--dry-run"] : [])]));
     }
     if (req.method === "GET" && p === "/api/priv/status") return sendJson(res, 200, await privCall({ op: "status" }));
     if (req.method === "POST" && p === "/api/priv/request") return sendJson(res, 200, await privCall({ op: "request" }));
