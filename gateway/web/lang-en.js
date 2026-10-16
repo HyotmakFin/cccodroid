@@ -699,4 +699,14 @@ window.I18N_DICT.en = {
   "遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。": "Can't install, nothing runs, or an error you can't make sense of: create a diagnostics bundle and share it with whoever is helping you (or attach it to a GitHub issue). You'll see what's inside before it's created; keys, tokens, email addresses and your message content are removed first.",
   // ── 大屏布局 ──
   "拖动调整宽度，双击复原": "Drag to resize, double-tap to reset",
+  // ── 文件面板：新建 / 重命名 ──
+  "新建文件": "New file",
+  "新建文件夹": "New folder",
+  "已经有同名的文件或文件夹": "Something with that name already exists",
+  "操作失败：{msg}": "Failed: {msg}",
+  "新文件夹名称": "Folder name",
+  "新文件名称（改后缀就是别的类型）": "File name (change the extension to make it another type)",
+  "新建文本": "New text",
+  "名称里不能有 /": "Names can't contain /",
+  "重命名为": "Rename to",
 };

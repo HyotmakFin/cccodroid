@@ -523,7 +523,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           frozen.appendChild(c);
           fz = idx;
         }
-        tail.innerHTML = renderMd(text.slice(fz)) + '<span class="cursor"></span>';
+        tail.innerHTML = renderMd(text.slice(fz));   // 光标不跟在每段正文后面：整条回复只留一个，见 AssistantView 的 liveTail
       } else {
         setHtml(tail, renderMd(text.slice(fz)));
       }
@@ -1011,7 +1011,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const blocks = [];
     let last = null, any = false, ended = false;
     const undot = () => { if (dots) { dots.remove(); dots = null; } };
-    const push = (b) => { undot(); blocks.push(b); last = b; any = true; return b; };
+    // 生成中只在最末尾留一个光标 + 用时：每加一块就把它挪回气泡最后（工具卡跑着时也在）
+    let liveTail = null, tailTime = null;
+    if (live) {
+      liveTail = document.createElement("div");
+      liveTail.className = "live-tail";
+      liveTail.innerHTML = '<span class="cursor"></span><span class="tail-time"></span>';
+      tailTime = liveTail.lastChild;
+    }
+    const keepTail = () => { if (liveTail && !ended) bubble.appendChild(liveTail); };
+    const push = (b) => { undot(); blocks.push(b); last = b; any = true; keepTail(); return b; };
     const textB = () => (last && last.kind === "text" ? last : push(TextBlock(bubble, live)));
     // 正在攒的步骤组（工具 + 中间的思考）；一出正文就收口
     const inGroup = () => last && last.kind === "tgroup";
@@ -1021,7 +1030,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return last && last.kind === "think" ? last : push(ThinkBlock(bubble));
     };
     return {
-      msgEl, bubble,
+      msgEl, bubble, tailTime,
       delta(t) { textB().append(t); },
       text(t) { push(TextBlock(bubble, live)).set(t); },
       thinkDelta(t) { thinkB().append(t); },
@@ -1035,17 +1044,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           push(g);
         }
         g.add(ToolBlock(g.body, id, name, input, live));
+        keepTail();
         scrollDown();
       },
       error(msg) {
         undot(); any = true; last = null;
         bubble.insertAdjacentHTML("beforeend", `<div class="err-box">${esc(msg)}</div>`);
+        keepTail();
         scrollDown();
       },
-      note(t, solid) { undot(); last = null; if (solid) any = true; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); },
+      note(t, solid) { undot(); last = null; if (solid) any = true; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); keepTail(); },
       finish(aborted) {
         if (ended) return;
         ended = true;
+        liveTail?.remove();
         for (const b of blocks) { b.finish && b.finish(); if (aborted && b.stop) b.stop(); }
         undot();
         if (!any && live && !aborted) bubble.innerHTML = '<p class="muted">' + t("（无输出）") + '</p>';
@@ -1069,11 +1081,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const el = document.createElement("span");
     el.className = "tag run-timer live";
     const t0 = startedAt || Date.now();
-    const tick = () => { el.textContent = fmtDur(Date.now() - t0); };
+    let tail = null;     // 回复末尾光标旁的那一份，跟顶部的同步走
+    const tick = () => { el.textContent = fmtDur(Date.now() - t0); if (tail) tail.textContent = el.textContent; };
     tick();
     let iv = setInterval(tick, 1000);
     return {
-      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); },
+      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; tick(); },
       stop() {
         if (!iv) return;
         clearInterval(iv); iv = 0;
@@ -1972,6 +1985,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const e = list[Number(el.dataset.i)];
       el.addEventListener("click", () => (e.dir ? fsLoad(state.fs.path.replace(/\/$/, "") + "/" + e.name) : fsSelect(e)));
       if (!e.dir) el.addEventListener("dblclick", () => { insertFile(e); });
+      el.addEventListener("contextmenu", (ev) => { ev.preventDefault(); fsRename(e); });   // 长按 = 重命名
     });
 
     $("fs-insert").disabled = !state.fs.sel;
@@ -2016,10 +2030,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
          <span class="tiny">${fmtSize(e.size)}</span>
          <button class="btn sm" data-a="open">${e.kind === "text" ? t("打开 / 编辑") : t("打开")}</button>
          <button class="btn ghost sm" data-a="insert">${t("插入 @路径")}</button>
+         <button class="btn ghost sm" data-a="rename">${t("重命名")}</button>
          <a class="btn ghost sm" href="${fileUrl(full, true)}" download>⤓</a>
        </div>
        <div class="fs-prev-body">${body}</div>`;
     box.querySelector('[data-a="insert"]')?.addEventListener("click", () => insertFile(e));
+    box.querySelector('[data-a="rename"]')?.addEventListener("click", () => fsRename(e));
     box.querySelector('[data-a="open"]')?.addEventListener("click", () => openViewer(full, e.kind, e.size));
     box.querySelector("img")?.addEventListener("click", () => openViewer(full, e.kind, e.size));
   }
@@ -2033,6 +2049,37 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   function closeFiles() { filesEl.classList.add("hidden"); }
+
+  // 新建 / 重命名：都不覆盖已有的同名项。新建文件默认 .txt，建好直接进编辑器；想换类型就改后缀
+  const fsErr = (e) => toast(/exists|409/.test(e.message) ? t("已经有同名的文件或文件夹") : t("操作失败：{msg}", { msg: e.message }), true);
+  const badName = (n) => !n || n === "." || n === ".." || /[\/\0]/.test(n);
+  async function fsCreate(dir) {
+    if (!state.fs.path) return;
+    const name = (prompt(dir ? t("新文件夹名称") : t("新文件名称（改后缀就是别的类型）"), dir ? t("新建文件夹") : t("新建文本") + ".txt") || "").trim();
+    if (!name) return;
+    if (badName(name)) return toast(t("名称里不能有 /"), true);
+    const full = state.fs.path.replace(/\/$/, "") + "/" + name;
+    try {
+      const r = await api(`/api/file/${dir ? "mkdir" : "new"}?path=${encodeURIComponent(full)}`, { method: "POST" });
+      if (dir) return fsLoad(r.path);
+      await fsLoad(state.fs.path);
+      state.fs.sel = name; renderFs();
+      openViewer(r.path, r.kind === "other" ? "text" : r.kind, 0);   // 空文件：没有识别出类型的也当文本开
+    } catch (e) { fsErr(e); }
+  }
+  async function fsRename(e) {
+    const name = (prompt(t("重命名为"), e.name) || "").trim();
+    if (!name || name === e.name) return;
+    if (badName(name)) return toast(t("名称里不能有 /"), true);
+    try {
+      await api(`/api/file/rename?from=${encodeURIComponent(fullPathOf(e))}&name=${encodeURIComponent(name)}`, { method: "POST" });
+      if (state.fs.sel === e.name) state.fs.sel = name;
+      await fsLoad(state.fs.path, { keepSel: true });
+      toast(t("已重命名"));
+    } catch (err) { fsErr(err); }
+  }
+  $("fs-newfile").addEventListener("click", () => fsCreate(false));
+  $("fs-mkdir").addEventListener("click", () => fsCreate(true));
 
   $("fs-close").addEventListener("click", closeFiles);
   $("fs-reload").addEventListener("click", () => fsLoad(state.fs.path, { keepSel: true }));

@@ -676,4 +676,14 @@ window.I18N_DICT["es"] = {
   "遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。": "¿No se instala, nada funciona o un error que no entiendes? Crea un paquete de diagnóstico y compártelo con quien te ayude (o adjúntalo a una issue de GitHub). Verás su contenido antes de crearlo; claves, tokens, correos y el contenido de tus mensajes se eliminan primero.",
   // ── 大屏布局 ──
   "拖动调整宽度，双击复原": "Arrastra para cambiar el ancho; toca dos veces para restablecer",
+  // ── 文件面板：新建 / 重命名 ──
+  "新建文件": "Nuevo archivo",
+  "新建文件夹": "Nueva carpeta",
+  "已经有同名的文件或文件夹": "Ya existe algo con ese nombre",
+  "操作失败：{msg}": "Error: {msg}",
+  "新文件夹名称": "Nombre de la carpeta",
+  "新文件名称（改后缀就是别的类型）": "Nombre del archivo (cambia la extensión para otro tipo)",
+  "新建文本": "Nuevo texto",
+  "名称里不能有 /": "El nombre no puede contener /",
+  "重命名为": "Renombrar a",
 };

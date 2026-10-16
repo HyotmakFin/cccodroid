@@ -4155,6 +4155,43 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, path: r.file, size: st.size, mtime: st.mtimeMs });
     }
 
+    // ── 文件面板：新建文件 / 新建文件夹 / 重命名。都不覆盖已有的东西，防呆规则同保存 ──
+    if (req.method === "POST" && (p === "/api/file/new" || p === "/api/file/mkdir")) {
+      const r = safeWritePath(u.searchParams.get("path"));
+      if (r.error) return sendJson(res, r.status || 400, { error: r.error });
+      if (!r.fresh) return sendJson(res, 409, { error: "exists" });
+      try {
+        if (p === "/api/file/mkdir") fs.mkdirSync(r.file);
+        else fs.writeFileSync(r.file, "", { flag: "wx" });
+      } catch (e) { return sendJson(res, e.code === "EEXIST" ? 409 : 500, { error: e.code === "EEXIST" ? "exists" : e.message }); }
+      const st = fs.statSync(r.file);
+      log(`[file] 新建${p === "/api/file/mkdir" ? "目录" : ""} ${r.file}`);
+      return sendJson(res, 200, { ok: true, path: r.file, dir: st.isDirectory(), size: st.size, mtime: st.mtimeMs, kind: fileKind(r.file, st.isDirectory()) });
+    }
+    if (req.method === "POST" && p === "/api/file/rename") {
+      const from = String(u.searchParams.get("from") || "");
+      const name = String(u.searchParams.get("name") || "").trim();
+      if (!path.isAbsolute(from)) return sendJson(res, 400, { error: "absolute path required" });
+      if (!name || name === "." || name === ".." || /[\/\0]/.test(name)) return sendJson(res, 400, { error: "bad name" });
+      let st; try { st = fs.lstatSync(from); } catch { return sendJson(res, 404, { error: "not found" }); }
+      // 源：文件走 safeFilePath；目录借它父目录下的一个虚拟子路径过一遍 safeWritePath 的根目录检查
+      const src = st.isDirectory() ? safeWritePath(path.join(from, ".probe-" + Date.now())) : safeFilePath(from);
+      if (src.error) return sendJson(res, src.status || 400, { error: src.error });
+      if (st.isDirectory()) {      // 也别把装着应用私有目录的上级挪走
+        let rf; try { rf = fs.realpathSync(from); } catch { rf = from; }
+        for (const root of [CFG.home, CFG.runtime]) {
+          let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
+          if (rr && rr.startsWith(rf + path.sep)) return sendJson(res, 403, { error: "forbidden" });
+        }
+      }
+      const dst = safeWritePath(path.join(path.dirname(from), name));
+      if (dst.error) return sendJson(res, dst.status || 400, { error: dst.error });
+      if (!dst.fresh) return sendJson(res, 409, { error: "exists" });
+      try { fs.renameSync(from, dst.file); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+      log(`[file] 重命名 ${from} → ${dst.file}`);
+      return sendJson(res, 200, { ok: true, path: dst.file, kind: fileKind(dst.file, st.isDirectory()) });
+    }
+
     // ── 把界面拿到的东西落盘（粘贴 / 拖放 / 选择文件共用）──
     if (req.method === "POST" && p === "/api/upload") {
       const rawName = u.searchParams.get("name") || "";

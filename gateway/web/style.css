@@ -213,6 +213,7 @@ td{color:var(--fg2)}
 .mini-btn{
   width:32px;height:32px;flex:0 0 32px;border:0;background:transparent;
   color:var(--fg2);display:grid;place-items:center;border-radius:50%;
+  margin-block:3px;   /* 单行时输入框这一行高 38（与发送键同高）；按钮 32，上下各让 3 才真正居中，多行时仍贴底 */
 }
 .mini-btn:active{background:var(--bg3)}
 .mini-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
@@ -223,11 +224,11 @@ td{color:var(--fg2)}
 #btn-send:disabled{opacity:.35}
 #btn-send svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #btn-send .ico-stop{display:none}
-#btn-send.busy{background:var(--err)}
+#btn-send.busy{background:var(--accent)}   /* 停止键与发送键同色，只换图标；红色留给真正的错误 */
 /* 插话键：忙碌且输入框有字时出现，坐落在 ⏹ 左边 */
 #btn-interject{
   width:34px;height:34px;flex:0 0 34px;border:1px solid var(--accent-dim);border-radius:50%;
-  background:transparent;color:var(--accent);display:grid;place-items:center;
+  background:transparent;color:var(--accent);display:grid;place-items:center;margin-block:2px;
 }
 #btn-interject.hidden{display:none !important}
 #btn-interject:active{background:var(--bg3)}
@@ -838,3 +839,7 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .help-body td{white-space:normal}
 .help-up{margin-inline-start:auto;background:none;border:0;color:var(--fg3);font-size:14px;padding:2px 6px}
 .help-body pre,.help-body table{display:block;max-width:100%;overflow-x:auto}
+#btn-send .ico-stop rect{fill:currentColor;stroke:none}
+.live-tail{display:flex;align-items:center;gap:8px;margin-top:4px;min-height:18px}
+.live-tail .cursor{vertical-align:0}
+.live-tail .tail-time{font-size:11.5px;color:var(--fg3);font-variant-numeric:tabular-nums}
