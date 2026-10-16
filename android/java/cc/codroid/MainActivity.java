@@ -513,7 +513,13 @@ public class MainActivity extends Activity {
                 openExternal(url);
                 return true;
             }
-            @Override public void onPageFinished(WebView v, String url) { pushInsets(); }
+            @Override public void onPageFinished(WebView v, String url) {
+                if (bounceStage != 0) {   // 冻结脱困中：跳出去那一下落地了就马上跳回来；回到网关页面才算完
+                    if (url == null || !url.startsWith("http://127.0.0.1:")) { if (bounceStage == 1) bounceBack(); return; }
+                    bounceStage = 0; web.setVisibility(View.VISIBLE);
+                }
+                pushInsets();
+            }
         });
         web.addJavascriptInterface(new Object() {
             @android.webkit.JavascriptInterface public void openUrl(String url) {
@@ -541,6 +547,8 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void shareText(String text) {
                 if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
             }
+            /** 冻结脱困：WebView 偶发把这个文档的触摸滚动整个吞掉，同站重载不好，跨站跳一次再回来才好。见 bounce() */
+            @android.webkit.JavascriptInterface public void unfreeze() { ui.post(() -> bounce()); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
@@ -585,6 +593,24 @@ public class MainActivity extends Activity {
         root.removeAllViews();
         root.addView(web);
         root.requestApplyInsets();            // 顶部留白交给页面（--safe-t）
+    }
+
+    // ── 冻结脱困 ─────────────────────────────────────────────────────
+    //  2026-10-16 实测：触摸滚动冻住后 location.reload() 和切后台都不好，跳到 127.0.0.2:9 再跳回来就好 ——
+    //  卡住的是 WebView 给这个文档的手势状态，换站点才会重建。127.0.0.2:9 是浏览器直接拒绝的端口，不发任何网络请求。
+    //  loadUrl 不经过 shouldOverrideUrlLoading，不会被当外链拦掉。跳的那一下先把 WebView 藏起来，免得闪错误页。
+    private int bounceStage = 0;   // 0 没在脱困 · 1 正跳出去 · 2 正跳回来
+    private void bounce() {
+        if (web == null || bounceStage != 0) return;
+        bounceStage = 1;
+        web.setVisibility(View.INVISIBLE);
+        web.loadUrl("http://127.0.0.2:9/");
+        ui.postDelayed(() -> { if (bounceStage == 1) bounceBack(); }, 1500);   // 落地回调没来
+        ui.postDelayed(() -> { if (bounceStage != 0) { bounceStage = 0; web.setVisibility(View.VISIBLE); } }, 10000);
+    }
+    private void bounceBack() {
+        bounceStage = 2;
+        web.loadUrl(Env.uiUrl());
     }
 
     private void jsDialog(String msg, boolean withCancel, String def, android.webkit.JsResult r, android.webkit.JsPromptResult pr) {

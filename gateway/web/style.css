@@ -139,9 +139,9 @@ td{color:var(--fg2)}
 .think summary::before{content:"▸";transition:transform .15s}
 .think[open] summary::before{transform:rotate(90deg)}
 .think .think-body{padding:0 12px 10px;font-size:12.6px;color:var(--fg2);white-space:pre-wrap;
-  overflow-wrap:anywhere;                     /* 超长无空格串别把排版撑爆 */
-  content-visibility:auto;                    /* 滚出去的正文不排版（Chromium 85+）*/
-  contain-intrinsic-size:auto 240px}
+  overflow-wrap:anywhere}                     /* 超长无空格串别把排版撑爆 */
+/* 2026-10-16：去掉了这里的 content-visibility:auto（排查滚动冻结时拆的，实测不是它的锅）。
+   思考正文本来就只在展开时才进 DOM，用不着它省排版 */
 .think summary .think-size{color:var(--fg3);opacity:.7;font-size:11px;font-weight:400}
 .think .think-more{margin:0 12px 10px;background:var(--more-bg);border:1px solid var(--more-line);color:var(--fg2);
   border-radius:8px;padding:5px 10px;font-size:12px}

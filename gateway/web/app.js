@@ -115,9 +115,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return localStorage.getItem(LS_SID) || null;
     } catch { return null; }
   }
+  // 自动跟到底：用户一往上滑就停，回到底部附近再恢复。
+  // 以前只看"离底部 <160px"，生成中每来一条事件就把正在惯性滑动的画面拽回去，表现为"滑不动、只能一点点拖"
+  let stick = true, progTop = -1;
+  // 对话区只挂一个 scroll 监听，事件里不读排版，攒到下一帧统一处理：跟底判断、翻到顶加载更早的、↓ 圆钮
+  const chatScrollHooks = [];
+  let chatScrollRaf = 0;
+  chatEl.addEventListener("scroll", () => {
+    if (chatScrollRaf) return;
+    chatScrollRaf = requestAnimationFrame(() => {
+      chatScrollRaf = 0;
+      if (chatEl.scrollTop !== progTop) stick = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 40;  // 不是我们自己滚的
+      for (const f of chatScrollHooks) f();
+    });
+  }, { passive: true });
   function scrollDown(force) {
-    const near = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 160;
-    if (force || near) chatEl.scrollTop = chatEl.scrollHeight;
+    if (force) stick = true;
+    else if (!stick) return;
+    chatEl.scrollTop = chatEl.scrollHeight;
+    progTop = chatEl.scrollTop;
   }
   function relTime(ms) {
     const d = Date.now() - ms;
@@ -1081,16 +1097,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const el = document.createElement("span");
     el.className = "tag run-timer live";
     const t0 = startedAt || Date.now();
-    let tail = null;     // 回复末尾光标旁的那一份，跟顶部的同步走
-    const tick = () => { el.textContent = fmtDur(Date.now() - t0); if (tail) tail.textContent = el.textContent; };
+    let tail = null;     // 回复末尾光标旁的那一份。有它时顶部那份先藏着，结束后才显示「用时」—— 两处同时跳秒太吵
+    const tick = () => { const d = fmtDur(Date.now() - t0); if (tail) tail.textContent = d; else el.textContent = d; };
     tick();
     let iv = setInterval(tick, 1000);
     return {
-      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; tick(); },
+      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; el.hidden = !!tail; tick(); },
       stop() {
         if (!iv) return;
         clearInterval(iv); iv = 0;
-        el.classList.remove("live");
+        el.classList.remove("live"); el.hidden = false;
         el.textContent = t("用时 {d}", { d: fmtDur(Date.now() - t0, true) });
       },
     };
@@ -1244,9 +1260,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     olderEl.classList.toggle("hidden", !r.cursor);
   }
   olderEl.addEventListener("click", () => loadOlder(false));
-  chatEl.addEventListener("scroll", () => {
+  chatScrollHooks.push(() => {
     if (chatEl.scrollTop < 240 && view.cursor && !view.loading && histEl.childElementCount) loadOlder(false);
-  }, { passive: true });
+  });
 
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
@@ -4135,8 +4151,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     bottomH = chatEl.scrollHeight;
   }
   const queueBottomSync = () => { if (!bottomRaf) bottomRaf = requestAnimationFrame(syncBottomBtn); };
-  chatEl.addEventListener("scroll", queueBottomSync, { passive: true });
-  new MutationObserver(queueBottomSync).observe(chatEl, { childList: true, subtree: true, characterData: true });
+  chatScrollHooks.push(syncBottomBtn);
+  // 内容长高才需要重算（以前盯整棵子树的每个字符变化，计时器每秒跳一下也触发）
+  const bottomRO = new ResizeObserver(queueBottomSync);
+  bottomRO.observe(histEl); bottomRO.observe(liveEl);
   toBottomEl.addEventListener("click", () => {
     toBottomEl.classList.remove("new");
     chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: "smooth" });
@@ -4227,46 +4245,78 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     document.addEventListener("scroll", (e) => { const n = performance.now(); if (n - last > 300) { last = n; add("scroll " + who(e.target)); } }, { capture: true, passive: true });
     document.addEventListener("visibilitychange", () => add("visibility " + document.visibilityState));
 
-    // 兜底：手指在对话区竖着拖了一段、对话区却纹丝不动（而它明明还能往那个方向滚）→ 判定冻住了。
-    // 先「踢」一下滚动容器（overflow 关了再开，让浏览器重建滚动状态），这一下手势剩下的部分由这里接管、照手指挪 scrollTop。
-    // 不用重开 App；根因还没定位，每次触发都记进 __touchLog（"assist"）留着查。
-    // 拖的是对话区里自己能滚的东西（长代码块、排队消息、思考块）时不接管，免得两边一起滚。
-    let g = null;
-    const innerScroller = (el) => {
-      for (; el && el !== chatEl; el = el.parentElement) {
-        if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return true;
-      }
-      return false;
+    // 2026-10-16：以前这里有个"拖了不滚就接管"的兜底（还会把 overflow 关了再开去「踢」滚动容器），已去掉，滚动完全交给系统。
+    // 去掉后触摸滚动仍会整个冻住：页面照常收到 touchmove，WebView 就是不出滚动；同站重载不好，跨站跳一次再回来才好，
+    // 说明卡在 WebView 给这个文档的手势状态上，不在页面代码里。上面的 __touchLog 只被动记录，留着抓触发现场。
+  })();
+
+  // ── 滚动冻结脱困（自动 + 顶栏雪花按钮）──────────────────────────────
+  //  冻住时页面救不了自己：跨站跳转会被壳当外链拦掉，只能请壳（CCApp.unfreeze）跳一次 127.0.0.2:9 再回来。
+  //  会话 id 本来就在 localStorage；输入框草稿先放 sessionStorage，回来再填上。
+  //  每次脱困都在 localStorage["cc.freezeLog"] 留最近 5 次现场（含触摸日志尾巴），以后找触发条件用。
+  (() => {
+    const FZ_LOG = "cc.freezeLog", FZ_AT = "cc.unfrozeAt", FZ_DRAFT = "cc.draft";
+    try {
+      const d = sessionStorage.getItem(FZ_DRAFT);
+      sessionStorage.removeItem(FZ_DRAFT);
+      if (d && !inputEl.value) { inputEl.value = d; inputEl.dispatchEvent(new Event("input")); }
+    } catch {}
+    function unfreeze(why) {
+      try {
+        const log = JSON.parse(localStorage.getItem(FZ_LOG) || "[]");
+        log.push({ at: new Date().toISOString(), why, touch: (window.__touchLog || []).slice(-40) });
+        localStorage.setItem(FZ_LOG, JSON.stringify(log.slice(-5)));
+        if (inputEl.value) sessionStorage.setItem(FZ_DRAFT, inputEl.value);
+        sessionStorage.setItem(FZ_AT, String(Date.now()));
+      } catch {}
+      if (window.CCApp && window.CCApp.unfreeze) { toast(t("正在重新挂载界面…")); window.CCApp.unfreeze(); }
+      else toast(t("这个版本的应用还不能脱困，请更新应用；临时办法是重启网关"), true);
+    }
+    $("btn-unfreeze").addEventListener("click", () => unfreeze("manual"));
+    window.__ccUnfreeze = unfreeze;
+
+    // 自动判定：单指竖向拖了 60px 以上、手指下的滚动容器明明还能往那个方向滚，
+    // 松手 350ms 后 scrollTop 却没往那个方向动过 —— 连续两次（20 秒内）就算冻住。
+    // 只看「朝手指方向的位移」：生成时贴底的程序滚动是往下的，不会把一次往上翻的失败盖掉。
+    const scroller = (el) => {
+      for (; el && el !== document.body; el = el.parentElement)
+        if (el.scrollHeight > el.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
+      return null;
     };
-    chatEl.addEventListener("touchstart", (e) => {
+    let g = null, sus = 0, susAt = 0;
+    document.addEventListener("touchstart", (e) => {
       g = null;
-      if (e.touches.length !== 1 || innerScroller(e.target)) return;
-      const t = e.touches[0];
-      g = { x0: t.clientX, y0: t.clientY, y: t.clientY, top0: chatEl.scrollTop, assist: false, frames: 0 };
-    }, { passive: true });
-    chatEl.addEventListener("touchmove", (e) => {
-      if (!g || e.touches.length !== 1) return;
-      const t = e.touches[0], dy = g.y - t.clientY;
-      g.y = t.clientY;
-      if (g.assist) {
-        // 浏览器自己也滚起来了（误判 / 踢活了）：立刻撒手，免得两边一起滚、页面乱跳
-        if (Math.abs(chatEl.scrollTop - g.exp) > 2) { add("assist off"); g = null; return; }
-        chatEl.scrollTop += dy; g.exp = chatEl.scrollTop; return;
-      }
-      const ty = g.y0 - t.clientY, tx = g.x0 - t.clientX;
-      if (Math.abs(ty) < 40 || Math.abs(ty) < Math.abs(tx) * 1.5) return;          // 还没拖够、或者是横着拖
-      if (++g.frames < 3) return;                                                   // 给浏览器几帧时间先自己滚
-      const max = chatEl.scrollHeight - chatEl.clientHeight;
-      const canMove = ty > 0 ? chatEl.scrollTop < max - 1 : chatEl.scrollTop > 0;
-      if (!canMove || chatEl.scrollTop !== g.top0) { g = null; return; }           // 到头了 / 正常在滚：不管
-      g.assist = true;
-      add("assist dy=" + Math.round(ty) + " top=" + Math.round(chatEl.scrollTop));
-      chatEl.style.overflowY = "hidden";
-      requestAnimationFrame(() => { chatEl.style.overflowY = ""; });
-      chatEl.scrollTop += ty; g.exp = chatEl.scrollTop;
-    }, { passive: true });
-    chatEl.addEventListener("touchend", () => { g = null; }, { passive: true });
-    chatEl.addEventListener("touchcancel", () => { g = null; }, { passive: true });
+      if (e.touches.length !== 1 || e.target.closest("textarea,input,.xterm")) return;
+      const el = scroller(e.target);
+      if (el) g = { el, x: e.touches[0].clientX, y: e.touches[0].clientY, top: el.scrollTop, lo: el.scrollTop, hi: el.scrollTop, t: performance.now(), prevented: false };
+    }, { capture: true, passive: true });
+    document.addEventListener("touchmove", (e) => { if (g && e.defaultPrevented) g.prevented = true; }, { passive: true });
+    document.addEventListener("touchcancel", () => { g = null; }, { capture: true, passive: true });
+    document.addEventListener("scroll", (e) => {
+      if (g && e.target === g.el) { const v = g.el.scrollTop; if (v < g.lo) g.lo = v; if (v > g.hi) g.hi = v; }
+    }, { capture: true, passive: true });
+    document.addEventListener("touchend", (e) => {
+      const s = g; g = null;
+      if (!s || e.touches.length || s.prevented) return;
+      const p = e.changedTouches[0], dx = p.clientX - s.x, dy = p.clientY - s.y;
+      if (Math.abs(dy) < 60 || Math.abs(dy) < 2 * Math.abs(dx) || performance.now() - s.t > 2000) return;
+      const max = s.el.scrollHeight - s.el.clientHeight;
+      if (dy > 0 ? s.top < 4 : s.top > max - 4) return;          // 已经到头了，本来就滚不动
+      if (String(getSelection() || "").length) return;            // 在拖选文字
+      setTimeout(() => {
+        if (!s.el.isConnected) return;
+        const v = s.el.scrollTop, moved = dy > 0 ? Math.min(s.lo, v) < s.top - 8 : Math.max(s.hi, v) > s.top + 8;
+        if (moved) { sus = 0; return; }
+        const now = Date.now();
+        sus = now - susAt < 20000 ? sus + 1 : 1; susAt = now;
+        (window.__touchLog || []).push("freeze? " + sus);
+        if (sus < 2) return;
+        sus = 0;
+        const last = Number(sessionStorage.getItem(FZ_AT)) || 0;
+        if (now - last < 60000) toast(t("滚动好像卡住了，可以点顶栏的雪花按钮脱困"), true);   // 刚自动救过一次，别来回跳
+        else unfreeze("auto");
+      }, 350);
+    }, { capture: true, passive: true });
   })();
 
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。

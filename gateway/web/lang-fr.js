@@ -686,4 +686,9 @@ window.I18N_DICT["fr"] = {
   "新建文本": "Nouveau texte",
   "名称里不能有 /": "Le nom ne peut pas contenir /",
   "重命名为": "Renommer en",
+  // ── 滚动冻结脱困 ──
+  "冻结脱困（滚动卡住时点）": "Débloquer (si le défilement se fige)",
+  "正在重新挂载界面…": "Remontage de l’interface…",
+  "这个版本的应用还不能脱困，请更新应用；临时办法是重启网关": "Cette version de l’app ne sait pas encore débloquer. Mettez l’app à jour ; en attendant, redémarrez la passerelle",
+  "滚动好像卡住了，可以点顶栏的雪花按钮脱困": "Le défilement semble figé. Touchez le flocon dans la barre du haut pour débloquer",
 };

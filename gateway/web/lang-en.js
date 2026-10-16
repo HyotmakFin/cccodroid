@@ -709,4 +709,9 @@ window.I18N_DICT.en = {
   "新建文本": "New text",
   "名称里不能有 /": "Names can't contain /",
   "重命名为": "Rename to",
+  // ── 滚动冻结脱困 ──
+  "冻结脱困（滚动卡住时点）": "Unfreeze (tap if scrolling gets stuck)",
+  "正在重新挂载界面…": "Remounting the interface…",
+  "这个版本的应用还不能脱困，请更新应用；临时办法是重启网关": "This app version can't unfreeze yet. Please update the app; for now, restart the gateway",
+  "滚动好像卡住了，可以点顶栏的雪花按钮脱困": "Scrolling seems stuck. Tap the snowflake button in the top bar to unfreeze",
 };
