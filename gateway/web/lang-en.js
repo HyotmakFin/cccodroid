@@ -1052,4 +1052,7 @@ window.I18N_DICT.en = {
   "{n} 处": "{n} matches",
   "更新 {time}": "Updated {time}",
   "创建 {time}": "Created {time}",
+  "静态程序兼容": "Static binary compatibility",
+  "罩住 claude 拉起的所有程序": "Cover every program claude starts",
+  "网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。": "Static programs downloaded from the web (mostly Go command-line tools and MCP servers) use newer system calls that Android forbids, and the system kills them outright. With this on, those calls return “not supported” instead, and the program falls back to the older way and keeps going. Starting each child program costs a tiny bit more; if something odd happens, try turning it off. Takes effect from the next message.",
 };

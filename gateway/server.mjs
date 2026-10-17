@@ -568,6 +568,9 @@ const SETTINGS = {
   memGuard: { enabled: false, whitelist: [] },
   // 最多同时跑几个会话（1 = 和以前一样一次只跑一轮）
   maxParallel: 3,
+  // 静态程序兼容：claude 外面套 seccomp-enosys-run -f，它拉起的整棵进程树里撞 seccomp 的静态二进制
+  // （CGO_ENABLED=0 的 Go 程序之类）拿到 ENOSYS 而不是被 SIGSYS 打死。出问题时可关，回到不套的老样子
+  staticCompat: true,
 };
 
 function loadSettings() {
@@ -1079,6 +1082,23 @@ function claudeArgv(extra) {
   return ["--library-path", PATHS.glibcLib, ...pre, PATHS.claude, ...extra];
 }
 
+/** seccomp 监督器：cccodroid 放在 seccomp-enosys.so 旁边（app/lib），开发端在 files/devbin */
+let ENOSYS_RUN;
+function enosysRun() {
+  if (ENOSYS_RUN !== undefined) return ENOSYS_RUN;
+  const cands = [process.env.CCAPP_ENOSYS_RUN,
+    PATHS.preload && path.join(path.dirname(PATHS.preload), "seccomp-enosys-run"),
+    path.join(CFG.home, "..", "devbin", "seccomp-enosys-run")].filter(Boolean);
+  ENOSYS_RUN = cands.find((p) => { try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; } }) || "";
+  return ENOSYS_RUN;
+}
+/** 拉起 claude 的 [程序, 参数]：开着「静态程序兼容」就外面套一层监督器（跟进模式） */
+function claudeCmd(extra) {
+  const argv = claudeArgv(extra);
+  const er = SETTINGS.staticCompat !== false ? enosysRun() : "";
+  return er ? [er, ["-f", PATHS.loader, ...argv]] : [PATHS.loader, argv];
+}
+
 /** 连 claude 带它拉起的整棵进程树一起杀。
  *
  *  为什么不能用 child.kill()：SIGKILL 不往下传。claude 起了 bash、bash 起了
@@ -1208,7 +1228,8 @@ function settingsArgs() {
 function runClaude(args, { cwd, timeoutMs = 60000 } = {}) {
   return new Promise((resolve) => {
     let out = "", err = "", done = false;
-    const child = spawn(PATHS.loader, claudeArgv([...settingsArgs(), ...args]), {
+    const [cmd0, args0] = claudeCmd([...settingsArgs(), ...args]);   // mcp list 之类会拉起 MCP 服务器，也要罩住
+    const child = spawn(cmd0, args0, {
       cwd: cwd || (fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home),
       env: claudeEnv(),
       stdio: ["ignore", "pipe", "pipe"],
@@ -3503,7 +3524,8 @@ async function startRun(item) {
   log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${SETTINGS.effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
   const t0 = Date.now();
 
-  const child = spawn(PATHS.loader, claudeArgv(argv), {
+  const [cmd0, args0] = claudeCmd(argv);
+  const child = spawn(cmd0, args0, {
     cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home,
     env: claudeEnv(),
     stdio: ["pipe", "pipe", "pipe"],
@@ -4246,7 +4268,8 @@ function saveRateLimits() {
 let EXT_LOCK = Promise.resolve();
 function extRun(args, timeoutMs = 180000) {
   const job = EXT_LOCK.then(() => new Promise((resolve) => {
-    const child = spawn(PATHS.loader, claudeArgv(args), {
+    const [cmd0, args0] = claudeCmd(args);
+    const child = spawn(cmd0, args0, {
       cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home,
       env: claudeEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
@@ -4830,6 +4853,8 @@ const server = http.createServer(async (req, res) => {
               : (g.whitelist || []),
           };
         }
+
+        if ("staticCompat" in b) SETTINGS.staticCompat = !!b.staticCompat;   // 下一轮生效
 
         if ("maxParallel" in b) {
           const n = Math.round(Number(b.maxParallel));

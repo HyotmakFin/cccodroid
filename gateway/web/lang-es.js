@@ -1023,4 +1023,7 @@ window.I18N_DICT["es"] = {
   "{n} 处": "{n} coincidencias",
   "更新 {time}": "Actualizada {time}",
   "创建 {time}": "Creada {time}",
+  "静态程序兼容": "Compatibilidad con binarios estáticos",
+  "罩住 claude 拉起的所有程序": "Cubrir todos los programas que lanza claude",
+  "网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。": "Los programas estáticos descargados de internet (sobre todo herramientas de línea de comandos y servidores MCP escritos en Go) usan llamadas al sistema nuevas que Android prohíbe, y el sistema los mata en el acto. Con esto activado, esas llamadas devuelven «no compatible» y el programa vuelve al método antiguo y sigue. Cada subprograma tarda un poquito más en arrancar; si notas algo raro, prueba a desactivarlo. Se aplica desde el próximo mensaje.",
 };

@@ -338,6 +338,15 @@
       </div>
 
       <div class="field">
+                <label data-i18n>静态程序兼容</label>
+                <label class="tiny" style="display:flex;gap:8px;align-items:center">
+                  <input type="checkbox" id="set-static" style="width:auto;margin:0">
+                  <span data-i18n>罩住 claude 拉起的所有程序</span>
+                </label>
+                <div class="tiny" data-i18n>网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。</div>
+      </div>
+
+      <div class="field">
                 <label data-i18n>运行状态</label>
                 <pre id="status-box" class="mono" data-i18n>读取中…</pre>
                 <button id="btn-cli-doctor" class="btn ghost sm" data-i18n>跑一次 doctor</button>

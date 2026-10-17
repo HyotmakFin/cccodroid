@@ -4061,6 +4061,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("set-effort").value = state.settings.effort || "";
       const pe = $("set-parallel");
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
+      $("set-static").checked = state.settings.staticCompat !== false;
     } catch {}
   }
 
@@ -4106,6 +4107,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
 
+  $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));
     if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
