@@ -30,18 +30,30 @@
  * 用法：
  *   seccomp-enosys-run <程序> [参数...]
  *   seccomp-enosys-run -v <程序> [参数...]     # 把每次拦截打到 stderr（排查用）
+ *   seccomp-enosys-run -f <程序> [参数...]     # 跟进模式：fork/vfork/exec 出来的整棵进程树都罩住
+ *
+ * 跟进模式（-f）：
+ *   用来罩住 claude 这种会层层拉起子进程的程序：claude → bash → 某个静态 Go 程序，最底下那个照样能救。
+ *   - 每次 fork / vfork / exec 各多停一次（事件停），系统调用本身仍是零开销。
+ *   - 动态链接的进程**不放手**：放手之后它再 fork 的孩子就不在监督下了，罩不住孙子辈的静态程序。
+ *     它们自带 seccomp-enosys.so，被我们先截到 SIGSYS 也只是改成同样的 ENOSYS，语义不变。
+ *   - 自己要用 ptrace 的工具（gdb / strace / ltrace / lldb / valgrind / proot，以及环境变量
+ *     ENOSYS_RUN_DETACH 里冒号分隔的程序名）exec 时立刻放手，连同它之后拉起的子进程：
+ *     被跟踪的进程不能再被别人跟踪，不放手的话 gdb 连自己的被调试程序都挂不上。
+ *   - 不设 EXITKILL：组长退出时监督器随之退出，剩下还在跑的后代由内核自动解除跟踪、继续运行，不会被连坐杀掉。
  *
  * 退出码：目标程序的退出码原样传递；被信号杀死时为 128+信号号。
  *
  * 已知限制：
- *   - 只接管目标的线程（TRACECLONE）。它 fork/exec 出来的子进程不在监督下（Go 的 os/exec 走 vfork 式 clone），
- *     那些子进程要是也是静态二进制、也撞 seccomp，得自己再套一层。
+ *   - 不带 -f 时只接管目标的线程（TRACECLONE）。它 fork/exec 出来的子进程不在监督下（Go 的 os/exec 走 vfork 式 clone），
+ *     那些子进程要是也是静态二进制、也撞 seccomp，得自己再套一层（或者用 -f）。
  *   - 别的程序向整个进程组发的信号（kill -INT -pgid）目标会收到两次：一次直接收，一次经监督器转发。
  *     监督器分不出"只发给我"和"发给整组"。终端 Ctrl-C 由内核发（SI_KERNEL），不重复。
  *   - 发给目标的 SIGSTOP 不会让它真停住（无 PTRACE_SEIZE/LISTEN，组停会被监督循环放行）。
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,6 +77,15 @@
 #endif
 #ifndef PTRACE_EVENT_CLONE
 #define PTRACE_EVENT_CLONE 3
+#endif
+#ifndef PTRACE_EVENT_EXEC
+#define PTRACE_EVENT_EXEC 4
+#endif
+#ifndef PTRACE_O_TRACEFORK
+#define PTRACE_O_TRACEFORK 0x00000002
+#endif
+#ifndef PTRACE_O_TRACEVFORK
+#define PTRACE_O_TRACEVFORK 0x00000004
 #endif
 #ifndef PTRACE_O_TRACEEXEC
 #define PTRACE_O_TRACEEXEC 0x00000010
@@ -92,6 +113,7 @@ struct arm64_regs {
 };
 
 static int verbose = 0;
+static int follow = 0;
 static volatile pid_t g_leader = 0;
 
 /* 已经接管过的线程号。PTRACE_O_TRACECLONE 带进来的新线程，内核保证它报上来的第一次停就是那次
@@ -141,6 +163,33 @@ static long get_syscall_nr(pid_t pid, siginfo_t *si) {
     return nr;
 }
 
+/* 跟进模式：exec 之后是不是自己要用 ptrace 的工具 —— 是就放手（连同它以后的子进程） */
+static int wants_ptrace(pid_t pid) {
+    char path[64], exe[512];
+    snprintf(path, sizeof path, "/proc/%d/exe", (int)pid);
+    ssize_t n = readlink(path, exe, sizeof exe - 1);
+    if (n <= 0) return 0;
+    exe[n] = 0;
+    const char *base = strrchr(exe, '/');
+    base = base ? base + 1 : exe;
+    static const char *builtin[] = { "gdb", "gdbserver", "strace", "ltrace", "lldb", "lldb-server",
+                                     "valgrind", "proot", "seccomp-enosys-run", NULL };
+    for (int i = 0; builtin[i]; i++) if (strcmp(base, builtin[i]) == 0) return 1;
+    /* 版本号后缀（gdb-18.1、python3.13 这类）不算：只认完整程序名，宁可漏也别误放 */
+    const char *extra = getenv("ENOSYS_RUN_DETACH");
+    if (extra && *extra) {
+        size_t bl = strlen(base);
+        for (const char *p = extra; *p; ) {
+            const char *e = strchr(p, ':');
+            size_t l = e ? (size_t)(e - p) : strlen(p);
+            if (l == bl && strncmp(p, base, l) == 0) return 1;
+            if (!e) break;
+            p = e + 1;
+        }
+    }
+    return 0;
+}
+
 /* 把 x0 写成 -ENOSYS。成功返回 0。 */
 static int set_return_enosys(pid_t pid) {
     struct arm64_regs regs;
@@ -170,11 +219,13 @@ static int supervise(pid_t leader) {
         if (WIFEXITED(status)) {
             if (pid == leader) exit_code = WEXITSTATUS(status);
             del_known(pid);
+            if (follow && pid == leader) return exit_code;   /* 别等后台的后代：它们随我们退出自动解除跟踪 */
             continue;
         }
         if (WIFSIGNALED(status)) {
             if (pid == leader) exit_code = 128 + WTERMSIG(status);
             del_known(pid);
+            if (follow && pid == leader) return exit_code;
             continue;
         }
         if (!WIFSTOPPED(status)) continue;
@@ -187,9 +238,15 @@ static int supervise(pid_t leader) {
             add_known(pid);
             if (sig == SIGSTOP) deliver = 0;
         } else if (sig == SIGTRAP && (status >> 16) != 0) {
-            /* ptrace 事件停（clone / exec）：不是信号，别投进目标程序。
+            /* ptrace 事件停（clone / fork / vfork / exec）：不是信号，别投进目标程序。
                开了 TRACEEXEC 之后 exec 也走这里，所以剩下的裸 SIGTRAP 就是真信号，照常投递 */
             deliver = 0;
+            if (follow && (status >> 16) == PTRACE_EVENT_EXEC && wants_ptrace(pid)) {
+                if (verbose) fprintf(stderr, "[enosys] pid %d: exec 了要用 ptrace 的工具，放手\n", (int)pid);
+                del_known(pid);
+                ptrace(PTRACE_DETACH, pid, 0, 0);
+                continue;
+            }
         } else if (sig == SIGSYS) {
             siginfo_t si;
             memset(&si, 0, sizeof si);
@@ -222,7 +279,8 @@ static void usage(const char *argv0) {
         "把被安卓 seccomp 拦下的系统调用改成返回 ENOSYS，让程序能优雅退回老接口。\n"
         "动态链接的程序用 seccomp-enosys.so（--preload），静态二进制用这个。\n"
         "\n"
-        "  -v   把每次拦截打到 stderr\n", argv0);
+        "  -v   把每次拦截打到 stderr\n"
+        "  -f   跟进模式：它 fork / exec 出来的整棵进程树都罩住\n", argv0);
 }
 
 int main(int argc, char **argv) {
@@ -230,6 +288,9 @@ int main(int argc, char **argv) {
     while (argi < argc && argv[argi][0] == '-' && argv[argi][1] != '\0') {
         if (strcmp(argv[argi], "-v") == 0 || strcmp(argv[argi], "--verbose") == 0) {
             verbose = 1;
+            argi++;
+        } else if (strcmp(argv[argi], "-f") == 0 || strcmp(argv[argi], "--follow") == 0) {
+            follow = 1;
             argi++;
         } else if (strcmp(argv[argi], "-h") == 0 || strcmp(argv[argi], "--help") == 0) {
             usage(argv[0]);
@@ -276,7 +337,9 @@ int main(int argc, char **argv) {
     }
 
     add_known(pid);
-    long opts = PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL;
+    /* 跟进模式不设 EXITKILL：监督器退出时后代自动解除跟踪继续跑，别连坐杀掉后台进程 */
+    long opts = follow ? (PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK)
+                       : (PTRACE_O_TRACECLONE | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
     if (ptrace(PTRACE_SETOPTIONS, pid, 0, (void *)opts) != 0) {
         perror("ptrace(PTRACE_SETOPTIONS)");
         return 127;
