@@ -35,7 +35,8 @@ final class Notify {
     static final String ACTION_DENY = "cc.codroid.PERM_DENY";
     static final String ACTION_OPEN = "cc.codroid.OPEN_SESSION";
     private static final int ID_DONE = 50;           // 完成通知只留最新一条
-    private static final String TAG_ASK = "ask";     // 确认通知按 tag + 请求号区分
+    private static final String TAG_ASK = "ask";
+    private static final String TAG_DONE = "done";     // 确认通知按 tag + 请求号区分
 
     private static volatile Notify self;
     static Notify get(Context c) {
@@ -147,7 +148,7 @@ final class Notify {
             JSONObject ev = new JSONObject(json);
             String type = ev.optString("type");
             synchronized (this) {
-                if ("hello".equals(type) || "state".equals(type)) onState(ev.optJSONObject("run"));
+                if ("hello".equals(type) || "state".equals(type)) onState(ev);
                 else if ("run_start".equals(type)) runText.put(ev.optString("runId"), ev.optString("text"));
                 else if ("run_end".equals(type)) onRunEnd(ev);
             }
@@ -156,9 +157,14 @@ final class Notify {
         }
     }
 
-    private void onState(JSONObject run) {
+    /** 并行多会话：state 里的 runs 是所有正在跑的轮次（旧网关只有 run） */
+    private void onState(JSONObject st) {
         pending.clear();
-        if (run != null) {
+        JSONArray runs = st.optJSONArray("runs");
+        if (runs == null) { runs = new JSONArray(); if (st.optJSONObject("run") != null) runs.put(st.optJSONObject("run")); }
+        for (int k = 0; k < runs.length(); k++) {
+            JSONObject run = runs.optJSONObject(k);
+            if (run == null) continue;
             runText.put(run.optString("id"), run.optString("text"));
             JSONArray ps = run.optJSONArray("perms");
             if (ps != null) for (int i = 0; i < ps.length(); i++) {
@@ -185,14 +191,17 @@ final class Notify {
     private void onRunEnd(JSONObject ev) {
         String runId = ev.optString("runId");
         String text = runText.remove(runId);
-        pending.clear();
+        // 只撤这一轮的确认项：别的会话可能还在等（紧跟着的 state 事件会再对齐一次）
+        for (java.util.Iterator<JSONObject> it = pending.values().iterator(); it.hasNext(); )
+            if (runId.equals(it.next().optString("runId"))) it.remove();
         syncAsks();
         if (!doneRuns.add(runId)) return;
         if (doneRuns.size() > 200) doneRuns.clear();
         if (ev.optBoolean("aborted") || MainActivity.visible || !doneOn()) return;
         boolean failed = ev.has("error") && !ev.isNull("error");
-        String sid = ev.optString("sessionId", "");
-        nm.notify(ID_DONE, new Notification.Builder(ctx, CH_DONE)
+        String sid = sidOf(ev);
+        // 每个会话各留最新一条：并行时几个会话先后跑完，不互相顶掉
+        nm.notify(TAG_DONE, sid.isEmpty() ? ID_DONE : sid.hashCode(), new Notification.Builder(ctx, CH_DONE)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentTitle(failed ? "出错了" : "已完成")
             .setContentText(clip(text == null || text.isEmpty() ? "这一轮跑完了" : text, 80))
@@ -228,7 +237,7 @@ final class Notify {
             .setContentText(clip(body, 120))
             .setStyle(new Notification.BigTextStyle().bigText(clip(body, 600)))
             .setCategory(Notification.CATEGORY_REMINDER)
-            .setContentIntent(openIntent(null, 1 + Math.abs(id.hashCode() % 10000)))
+            .setContentIntent(openIntent(sidOf(p), 1 + Math.abs(id.hashCode() % 10000)))
             .setAutoCancel(true);
         // 选择题要选项，通知里答不了；其它的给「拒绝」，「允许」必须进应用看完整内容再点
         if (!question) {
@@ -237,9 +246,12 @@ final class Notify {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             b.addAction(new Notification.Action.Builder(null, "拒绝", pi).build());
         }
-        b.addAction(new Notification.Action.Builder(null, "打开查看", openIntent(null, 30000 + Math.abs(id.hashCode() % 10000))).build());
+        b.addAction(new Notification.Action.Builder(null, "打开查看", openIntent(sidOf(p), 30000 + Math.abs(id.hashCode() % 10000))).build());
         return b.build();
     }
+
+    /** 会话号：JSON 里是 null 时 optString 会给出字符串 "null"，要单独判 */
+    private static String sidOf(JSONObject o) { return o.isNull("sessionId") ? "" : o.optString("sessionId", ""); }
 
     private PendingIntent openIntent(String sessionId, int req) {
         Intent i = new Intent(ctx, MainActivity.class).setAction(ACTION_OPEN)

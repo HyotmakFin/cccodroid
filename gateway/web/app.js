@@ -440,7 +440,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     lastRunId: null,
     title: "",
   };
-  const srv = { run: null, queue: [], connected: false };
+  // run / queue 只算当前视图的（本会话正在跑的那一轮、本会话排着的）；runs / queueAll 是网关上的全部
+  const srv = { run: null, queue: [], runs: [], queueAll: [], max: 3, connected: false };
   const runViews = new Map();     // runId → { av, startedAt }
   const TOOL_CARDS = new Map();   // tool_use id → 卡片（结果可能在另一页、另一个气泡里）
   const PENDING_RESULTS = new Map();
@@ -1190,6 +1191,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     PENDING_RESULTS.clear();
     olderEl.classList.add("hidden");
     statEl.textContent = "";
+    pickViewRun();                     // 换了会话：「本会话在不在跑」要重新算
+    syncInterject();
     saveUiState();
   }
 
@@ -1460,6 +1463,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const sid = view.sessionId;
     resetView(sid);
     view.runIds = keepRuns; view.cids = keepCids;
+    pickViewRun();
     renderSessions();
     if (sid) loadOlder(true);
     else if (!(ev.run && keepRuns.has(ev.run.id))) showWelcome();
@@ -1504,8 +1508,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 忙闲与排队（都以网关为准）──────────────────────────────────────
   function applyState(s) {
-    srv.run = s.run || null;
-    srv.queue = s.queue || [];
+    srv.runs = s.runs || (s.run ? [s.run] : []);
+    srv.queueAll = s.queue || [];
+    if (s.maxParallel) srv.max = s.maxParallel;
+    pickViewRun();
     const busy = !!srv.run;
     sendEl.classList.toggle("busy", busy && !inputEl.value.trim());
     inputEl.placeholder = busy
@@ -1514,10 +1520,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     syncInterject();
     renderQueue();
     // 别的窗口（或网关那边）已经答掉的，这里也收起来
-    const live = new Set((srv.run?.perms || []).map((p) => p.id));
-    for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !live.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");
-    if (busy) setStatus(srv.run.sessionId === view.sessionId || view.runIds.has(srv.run.id)
-      ? t("生成中…") : t("另一个会话正在生成…"), "warn");
+    const livePerms = new Set((srv.run?.perms || []).map((p) => p.id));
+    for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !livePerms.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");
+    if (busy) setStatus(t("生成中…"), "warn");
+    else if (srv.runs.length) setStatus(t("另有 {n} 个会话在生成", { n: srv.runs.length }), "ok");
+    // 别的会话在等你确认：当前视图看不到它的卡片，状态栏和会话列表里提醒
+    const elsewhere = srv.runs.filter((r) => r !== srv.run && r.perms && r.perms.length);
+    if (elsewhere.length) setStatus(t("另一个会话在等你确认 · 打开会话列表查看"), "warn");
+    const live = srv.runs.map((r) => (r.sessionId || "") + (r.perms && r.perms.length ? "!" : "")).join(",");
+    if (live !== srv.liveKey) { srv.liveKey = live; renderSessions(); }
     renderPermBar();                 // 放最后：有待确认项时状态栏要显示「等你确认」
     renderInterrupted(s.interrupted);
   }
@@ -1551,6 +1562,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   const isBusy = () => !!srv.run;
 
+  /** 并行多会话：从网关的全部轮次和队列里挑出属于当前视图的 */
+  function runInView(r) {
+    return (view.sessionId && r.sessionId === view.sessionId) || view.runIds.has(r.id) || (!!r.follow && view.runIds.has(r.follow)) || (!!r.cid && view.cids.has(r.cid));
+  }
+  function queuedInView(q) {
+    if (q.sessionId) return q.sessionId === view.sessionId;
+    return view.runIds.has(q.id) || (!!q.follow && view.runIds.has(q.follow)) || (!!q.cid && view.cids.has(q.cid));
+  }
+  function pickViewRun() {
+    srv.run = srv.runs.filter(runInView).sort((a, b) => b.startedAt - a.startedAt)[0] || null;
+    srv.queue = srv.queueAll.filter(queuedInView);
+  }
+
   /** 插话键只在「正在跑 + 输入框里有字」时露头 */
   function syncInterject() {
     const has = !!inputEl.value.trim();
@@ -1568,7 +1592,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           ? q.some((it) => it.intr)
             ? t("上一轮被系统中断，{n} 条排队的消息已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
             : t("点了停止，{n} 条已挂起，不会自动发出 · 点 ⚡ 发出", { n: q.filter((it) => it.held).length })
-          : t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })}</span>
+          : busy ? t("待发 {n} 条 · 当前这一轮结束后依次发出", { n: q.length })
+          : t("同时在跑的会话已到上限（{max} 个），有空位就依次发出 · 待发 {n} 条", { max: srv.max, n: q.length })}</span>
         <button class="q-clear">${t("全部清除")}</button>
       </div>
       ${q.map((it) => `
@@ -1585,7 +1610,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   queueStrip.addEventListener("click", async (e) => {
     const post = (p, body) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) })
       .catch((err) => toast(err.message, true));
-    if (e.target.closest(".q-clear")) return post("/api/queue/clear");
+    if (e.target.closest(".q-clear")) return post("/api/queue/clear", { ids: srv.queue.map((it) => it.id) });
     const item = e.target.closest(".qitem");
     if (!item) return;
     if (e.target.closest(".q-x")) return post("/api/queue/remove", { id: item.dataset.id });
@@ -1655,7 +1680,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       view.runIds.add(r.id);
       view.lastRunId = r.id;
       if (r.injected) toast(t("已插话：当前这一步做完，Claude 就会看到"));
-      else if (!r.started) toast(mode === "inject" ? t("这一轮正在收尾，插不进去 —— 已排到最前，马上发出") : t("已排队，这一轮结束后发出"));
+      else if (!r.started) toast(mode === "inject" ? t("这一轮正在收尾，插不进去 —— 已排到最前，马上发出")
+        : srv.run ? t("已排队，这一轮结束后发出") : t("同时在跑的会话已到上限，已排队，有空位就发出"));
     } catch (e) {
       view.cids.delete(cid);
       if (fromInput && !inputEl.value) { inputEl.value = text; autoGrow(); }   // 别把用户的话吞了
@@ -1671,7 +1697,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   async function abort() {
-    try { await api("/api/abort", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }); }
+    if (!srv.run) return;
+    try { await api("/api/abort", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: srv.run.id }) }); }
     catch (e) { toast(e.message, true); }
   }
 
@@ -2136,7 +2163,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
-    const liveSid = srv.run && srv.run.sessionId;
+    const liveSids = new Set(srv.runs.map((r) => r.sessionId).filter(Boolean));
+    const askSids = new Set(srv.runs.filter((r) => r.perms && r.perms.length).map((r) => r.sessionId).filter(Boolean));
     const picking = sess.mode === "select";
     box.innerHTML = state.sessions.map((s) => `
       <div class="item ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
@@ -2144,7 +2172,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <div class="it-meta">
           <span>${relTime(s.mtime)}</span>
           <span>${s.sizeKb} KB</span>
-          ${s.id === liveSid ? `<span class="badge cur">${t("生成中")}</span>` : ""}
+          ${askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : ""}
           ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
           ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
         </div>
@@ -3443,6 +3471,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       await loadModels();
       $("set-model").value = state.settings.model || "";
       $("set-effort").value = state.settings.effort || "";
+      const pe = $("set-parallel");
+      if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
     } catch {}
   }
 
@@ -3488,6 +3518,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
 
+  $("set-parallel").addEventListener("change", (e) => {
+    const v = Math.round(Number(e.target.value));
+    if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
+    saveSettings({ maxParallel: v }).then(() => { e.target.value = state.settings.maxParallel || v; });
+  });
   $("set-autocompact").addEventListener("change", (e) => {
     const v = e.target.value.trim();
     saveSettings({ autoCompactWindow: v ? Number(v) : null }).then(() => loadModels());

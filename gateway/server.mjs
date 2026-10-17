@@ -415,6 +415,8 @@ const SETTINGS = {
   provider: null,
   // 内存管家（cc-mem）：默认关。开了才允许停别的应用；白名单是用户额外保护的包名
   memGuard: { enabled: false, whitelist: [] },
+  // 最多同时跑几个会话（1 = 和以前一样一次只跑一轮）
+  maxParallel: 3,
 };
 
 function loadSettings() {
@@ -1541,7 +1543,14 @@ function capabilities() {
 
 // ── 会话进程状态 ──────────────────────────────────────────────────────
 const SESSIONS = new Map();   // 内存里记录本次运行见过的会话
-let activeRun = null;
+// 正在跑的轮次（并行多会话）：runId → run。同一个会话同时只跑一轮，不同会话按设置里的上限同时跑
+const RUNS = new Map();
+const runList = () => [...RUNS.values()];
+const latestRun = () => { let r = null; for (const x of RUNS.values()) if (!r || x.startedAt >= r.startedAt) r = x; return r; };
+const runOfSession = (sid) => (sid && runList().find((r) => r.sessionId === sid)) || null;
+// 同时跑几轮：每个 claude 进程要占几百 MB 内存，开多大由用户自己把握
+const MAX_PARALLEL_CAP = 16;
+const maxParallel = () => Math.max(1, Math.min(MAX_PARALLEL_CAP, Math.round(Number(SETTINGS.maxParallel)) || 3));
 // 有任务在跑时落一个标记文件：cccodroid 的冻结检测只把「跑任务时被冻」算数 ——
 // 空闲时被厂商冻结器冻住无害，以前每次都记，设置页的提醒就老是弹
 const RUN_FLAG = path.join(CFG.home, ".run-active");
@@ -2519,6 +2528,24 @@ setInterval(() => { for (const c of BUS.clients) busWrite(c, ": hb\n\n"); }, 150
 // ── 生成与排队 ────────────────────────────────────────────────────────
 const QUEUE = [];                 // 等着跑的消息：{ id, message, sessionId, follow, model, permissionMode, addDirs, at }
 const RUN_SESSIONS = new Map();   // runId → sessionId（新会话要等 init 才知道自己的会话号）
+const RUN_LANE = new Map();       // runId → 车道（跟在它后面排队的消息走同一条车道）
+
+// ── 车道：同一个会话里的消息严格按顺序一条条跑，不同会话可以同时跑 ──
+//   "s:<会话号>"  发给已有会话的
+//   "n:<runId>"   新会话还没拿到会话号：以第一条消息的 runId 为名，后面跟着发的（follow）都进这条车道
+function laneOf(item) {
+  if (item.follow && RUN_LANE.get(item.follow)) return RUN_LANE.get(item.follow);
+  return item.sessionId ? "s:" + item.sessionId : "n:" + (item.follow || item.id);
+}
+const laneOfItem = (q) => q.lane || (q.lane = laneOf(q));
+const sidOfLane = (lane) => lane.startsWith("s:") ? lane.slice(2) : (RUN_SESSIONS.get(lane.slice(2)) || null);
+/** 这条车道上正在跑的那一轮（没有就 null）。新会话 init 之后会话号和车道名对得上 */
+function laneRun(lane) {
+  const sid = sidOfLane(lane);
+  for (const r of RUNS.values()) if (r.lane === lane || (sid && r.sessionId === sid)) return r;
+  return null;
+}
+const sameLane = (q, run) => { const l = laneOfItem(q), sid = sidOfLane(l); return l === run.lane || (!!sid && sid === run.sessionId); };
 let RUN_N = 0;
 const newRunId = () => `r${BOOT}${(++RUN_N).toString(36)}`;
 
@@ -2533,13 +2560,15 @@ function setPermMode(mode) {
   if (SETTINGS.permissionMode !== mode) log(`权限模式 ${SETTINGS.permissionMode} → ${mode}`);   // 排障时看得出是谁、何时切的
   SETTINGS.permissionMode = mode;
   saveSettings();
-  if (activeRun && activeRun.setMode) activeRun.setMode(mode);
+  for (const r of RUNS.values()) if (r.setMode) r.setMode(mode);
   publish({ type: "perm_mode", mode });
   return true;
 }
 function snapshot() {
   return {
-    run: runInfo(activeRun),
+    run: runInfo(latestRun()),           // 旧字段：最近开始的那一轮
+    runs: runList().map(runInfo),
+    maxParallel: maxParallel(),
     queue: QUEUE.map((q) => ({ id: q.id, cid: q.cid, text: q.message.slice(0, 500), sessionId: q.sessionId, follow: q.follow, at: q.at, held: !!q.held, intr: !!q.intr })),
     provider: PROVIDER.id,
     model: SETTINGS.model || PROVIDER.defaultModel || null,
@@ -2557,12 +2586,12 @@ const RUN_MARK = path.join(CFG.home, "ccapp-run-mark.json");
 const INTR_FILE = path.join(CFG.home, "ccapp-interrupted.json");
 function saveRunMark() {
   try {
-    if (!activeRun && !QUEUE.length) return fs.rmSync(RUN_MARK, { force: true });
-    const r = activeRun;
+    if (!RUNS.size && !QUEUE.length) return fs.rmSync(RUN_MARK, { force: true });
+    const live = runList().filter((r) => !r.ended);
     fs.writeFileSync(RUN_MARK + ".tmp", JSON.stringify({
-      run: r && !r.ended ? { id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt } : null,
+      runs: live.map((r) => ({ id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt })),
       // 已经写进 stdin、claude 还没吃进去的插话也算排队的：一起留下
-      queue: [...(r && r.pendingInject || []).map((it) => ({ ...it, injected: false })), ...QUEUE],
+      queue: [...live.flatMap((r) => (r.pendingInject || []).map((it) => ({ ...it, injected: false }))), ...QUEUE],
     }), { mode: 0o600 });
     fs.renameSync(RUN_MARK + ".tmp", RUN_MARK);
   } catch {}
@@ -2580,11 +2609,13 @@ function recoverRunMark() {
   let m;
   try { m = JSON.parse(fs.readFileSync(RUN_MARK, "utf8")); } catch { return; }
   finally { try { fs.rmSync(RUN_MARK, { force: true }); } catch {} }
-  if (m.run && m.run.id) {
-    setInterrupted({ ...m.run, at: Date.now() });
-    if (m.run.sessionId) RUN_SESSIONS.set(m.run.id, m.run.sessionId);
-    log(`⚠️ 上一轮没跑完就被结束了（会话 ${m.run.sessionId || "未建立"}），已标为中断`);
+  // 并行时可能同时断了好几轮：「继续」卡只挂最近开始的那一轮，其余的会话内容都在，用户打开接着聊就行
+  const runs = (Array.isArray(m.runs) ? m.runs : m.run ? [m.run] : []).filter((r) => r && r.id).sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+  for (const r of runs) {
+    if (r.sessionId) RUN_SESSIONS.set(r.id, r.sessionId);
+    log(`⚠️ 上一轮没跑完就被结束了（会话 ${r.sessionId || "未建立"}），已标为中断`);
   }
+  if (runs.length) setInterrupted({ ...runs[runs.length - 1], at: Date.now() });
   for (const q of Array.isArray(m.queue) ? m.queue : []) {
     if (!q || !q.id || typeof q.message !== "string") continue;
     if (!q.sessionId && q.follow && RUN_SESSIONS.get(q.follow)) q.sessionId = RUN_SESSIONS.get(q.follow);
@@ -2626,8 +2657,8 @@ function endRun(run, fields = {}) {
   if (run.ended) return;
   flushPend(run);
   run.ended = true;
-  if (activeRun === run) activeRun = null;
-  if (!activeRun) runFlag(false);
+  RUNS.delete(run.id);
+  if (!RUNS.size) runFlag(false);
   publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...fields });
   run.log = [];
   publishState();
@@ -2639,23 +2670,31 @@ function abortRun(run) {
   run.aborted = true;
   // 停止要和排队的消息严格隔开：此刻排着的一律挂起，不许这一轮一结束就自动发出去
   // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
-  for (const q of QUEUE) { q.held = true; q.intr = false; }
+  // 并行时只挂起这个会话自己排着的，别的会话不受影响
+  for (const q of QUEUE) if (sameLane(q, run)) { q.held = true; q.intr = false; }
   if (run.child) killTree(run.child);
   return true;
 }
 
+/** 有空位就从队列里挑能跑的：车道空闲、且是这条车道上排在最前的（同一会话不许插队、不许同时跑两轮） */
 function pump() {
-  if (activeRun) return;
-  const qi = QUEUE.findIndex((q) => !q.held);     // 停止时挂起的不自动发
-  if (qi < 0) return;
-  const item = QUEUE.splice(qi, 1)[0];
-  startRun(item).catch((e) => {
-    log(`run 异常: ${e.stack || e.message}`);
-    if (activeRun && activeRun.id === item.id) {
-      runEmit(activeRun, { type: "error", message: tr(LAST_LANG, tz("内部错误：{err}", { err: e.message })) });
-      endRun(activeRun, { failed: true });
-    }
-  });
+  const blocked = new Set();
+  for (let i = 0; i < QUEUE.length && RUNS.size < maxParallel(); ) {
+    const q = QUEUE[i];
+    if (q.held) { i++; continue; }                  // 停止时挂起的不自动发，也不挡后面新发的
+    const lane = laneOfItem(q), key = sidOfLane(lane) || lane;
+    if (blocked.has(key) || laneRun(lane)) { blocked.add(key); i++; continue; }
+    blocked.add(key);
+    const item = QUEUE.splice(i, 1)[0];
+    startRun(item).catch((e) => {                   // startRun 同步占槽，RUNS.size 立刻算上它
+      log(`run 异常: ${e.stack || e.message}`);
+      const r = RUNS.get(item.id);
+      if (r) {
+        runEmit(r, { type: "error", message: tr(LAST_LANG, tz("内部错误：{err}", { err: e.message })) });
+        endRun(r, { failed: true });
+      }
+    });
+  }
 }
 
 function enqueue(body) {
@@ -2673,8 +2712,9 @@ function enqueue(body) {
   // 插话（"inject"，旧前端叫 "interrupt"）：不打断。消息直接写进正在跑的 claude 的 stdin，
   // claude 会在当前这一步（比如一次工具调用）结束后把它并进对话，同一轮里接着干 —— 和终端里边干边打字一样。
   // 塞不进去（这一轮已在收尾、或者不是同一个会话）就排到队首，这一轮一结束马上发。
-  if ((body.mode === "inject" || body.mode === "interrupt") && activeRun) {
-    if (tryInject(activeRun, item)) { item.injected = true; return item; }
+  const busyRun = laneRun(laneOfItem(item));
+  if ((body.mode === "inject" || body.mode === "interrupt") && busyRun) {
+    if (tryInject(busyRun, item)) { item.injected = true; return item; }
     QUEUE.unshift(item);
   } else {
     QUEUE.push(item);
@@ -2926,7 +2966,10 @@ async function startRun(item) {
     child: null, aborted: false, ended: false,
     log: [], pend: null, pendTimer: null,
   };
-  activeRun = run;                       // 同步占槽，中间不许有 await
+  run.lane = laneOfItem(item);
+  RUNS.set(run.id, run);                 // 同步占槽，中间不许有 await
+  RUN_LANE.set(run.id, run.lane);
+  if (RUN_LANE.size > 1000) for (const k of [...RUN_LANE.keys()].slice(0, 500)) if (!RUNS.has(k)) RUN_LANE.delete(k);
   runFlag(true);
   // 在被中断的那个会话里又跑起来了（点了「继续」或者直接接着聊）：中断提示就不用再挂着了
   if (INTERRUPTED && (INTERRUPTED.sessionId ? INTERRUPTED.sessionId === run.sessionId : !run.sessionId)) setInterrupted(null);
@@ -3062,6 +3105,7 @@ async function startRun(item) {
         suggestions: Array.isArray(r.permission_suggestions) ? r.permission_suggestions : [],
         reason: r.decision_reason || null, blockedPath: r.blocked_path || null, description: r.description || null,
         interactive: !!r.requires_user_interaction, agentId: r.agent_id || null, at: Date.now(),
+        runId: run.id, sessionId: run.sessionId || null,   // 并行时通知要知道是哪个会话的
       };
       run.perms.set(id, p);
       log(`⏸ 等确认 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
@@ -3944,7 +3988,8 @@ const server = http.createServer(async (req, res) => {
         bridge: await bridgeAlive(),
         uptimeMs: Math.round(process.uptime() * 1000),
         version: "3.0.0",
-        busy: !!activeRun,
+        busy: RUNS.size > 0,
+        running: RUNS.size,
         queued: QUEUE.length,
         safeMode: safeMode(),
         hasLedger: !!process.env.CCAPP_LEDGER,
@@ -3982,7 +4027,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/providers/delete") {
       const b = JSON.parse((await readBody(req)) || "{}");
       const id = String(b.id || "");
-      if (id === PROVIDER.id && activeRun) return sendJson(res, 409, { error: "busy", message: tz("这一家正在用，等这一轮跑完再删。") });
+      if (id === PROVIDER.id && RUNS.size) return sendJson(res, 409, { error: "busy", message: tz("这一家正在用，等这一轮跑完再删。") });
       if (PRESETS[id]) {
         // 预置厂商删不掉，只清空用户字段（密钥等）
         delete PROVIDERS_RAW.providers[id];
@@ -4002,7 +4047,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── 设置 ──
     if (p === "/api/settings") {
-      if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, workspace: CFG.workspace, outputStyles: outputStyles() });
+      if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, maxParallel: maxParallel(), maxParallelCap: MAX_PARALLEL_CAP, workspace: CFG.workspace, outputStyles: outputStyles() });
       if (req.method === "POST") {
         const b = JSON.parse((await readBody(req)) || "{}");
         for (const k of ["model", "outputStyle", "effort", "appendSystemPrompt"]) {
@@ -4024,6 +4069,12 @@ const server = http.createServer(async (req, res) => {
           };
         }
 
+        if ("maxParallel" in b) {
+          const n = Math.round(Number(b.maxParallel));
+          SETTINGS.maxParallel = Number.isFinite(n) ? Math.max(1, Math.min(MAX_PARALLEL_CAP, n)) : 3;
+          setImmediate(() => { publishState(); pump(); });   // 调大了马上放行排着的
+        }
+
         // 自动压缩窗口：数字就设，空/0 就清除（交回给 claude 自己决定）
         if ("autoCompactWindow" in b) {
           const n = Number(b.autoCompactWindow);
@@ -4040,7 +4091,7 @@ const server = http.createServer(async (req, res) => {
           if (want && !known) return sendJson(res, 400, { error: "unknown provider", provider: want });
 
           if (want !== PROVIDER.id) {
-            if (activeRun) {
+            if (RUNS.size) {
               return sendJson(res, 409, {
                 error: "busy",
                 message: tz("这一轮还在生成中，等它跑完再切厂商（切换会换掉正在用的密钥与模型）。"),
@@ -4107,7 +4158,7 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse((await readBody(req)) || "{}");
       const done = [], failed = [];
       for (const id of [].concat(b.ids || [])) {
-        if (activeRun && activeRun.sessionId === id) { failed.push(id); continue; }
+        if (runOfSession(id)) { failed.push(id); continue; }
         try { (trashSession(String(id)).ok ? done : failed).push(id); } catch { failed.push(id); }
       }
       if (done.length) log(`${done.length} 个会话进回收站`);
@@ -4157,7 +4208,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "GET" && !action) {
         if (!found) return sendJson(res, 404, { error: "not found" });
         const meta = peekSession(found.file);
-        const live = activeRun && activeRun.sessionId === id ? activeRun : null;
+        const live = runOfSession(id);
         const page = await readSessionPage(found.file, {
           before: u.searchParams.has("before") ? Number(u.searchParams.get("before")) : null,
           limit: Math.min(200, Math.max(10, Number(u.searchParams.get("limit")) || 40)),
@@ -4178,7 +4229,7 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === "DELETE" && !action) {
         if (!found) return sendJson(res, 404, { error: "not found" });
-        if (activeRun && activeRun.sessionId === id) return sendJson(res, 409, { error: "busy", message: tz("这个会话正在生成中。") });
+        if (runOfSession(id)) return sendJson(res, 409, { error: "busy", message: tz("这个会话正在生成中。") });
         // 删除先进回收站（30 天内可恢复），彻底删除走 /api/trash/purge
         let r;
         try { r = trashSession(id); } catch (e) { return sendJson(res, 500, { error: e.message }); }
@@ -4397,14 +4448,14 @@ const server = http.createServer(async (req, res) => {
       const since = m && m[1] === BOOT ? Number(m[2]) : -1;
       const first = BUS.ring[0];
       const resume = since >= 0 && since <= BUS.seq && (since === BUS.seq || (first && first.seq <= since + 1));
-      if (activeRun) flushPend(activeRun);
+      for (const r of RUNS.values()) flushPend(r);
       let out = "retry: 1500\n\n";
       out += `data: ${JSON.stringify({ type: "hello", boot: BOOT, resume, uiTag: uiTag(), ...snapshot() })}\n\n`;
       if (resume) {
         for (const r of BUS.ring) if (r.seq > since) out += r.line;
-      } else if (activeRun) {
-        // 续不上（网关重启过 / 断得太久）：把正在跑的这一轮从头重放
-        for (const ev of activeRun.log) out += `data: ${JSON.stringify(ev)}\n\n`;
+      } else {
+        // 续不上（网关重启过 / 断得太久）：把正在跑的每一轮从头重放（前端按会话自己认领）
+        for (const r of runList().sort((a, b) => a.startedAt - b.startedAt)) for (const ev of r.log) out += `data: ${JSON.stringify(ev)}\n\n`;
       }
       out += `id: ${BOOT}.${BUS.seq}\ndata: {"type":"sync"}\n\n`;
       res.write(out);
@@ -4427,7 +4478,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });
       const item = enqueue(b);
-      return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: !!activeRun && activeRun.id === item.id });
+      return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: RUNS.has(item.id) });
     }
 
     // ── 官方账户登录：就是在跑 `claude auth login`，网关只当终端用 ──
@@ -4476,7 +4527,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
     if (req.method === "POST" && p === "/api/login/logout") {
-      if (activeRun && isLoginMode()) return sendJson(res, 409, { error: "busy", message: tz("这一轮还在生成，等它跑完再退出登录。") });
+      if (RUNS.size && isLoginMode()) return sendJson(res, 409, { error: "busy", message: tz("这一轮还在生成，等它跑完再退出登录。") });
       const r = await runAuth(["logout"]);
       AUTH_CACHE = null;
       RATE_LIMITS = null; try { fs.unlinkSync(RL_FILE); } catch {}
@@ -4486,7 +4537,8 @@ const server = http.createServer(async (req, res) => {
     // ── 权限确认：回答 claude 的 can_use_tool ──
     if (req.method === "POST" && p === "/api/perm/answer") {
       const b = JSON.parse((await readBody(req)) || "{}");
-      const run = activeRun && (!b.runId || b.runId === activeRun.id) ? activeRun : null;
+      // 不带 runId（通知里的「拒绝」）就按请求号找它属于哪一轮
+      const run = b.runId ? RUNS.get(String(b.runId)) || null : runList().find((r) => r.perms && r.perms.has(String(b.id || ""))) || null;
       if (!run || !run.answerPerm) return sendJson(res, 409, { error: "gone", message: tz("这一轮已经结束了") });
       if (!run.answerPerm(String(b.id || ""), {
         behavior: b.behavior === "allow" ? "allow" : "deny",
@@ -4498,7 +4550,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/perm/mode") {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (!setPermMode(String(b.mode || ""))) return sendJson(res, 400, { error: "bad mode" });
-      return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: !!activeRun });
+      return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: RUNS.size > 0 });
     }
 
     if (req.method === "POST" && p === "/api/interrupted/dismiss") {
@@ -4510,7 +4562,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/abort") {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (b.clearQueue) QUEUE.length = 0;
-      const killed = activeRun && (!b.id || b.id === activeRun.id) ? abortRun(activeRun) : false;
+      // 带 id 只停那一轮；不带 id（旧前端）停掉全部
+      const killed = b.id ? abortRun(RUNS.get(String(b.id))) : runList().map(abortRun).some(Boolean);
       if (b.clearQueue) publishState();
       return sendJson(res, 200, { ok: true, killed });
     }
@@ -4519,13 +4572,17 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse((await readBody(req)) || "{}");
       const act = p.slice("/api/queue/".length);
       const i = QUEUE.findIndex((q) => q.id === b.id);
-      if (act === "clear") QUEUE.length = 0;
-      else if (i < 0) return sendJson(res, 404, { error: "not queued" });
+      if (act === "clear") {
+        // 带 ids 只清这些（前端只清当前会话的）；不带就全清
+        if (Array.isArray(b.ids)) { const ids = new Set(b.ids.map(String)); for (let k = QUEUE.length - 1; k >= 0; k--) if (ids.has(QUEUE[k].id)) QUEUE.splice(k, 1); }
+        else QUEUE.length = 0;
+      } else if (i < 0) return sendJson(res, 404, { error: "not queued" });
       else if (act === "remove") QUEUE.splice(i, 1);
       else if (act === "promote") {          // ⚡ 插话：塞进正在跑的这一轮（不打断）；塞不进就挪到队首
         const it = QUEUE.splice(i, 1)[0];
         it.held = false;                      // 挂起的消息靠这个放行
-        if (!(activeRun && tryInject(activeRun, it))) QUEUE.unshift(it);
+        const lr = laneRun(laneOfItem(it));
+        if (!(lr && tryInject(lr, it))) QUEUE.unshift(it);
       } else if (act === "edit") {
         const t = String(b.text || "").trim();
         if (!t) QUEUE.splice(i, 1); else QUEUE[i].message = t;

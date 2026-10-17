@@ -803,4 +803,11 @@ window.I18N_DICT.en = {
   "这项已经回答过了": "This has already been answered",
   "已允许，下次开机再看": "Done, check at next boot",
   "好的，下次开机后再检查。": "OK, will check again after the next boot.",
+  "另有 {n} 个会话在生成": "Other conversations running: {n}",
+  "另一个会话在等你确认 · 打开会话列表查看": "Another conversation is waiting for you · open the conversation list",
+  "同时在跑的会话已到上限（{max} 个），有空位就依次发出 · 待发 {n} 条": "Running-conversation limit reached ({max}); will send as slots free up · {n} waiting",
+  "同时在跑的会话已到上限，已排队，有空位就发出": "Running-conversation limit reached. Queued; will send when a slot frees up",
+  "等你确认": "Needs you",
+  "最多同时跑几个会话": "Max conversations running at once",
+  "不同会话可以同时干活，同一个会话里还是一条接一条。每多跑一个要多占几百 MB 内存，手机内存紧时调小；1 = 一次只跑一轮。": "Different conversations can work at the same time; within one conversation, messages still run one after another. Each extra one uses a few hundred MB of memory, so lower this if your phone is short on memory. 1 = one at a time.",
 };

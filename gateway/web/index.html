@@ -312,6 +312,12 @@
       </div>
 
       <div class="field">
+                <label data-i18n>最多同时跑几个会话</label>
+                <input id="set-parallel" type="number" inputmode="numeric" min="1" step="1">
+                <div class="tiny" data-i18n>不同会话可以同时干活，同一个会话里还是一条接一条。每多跑一个要多占几百 MB 内存，手机内存紧时调小；1 = 一次只跑一轮。</div>
+      </div>
+
+      <div class="field">
                 <label data-i18n>运行状态</label>
                 <pre id="status-box" class="mono" data-i18n>读取中…</pre>
                 <button id="btn-cli-doctor" class="btn ghost sm" data-i18n>跑一次 doctor</button>

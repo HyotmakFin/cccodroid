@@ -383,6 +383,7 @@ a.weblink{overflow-wrap:anywhere}
 }
 .badge{font-size:9.5px;padding:1px 5px;border-radius:5px;border:1px solid var(--line);color:var(--fg3)}
 .badge.cur{border-color:var(--ok);color:var(--ok)}
+.badge.warn{border-color:var(--warn);color:var(--warn)}
 
 /* 能力 chips */
 .chips{display:flex;flex-wrap:wrap;gap:5px}

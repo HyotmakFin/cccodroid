@@ -774,4 +774,11 @@ window.I18N_DICT["es"] = {
   "这项已经回答过了": "Esto ya se respondió",
   "已允许，下次开机再看": "Hecho, revisar en el próximo arranque",
   "好的，下次开机后再检查。": "De acuerdo, se volverá a comprobar tras el próximo arranque.",
+  "另有 {n} 个会话在生成": "Otras conversaciones en curso: {n}",
+  "另一个会话在等你确认 · 打开会话列表查看": "Otra conversación espera tu confirmación · abre la lista de conversaciones",
+  "同时在跑的会话已到上限（{max} 个），有空位就依次发出 · 待发 {n} 条": "Se alcanzó el límite de conversaciones simultáneas ({max}); se enviará cuando haya hueco · en espera: {n}",
+  "同时在跑的会话已到上限，已排队，有空位就发出": "Se alcanzó el límite de conversaciones simultáneas. En cola; se enviará cuando haya hueco",
+  "等你确认": "Pendiente",
+  "最多同时跑几个会话": "Máximo de conversaciones simultáneas",
+  "不同会话可以同时干活，同一个会话里还是一条接一条。每多跑一个要多占几百 MB 内存，手机内存紧时调小；1 = 一次只跑一轮。": "Varias conversaciones pueden trabajar a la vez; dentro de una misma conversación, los mensajes siguen yendo de uno en uno. Cada una de más ocupa unos cientos de MB de memoria: bájalo si el teléfono va justo de memoria. 1 = de una en una.",
 };
