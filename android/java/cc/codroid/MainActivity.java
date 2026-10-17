@@ -71,6 +71,7 @@ public class MainActivity extends Activity {
     private android.widget.Button retry, stuck;
 
     @Override protected void onCreate(Bundle b) {
+        Tr.init(this);
         // 安装页、空白 WebView 都按界面里选的外观（浅 / 深 / 跟随系统）上色，别再"界面浅色、启动页深色"
         setTheme(uiDark() ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(b);
@@ -109,11 +110,11 @@ public class MainActivity extends Activity {
                     GatewayService.pause(true);
                     try {
                         if (ins.recover()) {
-                            say("✓ 开发工具包已恢复到一致状态");
-                            Ledger.add(env, "recover", true, ins.recovered != null ? ins.recovered : "收拾了上次中断留下的目录", null);
+                            say(Tr.t("✓ 开发工具包已恢复到一致状态"));
+                            Ledger.add(env, "recover", true, ins.recovered != null ? ins.recovered : Tr.t("收拾了上次中断留下的目录"), null);
                         }
                     } catch (Exception e) {
-                        Ledger.add(env, "recover", false, "启动时恢复失败：" + e.getMessage(), null);
+                        Ledger.add(env, "recover", false, Tr.t("启动时恢复失败：") + e.getMessage(), null);
                         throw e;
                     } finally { GatewayService.pause(false); }
                 }
@@ -122,20 +123,20 @@ public class MainActivity extends Activity {
                     String src = null;
                     for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { src = l; break; }
                     if (src != null) {
-                        say("开发工具包来源：" + src);
+                        say(Tr.t("开发工具包来源：") + src);
                         ins.installDevkit(src);
                     } else {
                         File gz = ins.downloadDevkit(readAsset("devkit-sources.txt").trim().split("\\s+"));
                         ins.installDevkit(gz.getPath());
                         gz.delete();      // 解完就删，腾出 600MB
                     }
-                    say("✓ 开发工具包就绪");
-                    Ledger.add(env, "install", true, "首次安装开发工具包", null);
+                    say(Tr.t("✓ 开发工具包就绪"));
+                    Ledger.add(env, "install", true, Tr.t("首次安装开发工具包"), null);
                 }
                 deployAssets();
                 if (!env.claudeReady()) {
                     ins.installClaude(new File(env.app, "scripts/install-claude.sh"));
-                    say("✓ Claude Code 就绪");
+                    say(Tr.t("✓ Claude Code 就绪"));
                 }
                 // 上次自动下好的工具包更新：趁现在（刚打开、没有任务）装上
                 Updater upd = Updater.get(this);
@@ -143,13 +144,13 @@ public class MainActivity extends Activity {
                     // 先等网关答话再问它忙不忙：刚起的网关回话慢，读超时会被当成「忙」，更新就一直装不上
                     for (int i = 0; i < 40 && !Updater.pingGateway(); i++) Thread.sleep(250);
                     if (!Updater.gatewayBusy()) {
-                        say("安装已下载的开发工具包更新…");
+                        say(Tr.t("安装已下载的开发工具包更新…"));
                         upd.applyDevkit(ins);
-                        say("✓ 开发工具包已更新");
-                    } else say("开发工具包更新已下载；有任务在跑，等空闲时再装（也可在设置页手动装）");
+                        say(Tr.t("✓ 开发工具包已更新"));
+                    } else say(Tr.t("开发工具包更新已下载；有任务在跑，等空闲时再装（也可在设置页手动装）"));
                 }
                 askBatteryExemption();
-                say("等待网关…");
+                say(Tr.t("等待网关…"));
                 for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500);
                 ui.post(() -> { showWeb(); booted = true; handle(pending); pending = null; });
                 // 后台快速自检：只看文件在不在，缺了就提示修复
@@ -157,7 +158,7 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 android.util.Log.e("cccodroid-setup", "安装失败", e);
                 say("✗ " + humanize(e));
-                say("（下载过的部分都留着。处理好之后点「重试」，会从这一步接着来）");
+                say(Tr.t("（下载过的部分都留着。处理好之后点「重试」，会从这一步接着来）"));
                 ui.post(() -> { retry.setVisibility(View.VISIBLE); stuck.setVisibility(View.VISIBLE); });
             }
         }, "boot").start();
@@ -169,16 +170,16 @@ public class MainActivity extends Activity {
         for (Throwable c = e; c != null; c = c.getCause()) {
             String m = String.valueOf(c.getMessage());
             if (c instanceof Installer.NoSpace) return m;
-            if (m.contains("ENOSPC") || m.contains("No space left")) return "存储空间不够，写到一半满了。清理出 3 GB 左右的空间后点「重试」。";
+            if (m.contains("ENOSPC") || m.contains("No space left")) return Tr.t("存储空间不够，写到一半满了。清理出 3 GB 左右的空间后点「重试」。");
             if (c instanceof java.net.UnknownHostException)
-                return "连不上网络（找不到服务器）。检查 Wi-Fi / 移动数据是否能上网；开着 VPN 或代理的话，试试关掉或换个节点。";
+                return Tr.t("连不上网络（找不到服务器）。检查 Wi-Fi / 移动数据是否能上网；开着 VPN 或代理的话，试试关掉或换个节点。");
             if (c instanceof java.net.SocketTimeoutException || c instanceof java.net.ConnectException || c instanceof javax.net.ssl.SSLException
                 || m.contains("unexpected end of stream") || m.contains("Connection reset"))
-                return "网络不稳，下载中断了（" + c.getClass().getSimpleName() + "）。换个网络或稍后点「重试」，已下载的部分会接着续传。";
-            if (m.contains("sha256 不符"))
-                return "下载的文件没通过校验（可能被网络或代理改了内容），坏的那份已经删掉。点「重试」会重新下载。";
+                return Tr.f("网络不稳，下载中断了（{0}）。换个网络或稍后点「重试」，已下载的部分会接着续传。", c.getClass().getSimpleName());
+            if (m.contains("sha256"))
+                return Tr.t("下载的文件没通过校验（可能被网络或代理改了内容），坏的那份已经删掉。点「重试」会重新下载。");
             if (m.contains("HTTP 403") || m.contains("HTTP 429"))
-                return "下载服务器暂时拒绝了请求（" + m + "），多半是访问太频繁。过几分钟再点「重试」。";
+                return Tr.f("下载服务器暂时拒绝了请求（{0}），多半是访问太频繁。过几分钟再点「重试」。", m);
         }
         return raw;
     }
@@ -248,7 +249,7 @@ public class MainActivity extends Activity {
         if (!upd.devkitStaged()) { upd.apply("devkit", true); return; }     // 还没下：先下，下完会再走到这里
         new Thread(() -> {
             if (Updater.gatewayBusy()) {
-                ui.post(() -> android.widget.Toast.makeText(this, "有任务正在跑，等它结束再更新开发工具包", android.widget.Toast.LENGTH_LONG).show());
+                ui.post(() -> android.widget.Toast.makeText(this, Tr.t("有任务正在跑，等它结束再更新开发工具包"), android.widget.Toast.LENGTH_LONG).show());
                 return;
             }
             CountDownLatch shown = new CountDownLatch(1);
@@ -260,15 +261,15 @@ public class MainActivity extends Activity {
             });
             try {
                 shown.await();
-                say("更新开发工具包…");
+                say(Tr.t("更新开发工具包…"));
                 upd.applyDevkit(new Installer(env, new Installer.Progress() {
                     public void step(String m) { say(m); }
                     public void bytes(long d, long t) { progress(d, t); }
                 }));
-                say("✓ 开发工具包已更新，等待网关…");
+                say(Tr.t("✓ 开发工具包已更新，等待网关…"));
             } catch (Exception e) {
                 say("✗ " + e.getMessage());
-                say("（旧的工具包已经不在了的话，划掉应用重新打开会重新安装）");
+                say(Tr.t("（旧的工具包已经不在了的话，划掉应用重新打开会重新安装）"));
             }
             try { for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500); } catch (InterruptedException ignored) {}
             ui.post(() -> { showWeb(); booted = true; });
@@ -281,7 +282,7 @@ public class MainActivity extends Activity {
         File tag = new File(env.app, "TAG");
         String have = tag.isFile() ? new String(java.nio.file.Files.readAllBytes(tag.toPath())) : "";
         if (want.equals(have)) return;
-        say("部署界面与网关 " + want.trim());
+        say(Tr.t("部署界面与网关 ") + want.trim());
         // boot() 一开头就起了网关服务，守护线程可能已经拿旧的 server.mjs 把 node 拉起来了 ——
         // 不停一下，升级后界面是新的、网关还是旧的（新接口全 404），直到下次重启。
         // 只在内容哈希变了（= 刚升级，进程本来就被安装杀过）时走到这里，不会打断任务
@@ -349,16 +350,16 @@ public class MainActivity extends Activity {
         if (nm.areNotificationsEnabled() || sp.getBoolean("askedNotifySettings", false)) return;
         sp.edit().putBoolean("askedNotifySettings", true).apply();
         new android.app.AlertDialog.Builder(this)
-            .setTitle("开启通知")
-            .setMessage("cccodroid 在后台跑任务时靠一条常驻通知保活；任务完成或需要你确认时也通过通知提醒。\n\n系统目前屏蔽了本应用的通知，去设置里打开吧。")
-            .setPositiveButton("去开启", (d, w) -> {
+            .setTitle(Tr.t("开启通知"))
+            .setMessage(Tr.t("cccodroid 在后台跑任务时靠一条常驻通知保活；任务完成或需要你确认时也通过通知提醒。\n\n系统目前屏蔽了本应用的通知，去设置里打开吧。"))
+            .setPositiveButton(Tr.t("去开启"), (d, w) -> {
                 try {
                     startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
                 } catch (Exception e) {
                     startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
                 }
             })
-            .setNegativeButton("以后再说", null)
+            .setNegativeButton(Tr.t("以后再说"), null)
             .show();
     }
 
@@ -431,21 +432,21 @@ public class MainActivity extends Activity {
         logScroll.addView(log);
         col.addView(logScroll, new LinearLayout.LayoutParams(-1, 0, 1));
         retry = new android.widget.Button(this);
-        retry.setText("重试");
+        retry.setText(Tr.t("重试"));
         retry.setVisibility(View.GONE);
-        retry.setOnClickListener(v -> { retry.setVisibility(View.GONE); stuck.setVisibility(View.GONE); say("— 重试 —"); boot(); });
+        retry.setOnClickListener(v -> { retry.setVisibility(View.GONE); stuck.setVisibility(View.GONE); say(Tr.t("— 重试 —")); boot(); });
         // 「我卡住了」：界面还没起来时（安装就失败了）也能把诊断包发出去
         stuck = new android.widget.Button(this);
-        stuck.setText("我卡住了：分享诊断");
+        stuck.setText(Tr.t("我卡住了：分享诊断"));
         stuck.setVisibility(View.GONE);
         stuck.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
-            .setTitle("打包诊断信息")
-            .setMessage(Share.CONTENTS)
-            .setPositiveButton("打包并分享", (d, w) -> new Thread(() -> {
+            .setTitle(Tr.t("打包诊断信息"))
+            .setMessage(Share.contents())
+            .setPositiveButton(Tr.t("打包并分享"), (d, w) -> new Thread(() -> {
                 try { Share.send(this, Share.bundleLogs(this), "application/zip"); }
-                catch (Exception e) { say("✗ 诊断包没打成：" + e.getMessage()); }
+                catch (Exception e) { say(Tr.t("✗ 诊断包没打成：") + e.getMessage()); }
             }, "stuck").start())
-            .setNegativeButton("取消", null).show());
+            .setNegativeButton(Tr.t("取消"), null).show());
         LinearLayout acts = new LinearLayout(this);
         acts.addView(retry, new LinearLayout.LayoutParams(-2, -2));
         acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
@@ -481,7 +482,7 @@ public class MainActivity extends Activity {
             txt = mb(d) + " / " + mb(t) + " · " + (d * 100 / t) + "%";
             if (speed > 0 && d < t) {
                 long eta = (long) ((t - d) / speed);
-                txt += " · " + mb((long) speed) + "/s · 剩约 " + (eta >= 60 ? (eta / 60) + " 分" : eta + " 秒");
+                txt += " · " + mb((long) speed) + "/s · " + (eta >= 60 ? Tr.f("剩约 {0} 分", eta / 60) : Tr.f("剩约 {0} 秒", eta));
             }
         }
         final String line = txt;
@@ -552,6 +553,8 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
+            /** 界面最终用的语言（i18n.js 解析过的 code，不是 auto）：外壳的通知、安装页、更新文案跟着换 */
+            @android.webkit.JavascriptInterface public void langPref(String code) { Tr.set(code); }
             @android.webkit.JavascriptInterface public void themePref(String p) {
                 if ("auto".equals(p) || "light".equals(p) || "dark".equals(p))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).apply();
@@ -643,7 +646,7 @@ public class MainActivity extends Activity {
 
     private void openExternal(String url) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
-        catch (Exception e) { android.widget.Toast.makeText(this, "没有可用的浏览器：" + url, android.widget.Toast.LENGTH_LONG).show(); }
+        catch (Exception e) { android.widget.Toast.makeText(this, Tr.t("没有可用的浏览器：") + url, android.widget.Toast.LENGTH_LONG).show(); }
     }
 
     private void startSaveAs(String path, String name, String mime) {
@@ -666,7 +669,7 @@ public class MainActivity extends Activity {
             boolean ok = false;
             String msg;
             try (InputStream in = new java.io.FileInputStream(src); OutputStream out = getContentResolver().openOutputStream(dst, "w")) {
-                if (out == null) throw new java.io.IOException("openOutputStream 返回 null");
+                if (out == null) throw new java.io.IOException(Tr.t("openOutputStream 返回 null"));
                 byte[] buf = new byte[1 << 16];
                 for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
                 ok = true;

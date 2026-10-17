@@ -33,7 +33,7 @@ final class Apk {
         Signature[] s = Build.VERSION.SDK_INT >= 28 && p.signingInfo != null
             ? (p.signingInfo.hasMultipleSigners() ? p.signingInfo.getApkContentsSigners() : p.signingInfo.getSigningCertificateHistory())
             : p.signatures;
-        if (s == null || s.length == 0) throw new IOException("读不到签名");
+        if (s == null || s.length == 0) throw new IOException(Tr.t("读不到签名"));
         StringBuilder hex = new StringBuilder();
         // 签名轮换过的话 history 里有多张，最后一张是当前的；只比当前那张
         Signature cur = Build.VERSION.SDK_INT >= 28 && p.signingInfo != null && !p.signingInfo.hasMultipleSigners() ? s[s.length - 1] : s[0];

@@ -69,8 +69,8 @@ final class ShizukuSetup {
     private ShizukuSetup(Context c) {
         ctx = c;
         env = new Env(c);
-        NotificationChannel ch = new NotificationChannel(CH, "Shizuku 激活", NotificationManager.IMPORTANCE_HIGH);
-        ch.setDescription("无线调试配对码输入框、激活结果");
+        NotificationChannel ch = new NotificationChannel(CH, Tr.t("Shizuku 激活"), NotificationManager.IMPORTANCE_HIGH);
+        ch.setDescription(Tr.t("无线调试配对码输入框、激活结果"));
         c.getSystemService(NotificationManager.class).createNotificationChannel(ch);
         flushStaleNote(c);
     }
@@ -87,7 +87,7 @@ final class ShizukuSetup {
         try {
             for (android.service.notification.StatusBarNotification n : nm.getActiveNotifications())
                 if (n.getId() == NOTE && !n.getNotification().extras.getBoolean(EXTRA_PROGRESS)) return;
-            NotificationChannel q = new NotificationChannel(CH_QUIET, "Shizuku（静默）", NotificationManager.IMPORTANCE_MIN);
+            NotificationChannel q = new NotificationChannel(CH_QUIET, Tr.t("Shizuku（静默）"), NotificationManager.IMPORTANCE_MIN);
             nm.createNotificationChannel(q);
             nm.notify(NOTE, new Notification.Builder(c, CH_QUIET).setSmallIcon(android.R.drawable.ic_secure)
                 .setContentTitle("Shizuku").setOnlyAlertOnce(true).build());
@@ -147,34 +147,34 @@ final class ShizukuSetup {
         activateAfterInstall = thenActivate;
         new Thread(() -> {
             try {
-                set("downloading", "获取 Shizuku 最新版…");
+                set("downloading", Tr.t("获取 Shizuku 最新版…"));
                 JSONObject rel = new JSONObject(new String(Installer.httpGetSmall("https://api.github.com/repos/RikkaApps/Shizuku/releases/latest"), StandardCharsets.UTF_8));
                 JSONArray as = rel.getJSONArray("assets");
                 JSONObject a = null;
                 for (int i = 0; i < as.length(); i++) if (as.getJSONObject(i).optString("name").endsWith(".apk")) { a = as.getJSONObject(i); break; }
-                if (a == null) throw new Exception("Shizuku " + rel.optString("tag_name") + " 里没有 APK");
+                if (a == null) throw new Exception(Tr.f("Shizuku {0} 里没有 APK", rel.optString("tag_name")));
                 File f = new File(env.files, "updates/shizuku.apk");
                 done = 0; total = a.optLong("size");
-                set("downloading", "下载 Shizuku " + rel.optString("tag_name") + "…");
+                set("downloading", Tr.f("下载 Shizuku {0}…", rel.optString("tag_name")));
                 new Installer(env, new Installer.Progress() {
-                    public void step(String m) { if (m.startsWith("  网络中断")) message = m.trim(); }
+                    public void step(String m) { if (m.startsWith("  ")) message = m.trim(); }
                     public void bytes(long d, long t) { done = d; total = t; }
                 }).download(a.getString("browser_download_url"), f, a.optLong("size"), null);
                 PackageInfo p = Apk.archiveInfo(ctx, f);
-                if (p == null || !Priv.MANAGER.equals(p.packageName)) { f.delete(); throw new Exception("下载的不是 Shizuku 安装包"); }
-                if (!PIN.equals(Apk.signer(p))) { f.delete(); throw new Exception("Shizuku 安装包的签名不是官方的，拒绝安装"); }
-                set("installing", "在系统弹窗里点「安装」（第一次需要先允许 cccodroid 安装应用）");
+                if (p == null || !Priv.MANAGER.equals(p.packageName)) { f.delete(); throw new Exception(Tr.t("下载的不是 Shizuku 安装包")); }
+                if (!PIN.equals(Apk.signer(p))) { f.delete(); throw new Exception(Tr.t("Shizuku 安装包的签名不是官方的，拒绝安装")); }
+                set("installing", Tr.t("在系统弹窗里点「安装」（第一次需要先允许 cccodroid 安装应用）"));
                 Apk.install(ctx, f, "shizuku");
             } catch (Exception e) {
-                set("error", "装 Shizuku 失败：" + e.getMessage() + "。也可以去 https://shizuku.rikka.app/download/ 手动下载");
+                set("error", Tr.t("装 Shizuku 失败：") + e.getMessage() + Tr.t("。也可以去 https://shizuku.rikka.app/download/ 手动下载"));
             } finally { busy = false; }
         }, "shz-install").start();
     }
 
     void onInstalled(boolean ok, String msg) {
         new File(env.files, "updates/shizuku.apk").delete();
-        if (!ok) { set("error", "没装上：" + msg); return; }
-        set("idle", "✓ Shizuku 已安装");
+        if (!ok) { set("error", Tr.t("没装上：") + msg); return; }
+        set("idle", Tr.t("✓ Shizuku 已安装"));
         if (activateAfterInstall) activate();
     }
 
@@ -202,14 +202,14 @@ final class ShizukuSetup {
         if (!Priv.installed()) { synchronized (this) { busy = false; } install(true); return; }
         if (Priv.running()) { requestPermission(); return; }
         if (Build.VERSION.SDK_INT < 30) {
-            set("error", "安卓 11 以下没有无线调试，需要用电脑执行一次：adb shell " + starter()); return;
+            set("error", Tr.t("安卓 11 以下没有无线调试，需要用电脑执行一次：adb shell ") + starter()); return;
         }
         if (Settings.Global.getInt(ctx.getContentResolver(), Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 0) {
-            set("need_dev", "先打开「开发者选项」：设置 → 关于手机 → 连点「版本号」7 次。开好后回来再点一次「激活」");
+            set("need_dev", Tr.t("先打开「开发者选项」：设置 → 关于手机 → 连点「版本号」7 次。开好后回来再点一次「激活」"));
             startActivity(new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS));
             return;
         }
-        if (!onWifi()) { set("need_wifi", "无线调试要连着 Wi‑Fi 才能用（不需要能上网）。连上 Wi‑Fi 后再点「激活」"); return; }
+        if (!onWifi()) { set("need_wifi", Tr.t("无线调试要连着 Wi‑Fi 才能用（不需要能上网）。连上 Wi‑Fi 后再点「激活」")); return; }
         if (connectAndStart()) return;
         startPairing();
     }
@@ -217,13 +217,13 @@ final class ShizukuSetup {
     /** 已配对过的情况：开无线调试（有 WRITE_SECURE_SETTINGS 时自己开）→ 连 → 起服务。成功返回 true */
     private boolean connectAndStart() throws Exception {
         if (wirelessOn() == 0 && hasWss()) {
-            set("connecting", "打开无线调试…");
+            set("connecting", Tr.t("打开无线调试…"));
             Settings.Global.putInt(ctx.getContentResolver(), "adb_wifi_enabled", 1);
             for (int i = 0; i < 20 && wirelessOn() == 0; i++) Thread.sleep(250);
             Thread.sleep(1500);   // adbd 要一点时间开始监听、广播服务
         }
         if (wirelessOn() == 0) { log("无线调试没开，也没有 WRITE_SECURE_SETTINGS 去开它"); return false; }
-        set("connecting", "寻找本机的无线调试端口…");
+        set("connecting", Tr.t("寻找本机的无线调试端口…"));
         List<Integer> ports = discover("_adb-tls-connect._tcp", 8000);
         // mDNS 找不到（实测开着 VPN 时就找不到）：扫本机回环口，认出回 STLS 的那个端口
         if (ports.isEmpty()) { log("mDNS 没找到，改扫本机端口"); ports = probeLocalAdb(); }
@@ -247,8 +247,8 @@ final class ShizukuSetup {
     private void startPairing() {
         pairPort = -1;
         startPairDiscovery();
-        set("pairing", "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」直接输入（也可以填在这里）");
-        pairNote("在无线调试里点「使用配对码配对设备」，然后点下面的「填配对码」", true);
+        set("pairing", Tr.t("第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」直接输入（也可以填在这里）"));
+        pairNote(Tr.t("在无线调试里点「使用配对码配对设备」，然后点下面的「填配对码」"), true);
         Intent i = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
         Bundle b = new Bundle();
         b.putString(":settings:fragment_args_key", "toggle_adb_wireless");     // 设置里高亮"无线调试"那一项
@@ -278,7 +278,7 @@ final class ShizukuSetup {
             if (tok.length() == 6 && c.isEmpty()) c = tok;
             else if (tok.length() >= 4 && tok.length() <= 5) port = Integer.parseInt(tok);
         }
-        if (c.isEmpty()) { pairNote("配对码是 6 位数字，再填一次", true); set("pairing", "配对码是 6 位数字"); fin.run(); return; }
+        if (c.isEmpty()) { pairNote(Tr.t("配对码是 6 位数字，再填一次"), true); set("pairing", Tr.t("配对码是 6 位数字")); fin.run(); return; }
         synchronized (this) {
             if (busy) { fin.run(); return; }
             busy = true;
@@ -287,20 +287,20 @@ final class ShizukuSetup {
         final int given = port;
         new Thread(() -> {
             try {
-                set("pairing", "配对中…");
-                pairNote("配对中…", false);
+                set("pairing", Tr.t("配对中…"));
+                pairNote(Tr.t("配对中…"), false);
                 if (given > 0) pairPort = given;
                 if (pairDisc == null) startPairDiscovery();
                 for (int i = 0; i < 40 && pairPort <= 0; i++) Thread.sleep(250);
                 if (pairPort <= 0) {
-                    set("pairing", "没找到配对服务（开着 VPN 时常这样）：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 " + code + " 37285");
-                    pairNote("没找到配对服务：码和端口一起填，如 " + code + " 37285（端口在配对框里）", true);
+                    set("pairing", Tr.f("没找到配对服务（开着 VPN 时常这样）：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}", code + " 37285"));
+                    pairNote(Tr.f("没找到配对服务：码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
                     return;
                 }
                 String out = adb(30, "pair", "127.0.0.1:" + pairPort, code);
                 if (!out.contains("Successfully paired")) {
-                    set("pairing", "配对没成功（" + out.trim() + "）。码可能过期了：重新点「使用配对码配对设备」，填新码");
-                    pairNote("配对没成功，填新的配对码", true);
+                    set("pairing", Tr.f("配对没成功（{0}）。码可能过期了：重新点「使用配对码配对设备」，填新码", out.trim()));
+                    pairNote(Tr.t("配对没成功，填新的配对码"), true);
                     return;
                 }
                 prefs().edit().putBoolean("paired", true).putLong("pairedAt", System.currentTimeMillis()).apply();
@@ -308,25 +308,25 @@ final class ShizukuSetup {
                 pairOk = 1; pairCheckedAt = System.currentTimeMillis();
                 if (Priv.running()) {     // 只是补配对（Shizuku 本来就在跑）：不用重启它
                     cancelNote();
-                    set("done", "✓ 已重新配对。重启手机后会自动激活（需连着 Wi‑Fi）");
+                    set("done", Tr.t("✓ 已重新配对。重启手机后会自动激活（需连着 Wi‑Fi）"));
                     return;
                 }
-                pairNote("✓ 配对成功，正在启动 Shizuku…", false);
+                pairNote(Tr.t("✓ 配对成功，正在启动 Shizuku…"), false);
                 Thread.sleep(1500);
-                if (!connectAndStart()) failNote("已配对，但连不上无线调试：确认「无线调试」开关开着，再点「激活」");
+                if (!connectAndStart()) failNote(Tr.t("已配对，但连不上无线调试：确认「无线调试」开关开着，再点「激活」"));
             } catch (Exception e) {
                 // 别只改状态：通知还停在常驻的「配对中…」，用户划不掉
-                failNote("配对出错：" + e.getMessage());
+                failNote(Tr.t("配对出错：") + e.getMessage());
             } finally { idle(); fin.run(); }
         }, "shz-pair").start();
     }
 
     private void startServer(String serial) throws Exception {
-        set("starting", "启动 Shizuku 服务…");
+        set("starting", Tr.t("启动 Shizuku 服务…"));
         String out = adb(40, "-s", serial, "shell", starter());
         adb(10, "disconnect", serial);
         for (int i = 0; i < 60 && !Priv.running(); i++) Thread.sleep(250);
-        if (!Priv.running()) throw new Exception("Shizuku 没起来：" + tail(out));
+        if (!Priv.running()) throw new Exception(Tr.t("Shizuku 没起来：") + tail(out));
         cancelNote();
         requestPermission();
     }
@@ -337,15 +337,15 @@ final class ShizukuSetup {
 
     private void requestPermission() {
         if (Priv.granted()) { onPermission(true); return; }
-        set("permission", "Shizuku 已启动：在弹窗里点「允许」");
-        try { Shizuku.requestPermission(Priv.REQ); } catch (Throwable t) { set("error", "请求授权失败：" + t); }
+        set("permission", Tr.t("Shizuku 已启动：在弹窗里点「允许」"));
+        try { Shizuku.requestPermission(Priv.REQ); } catch (Throwable t) { set("error", Tr.t("请求授权失败：") + t); }
     }
 
     /** Priv 的授权回调转过来 */
     void onPermission(boolean ok) {
-        if (!ok) { set("error", "Shizuku 授权被拒绝了。再点「授权」重试"); return; }
+        if (!ok) { set("error", Tr.t("Shizuku 授权被拒绝了。再点「授权」重试")); return; }
         if (!hasWss()) log("grant WSS → " + Priv.run("pm grant " + ctx.getPackageName() + " " + WSS));
-        set("done", hasWss() ? "✓ 已激活。重启手机后会自动重新激活（需连着 Wi‑Fi）" : "✓ 已激活");
+        set("done", hasWss() ? Tr.t("✓ 已激活。重启手机后会自动重新激活（需连着 Wi‑Fi）") : Tr.t("✓ 已激活"));
         cancelNote();
     }
 
@@ -363,11 +363,11 @@ final class ShizukuSetup {
                 if (Priv.running() || busy) return;
                 busy = true;
                 try {
-                    if (!onWifi()) { failNote("没连 Wi‑Fi，Shizuku 没能自动激活。连上 Wi‑Fi 后点此重试"); return; }
-                    if (!connectAndStart()) failNote("Shizuku 自动激活没成功，点此重试");
+                    if (!onWifi()) { failNote(Tr.t("没连 Wi‑Fi，Shizuku 没能自动激活。连上 Wi‑Fi 后点此重试")); return; }
+                    if (!connectAndStart()) failNote(Tr.t("Shizuku 自动激活没成功，点此重试"));
                 } finally { idle(); }
             } catch (Exception e) {
-                failNote("Shizuku 自动激活失败：" + e.getMessage());
+                failNote(Tr.t("Shizuku 自动激活失败：") + e.getMessage());
             }
         }, "shz-reactivate").start();
     }
@@ -408,8 +408,8 @@ final class ShizukuSetup {
         synchronized (this) { if (busy) { activateQueued = false; return; } busy = true; }
         new Thread(() -> {
             try {
-                if (Build.VERSION.SDK_INT < 30) { set("error", "安卓 11 以下没有无线调试"); return; }
-                if (!onWifi()) { set("need_wifi", "无线调试要连着 Wi‑Fi 才能用。连上 Wi‑Fi 后再点「重新配对」"); return; }
+                if (Build.VERSION.SDK_INT < 30) { set("error", Tr.t("安卓 11 以下没有无线调试")); return; }
+                if (!onWifi()) { set("need_wifi", Tr.t("无线调试要连着 Wi‑Fi 才能用。连上 Wi‑Fi 后再点「重新配对」")); return; }
                 startPairing();
             } finally { idle(); }
         }, "shz-repair").start();
@@ -532,7 +532,7 @@ final class ShizukuSetup {
             if (h == null || mine.isEmpty() || mine.contains(h.getHostAddress()) || pairPort <= 0) {
                 boolean fresh = pairPort != r.getPort();
                 pairPort = r.getPort();
-                if (fresh && "pairing".equals(phase)) pairNote("配对框出现了（端口 " + pairPort + "）：点「填配对码」输入 6 位码", true);
+                if (fresh && "pairing".equals(phase)) pairNote(Tr.f("配对框出现了（端口 {0}）：点「填配对码」输入 6 位码", pairPort), true);
             }
             log("配对服务 " + s.getServiceName() + " → " + (h == null ? "?" : h.getHostAddress()) + ":" + r.getPort());
         });
@@ -593,7 +593,7 @@ final class ShizukuSetup {
     private void pairNote(String text, boolean withInput) {
         Notification.Builder b = new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.ic_secure)
-            .setContentTitle("Shizuku 无线调试配对")
+            .setContentTitle(Tr.t("Shizuku 无线调试配对"))
             .setContentText(text)
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setOnlyAlertOnce(false)
@@ -605,10 +605,10 @@ final class ShizukuSetup {
             .setTimeoutAfter(withInput ? 600_000 : 90_000);
         if (!withInput) { Bundle x = new Bundle(); x.putBoolean(EXTRA_PROGRESS, true); b.addExtras(x); }
         if (withInput) {
-            RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel("6 位配对码（必要时空格后加端口）").build();
+            RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel(Tr.t("6 位配对码（必要时空格后加端口）")).build();
             int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
             PendingIntent pi = PendingIntent.getBroadcast(ctx, NOTE, new Intent(ctx, Events.class).setAction(Events.ACTION_PAIR), fl);
-            b.addAction(new Notification.Action.Builder(null, "填配对码", pi).addRemoteInput(ri).build());
+            b.addAction(new Notification.Action.Builder(null, Tr.t("填配对码"), pi).addRemoteInput(ri).build());
             // 设置页会隐藏其他应用的悬浮窗（安卓 12 起防点击劫持，实测无线调试页也藏），所以输入只能放在通知里；
             // 带 fullScreenIntent 的通知在亮屏使用中会一直悬在顶部、不自动收起 —— 配对码对话框和输入框同时在屏幕上
             b.setFullScreenIntent(PendingIntent.getActivity(ctx, NOTE + 2,

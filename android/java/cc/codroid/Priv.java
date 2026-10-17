@@ -40,6 +40,9 @@ import rikka.shizuku.Shizuku;
  *   其余 op 回一行 JSON。
  */
 final class Priv {
+    /** 译文要拼进 sh -c '…' 的双引号里：单双引号换成全角，免得断开命令 */
+    static String shq(String s) { return s.replace("'", "’").replace("\"", "”").replace("$", "＄").replace("`", "’"); }
+
     static final String TAG = "cccodroid-priv";
     static final String SOCKET = "cc.codroid.priv";
     static final String MANAGER = "moe.shizuku.privileged.api";
@@ -144,14 +147,14 @@ final class Priv {
         String cmp = ctx.getPackageName() + "/" + MainActivity.class.getName();
         if (running() && granted() && run("am start --activity-reorder-to-front -n " + cmp).isEmpty()) return "shizuku";
         android.app.NotificationManager nm = ctx.getSystemService(android.app.NotificationManager.class);
-        nm.createNotificationChannel(new android.app.NotificationChannel("front", "回到应用", android.app.NotificationManager.IMPORTANCE_HIGH));
+        nm.createNotificationChannel(new android.app.NotificationChannel("front", Tr.t("回到应用"), android.app.NotificationManager.IMPORTANCE_HIGH));
         android.app.PendingIntent pi = android.app.PendingIntent.getActivity(ctx, 41,
             new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
             android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
         nm.notify(41, new android.app.Notification.Builder(ctx, "front")
             .setSmallIcon(android.R.drawable.ic_secure)
             .setContentTitle(text == null || text.isEmpty() ? "cccodroid" : text)
-            .setContentText("点此回到 cccodroid")
+            .setContentText(Tr.t("点此回到 cccodroid"))
             .setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(120_000).build());
         return "notification";
     }
@@ -165,7 +168,7 @@ final class Priv {
             int rc = p.waitFor();
             return (rc == 0 ? "" : "[rc=" + rc + "] ") + out;
         } catch (Throwable t) {
-            return "[失败] " + t;
+            return Tr.t("[失败] ") + t;
         }
     }
 
@@ -186,20 +189,20 @@ final class Priv {
                 byte[] buf = new byte[1 << 16];
                 for (int n; (n = in.read(buf)) > 0; ) o.write(buf, 0, n);
             }
-            if (p.waitFor() != 0) return "[失败] 写不进 " + STAGE;
+            if (p.waitFor() != 0) return Tr.t("[失败] 写不进 ") + STAGE;
             String pkg = ctx.getPackageName();
             // 带点击动作的通知有的 ROM 不让 shell 发（红魔：getIntentSender 权限不足），失败就发纯文字的
-            String note = "cmd notification post -t \"cccodroid 已更新到 v" + version + "（系统不让它在后台自己启动）\"";
+            String note = "cmd notification post -t \"" + shq(Tr.f("cccodroid 已更新到 v{0}（系统不让它在后台自己启动）", version)) + "\"";
             String job = "pm install -r " + STAGE + " > " + STAGE_LOG + " 2>&1; rm -f " + STAGE + "; "
                 + "am start-foreground-service -n " + pkg + "/.GatewayService >> " + STAGE_LOG + " 2>&1"
                 + (reopenUi ? "; am start -n " + pkg + "/.MainActivity >> " + STAGE_LOG + " 2>&1"
-                   : "; grep -q Error " + STAGE_LOG + " && { " + note + " -c \"activity -n " + pkg + "/.MainActivity\" cccodroid-updated \"点此打开即可继续使用\""
-                     + " || " + note + " cccodroid-updated \"打开 cccodroid 即可继续使用\"; } >> " + STAGE_LOG + " 2>&1");
+                   : "; grep -q Error " + STAGE_LOG + " && { " + note + " -c \"activity -n " + pkg + "/.MainActivity\" cccodroid-updated \"" + shq(Tr.t("点此打开即可继续使用")) + "\""
+                     + " || " + note + " cccodroid-updated \"" + shq(Tr.t("打开 cccodroid 即可继续使用")) + "\"; } >> " + STAGE_LOG + " 2>&1");
             run("setsid sh -c '" + job + "' < /dev/null > /dev/null 2>&1 &");
             Thread.sleep(60_000);       // 装上的话本进程在这期间就没了
             return run("cat " + STAGE_LOG);
         } catch (Throwable t) {
-            return "[失败] " + t;
+            return Tr.t("[失败] ") + t;
         }
     }
 
@@ -212,17 +215,17 @@ final class Priv {
     static JSONObject keepAlive(boolean on) {
         JSONObject r = new JSONObject();
         prefs().edit().putBoolean("keepalive", on).apply();
-        if (!granted()) { try { r.put("ok", false).put("message", "Shizuku 未就绪或未授权"); } catch (Exception ignored) {} return r; }
+        if (!granted()) { try { r.put("ok", false).put("message", Tr.t("Shizuku 未就绪或未授权")); } catch (Exception ignored) {} return r; }
         String pkg = ctx.getPackageName();
         String[][] steps = on ? new String[][]{
-            {"幽灵进程上限", "device_config set_sync_disabled_for_tests persistent; device_config put activity_manager max_phantom_processes 2147483647"},
-            {"关闭幽灵进程监控", "settings put global settings_enable_monitor_phantom_procs false"},
-            {"电池白名单", "dumpsys deviceidle whitelist +" + pkg},
-            {"允许后台运行", "cmd appops set " + pkg + " RUN_IN_BACKGROUND allow; cmd appops set " + pkg + " RUN_ANY_IN_BACKGROUND allow"},
-            {"待机分组设为活跃", "am set-standby-bucket " + pkg + " active"},
+            {Tr.t("幽灵进程上限"), "device_config set_sync_disabled_for_tests persistent; device_config put activity_manager max_phantom_processes 2147483647"},
+            {Tr.t("关闭幽灵进程监控"), "settings put global settings_enable_monitor_phantom_procs false"},
+            {Tr.t("电池白名单"), "dumpsys deviceidle whitelist +" + pkg},
+            {Tr.t("允许后台运行"), "cmd appops set " + pkg + " RUN_IN_BACKGROUND allow; cmd appops set " + pkg + " RUN_ANY_IN_BACKGROUND allow"},
+            {Tr.t("待机分组设为活跃"), "am set-standby-bucket " + pkg + " active"},
         } : new String[][]{
-            {"恢复幽灵进程上限", "device_config delete activity_manager max_phantom_processes; device_config set_sync_disabled_for_tests none"},
-            {"恢复幽灵进程监控", "settings delete global settings_enable_monitor_phantom_procs"},
+            {Tr.t("恢复幽灵进程上限"), "device_config delete activity_manager max_phantom_processes; device_config set_sync_disabled_for_tests none"},
+            {Tr.t("恢复幽灵进程监控"), "settings delete global settings_enable_monitor_phantom_procs"},
         };
         try {
             JSONArray arr = new JSONArray();
@@ -275,9 +278,9 @@ final class Priv {
                 }
                 case "status": resp = status(); break;
                 case "request":
-                    if (!running()) resp = new JSONObject().put("ok", false).put("message", "Shizuku 没在运行");
-                    else if (granted()) resp = new JSONObject().put("ok", true).put("message", "已授权");
-                    else { lastPermission = "pending"; Shizuku.requestPermission(REQ); resp = new JSONObject().put("ok", true).put("message", "已弹出授权请求"); }
+                    if (!running()) resp = new JSONObject().put("ok", false).put("message", Tr.t("Shizuku 没在运行"));
+                    else if (granted()) resp = new JSONObject().put("ok", true).put("message", Tr.t("已授权"));
+                    else { lastPermission = "pending"; Shizuku.requestPermission(REQ); resp = new JSONObject().put("ok", true).put("message", Tr.t("已弹出授权请求")); }
                     break;
                 case "open_manager": {
                     Intent i = ctx.getPackageManager().getLaunchIntentForPackage(MANAGER);
@@ -320,7 +323,7 @@ final class Priv {
                 case "share_logs": resp = Share.send(ctx, Share.bundleLogs(ctx), "application/zip"); break;
                 case "share_file": resp = Share.send(ctx, new java.io.File(req.optString("path")), req.optString("mime", "application/octet-stream")); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
-                default: resp = new JSONObject().put("ok", false).put("message", "未知操作 " + op);
+                default: resp = new JSONObject().put("ok", false).put("message", Tr.t("未知操作 ") + op);
             }
             out.write((resp.toString() + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
@@ -333,8 +336,8 @@ final class Priv {
     private static Thread exec(JSONObject req, InputStream in, OutputStream rawOut) throws Exception {
         DataOutputStream out = new DataOutputStream(rawOut);
         if (!granted()) {
-            frame(out, 4, (installed() ? (running() ? "Shizuku 还没授权给 cccodroid（设置 → Shizuku 里点授权）" : "Shizuku 没在运行，先打开 Shizuku 启动服务")
-                : "没装 Shizuku（https://shizuku.rikka.app/）").getBytes(StandardCharsets.UTF_8));
+            frame(out, 4, (installed() ? (running() ? Tr.t("Shizuku 还没授权给 cccodroid（设置 → Shizuku 里点授权）") : Tr.t("Shizuku 没在运行，先打开 Shizuku 启动服务"))
+                : Tr.t("没装 Shizuku（https://shizuku.rikka.app/）")).getBytes(StandardCharsets.UTF_8));
             frameExit(out, 126);
             return null;
         }
@@ -351,7 +354,7 @@ final class Priv {
         String dir = req.optString("cwd", "/");
         java.lang.Process p;
         try { p = newProcess(argv, envp, dir); }
-        catch (Throwable t) { frame(out, 4, ("起进程失败：" + t).getBytes(StandardCharsets.UTF_8)); frameExit(out, 127); return null; }
+        catch (Throwable t) { frame(out, 4, (Tr.t("起进程失败：") + t).getBytes(StandardCharsets.UTF_8)); frameExit(out, 127); return null; }
 
         Thread o1 = pump(p.getInputStream(), out, 1);
         Thread o2 = pump(p.getErrorStream(), out, 2);

@@ -75,15 +75,15 @@ public class BrowserPane extends LinearLayout {
         top.setOrientation(HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(4), dp(4), dp(4), dp(4));
-        back = btn("‹", fg, "后退");
-        fwd = btn("›", fg, "前进");
-        TextView reload = btn("⟳", fg, "刷新");
+        back = btn("‹", fg, Tr.t("后退"));
+        fwd = btn("›", fg, Tr.t("前进"));
+        TextView reload = btn("⟳", fg, Tr.t("刷新"));
         bar = new EditText(a);
         bar.setSingleLine(true);
         bar.setTextSize(14);
         bar.setTextColor(fg);
         bar.setHintTextColor(hint);
-        bar.setHint("网址，或 127.0.0.1:端口");
+        bar.setHint(Tr.t("网址，或 127.0.0.1:端口"));
         android.graphics.drawable.GradientDrawable fieldBg = new android.graphics.drawable.GradientDrawable();
         fieldBg.setColor(field);
         fieldBg.setCornerRadius(dp(10));
@@ -93,8 +93,8 @@ public class BrowserPane extends LinearLayout {
         bar.setImeOptions(EditorInfo.IME_ACTION_GO);
         bar.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         bar.setSelectAllOnFocus(true);
-        TextView ext = btn("↗", fg, "用系统浏览器打开");
-        TextView close = btn("✕", fg, "关闭");
+        TextView ext = btn("↗", fg, Tr.t("用系统浏览器打开"));
+        TextView close = btn("✕", fg, Tr.t("关闭"));
         top.addView(back); top.addView(fwd); top.addView(reload);
         LayoutParams lp = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1);
         lp.setMargins(dp(4), 0, dp(4), 0);
@@ -237,7 +237,7 @@ public class BrowserPane extends LinearLayout {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             act.startActivity(i);
         } catch (Exception e) {
-            Toast.makeText(act, "没有能打开它的应用：" + url, Toast.LENGTH_LONG).show();
+            Toast.makeText(act, Tr.t("没有能打开它的应用：") + url, Toast.LENGTH_LONG).show();
         }
     }
 

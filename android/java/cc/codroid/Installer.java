@@ -39,7 +39,7 @@ final class Installer {
         IOException last = null;
         for (String base : bases) {
             try {
-                ui.step("获取工具包清单：" + base);
+                ui.step(Tr.t("获取工具包清单：") + base);
                 JSONObject lock = new JSONObject(new String(httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
                 JSONObject gz = lock.getJSONObject("gz");
                 String name = gz.getString("file"), sha = gz.getString("sha256");
@@ -61,19 +61,19 @@ final class Installer {
                     part.delete();
                     write(tag, sha + "\n");
                 }
-                ui.step(String.format("下载开发工具包 %.0f MB%s…", size / 1048576.0, part.length() > 0 ? String.format("（续传，已有 %.0f MB）", part.length() / 1048576.0) : ""));
+                ui.step(String.format(Tr.t("下载开发工具包 %.0f MB%s…"), size / 1048576.0, part.length() > 0 ? String.format(Tr.t("（续传，已有 %.0f MB）"), part.length() / 1048576.0) : ""));
                 for (int attempt = 1; part.length() < size; attempt++) {
                     try { fetchRange(base + name, part, size); }
                     catch (IOException e) {
                         if (attempt >= 8) throw e;
-                        ui.step("  网络中断（" + e.getMessage() + "），" + (attempt * 3) + " 秒后续传…");
+                        ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
                         try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
                     }
                 }
-                ui.step("校验 sha256…");
+                ui.step(Tr.t("校验 sha256…"));
                 String got = sha256(part);
-                if (!sha.equals(got)) { part.delete(); throw new IOException("sha256 不符（期望 " + sha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…）"); }
-                if (!part.renameTo(done)) throw new IOException("换名失败: " + part);
+                if (!sha.equals(got)) { part.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
+                if (!part.renameTo(done)) throw new IOException(Tr.t("换名失败: ") + part);
                 tag.delete();
                 return done;
             } catch (Exception e) {
@@ -82,13 +82,13 @@ final class Installer {
                 ui.step("  ✗ " + e.getMessage());
             }
         }
-        throw last != null ? last : new IOException("没有可用的下载地址");
+        throw last != null ? last : new IOException(Tr.t("没有可用的下载地址"));
     }
 
     /** 存储空间不够：消息直接给用户看，写清要多少、还剩多少 */
     static final class NoSpace extends IOException {
         NoSpace(long need, long free) {
-            super(String.format(java.util.Locale.ROOT, "存储空间不够：安装需要约 %.1f GB，手机里目前只剩 %.1f GB。清理出空间后点「重试」即可（已下载的部分会保留）。",
+            super(String.format(java.util.Locale.ROOT, Tr.t("存储空间不够：安装需要约 %.1f GB，手机里目前只剩 %.1f GB。清理出空间后点「重试」即可（已下载的部分会保留）。"),
                 need / 1073741824.0, free / 1073741824.0));
         }
     }
@@ -117,20 +117,20 @@ final class Installer {
             catch (IOException e) {
                 if (alt != null && !url.equals(alt) && attempt >= 2) {
                     url = alt;
-                    ui.step("  GitHub 下载不顺（" + e.getMessage() + "），改从 cccodroid.net 镜像续传…");
+                    ui.step("  " + Tr.f("GitHub 下载不顺（{0}），改从 cccodroid.net 镜像续传…", e.getMessage()));
                     continue;
                 }
                 if (attempt >= 8) throw e;
-                ui.step("  网络中断（" + e.getMessage() + "），" + (attempt * 3) + " 秒后续传…");
+                ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
                 try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
             }
         }
         if (sha != null) {
             String got = sha256(part);
-            if (!sha.equals(got)) { part.delete(); throw new IOException("sha256 不符（期望 " + sha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…）"); }
+            if (!sha.equals(got)) { part.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
         }
         done.delete();
-        if (!part.renameTo(done)) throw new IOException("换名失败: " + part);
+        if (!part.renameTo(done)) throw new IOException(Tr.t("换名失败: ") + part);
         tag.delete();
         return done;
     }
@@ -208,8 +208,8 @@ final class Installer {
     /** @param base/sha/tarSha 这份工具包来自哪个 Release、gz 与 tar 的 sha256（本地文件安装时可为 null）—— 写进 .devkit-ok，更新检查拿它比 */
     void installDevkit(String source, String base, String sha, String tarSha) throws IOException {
         // 本地文件没给 sha：自己算一个。已装记录里有了内容身份，更新检查才不会把它误认成别的版本
-        if (sha == null && !source.startsWith("http")) { ui.step("计算工具包校验和…"); sha = sha256(new File(source)); }
-        ui.step("解包开发工具包…");
+        if (sha == null && !source.startsWith("http")) { ui.step(Tr.t("计算工具包校验和…")); sha = sha256(new File(source)); }
+        ui.step(Tr.t("解包开发工具包…"));
         InputStream raw; long total;
         if (source.startsWith("http")) {
             HttpURLConnection c = (HttpURLConnection) new URL(source).openConnection();
@@ -232,12 +232,12 @@ final class Installer {
             while (s.read(sink) > 0) { }            // tar 末尾的填充块也算进校验和
         } catch (IOException e) {
             deleteTree(tmp);
-            throw new IOException("解包失败，旧工具包未改动：" + e.getMessage(), e);
+            throw new IOException(Tr.t("解包失败，旧工具包未改动：") + e.getMessage(), e);
         } finally { s.close(); }
         String got = hex(md.digest());
         if (tarSha != null && !tarSha.isEmpty() && !tarSha.equals(got)) {
             deleteTree(tmp);
-            throw new IOException("解出来的内容与清单不符（tar sha256 期望 " + tarSha.substring(0, 12) + "…，实得 " + got.substring(0, 12) + "…），旧工具包未改动");
+            throw new IOException(Tr.f("解出来的内容与清单不符（tar sha256 期望 {0}…，实得 {1}…），旧工具包未改动", tarSha.substring(0, 12), got.substring(0, 12)));
         }
         JSONObject p = new JSONObject();
         try { p.put("base", base == null ? "" : base).put("sha256", sha == null ? "" : sha).put("tarSha256", got); }
@@ -251,10 +251,10 @@ final class Installer {
     private void swapIn(File tmp) throws IOException {
         File old = usrOld();
         deleteTree(old);
-        if (env.usr.exists() && !env.usr.renameTo(old)) throw new IOException("换名失败: " + env.usr);
+        if (env.usr.exists() && !env.usr.renameTo(old)) throw new IOException(Tr.t("换名失败: ") + env.usr);
         if (!tmp.renameTo(env.usr)) {
             if (old.exists()) old.renameTo(env.usr);
-            throw new IOException("换名失败: " + tmp);
+            throw new IOException(Tr.t("换名失败: ") + tmp);
         }
     }
 
@@ -269,9 +269,9 @@ final class Installer {
         env.home.mkdirs();
 
         long since = System.currentTimeMillis() - 2000;      // 文件系统时间戳精度留点余量
-        ui.step("首次运行配置…");
+        ui.step(Tr.t("首次运行配置…"));
         int rc = run(env.bin("bash").getPath(), new File(env.usr, "libexec/devkit/first-run.sh").getPath());
-        if (rc != 0) ui.step("（first-run 返回 " + rc + "，不影响使用）");
+        if (rc != 0) ui.step(Tr.f("（first-run 返回 {0}，不影响使用）", rc));
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
@@ -279,7 +279,7 @@ final class Installer {
         try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
         write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
         pend.delete();
-        if (old.exists()) { ui.step("清理旧版本…"); deleteTree(old); }
+        if (old.exists()) { ui.step(Tr.t("清理旧版本…")); deleteTree(old); }
     }
 
     /**
@@ -301,18 +301,18 @@ final class Installer {
         recovered = null;
         // 断在两次换名之间：旧版已换下、新版（校验过的）还没换上
         if (!env.usr.exists() && neu.isDirectory() && new File(neu, PENDING).isFile()) {
-            if (!neu.renameTo(env.usr)) throw new IOException("换名失败: " + neu);
+            if (!neu.renameTo(env.usr)) throw new IOException(Tr.t("换名失败: ") + neu);
             did = true;
-            recovered = "两次换名之间被打断：把已校验的新版换上";
+            recovered = Tr.t("两次换名之间被打断：把已校验的新版换上");
         }
         if (new File(env.usr, PENDING).isFile()) {
-            ui.step("上次的开发工具包更新被打断了，接着完成…");
+            ui.step(Tr.t("上次的开发工具包更新被打断了，接着完成…"));
             finish();
-            recovered = (recovered == null ? "" : recovered + "；") + "上次更新在收尾阶段被打断：重跑首次配置并写好校验基线";
+            recovered = (recovered == null ? "" : recovered + Tr.t("；")) + Tr.t("上次更新在收尾阶段被打断：重跑首次配置并写好校验基线");
             return true;
         }
-        if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; recovered = "新版没换上：退回旧版"; }   // 新版没成：退回旧版
-        if (neu.exists()) { deleteTree(neu); did = true; recovered = (recovered == null ? "" : recovered + "；") + "删掉解到一半的新版"; }   // 解到一半的残骸
+        if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; recovered = Tr.t("新版没换上：退回旧版"); }   // 新版没成：退回旧版
+        if (neu.exists()) { deleteTree(neu); did = true; recovered = (recovered == null ? "" : recovered + Tr.t("；")) + Tr.t("删掉解到一半的新版"); }   // 解到一半的残骸
         if (old.exists() && new File(env.usr, ".devkit-ok").isFile()) deleteTree(old);
         return did;
     }
@@ -343,8 +343,8 @@ final class Installer {
                 sb.append(l).append('\n');
             }
             write(new File(env.usr, LOCAL_MANIFEST), sb.toString());
-            if (dropped + rebased > 0) ui.step("（首次配置删掉 " + dropped + " 个、改写 " + rebased + " 个文件，校验基线已按实际情况记下）");
-        } catch (IOException e) { ui.step("（校验基线没写成：" + e.getMessage() + "）"); }
+            if (dropped + rebased > 0) ui.step(Tr.f("（首次配置删掉 {0} 个、改写 {1} 个文件，校验基线已按实际情况记下）", dropped, rebased));
+        } catch (IOException e) { ui.step(Tr.f("（校验基线没写成：{0}）", e.getMessage())); }
     }
 
     /** 用户可能自己动的地方：配置、pip / npm 装的包。改了不算坏，只有"缺了"才算 */
@@ -378,7 +378,7 @@ final class Installer {
             if (userTouchable(rel)) gone = false;
             else if (gone) { missing++; bad = true; }
             else if (full && !userTouchable(rel) && (file.length() != size || !f[0].equals(sha256(file)))) { changed++; bad = true; }
-            if (bad && samples.length() < 12) samples.put((gone ? "缺失 " : "改动 ") + rel);
+            if (bad && samples.length() < 12) samples.put((gone ? Tr.t("缺失 ") : Tr.t("改动 ")) + rel);
             doneBytes += full ? size : 0;
             if ((i & 255) == 0) ui.bytes(full ? doneBytes : i, full ? bytes : lines.size());
         }
@@ -420,7 +420,7 @@ final class Installer {
                 if (k.renameTo(to)) n++;
             }
         }
-        if (n > 0) ui.step("保留了你自己装进工具包的 " + n + " 项（pip / npm -g 等）");
+        if (n > 0) ui.step(Tr.f("保留了你自己装进工具包的 {0} 项（pip / npm -g 等）", n));
     }
 
     /** glibc 版程序（官方 Claude Code）解析域名靠它；安卓没有 /etc/resolv.conf */
@@ -434,9 +434,9 @@ final class Installer {
 
     // ── 官方 Claude Code ───────────────────────────────────────────────
     void installClaude(File script) throws IOException {
-        ui.step("从官方渠道下载 Claude Code…");
+        ui.step(Tr.t("从官方渠道下载 Claude Code…"));
         int rc = run(env.bin("bash").getPath(), script.getPath());
-        if (rc != 0 || !env.claudeReady()) throw new IOException("Claude Code 安装失败（rc=" + rc + "）");
+        if (rc != 0 || !env.claudeReady()) throw new IOException(Tr.f("Claude Code 安装失败（rc={0}）", rc));
     }
 
     int run(String... cmd) throws IOException {
@@ -497,7 +497,7 @@ final class Installer {
             name = name.substring(strip.length());
             if (name.isEmpty() || name.equals("/")) { skip(in, size); continue; }
             File f = new File(root, name);
-            if (!f.getCanonicalPath().startsWith(rootPath) && type != '2') throw new IOException("越界条目: " + name);
+            if (!f.getCanonicalPath().startsWith(rootPath) && type != '2') throw new IOException(Tr.t("越界条目: ") + name);
             try {
                 switch (type) {
                     case '5':
@@ -542,7 +542,7 @@ final class Installer {
         int off = 0;
         while (off < b.length) {
             int n = in.read(b, off, b.length - off);
-            if (n < 0) { if (off == 0) return false; throw new IOException("tar 截断"); }
+            if (n < 0) { if (off == 0) return false; throw new IOException(Tr.t("tar 截断")); }
             off += n;
         }
         return true;
@@ -557,7 +557,7 @@ final class Installer {
         byte[] buf = new byte[1 << 16];
         while (size > 0) {
             int n = in.read(buf, 0, (int) Math.min(buf.length, size));
-            if (n < 0) throw new IOException("tar 截断");
+            if (n < 0) throw new IOException(Tr.t("tar 截断"));
             o.write(buf, 0, n);
             size -= n;
         }
@@ -565,7 +565,7 @@ final class Installer {
     private static void skip(InputStream in, long size) throws IOException {
         long n = (size + 511) / 512 * 512;
         byte[] buf = new byte[8192];
-        while (n > 0) { int r = in.read(buf, 0, (int) Math.min(buf.length, n)); if (r < 0) throw new IOException("tar 截断"); n -= r; }
+        while (n > 0) { int r = in.read(buf, 0, (int) Math.min(buf.length, n)); if (r < 0) throw new IOException(Tr.t("tar 截断")); n -= r; }
     }
     private static void pad(InputStream in, long size) throws IOException {
         long r = size % 512;

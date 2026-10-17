@@ -77,7 +77,7 @@ public final class Share extends ContentProvider {
     /** 弹系统分享面板 */
     static JSONObject send(Context c, File f, String mime) throws Exception {
         Uri u = uriFor(c, f);
-        if (u == null || !f.isFile()) return new JSONObject().put("ok", false).put("message", "这个文件不能分享：" + f);
+        if (u == null || !f.isFile()) return new JSONObject().put("ok", false).put("message", Tr.t("这个文件不能分享：") + f);
         Intent send = new Intent(Intent.ACTION_SEND).setType(mime)
             .putExtra(Intent.EXTRA_STREAM, u).putExtra(Intent.EXTRA_SUBJECT, f.getName())
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -101,16 +101,16 @@ public final class Share extends ContentProvider {
     }
 
     /** 包里有什么、去掉了什么 —— 「我卡住了」打包前给用户看的就是这份（README.txt 也放一份进包里） */
-    static final String CONTENTS =
-        "包里有：\n" +
-        "· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n" +
-        "· 开发工具包：装的是哪一版（校验哈希）、更新与自检状态\n" +
-        "· 最近的日志：本应用的系统日志、网关日志的最后一段\n" +
-        "· 修复账本：安装、校验、修复做过哪些、成没成\n" +
-        "\n已经去掉：\n" +
-        "· 密钥、令牌、登录凭据、邮箱\n" +
-        "· 你发给 Claude 的消息内容（日志里只留「提问了一次」）\n" +
-        "· 会话记录本身不在包里\n";
+    static String contents() { return
+        Tr.t("包里有：\n") +
+        Tr.t("· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n") +
+        Tr.t("· 开发工具包：装的是哪一版（校验哈希）、更新与自检状态\n") +
+        Tr.t("· 最近的日志：本应用的系统日志、网关日志的最后一段\n") +
+        Tr.t("· 修复账本：安装、校验、修复做过哪些、成没成\n") +
+        Tr.t("\n已经去掉：\n") +
+        Tr.t("· 密钥、令牌、登录凭据、邮箱\n") +
+        Tr.t("· 你发给 Claude 的消息内容（日志里只留「提问了一次」）\n") +
+        Tr.t("· 会话记录本身不在包里\n"); }
 
     /** 打包：诊断信息 + 本应用 logcat + 网关日志尾部 + 修复账本 → files/cache/share/cccodroid-logs-*.zip */
     static File bundleLogs(Context c) throws Exception {
@@ -123,7 +123,7 @@ public final class Share extends ContentProvider {
         File out = new File(dir, "cccodroid-logs-" + stamp + ".zip");
         JSONObject parts = new JSONObject();
         try (ZipOutputStream z = new ZipOutputStream(new FileOutputStream(out))) {
-            parts.put("README.txt", put(z, "README.txt", "cccodroid 诊断包（「我卡住了」）\n\n" + CONTENTS));
+            parts.put("README.txt", put(z, "README.txt", Tr.t("cccodroid 诊断包（「我卡住了」）\n\n") + contents()));
             parts.put("diagnostics.txt", put(z, "diagnostics.txt", diagnostics(c, env)));
             parts.put("logcat.txt", put(z, "logcat.txt", scrub(logcat())));
             if (env.log.isFile()) parts.put("gateway.log", put(z, "gateway.log", scrub(tail(env.log, 1024 * 1024))));
@@ -133,7 +133,7 @@ public final class Share extends ContentProvider {
             File led = Ledger.file(env);
             if (led.isFile()) parts.put("ledger.jsonl", put(z, "ledger.jsonl", scrub(tail(led, 512 * 1024))));
         }
-        Ledger.add(env, "logs", true, "打包日志用于分享（压缩后 " + out.length() / 1024 + " KB）", parts);
+        Ledger.add(env, "logs", true, Tr.f("打包日志用于分享（压缩后 {0} KB）", out.length() / 1024), parts);
         return out;
     }
 

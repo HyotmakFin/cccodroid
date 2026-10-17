@@ -3712,6 +3712,134 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
   });
 
+  // ── 耗电卡：小时 / 日 / 周三档，SVG 手画（像 macOS 的电池页：上面电量，下面用量柱）──
+  const en = { view: "hour", data: null, sel: -1 };
+  const enW = 320, enH = 96, enTop = 6, enBot = 80;
+  const enPct = (x) => (Math.round(x * 10) / 10) + "%";
+  function enLabel(b, view, long) {
+    if (view === "hour") {
+      const a = new Date(b.t), z = new Date(b.t + 3600e3), hm = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return long ? hm(a) + "–" + hm(z) : String(a.getHours()).padStart(2, "0");
+    }
+    const [y, m, d] = b.t.split("-").map(Number), dt = new Date(y, m - 1, d);
+    if (!long) return (m) + "/" + d;
+    if (view === "day") return dt.toLocaleDateString([], { month: "short", day: "numeric", weekday: "short" });
+    const e = new Date(dt); e.setDate(e.getDate() + 6);
+    return dt.toLocaleDateString([], { month: "short", day: "numeric" }) + " – " + e.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+  /** 柱状图：series = [[键, 样式类]]，后面的叠画在前面的上面（比如亮屏里套前台）；fmtMax 给左上角的刻度 */
+  function enBars(bars, series, fmtMax, labelEvery) {
+    const n = bars.length, slot = enW / n, bw = Math.max(2, slot * 0.68);
+    const max = Math.max(...bars.flatMap((b) => series.map(([k]) => b[k] || 0)), 0);
+    if (!(max > 0)) return null;
+    let s = `<line class="grid" x1="0" x2="${enW}" y1="${enTop}" y2="${enTop}"/><line class="grid" x1="0" x2="${enW}" y1="${enBot}" y2="${enBot}"/>`;
+    s += `<text x="${enW}" y="${enTop - 1}" text-anchor="end">${esc(fmtMax(max))}</text>`;
+    bars.forEach((b, i) => {
+      const x = i * slot + (slot - bw) / 2, dim = en.sel >= 0 && en.sel !== i ? " dim" : "";
+      for (const [k, cls] of series) {
+        const h = ((b[k] || 0) / max) * (enBot - enTop);
+        if (h > 0) s += `<rect class="bar ${cls}${dim}" x="${x.toFixed(1)}" y="${(enBot - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h, 0.8).toFixed(1)}" rx="1.5"/>`;
+      }
+      if (i % labelEvery === 0) s += `<text x="${(i * slot + slot / 2).toFixed(1)}" y="${enH - 4}" text-anchor="middle">${esc(enLabel(b, en.view))}</text>`;
+      s += `<rect class="hit" data-i="${i}" x="${(i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${enH}"/>`;
+    });
+    return s;
+  }
+  /** 电量曲线（近 24 小时）：充电的时段铺一层绿底 */
+  function enLevels(levels, now) {
+    if (levels.length < 2) return null;
+    const t0 = now - 24 * 3600e3, X = (t) => ((t - t0) / (24 * 3600e3)) * enW, Y = (v) => enBot - (v / 100) * (enBot - enTop);
+    let s = [0, 50, 100].map((v) => `<line class="grid" x1="0" x2="${enW}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${enW}" y="${Y(v) - 1}" text-anchor="end">${v}%</text>`).join("");
+    for (let i = 1; i < levels.length; i++) {
+      // 中间隔了超过半小时（关机 / 网关没跑）就断开，不连成一条假的直线
+      if (levels[i][2] && levels[i - 1][2] && levels[i][0] - levels[i - 1][0] < 1800e3)
+        s += `<rect class="chg" x="${X(levels[i - 1][0]).toFixed(1)}" y="${enTop}" width="${(X(levels[i][0]) - X(levels[i - 1][0])).toFixed(1)}" height="${enBot - enTop}"/>`;
+    }
+    let seg = [];
+    const flush = () => {
+      if (seg.length > 1) {
+        const pts = seg.map((l) => X(l[0]).toFixed(1) + "," + Y(l[1]).toFixed(1)).join(" ");
+        s += `<polygon class="lvl-a" points="${X(seg[0][0]).toFixed(1)},${enBot} ${pts} ${X(seg[seg.length - 1][0]).toFixed(1)},${enBot}"/><polyline class="lvl" points="${pts}"/>`;
+      }
+      seg = [];
+    };
+    levels.forEach((l, i) => { if (i && l[0] - levels[i - 1][0] > 1800e3) flush(); seg.push(l); });
+    flush();
+    for (let h = 0; h < 24; h += 6) {
+      const d = new Date(now - (24 - h) * 3600e3); d.setMinutes(0, 0, 0);
+      const t = d.getTime() + 3600e3;
+      s += `<text x="${X(t).toFixed(1)}" y="${enH - 4}" text-anchor="middle">${String(new Date(t).getHours()).padStart(2, "0")}</text>`;
+    }
+    return s;
+  }
+  function enChart(title, legend, body) {
+    if (!body) return "";
+    return `<div class="en-chart"><div class="en-t"><span>${esc(title)}</span><span>${legend || ""}</span></div><svg viewBox="0 0 ${enW} ${enH}">${body}</svg></div>`;
+  }
+  const enDot = (cls, text) => `<span class="en-dot ${cls}"><i></i>${esc(text)}</span>`;
+  function enCaption() {
+    const d = en.data;
+    if (!d) return;
+    const pick = en.sel >= 0 ? [d.bars[en.sel]] : d.bars;
+    const tot = pick.reduce((a, b) => { for (const k of ["c", "f", "s", "d"]) a[k] += b[k] || 0; return a; }, { c: 0, f: 0, s: 0, d: 0 });
+    const head = en.sel >= 0 ? enLabel(d.bars[en.sel], en.view, true) : t({ hour: "近 24 小时", day: "近 14 天", week: "近 12 周" }[en.view]);
+    const parts = [t("本应用 CPU {d}", { d: fmtDur(tot.c * 1000) })];
+    if (d.native) parts.push(t("前台 {d}", { d: fmtDur(tot.f * 1000) }), t("亮屏 {d}", { d: fmtDur(tot.s * 1000) }), t("整机掉电 {p}", { p: enPct(tot.d) }));
+    $("en-cap").textContent = head + " · " + parts.join(" · ");
+  }
+  function enRender() {
+    const d = en.data, box = $("en-charts");
+    if (!d) return;
+    const every = { hour: 6, day: 2, week: 3 }[en.view];
+    const empty = !d.bars.some((b) => b.c || b.s);
+    let h = "";
+    if (en.view === "hour") h += enChart(t("电量"), enDot("chg", t("充电")), enLevels(d.levels, d.now));
+    else if (d.native) h += enChart(t("整机掉电"), "", enBars(d.bars, [["d", ""]], enPct, every));
+    h += enChart(t("本应用 CPU 时间"), "", enBars(d.bars, [["c", ""]], (v) => fmtDur(v * 1000), every));
+    if (d.native) h += enChart(t("亮屏时间"), enDot("s", t("亮屏")) + enDot("f", t("本应用在前台")), enBars(d.bars, [["s", "s"], ["f", "f"]], (v) => fmtDur(v * 1000), every));
+    if (empty) h += `<div class="tiny">${esc(t("刚开始记录，每 5 分钟采一次，过一会儿再来看。"))}</div>`;
+    if (!d.native) h += `<div class="tiny">${esc(t("这个版本没有原生层，只记 CPU 时间（电量、亮屏、前台时长要 cccodroid）。"))}</div>`;
+    box.innerHTML = h;
+    const b = d.battery;
+    $("en-bat").textContent = b ? [t("电池 {p}", { p: Math.round(b.level) + "%" }), b.charging ? t("充电中") : t("放电中"),
+      Number.isFinite(b.currentUa) && b.currentUa ? Math.round(Math.abs(b.currentUa) / (Math.abs(b.currentUa) > 20000 ? 1000 : 1)) + " mA" : ""].filter(Boolean).join(" · ") : "";
+    enCaption();
+  }
+  async function loadEnergy() {
+    try { en.data = await api("/api/energy?view=" + en.view); en.sel = -1; enRender(); if (en.data.sys) enSys(en.data.sys); }
+    catch (e) { $("en-cap").textContent = "✗ " + e.message; }
+  }
+  $("en-seg").addEventListener("click", (e) => {
+    const v = e.target.dataset && e.target.dataset.v;
+    if (!v || v === en.view) return;
+    en.view = v;
+    $("en-seg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.v === v));
+    loadEnergy();
+  });
+  // 点柱子看那一格的明细，再点一下（或点同一格）回到合计
+  $("en-charts").addEventListener("click", (e) => {
+    const i = e.target.dataset && e.target.dataset.i;
+    if (i == null) return;
+    en.sel = en.sel === +i ? -1 : +i;
+    enRender();
+  });
+  function enSys(s) {
+    const ago = fmtDur(s.sinceMs || 0), me = s.me;
+    let h = `<div class="tiny" style="margin-top:6px">${esc(me
+      ? t("系统估算（自上次充满，{ago}）：本应用约 {mah} mAh，占整机已用 {used} mAh 的 {pct}；其中屏幕 {scr} mAh。在 {n} 个应用里排第 {rank}。", {
+        ago, mah: Math.round(me.mah), used: Math.round(s.used), pct: s.used ? Math.round((me.mah / s.used) * 100) + "%" : "—", scr: Math.round(me.screen), n: s.apps, rank: me.rank })
+      : t("系统估算（自上次充满，{ago}）：整机已用 {used} mAh，本应用没有记录。", { ago, used: Math.round(s.used) }))}</div>`;
+    h += `<ul class="en-sys-list">${(s.top || []).map((a) => `<li class="${a.me ? "me" : ""}"><span>${esc(a.name)}</span><span>${Math.round(a.mah * 10) / 10} mAh</span></li>`).join("")}</ul>`;
+    h += `<div class="tiny">${esc(t("安卓把亮屏时的屏幕耗电记在前台应用头上，开着看得越久排名越靠前；CPU 那部分才是应用自己干活用掉的。{time} 查询。", { time: new Date(s.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) }))}</div>`;
+    $("en-sys").innerHTML = h;
+  }
+  $("en-sys-btn").addEventListener("click", async () => {
+    $("en-sys").innerHTML = `<div class="tiny">${esc(t("正在向系统查询…"))}</div>`;
+    const r = await post("/api/energy/system", {}).catch((e) => ({ ok: false, message: e.message }));
+    if (r.ok) enSys(r.sys);
+    else $("en-sys").innerHTML = `<div class="prov-state err">${esc(t("查不到：{msg}（要先在上面开好 Shizuku）", { msg: r.message || t("失败") }))}</div>`;
+  });
+
   // ── 自定义接口卡（任何讲 Anthropic Messages 协议的端点）──
   function renderCustomCard(box, p) {
     const v = p || { label: "", baseUrl: "", authStyle: "bearer", modelsUrl: "", defaultModel: "", fastModel: "" };
@@ -3993,7 +4121,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
     if (name === "help") loadHelp();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadEnergy(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 

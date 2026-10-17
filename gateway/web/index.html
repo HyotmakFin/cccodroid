@@ -226,6 +226,25 @@
         </div>
       </div>
 
+      <!-- 耗电：本应用自己量的 CPU 时间 + 原生层给的电量 / 亮屏 / 前台时长；系统估算要 Shizuku，点了才查 -->
+      <div class="field" id="en-field">
+        <label data-i18n>耗电</label>
+        <div class="prov-card">
+          <div class="en-head">
+            <div class="en-seg" id="en-seg">
+              <button data-v="hour" class="on" data-i18n>小时</button><button data-v="day" data-i18n>日</button><button data-v="week" data-i18n>周</button>
+            </div>
+            <span class="tiny" id="en-bat"></span>
+          </div>
+          <div id="en-charts"></div>
+          <div class="tiny en-cap" id="en-cap"></div>
+          <div class="row-actions">
+            <button class="btn sm ghost" id="en-sys-btn" data-i18n>系统估算（需要 Shizuku）</button>
+          </div>
+          <div id="en-sys"></div>
+        </div>
+      </div>
+
       <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
       <div class="field hidden" id="upd-field">
                 <label data-i18n>更新</label>

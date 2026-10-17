@@ -50,13 +50,14 @@ public class GatewayService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        Tr.init(this);
         env = new Env(this);
         NotificationManager nm = getSystemService(NotificationManager.class);
-        NotificationChannel ch = new NotificationChannel(CH, "后台运行", NotificationManager.IMPORTANCE_LOW);
-        ch.setDescription("保持网关与正在进行的任务在后台运行");
+        NotificationChannel ch = new NotificationChannel(CH, Tr.t("后台运行"), NotificationManager.IMPORTANCE_LOW);
+        ch.setDescription(Tr.t("保持网关与正在进行的任务在后台运行"));
         ch.setShowBadge(false);
         nm.createNotificationChannel(ch);
-        startForeground(1, note("正在启动…"));
+        startForeground(1, note(Tr.t("正在启动…")));
 
         PowerManager pm = getSystemService(PowerManager.class);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cccodroid:gateway");
@@ -131,13 +132,13 @@ public class GatewayService extends Service {
     private void supervise() {
         long backoff = 1000;
         while (!stopping) {
-            if (paused) { update("正在更新开发工具包…"); sleep(1000); continue; }
-            if (!env.devkitReady()) { update("工具链未安装"); sleep(3000); continue; }
-            if (alive()) { update("运行中 · 127.0.0.1:" + Env.PORT); sleep(5000); continue; }
+            if (paused) { update(Tr.t("正在更新开发工具包…")); sleep(1000); continue; }
+            if (!env.devkitReady()) { update(Tr.t("工具链未安装")); sleep(3000); continue; }
+            if (alive()) { update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT); sleep(5000); continue; }
             long t0 = System.currentTimeMillis();
             try {
                 spawnGateway();
-                update("运行中 · 127.0.0.1:" + Env.PORT);
+                update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT);
                 int rc = proc.waitFor();
                 Log.w(TAG, "网关退出 rc=" + rc);
             } catch (Exception e) {
@@ -145,7 +146,7 @@ public class GatewayService extends Service {
             }
             if (stopping) break;
             backoff = System.currentTimeMillis() - t0 > 60000 ? 1000 : Math.min(backoff * 2, 60000);
-            update("网关已退出，" + (backoff / 1000) + " 秒后重启");
+            update(Tr.f("网关已退出，{0} 秒后重启", backoff / 1000));
             sleep(backoff);
         }
     }
@@ -198,7 +199,7 @@ public class GatewayService extends Service {
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(new Notification.Action.Builder(null, "停止", stop).build())
+            .addAction(new Notification.Action.Builder(null, Tr.t("停止"), stop).build())
             .build();
     }
 

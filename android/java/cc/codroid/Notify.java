@@ -60,11 +60,11 @@ final class Notify {
         ctx = c;
         nm = c.getSystemService(NotificationManager.class);
         sp = c.getSharedPreferences("notify", Context.MODE_PRIVATE);
-        NotificationChannel done = new NotificationChannel(CH_DONE, "任务完成", NotificationManager.IMPORTANCE_DEFAULT);
-        done.setDescription("应用在后台时，一轮任务跑完提醒一下");
+        NotificationChannel done = new NotificationChannel(CH_DONE, Tr.t("任务完成"), NotificationManager.IMPORTANCE_DEFAULT);
+        done.setDescription(Tr.t("应用在后台时，一轮任务跑完提醒一下"));
         // 不用 IMPORTANCE_HIGH：那会弹横幅。这是安静的开发工具，进通知栏、响一声就够（用户 2026-10-15 定）
-        NotificationChannel ask = new NotificationChannel(CH_ASK, "等你确认", NotificationManager.IMPORTANCE_DEFAULT);
-        ask.setDescription("应用在后台时，Claude 等你批准命令、计划或回答问题");
+        NotificationChannel ask = new NotificationChannel(CH_ASK, Tr.t("等你确认"), NotificationManager.IMPORTANCE_DEFAULT);
+        ask.setDescription(Tr.t("应用在后台时，Claude 等你批准命令、计划或回答问题"));
         nm.createNotificationChannel(done);
         nm.createNotificationChannel(ask);
     }
@@ -203,8 +203,8 @@ final class Notify {
         // 每个会话各留最新一条：并行时几个会话先后跑完，不互相顶掉
         nm.notify(TAG_DONE, sid.isEmpty() ? ID_DONE : sid.hashCode(), new Notification.Builder(ctx, CH_DONE)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle(failed ? "出错了" : "已完成")
-            .setContentText(clip(text == null || text.isEmpty() ? "这一轮跑完了" : text, 80))
+            .setContentTitle(failed ? Tr.t("出错了") : Tr.t("已完成"))
+            .setContentText(clip(text == null || text.isEmpty() ? Tr.t("这一轮跑完了") : text, 80))
             .setContentIntent(openIntent(sid, 0))
             .setAutoCancel(true)
             .build());
@@ -217,15 +217,15 @@ final class Notify {
         String title, body;
         boolean question = "AskUserQuestion".equals(tool);
         if ("ExitPlanMode".equals(tool)) {
-            title = "计划待批准";
+            title = Tr.t("计划待批准");
             body = in.optString("plan");
         } else if (question) {
-            title = "Claude 想问你";
+            title = Tr.t("Claude 想问你");
             JSONArray qs = in.optJSONArray("questions");
             JSONObject q = qs == null ? null : qs.optJSONObject(0);
             body = q == null ? "" : q.optString("question");
         } else {
-            title = "需要确认：" + tool;
+            title = Tr.t("需要确认：") + tool;
             body = firstOf(in, "command", "file_path", "notebook_path", "url", "pattern", "path");
             if (body.isEmpty()) body = p.optString("description");
             if (body.isEmpty()) body = in.toString();
@@ -244,9 +244,9 @@ final class Notify {
             Intent deny = new Intent(ctx, Events.class).setAction(ACTION_DENY).putExtra("id", id);
             PendingIntent pi = PendingIntent.getBroadcast(ctx, 20000 + Math.abs(id.hashCode() % 10000), deny,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            b.addAction(new Notification.Action.Builder(null, "拒绝", pi).build());
+            b.addAction(new Notification.Action.Builder(null, Tr.t("拒绝"), pi).build());
         }
-        b.addAction(new Notification.Action.Builder(null, "打开查看", openIntent(sidOf(p), 30000 + Math.abs(id.hashCode() % 10000))).build());
+        b.addAction(new Notification.Action.Builder(null, Tr.t("打开查看"), openIntent(sidOf(p), 30000 + Math.abs(id.hashCode() % 10000))).build());
         return b.build();
     }
 

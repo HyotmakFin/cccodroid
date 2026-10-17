@@ -974,3 +974,31 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .hk-help{line-height:1.7}
 .hk-bar .hk-pause{justify-content:flex-start;gap:6px;margin:0}
 .hk-bar .hk-pause input{width:auto;flex:none;margin:0}
+
+/* ── 设置页「耗电」卡 ── */
+.en-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+.en-seg { display:inline-flex; background:var(--bg3); border-radius:9px; padding:2px; }
+.en-seg button { border:0; background:none; color:var(--fg2); font:inherit; font-size:13px; padding:4px 14px; border-radius:7px; cursor:pointer; }
+.en-seg button.on { background:var(--bg); color:var(--fg); box-shadow:0 1px 2px var(--shadow); }
+.en-chart { margin-top:8px; }
+.en-chart .en-t { font-size:12px; color:var(--fg2); display:flex; justify-content:space-between; }
+.en-chart svg { display:block; width:100%; height:auto; overflow:visible; }
+.en-chart svg text { fill:var(--fg3); font-size:9px; font-family:inherit; }
+.en-chart .grid { stroke:var(--line); stroke-width:.5; }
+.en-chart .bar { fill:var(--accent); }
+.en-chart .bar.f { fill:var(--tool); }
+.en-chart .bar.s { fill:var(--fg3); opacity:.45; }
+.en-chart .bar.dim { opacity:.3; }
+.en-dot { white-space:nowrap; margin-left:10px; }
+.en-dot i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; background:var(--accent); }
+.en-dot.chg i { background:var(--ok); opacity:.5; }
+.en-dot.s i { background:var(--fg3); opacity:.6; }
+.en-dot.f i { background:var(--tool); }
+.en-chart .hit { fill:transparent; cursor:pointer; }
+.en-chart .lvl { fill:none; stroke:var(--ok); stroke-width:1.5; stroke-linejoin:round; }
+.en-chart .lvl-a { fill:var(--ok); opacity:.14; }
+.en-chart .chg { fill:var(--ok); opacity:.22; }
+.en-cap { margin-top:6px; min-height:1.4em; }
+.en-sys-list { margin:6px 0 0; padding:0; list-style:none; font-size:13px; }
+.en-sys-list li { display:flex; justify-content:space-between; gap:8px; padding:2px 0; border-bottom:1px solid var(--line); }
+.en-sys-list li.me { color:var(--accent); font-weight:600; }

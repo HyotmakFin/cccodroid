@@ -100,10 +100,10 @@ final class Usb {
         UsbManager m = mgr(c);
         OutputStream out = sock.getOutputStream();
         UsbDevice d = pick(m, req.optString("name", null));
-        if (d == null) { reply(out, new JSONObject().put("ok", false).put("message", "没找到唯一一台开了 USB 调试的设备；用 usb-adb list 看看，再用 --name 指定")); return; }
-        if (!ask(c, m, d, req.optLong("timeout", 60))) { reply(out, new JSONObject().put("ok", false).put("message", "USB 授权被拒绝或超时（请在弹出的系统对话框里点「确定」）")); return; }
+        if (d == null) { reply(out, new JSONObject().put("ok", false).put("message", Tr.t("没找到唯一一台开了 USB 调试的设备；用 usb-adb list 看看，再用 --name 指定"))); return; }
+        if (!ask(c, m, d, req.optLong("timeout", 60))) { reply(out, new JSONObject().put("ok", false).put("message", Tr.t("USB 授权被拒绝或超时（请在弹出的系统对话框里点「确定」）"))); return; }
         UsbDeviceConnection conn = m.openDevice(d);
-        if (conn == null) { reply(out, new JSONObject().put("ok", false).put("message", "openDevice 失败（设备被别的应用占着？）")); return; }
+        if (conn == null) { reply(out, new JSONObject().put("ok", false).put("message", Tr.t("openDevice 失败（设备被别的应用占着？）"))); return; }
         try (ParcelFileDescriptor pfd = ParcelFileDescriptor.fromFd(conn.getFileDescriptor())) {
             sock.setFileDescriptorsForSend(new FileDescriptor[] { pfd.getFileDescriptor() });
             reply(out, describe(m, d).put("ok", true));

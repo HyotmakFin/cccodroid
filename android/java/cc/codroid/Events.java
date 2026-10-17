@@ -23,6 +23,7 @@ public class Events extends BroadcastReceiver {
     static final String KEY_CODE = "code";
 
     @Override public void onReceive(Context c, Intent i) {
+        Tr.init(c);
         String a = i.getAction();
         if (Notify.ACTION_DENY.equals(a)) {
             // 通知里点「拒绝」：网络请求不能在主线程，挂住广播直到转给网关
@@ -53,13 +54,13 @@ public class Events extends BroadcastReceiver {
             PendingIntent pi = PendingIntent.getActivity(c, 40, confirm, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             c.getSystemService(NotificationManager.class).notify(40, new Notification.Builder(c, Updater.CH)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("shizuku".equals(what) ? "安装 Shizuku" : "安装 cccodroid 新版本")
-                .setContentText("点此确认安装")
+                .setContentTitle("shizuku".equals(what) ? Tr.t("安装 Shizuku") : Tr.t("安装 cccodroid 新版本"))
+                .setContentText(Tr.t("点此确认安装"))
                 .setContentIntent(pi).setAutoCancel(true).build());
             return;
         }
         boolean ok = st == PackageInstaller.STATUS_SUCCESS;
-        String why = st == PackageInstaller.STATUS_FAILURE_ABORTED ? "取消了" : msg;
+        String why = st == PackageInstaller.STATUS_FAILURE_ABORTED ? Tr.t("取消了") : msg;
         if ("shizuku".equals(what)) ShizukuSetup.get(c).onInstalled(ok, why);
         else Updater.get(c).onInstallResult(what, ok, why);
     }

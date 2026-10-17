@@ -52,7 +52,7 @@ final class Updater {
 
     final Context ctx;
     final Env env;
-    private final Item app = new Item("app", "cccodroid"), devkit = new Item("devkit", "开发工具包"), claude = new Item("claude", "Claude Code");
+    private final Item app = new Item("app", "cccodroid"), devkit = new Item("devkit", Tr.t("开发工具包")), claude = new Item("claude", "Claude Code");
     private volatile boolean checking;
     private volatile String lastError = "";
     /** APK 已下好但因为工具包在忙而推迟安装；user=用户点的（走系统确认），否则静默规则 */
@@ -80,8 +80,8 @@ final class Updater {
     private Updater(Context c) {
         ctx = c;
         env = new Env(c);
-        NotificationChannel ch = new NotificationChannel(CH, "更新", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("新版本已下载、等你点一下安装");
+        NotificationChannel ch = new NotificationChannel(CH, Tr.t("更新"), NotificationManager.IMPORTANCE_DEFAULT);
+        ch.setDescription(Tr.t("新版本已下载、等你点一下安装"));
         c.getSystemService(NotificationManager.class).createNotificationChannel(ch);
         refreshCurrent();
         // 上次下好、还没装的工具包（进程重启后状态在内存里没了，靠这条记录接上）
@@ -135,14 +135,14 @@ final class Updater {
             try {
                 checkClaude();
                 if ("available".equals(claude.state)) apply("claude", true);
-            } catch (Exception ex) { claude.set("error", "连不上 downloads.claude.ai：" + ex.getMessage()); }
+            } catch (Exception ex) { claude.set("error", Tr.t("连不上 downloads.claude.ai：") + ex.getMessage()); }
         }, "upd-channel").start();
     }
 
     private void refreshCurrent() {
         try { app.current = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName; } catch (Exception ignored) {}
         String b = installedDevkitBase();
-        devkit.current = !b.isEmpty() ? tagOf(b) : !installedDevkitSha().isEmpty() ? "本地安装" : env.devkitReady() ? "未知" : "";
+        devkit.current = !b.isEmpty() ? tagOf(b) : !installedDevkitSha().isEmpty() ? Tr.t("本地安装") : env.devkitReady() ? Tr.t("未知") : "";
         try { claude.current = new File(Os.readlink(new File(env.home, ".local/share/cccodroid/claude/current").getPath())).getName(); }
         catch (Exception e) { claude.current = ""; }
     }
@@ -180,18 +180,18 @@ final class Updater {
         boolean mirror = false;
         try { rels = new JSONArray(new String(Installer.httpGetSmall(feed()), StandardCharsets.UTF_8)); }
         catch (Exception e) {
-            lastError = "连不上 GitHub：" + e.getMessage();
+            lastError = Tr.t("连不上 GitHub：") + e.getMessage();
             // GitHub 不通：应用本身改看镜像的发布列表；工具包没有镜像，如实说查不了（别报成"已是最新"）
             try { rels = new JSONArray(new String(Installer.httpGetSmall(MIRROR + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; }
             catch (Exception e2) { app.set("error", lastError); }
             devkit.set("error", lastError);
         }
         if (rels != null) {
-            try { checkApp(rels); if (mirror && !"error".equals(app.state)) app.message = app.message.isEmpty() ? "来自 cccodroid.net 镜像" : app.message + " · 来自 cccodroid.net 镜像"; }
+            try { checkApp(rels); if (mirror && !"error".equals(app.state)) app.message = app.message.isEmpty() ? Tr.t("来自 cccodroid.net 镜像") : app.message + Tr.t(" · 来自 cccodroid.net 镜像"); }
             catch (Exception e) { app.set("error", e.getMessage()); }
             if (!mirror) try { checkDevkit(rels); } catch (Exception e) { devkit.set("error", e.getMessage()); }
         }
-        try { checkClaude(); } catch (Exception e) { claude.set("error", "连不上 downloads.claude.ai：" + e.getMessage()); }
+        try { checkClaude(); } catch (Exception e) { claude.set("error", Tr.t("连不上 downloads.claude.ai：") + e.getMessage()); }
         prefs().edit().putLong("lastCheck", System.currentTimeMillis()).apply();
         if (auto() && !manual) autoApply();
         releaseApp();         // 工具包停在"已下载"没去装（比如有任务在跑）时，别让 APK 一直等着
@@ -215,10 +215,10 @@ final class Updater {
                 app.sha = d.startsWith("sha256:") ? d.substring(7) : null;
                 app.file = new File(env.files, "updates/cccodroid-" + app.latest + ".apk");
                 if (!"downloading".equals(app.state) && !"installing".equals(app.state))
-                    app.set(app.file.isFile() && app.file.length() == app.size ? "ready" : "available", r.optBoolean("prerelease") ? "预览版" : "");
+                    app.set(app.file.isFile() && app.file.length() == app.size ? "ready" : "available", r.optBoolean("prerelease") ? Tr.t("预览版") : "");
                 return;
             }
-            app.set("error", "v" + app.latest + " 里没有 cccodroid.apk");
+            app.set("error", Tr.f("v{0} 里没有 cccodroid.apk", app.latest));
             return;
         }
         app.set("uptodate", "");
@@ -240,7 +240,7 @@ final class Updater {
         String base = "https://github.com/" + REPO + "/releases/download/" + best + "/";
         JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
         if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT) {
-            devkit.set("uptodate", best + " 需要更新版本的 cccodroid"); return;
+            devkit.set("uptodate", Tr.f("{0} 需要更新版本的 cccodroid", best)); return;
         }
         JSONObject gz = lock.getJSONObject("gz");
         String sha = gz.getString("sha256");
@@ -257,21 +257,21 @@ final class Updater {
         devkit.url = base + gz.getString("file");
         devkit.file = new File(env.files, gz.getString("file"));
         String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
-        devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + " · 无法确认已装的是哪一版，建议更新一次" : mb);
+        devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
     }
 
     private void checkClaude() throws Exception {
         String v = new String(Installer.httpGetSmall("https://downloads.claude.ai/claude-code-releases/" + channel()), StandardCharsets.UTF_8).trim();
-        if (!v.matches("\\d+\\.\\d+\\.\\d+.*")) throw new IOException("版本号不对：" + v);
+        if (!v.matches("\\d+\\.\\d+\\.\\d+.*")) throw new IOException(Tr.t("版本号不对：") + v);
         claude.latest = v;
         // 已装的版本要和所选渠道的版本「一致」，而不只是「不比它旧」：
         // 从 latest 切回 stable 时，stable 的版本号更小，以前这里判成「已是最新」，结果一直停在 latest 的版本上
         if (!"installing".equals(claude.state)) {
             int c = cmpVer(v, claude.current);
-            String tag = channel().equals("latest") ? "latest 渠道" : "";
+            String tag = channel().equals("latest") ? Tr.t("latest 渠道") : "";
             if (c == 0) claude.set("uptodate", tag);
             else if (c > 0 || claude.current.isEmpty()) claude.set("available", tag);
-            else claude.set("available", "切回 " + channel() + " 渠道：将换成 " + v + "（比当前的 " + claude.current + " 旧）");
+            else claude.set("available", Tr.f("切回 {0} 渠道：将换成 {1}（比当前的 {2} 旧）", channel(), v, claude.current));
         }
     }
 
@@ -310,21 +310,21 @@ final class Updater {
         Item it = id.equals("app") ? app : id.equals("devkit") ? devkit : id.equals("claude") ? claude : null;
         JSONObject r = new JSONObject();
         try {
-            if (it == null) return r.put("ok", false).put("message", "未知项 " + id);
-            if ("downloading".equals(it.state) || "installing".equals(it.state)) return r.put("ok", true).put("message", "进行中");
+            if (it == null) return r.put("ok", false).put("message", Tr.t("未知项 ") + id);
+            if ("downloading".equals(it.state) || "installing".equals(it.state)) return r.put("ok", true).put("message", Tr.t("进行中"));
             if (it == claude) {
-                if (claude.latest.isEmpty()) return r.put("ok", false).put("message", "先检查更新");
+                if (claude.latest.isEmpty()) return r.put("ok", false).put("message", Tr.t("先检查更新"));
                 new Thread(this::installClaude, "upd-claude").start();
-                return r.put("ok", true).put("message", "开始更新 Claude Code");
+                return r.put("ok", true).put("message", Tr.t("开始更新 Claude Code"));
             }
-            if (it.url == null) return r.put("ok", false).put("message", "没有可用的更新，先检查");
+            if (it.url == null) return r.put("ok", false).put("message", Tr.t("没有可用的更新，先检查"));
             if ("ready".equals(it.state)) {
-                if (it == app) { new Thread(this::installApp, "upd-install").start(); return r.put("ok", true).put("message", "正在安装"); }
-                if (user) { new Thread(this::startDevkitApply, "upd-devkit").start(); return r.put("ok", true).put("message", "正在替换开发工具包"); }
-                return r.put("ok", true).put("message", "已下载，等待安装");
+                if (it == app) { new Thread(this::installApp, "upd-install").start(); return r.put("ok", true).put("message", Tr.t("正在安装")); }
+                if (user) { new Thread(this::startDevkitApply, "upd-devkit").start(); return r.put("ok", true).put("message", Tr.t("正在替换开发工具包")); }
+                return r.put("ok", true).put("message", Tr.t("已下载，等待安装"));
             }
             new Thread(() -> download(it, user), "upd-dl-" + id).start();
-            return r.put("ok", true).put("message", "开始下载");
+            return r.put("ok", true).put("message", Tr.t("开始下载"));
         } catch (Exception e) {
             try { r.put("ok", false).put("message", e.getMessage()); } catch (Exception ignored) {}
             return r;
@@ -345,7 +345,7 @@ final class Updater {
             if (it == devkit) {
                 long need = it.size + (it.need > 0 ? it.need : it.size * 4) + (300L << 20);   // gz + 解出来的新目录（旧目录换名前一直在）+ 余量
                 long free = new StatFs(env.files.getPath()).getAvailableBytes();
-                if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, "空间不够：需要约 %.1f GB，只剩 %.1f GB", need / 1e9, free / 1e9));
+                if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, Tr.t("空间不够：需要约 %.1f GB，只剩 %.1f GB"), need / 1e9, free / 1e9));
             }
             installer(it).download(it.url, it == app ? it.alt : null, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
@@ -366,9 +366,9 @@ final class Updater {
     private void checkApkSigner(File apk) throws Exception {
         PackageManager pm = ctx.getPackageManager();
         PackageInfo a = Apk.archiveInfo(ctx, apk);
-        if (a == null || !ctx.getPackageName().equals(a.packageName)) throw new IOException("下载的不是 cccodroid 安装包");
+        if (a == null || !ctx.getPackageName().equals(a.packageName)) throw new IOException(Tr.t("下载的不是 cccodroid 安装包"));
         if (!Apk.signer(a).equals(Apk.signer(pm.getPackageInfo(ctx.getPackageName(), Apk.SIG_FLAGS))))
-            throw new IOException("安装包签名与本应用不一致，拒绝安装");
+            throw new IOException(Tr.t("安装包签名与本应用不一致，拒绝安装"));
     }
 
     /** 工具包正在下载 / 替换：这时装 APK 会把它拦腰截断 */
@@ -378,7 +378,7 @@ final class Updater {
     private boolean deferApp(boolean user) {
         if (!devkitMoving()) return false;
         appWaiting = true; appWaitingUser |= user;
-        app.set("ready", "等开发工具包" + ("installing".equals(devkit.state) ? "装完" : "下完") + "再装，免得把它打断");
+        app.set("ready", ("installing".equals(devkit.state) ? Tr.t("等开发工具包装完再装，免得把它打断") : Tr.t("等开发工具包下完再装，免得把它打断")));
         return true;
     }
     /** 工具包这一步走完（下完 / 装完 / 出错）：放行等着的 APK */
@@ -392,18 +392,18 @@ final class Updater {
     }
 
     void installApp() {
-        if (app.file == null || !app.file.isFile()) { app.set("error", "安装包不见了，重新检查更新"); return; }
+        if (app.file == null || !app.file.isFile()) { app.set("error", Tr.t("安装包不见了，重新检查更新")); return; }
         if (deferApp(true)) return;
         app.set("installing", "");
         // 有 Shizuku 就静默装（进程会被系统替换掉，服务由 MY_PACKAGE_REPLACED 拉起）；否则走系统安装确认
         if (Priv.granted() && !gatewayBusy()) {
             String out = Priv.pipeInstall(app.file, MainActivity.visible, app.latest);
             Log.i(TAG, "pm install → " + out);     // 走到这里多半说明没装上（装上的话本进程已经没了）
-            if (!out.contains("Success")) app.set("ready", "静默安装失败（" + out + "），点安装走系统确认");
+            if (!out.contains("Success")) app.set("ready", Tr.f("静默安装失败（{0}），点安装走系统确认", out));
             return;
         }
         try { Apk.install(ctx, app.file, "app"); }
-        catch (Exception e) { app.set("error", "安装失败：" + e.getMessage()); }
+        catch (Exception e) { app.set("error", Tr.t("安装失败：") + e.getMessage()); }
     }
 
     /** 自动模式：Shizuku 可用、没有任务在跑、界面不在前台 —— 静默装；否则通知用户 */
@@ -425,8 +425,8 @@ final class Updater {
         try {
             int rc = installer(claude).run(env.bin("bash").getPath(), new File(env.app, "scripts/install-claude.sh").getPath(), claude.latest);
             refreshCurrent();
-            if (rc != 0) throw new IOException("install-claude.sh 返回 " + rc);
-            claude.set("uptodate", "已更新到 " + claude.current + "（下一轮对话起生效）");
+            if (rc != 0) throw new IOException(Tr.t("install-claude.sh 返回 ") + rc);
+            claude.set("uptodate", Tr.f("已更新到 {0}（下一轮对话起生效）", claude.current));
         } catch (Exception e) { claude.set("error", e.getMessage()); }
     }
 
@@ -435,7 +435,7 @@ final class Updater {
 
     /** 交给界面做：替换期间网关要停，界面切回安装进度页 */
     private void startDevkitApply() {
-        if (gatewayBusy()) { devkit.set("ready", "有任务正在跑，等它结束再装"); releaseApp(); return; }
+        if (gatewayBusy()) { devkit.set("ready", Tr.t("有任务正在跑，等它结束再装")); releaseApp(); return; }
         ctx.startActivity(new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_APPLY_DEVKIT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
@@ -444,11 +444,11 @@ final class Updater {
         devkit.set("installing", "");
         try {
             // 落盘以后可能过了好几天、经历过 APK 升级：装之前再核一遍，坏了就删掉重下，不拿它去换掉能用的旧版
-            ins.step("核对已下载的工具包…");
+            ins.step(Tr.t("核对已下载的工具包…"));
             if (devkit.sha != null && !devkit.sha.equals(Installer.sha256(devkit.file))) {
                 devkit.file.delete();
                 prefs().edit().remove("devkitStaged").apply();
-                throw new IOException("已下载的工具包校验不通过，已删除；重新检查更新会再下一次");
+                throw new IOException(Tr.t("已下载的工具包校验不通过，已删除；重新检查更新会再下一次"));
             }
         } catch (Exception e) { devkit.set("error", e.getMessage()); releaseApp(); throw e; }
         GatewayService.pause(true);
@@ -460,11 +460,11 @@ final class Updater {
             refreshCurrent();
             devkit.set("uptodate", "");
             ctx.getSystemService(NotificationManager.class).cancel(20);
-            Ledger.add(env, repairing ? "repair" : "install", true, (repairing ? "修复完成：重装 " : "已装上 ") + tagOf(devkit.base),
+            Ledger.add(env, repairing ? "repair" : "install", true, (repairing ? Tr.t("修复完成：重装 ") : Tr.t("已装上 ")) + tagOf(devkit.base),
                 new JSONObject().put("sha256", devkit.sha));
         } catch (Exception e) {
             devkit.set("error", e.getMessage());
-            Ledger.add(env, repairing ? "repair" : "install", false, (repairing ? "修复失败：" : "安装失败：") + e.getMessage(), null);
+            Ledger.add(env, repairing ? "repair" : "install", false, (repairing ? Tr.t("修复失败：") : Tr.t("安装失败：")) + e.getMessage(), null);
             throw e;
         } finally {
             repairing = false;
@@ -478,10 +478,10 @@ final class Updater {
     JSONObject verifyAsync(boolean full) {
         JSONObject r = new JSONObject();
         try {
-            if (!env.devkitReady()) return r.put("ok", false).put("message", "开发工具包还没装好");
-            if (devkitMoving() || "verifying".equals(devkit.state)) return r.put("ok", true).put("message", "进行中");
+            if (!env.devkitReady()) return r.put("ok", false).put("message", Tr.t("开发工具包还没装好"));
+            if (devkitMoving() || "verifying".equals(devkit.state)) return r.put("ok", true).put("message", Tr.t("进行中"));
             String prev = devkit.state, prevMsg = devkit.message;
-            devkit.set("verifying", full ? "逐个文件核对哈希" : "");
+            devkit.set("verifying", full ? Tr.t("逐个文件核对哈希") : "");
             devkit.done = 0; devkit.total = 0;
             new Thread(() -> {
                 try {
@@ -492,27 +492,27 @@ final class Updater {
                     // 启动时的快速自检每次都跑，没问题就不记，免得账本被刷满
                     if (full || nBad > 0 || !v.optBoolean("manifest"))
                         Ledger.add(env, "verify", v.optBoolean("manifest") && nBad == 0,
-                            (full ? "完整校验" : "快速自检") + "：" + (!v.optBoolean("manifest") ? "没有文件清单，无法核对"
-                                : nBad == 0 ? v.optInt("total") + " 个文件完好"
-                                : "缺 " + v.optInt("missing") + " 个、内容不对 " + v.optInt("changed") + " 个"),
+                            (full ? Tr.t("完整校验") : Tr.t("快速自检")) + Tr.t("：") + (!v.optBoolean("manifest") ? Tr.t("没有文件清单，无法核对")
+                                : nBad == 0 ? Tr.f("{0} 个文件完好", v.optInt("total"))
+                                : Tr.f("缺 {0} 个、内容不对 {1} 个", v.optInt("missing"), v.optInt("changed"))),
                             new JSONObject().put("installed", tagOf(installedDevkitBase())).put("total", v.optInt("total"))
                                 .put("missing", v.optInt("missing")).put("changed", v.optInt("changed")).put("samples", v.optJSONArray("samples")));
                     if (!v.optBoolean("manifest")) {
-                        devkit.set(full ? "damaged" : prev, full ? "这一版工具包没带文件清单，没法逐个核对；可以修复（重装同一版本）" : prevMsg);
+                        devkit.set(full ? "damaged" : prev, full ? Tr.t("这一版工具包没带文件清单，没法逐个核对；可以修复（重装同一版本）") : prevMsg);
                         return;
                     }
                     int bad = v.optInt("missing") + v.optInt("changed");
-                    if (bad == 0) { devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? "已核对 " + v.optInt("total") + " 个文件，全部完好" : prevMsg); return; }
-                    devkit.set("damaged", (v.optInt("missing") > 0 ? "缺 " + v.optInt("missing") + " 个文件" : "")
+                    if (bad == 0) { devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? Tr.f("已核对 {0} 个文件，全部完好", v.optInt("total")) : prevMsg); return; }
+                    devkit.set("damaged", (v.optInt("missing") > 0 ? Tr.f("缺 {0} 个文件", v.optInt("missing")) : "")
                         + (v.optInt("missing") > 0 && v.optInt("changed") > 0 ? "、" : "")
-                        + (v.optInt("changed") > 0 ? v.optInt("changed") + " 个文件内容不对" : "") + "，点修复重装同一版本");
+                        + (v.optInt("changed") > 0 ? Tr.f("{0} 个文件内容不对", v.optInt("changed")) : "") + Tr.t("，点修复重装同一版本"));
                     if (!full) notifyDamaged(v);
                 } catch (Exception e) {
-                    devkit.set("error", "校验失败：" + e.getMessage());
-                    Ledger.add(env, "verify", false, "校验失败：" + e.getMessage(), null);
+                    devkit.set("error", Tr.t("校验失败：") + e.getMessage());
+                    Ledger.add(env, "verify", false, Tr.t("校验失败：") + e.getMessage(), null);
                 }
             }, "upd-verify").start();
-            return r.put("ok", true).put("message", full ? "开始逐个核对（一两分钟）" : "开始核对");
+            return r.put("ok", true).put("message", full ? Tr.t("开始逐个核对（一两分钟）") : Tr.t("开始核对"));
         } catch (Exception e) {
             try { r.put("ok", false).put("message", e.getMessage()); } catch (Exception ignored) {}
             return r;
@@ -523,12 +523,12 @@ final class Updater {
     JSONObject repair() {
         JSONObject r = new JSONObject();
         try {
-            if (devkitMoving()) return r.put("ok", true).put("message", "进行中");
+            if (devkitMoving()) return r.put("ok", true).put("message", Tr.t("进行中"));
             String base = installedDevkitBase();
             if (base.isEmpty()) base = pinnedDevkitBase();
             JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
             if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT)
-                return r.put("ok", false).put("message", tagOf(base) + " 与本版 cccodroid 不兼容");
+                return r.put("ok", false).put("message", Tr.f("{0} 与本版 cccodroid 不兼容", tagOf(base)));
             JSONObject gz = lock.getJSONObject("gz"), tar = lock.optJSONObject("tar");
             devkit.base = base; devkit.latest = tagOf(base);
             devkit.sha = gz.getString("sha256"); devkit.size = gz.getLong("bytes");
@@ -536,26 +536,26 @@ final class Updater {
             devkit.need = tar != null ? tar.optLong("bytes") : devkit.size * 4;
             devkit.url = base + gz.getString("file");
             devkit.file = new File(env.files, gz.getString("file"));
-            devkit.set("available", "修复：重装 " + devkit.latest);
+            devkit.set("available", Tr.t("修复：重装 ") + devkit.latest);
             repairing = true;
-            Ledger.add(env, "repair", true, "开始修复：重新下载 " + devkit.latest, null);
+            Ledger.add(env, "repair", true, Tr.t("开始修复：重新下载 ") + devkit.latest, null);
             new Thread(() -> download(devkit, true), "upd-dl-devkit").start();
-            return r.put("ok", true).put("message", "开始下载 " + devkit.latest + " 用于修复");
+            return r.put("ok", true).put("message", Tr.f("开始下载 {0} 用于修复", devkit.latest));
         } catch (Exception e) {
-            Ledger.add(env, "repair", false, "修复没开始：" + e.getMessage(), null);
-            try { r.put("ok", false).put("message", "修复没开始：" + e.getMessage()); } catch (Exception ignored) {}
+            Ledger.add(env, "repair", false, Tr.t("修复没开始：") + e.getMessage(), null);
+            try { r.put("ok", false).put("message", Tr.t("修复没开始：") + e.getMessage()); } catch (Exception ignored) {}
             return r;
         }
     }
 
     private void notifyDamaged(JSONObject v) {
-        String text = "开发工具包缺了 " + v.optInt("missing") + " 个文件。点此打开设置修复（重装同一版本，你自己装的 pip / npm 包会保留）";
+        String text = Tr.f("开发工具包缺了 {0} 个文件。点此打开设置修复（重装同一版本，你自己装的 pip / npm 包会保留）", v.optInt("missing"));
         PendingIntent pi = PendingIntent.getActivity(ctx, 23,
             new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         ctx.getSystemService(NotificationManager.class).notify(20, new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle("开发工具包不完整")
+            .setContentTitle(Tr.t("开发工具包不完整"))
             .setContentText(text)
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setContentIntent(pi).setAutoCancel(true).build());
@@ -563,14 +563,14 @@ final class Updater {
 
     // ── 通知 ───────────────────────────────────────────────────────────
     private void notifyReady(Item it) {
-        String text = it == app ? "新版本 v" + app.latest + " 已下载，点此安装"
-            : "开发工具包 " + devkit.latest + " 已下载。点此安装（约 1–2 分钟，期间暂停服务）；不点的话下次打开应用且空闲时自动装";
+        String text = it == app ? Tr.f("新版本 v{0} 已下载，点此安装", app.latest)
+            : Tr.f("开发工具包 {0} 已下载。点此安装（约 1–2 分钟，期间暂停服务）；不点的话下次打开应用且空闲时自动装", devkit.latest);
         PendingIntent pi = PendingIntent.getActivity(ctx, it == app ? 21 : 22,
             new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).putExtra("item", it.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle(it.name + " 有更新")
+            .setContentTitle(Tr.f("{0} 有更新", it.name))
             .setContentText(text)
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setContentIntent(pi)

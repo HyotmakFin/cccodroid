@@ -55,6 +55,8 @@
   }
   if (pref !== "auto" && !byCode[pref]) pref = "auto";   // 存了个不认识的值（比如语言被撤掉了）：别卡死在它上面
   const lang = pref === "auto" ? systemLang() : pref;
+  // 告诉 cccodroid 的原生外壳（通知、安装页、更新文案）界面最终用哪种语言；开发端 / 浏览器里没有这个桥就跳过
+  try { const a = window.CCApp; if (a && typeof a.langPref === "function") a.langPref(lang); } catch {}
   const missing = new Set();   // 本次运行里查过但当前语言没译的键，调试用：[...I18N.missing]
 
   window.I18N_DICT = window.I18N_DICT || {};

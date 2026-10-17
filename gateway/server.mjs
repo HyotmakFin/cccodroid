@@ -2276,9 +2276,18 @@ function compFetch(src) {
       (e, so, se) => (e ? reject(new Error(String(se || e.message).trim().slice(0, 200))) : resolve(so)));
   });
 }
+// 备用源：cccodroid.net 镜像了两份索引（连同 .sig，逐字节同 GitHub）。主地址拉不到才用；照样验签，镜像不需要被信任
+const COMP_INDEX_MIRROR = { preset: "https://cccodroid.net/components/official/components.json",
+  community: "https://cccodroid.net/components/community/components.json" };
 /** 取一份索引并验签。unsigned 只在私有目录里有 allow-unsigned 开关文件时才放行（/sdcard 别的应用也能写） */
-async function compFetchIndex(src) {
-  const body = await compFetch(src);
+async function compFetchIndex(src, mirror) {
+  let body;
+  try { body = await compFetch(src); }
+  catch (e) {
+    if (!mirror) throw e;
+    try { body = await compFetch(mirror); src = mirror; } catch { throw e; }
+    log(`组件索引改用镜像：${mirror}`);
+  }
   let sig = null;
   try { sig = Buffer.from(String(await compFetch(src + ".sig")).trim(), "base64"); } catch {}
   const ok = sig && sig.length === 64 && crypto.verify(null, body, COMP_INDEX_PUBKEY, sig);
@@ -2297,7 +2306,7 @@ async function compIndex(force) {
     { source: "preset", url: local && fs.existsSync(local) ? "file://" + local : COMP_INDEX },
     { source: "community", url: COMP_COMMUNITY_INDEX },
   ];
-  const got = await Promise.all(sources.map((s) => compFetchIndex(s.url).then((d) => ({ ...s, d }), (e) => ({ ...s, e }))));
+  const got = await Promise.all(sources.map((s) => compFetchIndex(s.url, s.url.startsWith("file://") ? null : COMP_INDEX_MIRROR[s.source]).then((d) => ({ ...s, d }), (e) => ({ ...s, e }))));
   const components = {}, errors = [];
   for (const g of got) {
     if (g.e) { errors.push(`${g.source}: ${g.e.message}`); continue; }
@@ -3588,6 +3597,171 @@ function toFront(text) {
   if (PREFIX) return privCall({ op: "to_front", text }, 8000);
   return new Promise((ok) => execFile("priv", ["am start --activity-reorder-to-front -n li.dsh.claudecli/.MainActivity"],
     { timeout: 8000, env: process.env }, (e) => ok(e ? { message: e.message.slice(0, 120) } : { via: "priv" })));
+}
+
+// ── 本应用耗电统计（设置页「耗电」卡）──────────────────────────────────────────
+// 应用身份能直接量的只有自己进程的 CPU 时间（/proc/<pid>/stat，同 uid 的进程才看得见）；
+// 电量、充电、亮屏和前台时长由 Java（Battery.java，经 Priv 套接字 op=battery）给，开发端没有这一层就只记 CPU。
+// 每 5 分钟采一次，按「小时」「天」两级桶存（8 天 / 120 天），周由天现算。
+// 系统自己的估算（dumpsys batterystats，按电源模型折成 mAh）要 Shizuku，只在用户点了才查一次 —— 那条命令本身就不轻。
+const ENERGY_FILE = path.join(CFG.home, ".cache", "ccapp-energy.json");
+const ENERGY_STEP = 5 * 60e3, ENERGY_HOUR = 3600e3;
+const energy = { v: 1, last: null, hours: {}, days: {}, levels: [], sys: null };
+try { Object.assign(energy, JSON.parse(fs.readFileSync(ENERGY_FILE, "utf8"))); } catch {}
+const MY_UID = process.getuid();
+const CLK_TCK = 100;   // 安卓内核一律 100
+
+/** 本 uid 所有进程：pid → [启动时刻(tick), 自身+已回收子进程的 CPU(tick), ppid] */
+function energyProcs() {
+  const pids = {};
+  let total = 0;
+  for (const d of fs.readdirSync("/proc")) {
+    if (!/^\d+$/.test(d)) continue;
+    try {
+      if (fs.statSync("/proc/" + d).uid !== MY_UID) continue;
+      const st = fs.readFileSync(`/proc/${d}/stat`, "utf8");
+      const f = st.slice(st.lastIndexOf(")") + 2).split(" ");
+      const v = +f[11] + +f[12] + +f[13] + +f[14];   // utime stime cutime cstime
+      pids[d] = [+f[19], v, +f[1]];
+      total += v;
+    } catch {}
+  }
+  return { pids, total };
+}
+
+const energyDayKey = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const energyHourStart = (ts) => { const d = new Date(ts); d.setMinutes(0, 0, 0); return d.getTime(); };
+
+/** 把一段时间 [a, b) 里的量按时长摊进各小时桶和天桶 */
+function energySpread(a, b, add) {
+  if (!(b > a)) return;
+  for (let t = a; t < b;) {
+    const h = energyHourStart(t), end = Math.min(b, h + ENERGY_HOUR), frac = (end - t) / (b - a);
+    for (const box of [energy.hours[h] ||= {}, energy.days[energyDayKey(t)] ||= {}]) {
+      for (const [k, v] of Object.entries(add)) if (v) box[k] = Math.round(((box[k] || 0) + v * frac) * 1000) / 1000;
+    }
+    t = end;
+  }
+}
+
+async function energySample() {
+  const now = Date.now();
+  const cur = energyProcs();
+  const bat = PREFIX ? await privCall({ op: "battery" }, 5000) : null;
+  const prev = energy.last;
+  if (prev) {
+    // CPU 增量：活着的进程看差值；退出的进程时间会并进父进程的 cutime（父进程也是我们的，就已经在 total 里），
+    // 父进程不在了（被 init 收养）它的时间就跟着消失，要补回来
+    let d = cur.total - prev.total;
+    for (const [pid, [start, v, ppid]] of Object.entries(prev.pids || {})) {
+      const n = cur.pids[pid];
+      if (n && n[0] === start) continue;
+      const par = cur.pids[ppid], parPrev = (prev.pids || {})[ppid];
+      if (!par || !parPrev || par[0] !== parPrev[0]) d += v;
+    }
+    // 中间断了很久（网关没跑 / 关机）：只摊到现存最老的进程起来以后
+    let from = prev.ts;
+    if (now - prev.ts > 2 * ENERGY_STEP) {
+      try {
+        const up = parseFloat(fs.readFileSync("/proc/uptime", "utf8")) * 1000, boot = now - up;
+        const oldest = Math.min(...Object.values(cur.pids).map((x) => x[0])) * (1000 / CLK_TCK) + boot;
+        if (oldest > from) from = Math.min(oldest, now - 1000);
+      } catch {}
+    }
+    const add = { c: Math.max(0, d) / CLK_TCK };
+    if (bat && bat.ok && prev.bat) {
+      const df = (o, k) => (o[k] >= prev.bat[k] ? o[k] - prev.bat[k] : o[k]) / 1000;   // 变小 = 应用进程重启过，从零数
+      add.f = df(bat, "fgMs");
+      add.s = df(bat, "screenMs");
+      // 整机掉电（百分点）：两头都没在充电才算
+      if (!bat.charging && !prev.bat.charging && bat.level >= 0 && prev.bat.level > bat.level) add.d = prev.bat.level - bat.level;
+    }
+    energySpread(from, now, add);
+  }
+  energy.last = { ts: now, total: cur.total, pids: cur.pids, bat: bat && bat.ok ? { fgMs: bat.fgMs, screenMs: bat.screenMs, level: bat.level, charging: bat.charging } : null };
+  if (bat && bat.ok && bat.level >= 0) energy.levels.push([now, Math.round(bat.level * 10) / 10, bat.charging ? 1 : 0]);
+  // 修剪：小时桶 8 天、天桶 120 天、电量曲线 26 小时
+  const hCut = now - 8 * 86400e3, dCut = energyDayKey(now - 120 * 86400e3), lCut = now - 26 * ENERGY_HOUR;
+  for (const k of Object.keys(energy.hours)) if (+k < hCut) delete energy.hours[k];
+  for (const k of Object.keys(energy.days)) if (k < dCut) delete energy.days[k];
+  while (energy.levels.length && energy.levels[0][0] < lCut) energy.levels.shift();
+  try {
+    fs.mkdirSync(path.dirname(ENERGY_FILE), { recursive: true });
+    fs.writeFileSync(ENERGY_FILE + ".tmp", JSON.stringify(energy));
+    fs.renameSync(ENERGY_FILE + ".tmp", ENERGY_FILE);
+  } catch {}
+  return bat;
+}
+let energyBusy = null;
+const energySampleOnce = () => (energyBusy ||= energySample().finally(() => { energyBusy = null; }));
+setTimeout(() => energySampleOnce().catch(() => {}), 20e3).unref();
+setInterval(() => energySampleOnce().catch(() => {}), ENERGY_STEP).unref();
+
+/** 给设置页：view = hour（近 24 小时）/ day（近 14 天）/ week（近 12 周，周一起） */
+async function energyReport(view) {
+  const bat = await energySampleOnce().catch(() => null);
+  const now = Date.now(), bars = [];
+  const sum = (to, o) => { for (const k of ["c", "f", "s", "d"]) to[k] = (to[k] || 0) + (o[k] || 0); return to; };
+  if (view === "day" || view === "week") {
+    const n = view === "day" ? 14 : 12, d0 = new Date(now); d0.setHours(12, 0, 0, 0);
+    if (view === "week") d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7));   // 本周一
+    for (let i = n - 1; i >= 0; i--) {
+      const s = new Date(d0); s.setDate(s.getDate() - i * (view === "day" ? 1 : 7));
+      const b = { t: energyDayKey(s.getTime()) };
+      for (let j = 0; j < (view === "day" ? 1 : 7); j++) {
+        const x = new Date(s); x.setDate(x.getDate() + j);
+        const o = energy.days[energyDayKey(x.getTime())];
+        if (o) sum(b, o);
+      }
+      bars.push(b);
+    }
+  } else {
+    const h0 = energyHourStart(now);
+    for (let i = 23; i >= 0; i--) {
+      const h = h0 - i * ENERGY_HOUR;   // 夏令时那天会有一格错位，不影响看趋势
+      bars.push(sum({ t: h }, energy.hours[h] || {}));
+    }
+  }
+  const first = Math.min(...Object.keys(energy.hours).map(Number), now);
+  return {
+    ok: true, view, now, bars, since: first,
+    levels: view === "hour" || !view ? energy.levels.filter((l) => l[0] >= now - 24 * ENERGY_HOUR) : [],
+    battery: bat && bat.ok ? { level: bat.level, charging: bat.charging, currentUa: bat.currentUa, temp: bat.temp, screen: bat.screen } : null,
+    native: !!PREFIX, sys: energy.sys,
+  };
+}
+
+/** 系统自己的账（dumpsys batterystats --checkin，自上次充满起）：本应用折算多少 mAh、在所有应用里排第几 */
+function energySystem() {
+  return new Promise((resolve) => {
+    // 两路输出并成一路：开发端的 priv（rish）在没有终端时会把一部分 stdout 吐到 stderr，分开收就是两半残缺的行
+    execFile("sh", ["-c", "priv \"dumpsys batterystats --checkin\" 2>&1 </dev/null"], { env: { ...process.env, PATH: claudeEnv().PATH }, timeout: 60000, maxBuffer: 32 << 20 }, (err, out, errOut) => {
+      if (!out || !out.includes(",l,pwi,")) return resolve({ ok: false, message: (errOut || (err && err.message) || tz("没拿到数据")).trim().slice(0, 300) });
+      const apps = {}, names = {};
+      let cap = 0, used = 0, since = 0, me = null;
+      for (const line of out.split("\n")) {
+        const f = line.split(",");
+        if (f[0] !== "9") continue;
+        const uid = +f[1];
+        if (f[2] === "i" && f[3] === "uid") (names[f[4]] ||= f[5]);
+        if (f[2] !== "l") continue;
+        if (f[3] === "pwi" && f[4] === "uid" && uid >= 10000) apps[uid] = { mah: +f[5], screen: +f[7] || 0 };
+        else if (f[3] === "pws") { cap = +f[4]; used = +f[5]; }
+        else if (f[3] === "bt" && uid === 0) since = +f[3 + 2] || 0;
+        else if (f[3] === "cpu" && uid === MY_UID) (apps[uid] ||= { mah: 0, screen: 0 }).cpuMs = +f[4] + +f[5];
+        else if (f[3] === "fg" && uid === MY_UID) (apps[uid] ||= { mah: 0, screen: 0 }).fgMs = +f[4];
+      }
+      const rank = Object.entries(apps).sort((a, b) => b[1].mah - a[1].mah);
+      const i = rank.findIndex(([u]) => +u === MY_UID);
+      if (i >= 0) me = { ...apps[MY_UID], rank: i + 1 };
+      energy.sys = {
+        at: Date.now(), cap, used, sinceMs: since, me,
+        apps: rank.length, top: rank.slice(0, 5).map(([u, a]) => ({ name: names[u] || "uid " + u, mah: a.mah, me: +u === MY_UID })),
+      };
+      try { fs.writeFileSync(ENERGY_FILE, JSON.stringify(energy)); } catch {}
+      resolve({ ok: true, sys: energy.sys });
+    });
+  });
 }
 
 /** 问应用进程里的提权中转（Priv.java）。只在 cccodroid 布局下存在 */
@@ -4976,6 +5150,8 @@ const server = http.createServer(async (req, res) => {
     // 我们只转交用户在授权页拿到的一次性授权码（等同于在终端里粘贴），不读、不存任何凭据。
     // ── Shizuku（调试提权）──
     // ── 内存管家 ──
+    if (req.method === "GET" && p === "/api/energy") return sendJson(res, 200, await energyReport(u.searchParams.get("view") || "hour"));
+    if (req.method === "POST" && p === "/api/energy/system") return sendJson(res, 200, await energySystem());
     if (req.method === "GET" && p === "/api/mem/status") return sendJson(res, 200, await ccMem(["status", "--json"]));
     if (req.method === "POST" && p === "/api/mem/clear") {
       const b = JSON.parse((await readBody(req)) || "{}");
