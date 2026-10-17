@@ -65,6 +65,7 @@ public class GatewayService extends Service {
 
         // 提权中转：和网关同寿命（priv 命令、设置页的 Shizuku 状态都靠它）
         Priv.start(this);
+        Battery.watch(this);   // 耗电统计：数亮屏时长
         self = this;
         Updater.get(this).loop();
         // Shizuku 掉了（重启、被杀）而用户开着自动激活：自己重新拉起来

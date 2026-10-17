@@ -293,6 +293,7 @@ final class Priv {
                     resp = new JSONObject().put("ok", true);
                     break;
                 }
+                case "battery": resp = Battery.snapshot(ctx); break;   // 耗电统计（网关每 5 分钟取一次）
                 case "usb_list": resp = Usb.list(ctx); break;
                 // 一键安装 / 激活 Shizuku（ShizukuSetup），进度在 status 的 setup 字段里
                 case "shz_install": ShizukuSetup.get(ctx).install(false); resp = status(); break;

@@ -188,11 +188,11 @@ public class MainActivity extends Activity {
         if (booted) handle(i); else pending = i;
     }
 
-    @Override protected void onResume() { super.onResume(); visible = true;
+    @Override protected void onResume() { super.onResume(); visible = true; Battery.foreground(true);
         if (pane != null) pane.resume();
         getSystemService(android.app.NotificationManager.class).cancel(41);    // Priv.toFront 的「点此回来」
         Notify.get(this).onForeground(); }                                    // 确认卡就在眼前，通知撤掉
-    @Override protected void onPause() { visible = false; super.onPause();
+    @Override protected void onPause() { visible = false; Battery.foreground(false); super.onPause();
         if (pane != null) pane.pause();
         Notify.get(this).onBackground(); }                                    // 还有没答的确认：现在补发通知
 
