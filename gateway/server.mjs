@@ -344,6 +344,154 @@ async function testProvider(id) {
     return { ok: false, message: tz("连不上：{err}", { err: e.message }) };
   }
 }
+// ── 余额与消费（设置页的厂商卡片）────────────────────────────────────
+// 余额：问平台（各家接口不一样，没开放的就没有）。
+// 消费：没有一家给 API Key 开放账单接口，只能自己记 —— 每次查到余额记一笔，比上次少了就是花掉的，
+//       多了是充值（不算消费）。算的是整个账号的真实花费，同一把 Key 在别处用掉的也算。
+// token：每轮结束按 claude 报的用量记一笔，所有厂商都有（查不了余额的平台就看这个）。
+const BILL_FILE = path.join(CFG.home, "ccapp-billing.json");
+let BILL = (() => { try { return JSON.parse(fs.readFileSync(BILL_FILE, "utf8")) || {}; } catch { return {}; } })();
+let billSaveT = null;
+const saveBill = () => { clearTimeout(billSaveT); billSaveT = setTimeout(() => { try { fs.writeFileSync(BILL_FILE, JSON.stringify(BILL), { mode: 0o600 }); } catch {} }, 500); };
+const billOf = (id) => (BILL[id] ||= { since: Date.now(), spends: [], spentOld: 0, tok: [], tokOld: { in: 0, out: 0, cache: 0 } });
+const KEEP_MS = 92 * 86400e3;   // 明细留三个月，更早的并进累计
+
+/** 按端点认平台。认不出的（含自定义）就只记 token */
+function billKind(v) {
+  const u = String(v.baseUrl || "");
+  if (/\/\/api\.deepseek\.com/.test(u)) return { kind: "deepseek" };
+  if (/\/\/api\.moonshot\.cn/.test(u)) return { kind: "kimi", host: "https://api.moonshot.cn", currency: "CNY" };
+  if (/\/\/api\.moonshot\.ai/.test(u)) return { kind: "kimi", host: "https://api.moonshot.ai", currency: "USD" };
+  if (/\/\/open\.bigmodel\.cn/.test(u)) return { kind: "glm", host: "https://open.bigmodel.cn" };
+  if (/\/\/api\.z\.ai/.test(u)) return { kind: "glm", host: "https://api.z.ai" };
+  if (/\/\/openrouter\.ai/.test(u)) return { kind: "openrouter", currency: "USD" };
+  return { kind: "none" };
+}
+
+async function fetchJson(url, headers) {
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+  const text = await r.text();
+  let j = null; try { j = JSON.parse(text); } catch {}
+  if (!r.ok) throw new Error(`HTTP ${r.status}：${(j && (j.error?.message || j.message || j.msg)) || text.slice(0, 120)}`);
+  return j;
+}
+
+/** 问平台要余额 → { currency, balance, parts:[{k,v}] } 或套餐额度 { plan:[...] } */
+async function queryBalance(v, k) {
+  const key = String(v.apiKey || "").trim();
+  if (k.kind === "deepseek") {
+    const j = await fetchJson("https://api.deepseek.com/user/balance", { Authorization: `Bearer ${key}` });
+    const b = (j.balance_infos || [])[0];
+    if (!b) throw new Error("no balance_infos");
+    return { currency: b.currency, balance: +b.total_balance, parts: [{ k: "granted", v: +b.granted_balance }, { k: "topped", v: +b.topped_up_balance }], available: j.is_available !== false };
+  }
+  if (k.kind === "kimi") {
+    const j = await fetchJson(k.host + "/v1/users/me/balance", { Authorization: `Bearer ${key}` });
+    if (j.code !== 0 || !j.data) throw new Error(j.error?.message || j.message || "code " + j.code);
+    return { currency: k.currency, balance: +j.data.available_balance, parts: [{ k: "voucher", v: +j.data.voucher_balance }, { k: "cash", v: +j.data.cash_balance }] };
+  }
+  if (k.kind === "openrouter") {
+    const j = await fetchJson("https://openrouter.ai/api/v1/key", { Authorization: `Bearer ${key}` });
+    const d = j.data || {};
+    if (d.limit_remaining == null) return { currency: "USD", balance: null, usage: +d.usage || 0 };
+    return { currency: "USD", balance: +d.limit_remaining, usage: +d.usage || 0 };
+  }
+  if (k.kind === "glm") {
+    // 智谱没有公开的余额接口；这是官方用量插件用的 Coding Plan 额度接口（非公开，可能变）。按量计费的 Key 查不到
+    let j, err;
+    for (const auth of [key, `Bearer ${key}`]) {
+      try { j = await fetchJson(k.host + "/api/monitor/usage/quota/limit", { Authorization: auth, "Accept-Language": "zh-CN,zh" }); break; } catch (e) { err = e; }
+    }
+    if (!j) throw err;
+    const lim = (j.data && j.data.limits) || [];
+    if (!lim.length) return { plan: [], level: j.data && j.data.level };
+    return {
+      level: j.data.level || null,
+      plan: lim.map((x) => ({
+        window: x.unit === 3 ? "5h" : x.unit === 6 ? "week" : x.unit === 5 ? "month" : String(x.unit || ""),
+        type: x.type || "", pct: Number(x.percentage) || 0, resetsAt: Number(x.nextResetTime) || 0,
+        used: x.usage != null ? +x.usage : null, remaining: x.remaining != null ? +x.remaining : null,
+      })),
+    };
+  }
+  return null;
+}
+
+/** 记一次余额：比上次少 → 消费；多 → 充值（只更新基准） */
+function noteBalance(id, cur, bal) {
+  if (!Number.isFinite(bal)) return;
+  const b = billOf(id);
+  if (b.currency && b.currency !== cur) { b.last = null; }      // 换了币种（换了线路）：重新起算
+  b.currency = cur;
+  const now = Date.now();
+  if (b.last && Number.isFinite(b.last.bal)) {
+    const d = +(b.last.bal - bal).toFixed(6);
+    if (d > 0) b.spends.push([now, d]);
+    else if (d < 0) b.topups = (b.topups || 0) + 1;
+  }
+  b.last = { at: now, bal };
+  const cut = now - KEEP_MS;
+  while (b.spends.length && b.spends[0][0] < cut) b.spentOld += b.spends.shift()[1];
+  saveBill();
+}
+
+/** 一轮结束记 token（按小时合并） */
+function noteTokens(id, u) {
+  if (!id || !u) return;
+  const b = billOf(id);
+  const hour = Math.floor(Date.now() / 3600e3) * 3600e3;
+  const add = [u.input_tokens || 0, u.output_tokens || 0, (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0)];
+  const last = b.tok[b.tok.length - 1];
+  if (last && last[0] === hour) for (let i = 0; i < 3; i++) last[i + 1] += add[i];
+  else b.tok.push([hour, ...add]);
+  const cut = Date.now() - KEEP_MS;
+  while (b.tok.length && b.tok[0][0] < cut) { const x = b.tok.shift(); b.tokOld.in += x[1]; b.tokOld.out += x[2]; b.tokOld.cache += x[3]; }
+  saveBill();
+}
+
+// 汇率：界面货币跟语言走（中文显示人民币，其余显示美元），账户币种不同时按汇率换算并标「≈」。半天取一次
+let FX = null;
+async function usdCny() {
+  if (FX && Date.now() - FX.at < 12 * 3600e3) return FX;
+  try {
+    const j = await fetchJson("https://open.er-api.com/v6/latest/USD", {});
+    if (j.result === "success" && j.rates && j.rates.CNY) FX = { rate: +j.rates.CNY, at: Date.now(), src: "open.er-api.com" };
+  } catch (e) { log(`汇率获取失败：${e.message}`); }
+  return FX;
+}
+
+const BAL_CACHE = new Map();   // id → { at, data }
+async function billingInfo(id, force) {
+  const v = PROVIDERS_CFG.providers[id];
+  if (!v) return { error: tz("没有这家厂商") };
+  const k = billKind(v);
+  const out = { id, kind: k.kind, hasKey: !!String(v.apiKey || "").trim() };
+  if (k.kind !== "none" && out.hasKey) {
+    const c = BAL_CACHE.get(id);
+    if (!force && c && Date.now() - c.at < 60000) Object.assign(out, c.data);
+    else {
+      try {
+        const d = await queryBalance(v, k);
+        if (d && d.currency && Number.isFinite(d.balance)) noteBalance(id, d.currency, d.balance);
+        BAL_CACHE.set(id, { at: Date.now(), data: d || {} });
+        Object.assign(out, d || {});
+      } catch (e) { out.balanceError = e.message; }
+    }
+  }
+  const b = BILL[id];
+  if (b) Object.assign(out, { since: b.since, spends: b.spends, spentOld: b.spentOld, ledgerCurrency: b.currency || null, tok: b.tok, tokOld: b.tokOld, checkedAt: b.last ? b.last.at : null });
+  out.fx = await usdCny();
+  return out;
+}
+
+/** 一轮跑完顺手查一次余额（能查的平台），消费记录才连得上。同一家 20 秒内只查一次 */
+const billPending = new Map();
+function billAfterRun(id) {
+  const v = PROVIDERS_CFG.providers[id];
+  if (!v || billKind(v).kind === "none" || !String(v.apiKey || "").trim() || billPending.has(id)) return;
+  billPending.set(id, setTimeout(() => { billPending.delete(id); billingInfo(id, true).catch(() => {}); }, 20000));
+}
+
 let PROVIDER = BUILTIN_PROVIDER;
 
 /** 逐级回落取密钥：生效厂商自带 → 环境变量 → 历史配置文件 */
@@ -1761,6 +1909,199 @@ function ptyCommand() {
 }
 
 /** 终端里的环境：与 claude 的工具子进程同一套 PATH / TMPDIR / terminfo，但它是给人用的 —— 要颜色，不要 CI 标记。 */
+// ── git 可视化：改了哪些文件、逐行对比、提交历史、提交 / 撤销 ──────────────
+// 只是 git 命令的薄壳，用终端同一套环境（PATH 里有 git）。仓库位置由前端给（文件面板当前目录 / 编辑器里的文件）
+const GIT_MAX = 768 * 1024;
+function git(cwd, args, { input, timeout = 30000, max = GIT_MAX } = {}) {
+  return new Promise((resolve) => {
+    const c = execFile("git", ["-c", "core.quotePath=false", "-c", "color.ui=false", ...args],
+      { cwd, env: { ...termEnv(), GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C.UTF-8" }, timeout, maxBuffer: max * 2, encoding: "utf8" },
+      (err, out, errOut) => resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: out || "", err: (errOut || (err && err.code === "ENOENT" ? "找不到 git" : err?.message) || "").trim() }));
+    if (input != null) { c.stdin.end(input); }
+  });
+}
+/** 从任意路径（文件或目录）找到所在仓库；密钥所在的私有目录一律不碰 */
+async function gitRepo(p) {
+  let dir = String(p || CFG.workspace).trim();
+  if (!path.isAbsolute(dir)) dir = path.join(CFG.workspace, dir);
+  try { dir = fs.realpathSync(dir); } catch { return { error: tz("路径不存在") }; }
+  try { if (!fs.statSync(dir).isDirectory()) dir = path.dirname(dir); } catch {}
+  const r = await git(dir, ["rev-parse", "--show-toplevel"]);
+  if (r.code) return { error: /not a git repository/i.test(r.err) ? "not_repo" : r.err, notRepo: /not a git repository/i.test(r.err), dir };
+  const root = r.out.trim();
+  for (const s of [CFG.home, CFG.runtime]) {
+    let rr; try { rr = fs.realpathSync(s); } catch { rr = s; }
+    if (rr && (root === rr || root.startsWith(rr + path.sep))) return { error: "forbidden", status: 403 };
+  }
+  return { root, dir };
+}
+/** 仓库里的相对路径：前端给的可能是绝对路径 */
+/** 仓库里的相对路径：前端给的可能是绝对路径，且 /sdcard 与 /storage/emulated/0 是同一处，按真实路径比（文件删了就解析它的目录） */
+function gitRel(root, f) {
+  let a = path.isAbsolute(f) ? f : path.join(root, f);
+  try { a = fs.realpathSync(a); } catch { try { a = path.join(fs.realpathSync(path.dirname(a)), path.basename(a)); } catch {} }
+  const r = path.relative(root, a);
+  return r.startsWith("..") || path.isAbsolute(r) ? null : r;
+}
+
+async function gitStatus(root) {
+  const r = await git(root, ["status", "--porcelain=v1", "-z", "-b", "--untracked-files=all"]);
+  if (r.code) return { error: r.err };
+  const parts = r.out.split("\0");
+  const out = { root, branch: "", upstream: "", ahead: 0, behind: 0, files: [] };
+  for (let i = 0; i < parts.length; i++) {
+    const s = parts[i]; if (!s) continue;
+    if (s.startsWith("## ")) {
+      const m = s.slice(3).match(/^(.+?)(?:\.\.\.(\S+))?(?: \[(.+)\])?$/);
+      if (m) {
+        out.branch = m[1].replace(/^No commits yet on /, "");
+        out.upstream = m[2] || "";
+        const a = (m[3] || "").match(/ahead (\d+)/), b = (m[3] || "").match(/behind (\d+)/);
+        out.ahead = a ? +a[1] : 0; out.behind = b ? +b[1] : 0;
+      }
+      continue;
+    }
+    const x = s[0], y = s[1], file = s.slice(3);
+    const f = { path: file, x, y };
+    if (x === "R" || x === "C") f.orig = parts[++i];
+    f.kind = x === "?" ? "new" : (x === "U" || y === "U" || (x === "A" && y === "A") || (x === "D" && y === "D")) ? "conflict"
+      : (x === "D" || y === "D") ? "deleted" : (x === "A") ? "added" : (x === "R") ? "renamed" : "modified";
+    f.staged = x !== " " && x !== "?";
+    out.files.push(f);
+    if (out.files.length >= 1000) { out.truncated = true; break; }
+  }
+  // 每个文件的增删行数（工作区对 HEAD；新文件按行数算）
+  const ns = await git(root, ["diff", "HEAD", "--numstat", "-z"]);
+  if (!ns.code) {
+    const map = new Map();
+    for (const rec of ns.out.split("\0")) { const m = rec.match(/^(\d+|-)\t(\d+|-)\t(.+)$/); if (m) map.set(m[3], [m[1], m[2]]); }
+    for (const f of out.files) { const n = map.get(f.path); if (n) { f.add = n[0] === "-" ? null : +n[0]; f.del = n[1] === "-" ? null : +n[1]; } }
+  }
+  for (const f of out.files) if (f.kind === "new" && f.add == null) {
+    try { const st = fs.statSync(path.join(root, f.path)); if (st.size < 2 << 20) { const t = fs.readFileSync(path.join(root, f.path)); f.add = t.includes(0) ? null : (t.length ? t.toString("utf8").split("\n").length - (t[t.length - 1] === 10 ? 1 : 0) : 0); f.del = 0; f.binary = t.includes(0); } } catch {}
+  }
+  return out;
+}
+
+async function handleGit(req, res, p, u) {
+  const q = (k) => u.searchParams.get(k) || "";
+  const body = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
+  const act = p.slice("/api/git/".length);
+  const repo = await gitRepo(req.method === "POST" ? body.dir : q("dir"));
+  // 还不是仓库：只允许「建一个」（私有目录除外）
+  if (repo.notRepo && act === "init" && req.method === "POST") {
+    for (const s of [CFG.home, CFG.runtime]) {
+      let rr; try { rr = fs.realpathSync(s); } catch { rr = s; }
+      if (rr && (repo.dir === rr || repo.dir.startsWith(rr + path.sep))) return sendJson(res, 403, { error: "forbidden" });
+    }
+    const r = await git(repo.dir, ["init"]);
+    log(`[git] 新建仓库 ${repo.dir}`);
+    return sendJson(res, r.code ? 500 : 200, r.code ? { error: r.err } : { ok: true, root: repo.dir });
+  }
+  if (repo.error) return sendJson(res, repo.status || (repo.notRepo ? 200 : 400), { error: repo.error, notRepo: !!repo.notRepo, dir: repo.dir });
+  const root = repo.root;
+
+  if (act === "status") return sendJson(res, 200, await gitStatus(root));
+
+  if (act === "diff") {
+    // file 为空 = 整个工作区；commit 有值 = 那次提交里的改动
+    const commit = q("commit"), file = q("file") ? gitRel(root, q("file")) : "";
+    if (q("file") && file == null) return sendJson(res, 400, { error: "outside repo" });
+    let r;
+    if (commit) {
+      if (!/^[0-9a-f]{4,40}$/i.test(commit)) return sendJson(res, 400, { error: "bad commit" });
+      r = await git(root, ["show", "--format=", "--patch", "-M", commit, ...(file ? ["--", file] : [])]);
+    } else {
+      const st = file ? await git(root, ["status", "--porcelain=v1", "-z", "--", file]) : null;
+      if (st && st.out.startsWith("??")) r = await git(root, ["diff", "--no-index", "--", "/dev/null", file]);
+      else {
+        const head = await git(root, ["rev-parse", "--verify", "-q", "HEAD"]);
+        r = await git(root, ["diff", ...(head.code ? ["--cached"] : ["HEAD"]), "-M", ...(file ? ["--", file] : [])]);
+      }
+      if (r.code === 1 && r.out) r.code = 0;            // --no-index 有差异时退出码是 1
+    }
+    if (r.code) return sendJson(res, 500, { error: r.err });
+    return sendJson(res, 200, { root, file, commit, diff: r.out.slice(0, GIT_MAX), truncated: r.out.length > GIT_MAX });
+  }
+
+  if (act === "log") {
+    const n = Math.min(200, Math.max(1, +q("n") || 50)), skip = Math.max(0, +q("skip") || 0);
+    const file = q("file") ? gitRel(root, q("file")) : "";
+    const r = await git(root, ["log", `-n${n}`, `--skip=${skip}`, "--format=%H%x1f%h%x1f%an%x1f%at%x1f%s%x1f%D%x1e", ...(file ? ["--follow", "--", file] : [])]);
+    if (r.code) return sendJson(res, 200, { root, commits: [], error: /does not have any commits/.test(r.err) ? "" : r.err });
+    const commits = r.out.split("\x1e").map((s) => s.trim()).filter(Boolean).map((s) => {
+      const [hash, short, author, at, subject, refs] = s.split("\x1f");
+      return { hash, short, author, at: +at * 1000, subject, refs: refs || "" };
+    });
+    return sendJson(res, 200, { root, commits, more: commits.length === n });
+  }
+
+  if (act === "show") {
+    const c = q("commit");
+    if (!/^[0-9a-f]{4,40}$/i.test(c)) return sendJson(res, 400, { error: "bad commit" });
+    const meta = await git(root, ["show", "-s", "--format=%H%x1f%an%x1f%ae%x1f%at%x1f%B", c]);
+    if (meta.code) return sendJson(res, 404, { error: meta.err });
+    const [hash, author, email, at, message] = meta.out.split("\x1f");
+    const ns = await git(root, ["show", "--format=", "--numstat", "-M", "-z", c]);
+    const nm = await git(root, ["show", "--format=", "--name-status", "-M", "-z", c]);
+    const files = [];
+    const a = nm.out.split("\0").filter((x) => x !== "");
+    for (let i = 0; i < a.length; i++) {
+      const s = a[i][0];
+      const f = { status: s, path: a[++i] };
+      if (s === "R" || s === "C") { f.orig = f.path; f.path = a[++i]; }
+      files.push(f);
+    }
+    const nums = ns.out.split("\0");
+    for (const rec of nums) { const m = rec.match(/^(\d+|-)\t(\d+|-)\t(.*)$/); if (!m) continue; const f = files.find((x) => x.path === m[3]) || files.find((x) => !("add" in x)); if (f) { f.add = m[1] === "-" ? null : +m[1]; f.del = m[2] === "-" ? null : +m[2]; } }
+    return sendJson(res, 200, { root, hash, author, email, at: +at * 1000, message: (message || "").trim(), files });
+  }
+
+  if (req.method !== "POST") return sendJson(res, 404, { error: "unknown" });
+
+  if (act === "commit") {
+    const msg = String(body.message || "").trim();
+    if (!msg) return sendJson(res, 400, { error: tz("写一句提交说明") });
+    const files = Array.isArray(body.files) ? body.files.map((f) => gitRel(root, String(f))).filter((f) => f != null) : null;
+    const who = await git(root, ["config", "user.email"]);
+    if (!who.out.trim()) return sendJson(res, 409, { error: "no_identity", message: tz("还没设置 git 的名字和邮箱（提交记录里署名用）。") });
+    const add = files && files.length ? await git(root, ["add", "-A", "--", ...files]) : await git(root, ["add", "-A"]);
+    if (add.code) return sendJson(res, 500, { error: add.err });
+    const r = await git(root, ["commit", "-F", "-", ...(files && files.length ? ["--", ...files] : [])], { input: msg + "\n" });
+    if (r.code) return sendJson(res, 500, { error: r.err || r.out.trim() });
+    const h = await git(root, ["rev-parse", "--short", "HEAD"]);
+    log(`[git] 提交 ${h.out.trim()} @ ${root}`);
+    return sendJson(res, 200, { ok: true, hash: h.out.trim(), message: tz("已提交 {hash}", { hash: h.out.trim() }) });
+  }
+
+  if (act === "identity") {
+    const name = String(body.name || "").trim(), email = String(body.email || "").trim();
+    if (!name || !/^[^@\s]+@[^@\s]+$/.test(email)) return sendJson(res, 400, { error: tz("名字和邮箱都要填") });
+    await git(root, ["config", "--global", "user.name", name]);
+    await git(root, ["config", "--global", "user.email", email]);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (act === "discard") {
+    // 撤销一个文件的改动：改回上次提交时的样子；新文件（没被 git 记录过的）直接删掉
+    const file = gitRel(root, String(body.file || ""));
+    if (!file) return sendJson(res, 400, { error: "file required" });
+    const st = await git(root, ["status", "--porcelain=v1", "-z", "--", file]);
+    if (!st.out) return sendJson(res, 200, { ok: true, message: tz("没有改动") });
+    if (st.out.startsWith("??")) {
+      try { fs.rmSync(path.join(root, file), { force: true }); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+    } else {
+      const head = await git(root, ["rev-parse", "--verify", "-q", "HEAD"]);
+      const r = head.code ? await git(root, ["rm", "--cached", "-f", "-q", "--", file]) : await git(root, ["checkout", "HEAD", "--", file]);
+      if (r.code) return sendJson(res, 500, { error: r.err });
+    }
+    log(`[git] 撤销 ${file} @ ${root}`);
+    return sendJson(res, 200, { ok: true, message: tz("已撤销") });
+  }
+
+  return sendJson(res, 404, { error: "unknown" });
+}
+
 function termEnv() {
   const env = claudeEnv();
   for (const k of ["CI", "NO_COLOR", "CLAUDE_CODE_SHELL", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CCAPP_RUN"]) delete env[k];   // 终端里用户自己起的东西不算 claude 运行，网关重启时别当孤儿清
@@ -2964,6 +3305,7 @@ async function startRun(item) {
     cid: item.cid,
     startedAt: Date.now(),
     child: null, aborted: false, ended: false,
+    provider: PROVIDER.id,             // 记 token 用：开跑时的厂商（跑着的时候不许切）
     log: [], pend: null, pendTimer: null,
   };
   run.lane = laneOfItem(item);
@@ -3204,6 +3546,8 @@ async function startRun(item) {
       log(`✔ 完成 ${ms}ms  ${lastResult.num_turns || "?"} 轮  ` +
           `上下文=${flags.contextTokens ?? "?"} out=${lastResult.usage?.output_tokens ?? "?"}  ` +
           `$${Number(lastResult.total_cost_usd || 0).toFixed(5)}${localCmd ? "  [" + localCmd + "]" : ""}`);
+      noteTokens(run.provider, lastResult.usage);
+      billAfterRun(run.provider);
       return endRun(run, {
         durationMs: ms,
         // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报
@@ -4045,6 +4389,10 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await testProvider(String(b.id || PROVIDER.id)));
     }
 
+    if (req.method === "GET" && p === "/api/billing") {
+      return sendJson(res, 200, await billingInfo(String(u.searchParams.get("id") || PROVIDER.id), u.searchParams.get("refresh") === "1"));
+    }
+
     // ── 设置 ──
     if (p === "/api/settings") {
       if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, maxParallel: maxParallel(), maxParallelCap: MAX_PARALLEL_CAP, workspace: CFG.workspace, outputStyles: outputStyles() });
@@ -4274,6 +4622,7 @@ const server = http.createServer(async (req, res) => {
     // ── 可选组件（浏览器组件等）──
     if (p === "/api/components" || p.startsWith("/api/components/")) return handleComponents(req, res, p, u);
     if (p.startsWith("/api/gh/")) return handleGh(req, res, p);
+    if (p.startsWith("/api/git/")) return handleGit(req, res, p, u);
 
     // ── 能力清单 ──
     if (req.method === "GET" && p === "/api/capabilities") {

@@ -773,14 +773,14 @@ html.dock-l body{padding-inline-start:var(--lw)}
 html.has-right body{padding-inline-end:var(--rw)}
 html.dock-l #drawer{inset-inline-end:auto;width:var(--lw);background:none;backdrop-filter:none;z-index:40}
 html.dock-l .drawer-panel{inset:0;width:auto;animation:none;border-inline-start:0;border-inline-end:1px solid var(--line)}
-html.has-right #files,html.has-right #viewer,html.has-right #term,html.has-right #term-textview{
+html.has-right #files,html.has-right #viewer,html.has-right #git,html.has-right #term,html.has-right #term-textview{
   inset-inline-start:auto;width:var(--rw);border-inline-start:1px solid var(--line);z-index:70;
 }
-html.has-right #files.ws-top,html.has-right #viewer.ws-top,html.has-right #term.ws-top{z-index:71}
+html.has-right #files.ws-top,html.has-right #viewer.ws-top,html.has-right #git.ws-top,html.has-right #term.ws-top{z-index:71}
 html.has-right #term-textview{z-index:73}
 html.has-right #files{padding:calc(var(--safe-t) + 8px) 12px calc(var(--safe-b) + 8px)}
 html.has-right #popup{inset-inline-end:calc(var(--rw) + 22px)}
-html.ws-multi #files,html.ws-multi #viewer,html.ws-multi #term,html.ws-multi #term-textview{padding-top:calc(var(--safe-t) + 44px)}
+html.ws-multi #files,html.ws-multi #viewer,html.ws-multi #git,html.ws-multi #term,html.ws-multi #term-textview{padding-top:calc(var(--safe-t) + 44px)}
 #ws-tabs{display:none}
 html.ws-multi #ws-tabs{
   display:flex;gap:4px;position:fixed;top:calc(var(--safe-t) + 6px);inset-inline-end:8px;
@@ -852,3 +852,46 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .live-tail{display:flex;align-items:center;gap:8px;margin-top:4px;min-height:18px}
 .live-tail .cursor{vertical-align:0}
 .live-tail .tail-time{font-size:11.5px;color:var(--fg3);font-variant-numeric:tabular-nums}
+.bill{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.bill-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bill-big{margin:4px 0 2px}
+.bill-big b{font-size:16px}
+.bill-grid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:6px 0 2px;font-size:13px}
+.bill-grid span:nth-child(odd){color:var(--fg3)}
+
+/* ── git 面板 ── */
+#git{position:fixed;inset:0;z-index:71;background:var(--bg);display:flex;flex-direction:column;padding:calc(var(--safe-t) + 6px) 8px calc(var(--safe-b) + 6px)}
+#git-body{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+.git-tabs{display:flex;gap:6px;margin:0 0 8px}
+.git-tab{flex:0 0 auto;padding:5px 14px;border-radius:9px;border:1px solid var(--line);background:none;color:var(--fg2);font:inherit;font-size:13px}
+.git-tab.on{border-color:var(--accent);color:var(--fg);background:var(--bg2)}
+.git-row{display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid var(--line);font-size:13px;min-width:0}
+.git-row .gp{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.git-row .gp bdi{direction:ltr;unicode-bidi:isolate}
+.git-row input[type=checkbox]{margin:0;flex:0 0 auto}
+.gs{flex:0 0 auto;width:1.4em;text-align:center;font-weight:600;font-family:var(--mono,monospace);font-size:12px}
+.gs-modified,.gs-renamed{color:var(--warn)} .gs-added,.gs-new{color:var(--ok)} .gs-deleted,.gs-conflict{color:var(--err)}
+.gn{flex:0 0 auto;font-family:var(--mono,monospace);font-size:11.5px}
+.gn .a{color:var(--ok)} .gn .d{color:var(--err)}
+.git-row .btn{width:auto;margin:0;flex:0 0 auto}
+.git-commit{position:sticky;bottom:0;background:var(--bg);padding:8px 0 2px;border-top:1px solid var(--line);margin-top:6px}
+.git-commit textarea{width:100%;min-height:54px;resize:vertical;box-sizing:border-box}
+.git-commit .row-actions{margin-top:6px}
+.git-log .git-row{flex-wrap:wrap;cursor:pointer}
+.git-log .subj{flex:1 1 60%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+.git-log .meta{flex:1 1 100%;font-size:11px;color:var(--fg3)}
+.git-ref{font-size:10px;padding:0 5px;border-radius:5px;border:1px solid var(--accent);color:var(--accent);margin-inline-end:4px}
+.git-back{margin:0 0 8px}
+.gdiff{font-family:var(--mono,monospace);font-size:12px;line-height:1.45;margin:0 0 10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.gdiff .fh{padding:5px 8px;background:var(--bg2);color:var(--fg);font-weight:600;word-break:break-all;position:sticky;top:0}
+.gdiff .ln{display:flex;min-width:0}
+.gdiff .no{flex:0 0 auto;width:3.4em;text-align:right;padding-inline-end:6px;color:var(--fg3);user-select:none;opacity:.8}
+.gdiff .tx{flex:1;min-width:0;white-space:pre-wrap;word-break:break-all;padding:0 6px}
+.gdiff.nowrap .tx{white-space:pre;word-break:normal}
+.gdiff .add{background:color-mix(in srgb,var(--ok) 16%,transparent)}
+.gdiff .del{background:color-mix(in srgb,var(--err) 16%,transparent)}
+.gdiff .hunk{color:var(--tool);background:var(--bg2)}
+.gdiff .meta{color:var(--fg3)}
+.fs-git-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-start:6px;vertical-align:middle;flex:0 0 auto}
+.fs-git-dot.modified,.fs-git-dot.renamed{background:var(--warn)} .fs-git-dot.new,.fs-git-dot.added{background:var(--ok)} .fs-git-dot.deleted,.fs-git-dot.conflict{background:var(--err)}
+.vw-diff{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}

@@ -2032,6 +2032,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
     $("fs-insert").disabled = !state.fs.sel;
     renderFsPreview();
+    fsGitDots();
   }
 
   const fullPathOf = (e) => state.fs.path.replace(/\/$/, "") + "/" + e.name;
@@ -2124,7 +2125,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("fs-mkdir").addEventListener("click", () => fsCreate(true));
 
   $("fs-close").addEventListener("click", closeFiles);
-  $("fs-reload").addEventListener("click", () => fsLoad(state.fs.path, { keepSel: true }));
+  $("fs-reload").addEventListener("click", () => { fsDotsAt = 0; fsLoad(state.fs.path, { keepSel: true }); });
+  $("fs-git").addEventListener("click", () => openGit(state.fs.path));
   $("fs-up").addEventListener("click", () => {
     if (state.fs.parent && state.fs.parent !== state.fs.path) fsLoad(state.fs.parent);
   });
@@ -2994,6 +2996,82 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   // ── 密钥卡（Claude API Key 与第三方厂商）──
+  // ── 余额与消费（密钥卡底部）──
+  // 余额问平台；消费是网关按余额变化自己记的（平台都不给账单接口）；token 每轮结束记。
+  // 显示货币跟界面语言走：中文用人民币，其余用美元；账户币种不同就按汇率换算，标「≈」
+  const billCur = () => (/^zh/.test(I18N.lang) ? "CNY" : "USD");
+  function money(v, cur) {
+    try { return new Intl.NumberFormat(I18N.lang, { style: "currency", currency: cur, maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 }).format(v); }
+    catch { return cur + " " + v.toFixed(2); }
+  }
+  function toDisp(v, from, fx) {
+    const to = billCur();
+    if (!from || from === to) return { v, cur: to, approx: false };
+    if (!fx || !fx.rate) return { v, cur: from, approx: false };          // 拿不到汇率就照原币种显示
+    return { v: from === "CNY" ? v / fx.rate : v * fx.rate, cur: to, approx: true };
+  }
+  const compact = (n) => { try { return new Intl.NumberFormat(I18N.lang, { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch { return String(n); } };
+  async function loadBill(p, force) {
+    const el = $("pc-bill"); if (!el) return;
+    if (!el.innerHTML) el.innerHTML = `<div class="tiny">${t("查询余额…")}</div>`;
+    let b;
+    try { b = await api(`/api/billing?id=${encodeURIComponent(p.id)}${force ? "&refresh=1" : ""}`); }
+    catch (e) { el.innerHTML = `<div class="tiny">${esc(t("查询失败：{msg}", { msg: e.message }))}</div>`; return; }
+    if (state.provView !== p.id || !$("pc-bill")) return;
+    const fx = b.fx;
+    const fmt = (v, cur) => { const d = toDisp(v, cur, fx); return (d.approx ? "≈ " : "") + money(d.v, d.cur); };
+    const rows = [];
+    // 余额 / 套餐额度
+    if (b.balanceError) rows.push(`<div class="prov-state err">${esc(t("余额查询失败：{msg}", { msg: b.balanceError }))}</div>`);
+    else if (Number.isFinite(b.balance)) {
+      const PART = { granted: t("赠送"), topped: t("充值"), voucher: t("代金券"), cash: t("现金") };
+      const parts = (b.parts || []).filter((x) => Number.isFinite(x.v)).map((x) => `${PART[x.k] || x.k} ${fmt(x.v, b.currency)}`).join(" · ");
+      rows.push(`<div class="bill-big">${t("余额")} <b>${fmt(b.balance, b.currency)}</b>${b.available === false ? ` <span class="badge warn">${t("不可用")}</span>` : ""}</div>` +
+        (parts ? `<div class="tiny">${parts}</div>` : ""));
+    } else if (b.kind === "openrouter" && Number.isFinite(b.usage)) {
+      rows.push(`<div class="bill-big">${t("已用")} <b>${fmt(b.usage, "USD")}</b></div><div class="tiny">${t("这把 Key 没设额度上限，查不到余额")}</div>`);
+    }
+    if (Array.isArray(b.plan)) {
+      const W = { "5h": t("5 小时"), week: t("每周"), month: t("每月") };
+      rows.push(b.plan.length
+        ? `<div class="quota">${b.plan.map((x) => {
+            const pct = Math.max(0, Math.min(100, x.pct)), cls = pct >= 90 ? "hot" : pct >= 70 ? "warm" : "";
+            const reset = x.resetsAt ? new Date(x.resetsAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+            return `<div class="quota-row"><span class="quota-l">${esc(W[x.window] || x.window)}</span>
+              <span class="quota-bar"><i class="${cls}" style="width:${pct}%"></i></span><span class="quota-v">${Math.round(pct)}%</span>
+              <span class="tiny">${reset ? t("{time} 重置", { time: esc(reset) }) : ""}</span></div>`;
+          }).join("")}<div class="tiny">${t("Coding Plan 套餐额度（智谱没有公开的余额接口，按量计费的 Key 查不到）")}</div></div>`
+        : `<div class="tiny">${t("这把 Key 没有 Coding Plan 套餐额度；智谱没有公开的按量余额接口，请到控制台查看")}</div>`);
+    }
+    if (b.kind === "none") rows.push(`<div class="tiny">${esc(p.id === "qwen"
+      ? t("百炼的余额挂在阿里云主账号上，API Key 查不到，请到百炼控制台查看。下面是本机记录的 token 用量。")
+      : t("这个平台没有开放余额查询接口。下面是本机记录的 token 用量。"))}</div>`);
+    // 消费（按余额变化记的）
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    if (b.ledgerCurrency) {
+      const sp = b.spends || [];
+      const today = sp.filter((x) => x[0] >= midnight.getTime()).reduce((a, x) => a + x[1], 0);
+      const total = (b.spentOld || 0) + sp.reduce((a, x) => a + x[1], 0);
+      rows.push(`<div class="bill-grid"><span>${t("今日消费")}</span><b>${fmt(today, b.ledgerCurrency)}</b>
+        <span>${t("累计消费")}</span><b>${fmt(total, b.ledgerCurrency)}</b></div>
+        <div class="tiny">${esc(t("按余额变化记账，{date} 起；充值不算消费。同一把 Key 在别处用掉的也算在内。", { date: new Date(b.since).toLocaleDateString() }))}</div>`);
+    }
+    // token
+    const tk = b.tok || [];
+    const sum = (arr) => arr.reduce((a, x) => [a[0] + x[1], a[1] + x[2], a[2] + x[3]], [0, 0, 0]);
+    const td = sum(tk.filter((x) => x[0] + 3600e3 > midnight.getTime()));
+    const all = sum(tk), old = b.tokOld || { in: 0, out: 0, cache: 0 };
+    const tl = (a) => t("输入 {i} · 输出 {o} · 缓存 {c}", { i: compact(a[0]), o: compact(a[1]), c: compact(a[2]) });
+    rows.push(`<div class="bill-grid"><span>${t("今日 token")}</span><span>${tk.length ? tl(td) : "—"}</span>
+      <span>${t("累计 token")}</span><span>${tk.length || old.in ? tl([all[0] + old.in, all[1] + old.out, all[2] + old.cache]) : "—"}</span></div>
+      ${tk.length ? "" : `<div class="tiny">${t("用这个接口跑完一轮后开始记录")}</div>`}`);
+    if (fx && fx.rate && [b.currency, b.ledgerCurrency].some((c) => c && c !== billCur()))
+      rows.push(`<div class="tiny">${esc(t("按 1 美元 ≈ {r} 人民币换算（{src}，{time}）", { r: fx.rate.toFixed(3), src: fx.src, time: new Date(fx.at).toLocaleString() }))}</div>`);
+    el.innerHTML = `<div class="bill-head"><span class="sub">${t("余额与消费")}</span>
+      <button class="btn sm ghost" data-bill="refresh">${t("刷新")}</button></div>${rows.join("")}`;
+    el.querySelector('[data-bill="refresh"]').onclick = (e) => { e.stopPropagation(); loadBill(p, true); };
+  }
+
   function renderKeyCard(box, p) {
     box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
       ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">${t("线路")}</div>
@@ -3010,7 +3088,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="prov-state" id="pc-result"></div>
       <div class="tiny">${t("端点")} <code>${esc(p.baseUrl)}</code>${p.defaultModel ? ` · ${t("默认模型")} <code>${esc(p.defaultModel)}</code>` : ""}
         ${p.keyUrl ? `<br><a href="${esc(p.keyUrl)}" target="_blank" rel="noopener">${t("去官网创建 Key ↗")}</a>` : ""}
-        <br>${esc(pHint(p) || t("Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。"))}</div>`;
+        <br>${esc(pHint(p) || t("Key 只存在本机应用私有目录，由 claude 的 apiKeyHelper 按需读取（不进环境变量），直连厂商的 Anthropic 兼容端点。"))}</div>
+      ${p.hasKey ? `<div id="pc-bill" class="bill"></div>` : ""}`;
+    if (p.hasKey) loadBill(p);
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;
@@ -3657,6 +3737,269 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 文本 / 代码：直接改，保存时带上打开那一刻的 mtime —— Claude 在这期间改过就先问，别互相覆盖。
   // Markdown：默认渲染，可切到编辑。图片：点一下在「适应屏幕」和「原始大小」之间切。
   // PDF：pdf.js（按需加载），页面进视野才画、离远了就释放，几百页的也不会把 WebView 撑爆。
+  // ── git 面板：改动 / 历史 / 逐行对比 / 提交 / 撤销 ──────────────────────
+  // 从文件面板（当前目录所在的仓库）或编辑器（这个文件）打开。只是 git 命令的界面，网关见 handleGit
+  const gitEl = $("git");
+  const GIT = { dir: "", root: "", tab: "changes", status: null, sel: new Set(), file: "", view: null, wrap: true };
+  const gapi = (act, params) => api(`/api/git/${act}?` + new URLSearchParams({ dir: GIT.dir, ...(params || {}) }));
+  const gpost = (act, body) => api(`/api/git/${act}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dir: GIT.dir, ...body }) });
+  const GS = { modified: "M", added: "A", new: "U", deleted: "D", renamed: "R", conflict: "!" };
+  const gsTitle = (k) => ({ modified: t("已修改"), added: t("已添加"), new: t("新文件"), deleted: t("已删除"), renamed: t("已改名"), conflict: t("有冲突") })[k] || k;
+  const gnum = (f) => (f.add == null && f.del == null) ? (f.binary ? `<span class="gn">${t("二进制")}</span>` : "")
+    : `<span class="gn"><span class="a">+${f.add ?? 0}</span> <span class="d">−${f.del ?? 0}</span></span>`;
+  const gbdi = (s) => `<bdi>${esc(s)}</bdi>`;
+
+  /** 打开：dir 可以是目录或文件；opts.file 指定先看哪个文件的对比，opts.tab = "history" 看历史 */
+  async function openGit(dir, opts = {}) {
+    Object.assign(GIT, { dir, root: "", tab: opts.tab || "changes", status: null, file: opts.file || "", view: opts.file ? (opts.tab === "history" ? { kind: "log" } : { kind: "diff" }) : null });
+    GIT.sel = new Set();
+    gitEl.classList.remove("hidden");
+    $("git-name").textContent = String(dir).split("/").pop();
+    $("git-info").textContent = "";
+    await gitLoad();
+  }
+  function closeGit() { gitEl.classList.add("hidden"); $("git-body").innerHTML = ""; }
+  $("git-close").addEventListener("click", closeGit);
+  $("git-reload").addEventListener("click", () => gitLoad());
+  gitEl.querySelector(".git-tabs").addEventListener("click", (e) => {
+    const b = e.target.closest(".git-tab"); if (!b) return;
+    GIT.tab = b.dataset.tab; GIT.view = null; GIT.file = ""; gitRender();
+  });
+
+  async function gitLoad() {
+    $("git-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    let s;
+    try { s = await gapi("status"); } catch (e) { $("git-body").innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (s.notRepo) {
+      $("git-info").textContent = "";
+      $("git-body").innerHTML = `<div class="vw-empty"><div>${t("这个文件夹还不是 git 仓库。")}</div>
+        <div class="tiny">${esc(s.dir || GIT.dir)}</div>
+        <div class="tiny">${t("建一个仓库后，每次改动都能看到改了哪几行，还能随时退回之前的版本。")}</div>
+        <button class="btn sm" data-a="init">${t("在这里建一个仓库")}</button></div>`;
+      $("git-body").querySelector('[data-a="init"]').onclick = async () => {
+        try { await gpost("init"); toast(t("已建好仓库")); gitLoad(); } catch (e2) { toast(e2.message, true); }
+      };
+      return;
+    }
+    if (s.error) { $("git-body").innerHTML = `<div class="vw-empty">${esc(s.error)}</div>`; return; }
+    GIT.status = s; GIT.root = s.root;
+    // 默认全选；刷新时保留用户的取舍，新冒出来的文件默认选上
+    const known = GIT.known || new Set();
+    for (const f of s.files) if (!known.has(f.path)) GIT.sel.add(f.path);
+    for (const p of [...GIT.sel]) if (!s.files.some((f) => f.path === p)) GIT.sel.delete(p);
+    GIT.known = new Set(s.files.map((f) => f.path));
+    $("git-name").textContent = s.root.split("/").pop();
+    $("git-info").textContent = (s.branch ? "⎇ " + s.branch : "") +
+      (s.ahead ? " · " + t("领先 {n}", { n: s.ahead }) : "") + (s.behind ? " · " + t("落后 {n}", { n: s.behind }) : "") +
+      " · " + (s.files.length ? t("{n} 个文件有改动", { n: s.files.length }) : t("没有改动"));
+    gitRender();
+  }
+
+  function gitRender() {
+    gitEl.querySelectorAll(".git-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === GIT.tab));
+    if (GIT.view && GIT.view.kind === "diff") return gitShowDiff(GIT.file, GIT.view.commit);
+    if (GIT.view && GIT.view.kind === "commit") return gitShowCommit(GIT.view.commit);
+    if (GIT.tab === "history") return gitShowLog(GIT.file);
+    gitShowChanges();
+  }
+
+  function gitShowChanges() {
+    const s = GIT.status; if (!s) return;
+    const box = $("git-body");
+    if (!s.files.length) { box.innerHTML = `<div class="vw-empty">${t("工作区是干净的：上次提交之后没有改动。")}</div>`; return; }
+    const n = GIT.sel.size;
+    box.innerHTML = `<div class="git-row tiny"><label><input type="checkbox" id="git-all" ${n === s.files.length ? "checked" : ""}> ${t("全选")}</label>
+        <span style="flex:1"></span><span>${t("点文件看改了哪几行")}</span></div>
+      ${s.files.map((f, i) => `<div class="git-row" data-i="${i}">
+        <input type="checkbox" data-ck="${i}" ${GIT.sel.has(f.path) ? "checked" : ""}>
+        <span class="gs gs-${f.kind}" title="${esc(gsTitle(f.kind))}">${GS[f.kind] || "?"}</span>
+        <span class="gp" data-open="${i}">${gbdi(f.orig ? f.orig + " → " + f.path : f.path)}</span>
+        ${gnum(f)}
+        <button class="btn ghost sm" data-undo="${i}" title="${esc(t("把这个文件改回上次提交时的样子"))}">${t("撤销")}</button>
+      </div>`).join("")}
+      <div class="git-commit">
+        <textarea id="git-msg" placeholder="${esc(t("提交说明：这次改了什么（必填）"))}"></textarea>
+        <div id="git-id" class="hidden"></div>
+        <div class="row-actions"><button class="btn sm" id="git-do" ${n ? "" : "disabled"}>${t("提交选中的 {n} 个文件", { n })}</button>
+          <button class="btn ghost sm" id="git-ask">${t("让 Claude 写说明并提交")}</button></div>
+      </div>`;
+    box.querySelector("#git-all").onchange = (e) => { GIT.sel = e.target.checked ? new Set(s.files.map((f) => f.path)) : new Set(); gitShowChanges(); };
+    box.onclick = async (e) => {
+      const ck = e.target.dataset.ck, op = e.target.closest("[data-open]"), un = e.target.dataset.undo;
+      if (ck != null) {
+        const f = s.files[+ck]; e.target.checked ? GIT.sel.add(f.path) : GIT.sel.delete(f.path);
+        const b = $("git-do"); b.disabled = !GIT.sel.size; b.textContent = t("提交选中的 {n} 个文件", { n: GIT.sel.size });
+        return;
+      }
+      if (op) { GIT.file = s.files[+op.dataset.open].path; GIT.view = { kind: "diff" }; return gitRender(); }
+      if (un != null) {
+        const f = s.files[+un];
+        const q = f.kind === "new" ? t("{f} 是新文件，撤销就是删掉它。确定？", { f: f.path }) : t("把 {f} 改回上次提交时的样子？这个文件没提交的改动会丢掉。", { f: f.path });
+        if (!confirm(q)) return;
+        try { const r = await gpost("discard", { file: f.path }); toast(r.message || t("已撤销")); gitLoad(); } catch (e2) { toast(e2.message, true); }
+      }
+    };
+    $("git-do").onclick = () => gitCommit();
+    $("git-ask").onclick = () => {
+      const files = [...GIT.sel];
+      closeGit();
+      send(t("请看一下 {root} 里这些文件的改动，写一句简洁的提交说明，然后只提交它们：{files}", { root: GIT.root, files: files.join("、") || t("（全部改动）") }));
+    };
+  }
+
+  async function gitCommit(again) {
+    const msg = ($("git-msg")?.value || "").trim();
+    if (!msg) { toast(t("写一句提交说明"), true); $("git-msg")?.focus(); return; }
+    const all = GIT.sel.size === GIT.status.files.length;
+    try {
+      const r = await gpost("commit", { message: msg, files: all ? null : [...GIT.sel] });
+      toast(r.message || t("已提交"));
+      GIT.sel = new Set(); GIT.known = null;
+      gitLoad();
+    } catch (e) {
+      if (e.status === 409 && !again) return gitAskIdentity();
+      toast(e.message, true);
+    }
+  }
+  /** 第一次提交：git 要知道署名。填一次，存进全局配置 */
+  function gitAskIdentity() {
+    const box = $("git-id"); box.classList.remove("hidden");
+    box.innerHTML = `<div class="tiny">${t("第一次提交要先告诉 git 你的名字和邮箱（写进提交记录，存在本机）。")}</div>
+      <input id="git-id-name" placeholder="${esc(t("名字"))}" autocomplete="off"><input id="git-id-mail" placeholder="${esc(t("邮箱"))}" autocomplete="off" inputmode="email">
+      <button class="btn sm" id="git-id-ok">${t("保存并提交")}</button>`;
+    $("git-id-ok").onclick = async () => {
+      try { await gpost("identity", { name: $("git-id-name").value, email: $("git-id-mail").value }); }
+      catch (e) { return toast(e.message, true); }
+      box.classList.add("hidden");
+      gitCommit(true);
+    };
+  }
+
+  /** 统一 diff → 带行号的红绿行 */
+  function diffHtml(text) {
+    if (!text.trim()) return `<div class="tiny">${t("没有差异")}</div>`;
+    const out = []; let o = 0, n = 0, open = false;
+    const close = () => { if (open) out.push("</div>"); open = false; };
+    for (const line of text.split("\n")) {
+      if (line.startsWith("diff --git ")) {
+        close();
+        const m = line.match(/ b\/(.+)$/);
+        out.push(`<div class="gdiff${GIT.wrap ? "" : " nowrap"}"><div class="fh">${esc(m ? m[1] : line)}</div>`); open = true; continue;
+      }
+      if (!open) { out.push(`<div class="gdiff${GIT.wrap ? "" : " nowrap"}">`); open = true; }
+      if (/^(index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode)/.test(line)) {
+        if (/^(new file|deleted file|rename )/.test(line)) out.push(`<div class="ln meta"><span class="no"></span><span class="tx">${esc(line)}</span></div>`);
+        continue;
+      }
+      if (line.startsWith("Binary files")) { out.push(`<div class="ln meta"><span class="no"></span><span class="tx">${t("二进制文件，无法逐行对比")}</span></div>`); continue; }
+      const h = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/);
+      if (h) { o = +h[1]; n = +h[2]; out.push(`<div class="ln hunk"><span class="no">⋯</span><span class="tx">${esc(h[3].trim() || "")}</span></div>`); continue; }
+      if (line.startsWith("\\")) continue;      // \ No newline at end of file
+      const c = line[0];
+      if (c === "+") out.push(`<div class="ln add"><span class="no">${n++}</span><span class="tx">${esc(line.slice(1)) || " "}</span></div>`);
+      else if (c === "-") out.push(`<div class="ln del"><span class="no">${o++}</span><span class="tx">${esc(line.slice(1)) || " "}</span></div>`);
+      else if (c === " ") { out.push(`<div class="ln"><span class="no">${n}</span><span class="tx">${esc(line.slice(1)) || " "}</span></div>`); o++; n++; }
+    }
+    close();
+    return out.join("");
+  }
+
+  async function gitShowDiff(file, commit) {
+    const box = $("git-body");
+    const back = commit ? t("← 返回这次提交") : t("← 返回改动列表");
+    box.innerHTML = `<div class="row-actions git-back"><button class="btn ghost sm" data-a="back">${back}</button>
+      <button class="btn ghost sm" data-a="wrap">${t("换行")}</button>
+      ${!commit && file ? `<button class="btn ghost sm" data-a="hist">${t("这个文件的历史")}</button>` : ""}
+      ${!commit && file && GIT.status?.files.some((f) => f.path === file) ? `<button class="btn ghost sm" data-a="undo">${t("撤销")}</button>` : ""}</div>
+      <div id="git-diff"><div class="tiny">${t("读取中…")}</div></div>`;
+    box.querySelector(".git-back").onclick = async (e) => {
+      const a = e.target.dataset.a; if (!a) return;
+      if (a === "back") { GIT.view = commit ? { kind: "commit", commit } : null; if (!commit) GIT.file = ""; return gitRender(); }
+      if (a === "wrap") { GIT.wrap = !GIT.wrap; box.querySelectorAll(".gdiff").forEach((d) => d.classList.toggle("nowrap", !GIT.wrap)); return; }
+      if (a === "hist") { GIT.tab = "history"; GIT.view = null; return gitRender(); }
+      if (a === "undo") {
+        const f = GIT.status.files.find((x) => x.path === file);
+        if (!confirm(f && f.kind === "new" ? t("{f} 是新文件，撤销就是删掉它。确定？", { f: file }) : t("把 {f} 改回上次提交时的样子？这个文件没提交的改动会丢掉。", { f: file }))) return;
+        try { await gpost("discard", { file }); toast(t("已撤销")); GIT.view = null; GIT.file = ""; gitLoad(); } catch (e2) { toast(e2.message, true); }
+      }
+    };
+    try {
+      const r = await gapi("diff", { file: file || "", commit: commit || "" });
+      $("git-diff").innerHTML = diffHtml(r.diff) + (r.truncated ? `<div class="tiny">${t("改动太多，只显示了前一部分")}</div>` : "");
+    } catch (e) { $("git-diff").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; }
+  }
+
+  async function gitShowLog(file, append) {
+    const box = $("git-body");
+    if (!append) { GIT.log = []; box.innerHTML = `<div class="tiny">${t("读取中…")}</div>`; }
+    let r;
+    try { r = await gapi("log", { n: 50, skip: GIT.log.length, file: file || "" }); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    GIT.log = GIT.log.concat(r.commits || []);
+    if (!GIT.log.length) { box.innerHTML = `<div class="vw-empty">${t("还没有提交记录。")}</div>`; return; }
+    box.innerHTML = (file ? `<div class="row-actions git-back"><span class="tiny">${esc(t("只看 {f} 的历史", { f: file }))}</span>
+        <button class="btn ghost sm" data-a="all">${t("看全部")}</button></div>` : "") +
+      `<div class="git-log">${GIT.log.map((c, i) => `<div class="git-row" data-c="${i}">
+        <span class="subj">${(c.refs ? c.refs.split(", ").map((x) => `<span class="git-ref">${esc(x.replace(/^HEAD -> /, ""))}</span>`).join("") : "")}${esc(c.subject)}</span>
+        <span class="meta mono">${esc(c.short)} · ${esc(c.author)} · ${esc(relTime(c.at))}</span></div>`).join("")}</div>` +
+      (r.more ? `<div class="row-actions"><button class="btn ghost sm" data-a="more">${t("加载更多")}</button></div>` : "");
+    box.onclick = (e) => {
+      const a = e.target.dataset && e.target.dataset.a;
+      if (a === "all") { GIT.file = ""; return gitShowLog(""); }
+      if (a === "more") return gitShowLog(file, true);
+      const row = e.target.closest("[data-c]");
+      if (row) { GIT.view = { kind: "commit", commit: GIT.log[+row.dataset.c].hash }; gitRender(); }
+    };
+  }
+
+  async function gitShowCommit(hash) {
+    const box = $("git-body");
+    box.onclick = null;
+    box.innerHTML = `<div class="tiny">${t("读取中…")}</div>`;
+    let c;
+    try { c = await gapi("show", { commit: hash }); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    box.innerHTML = `<div class="row-actions git-back"><button class="btn ghost sm" data-a="back">${t("← 返回历史")}</button>
+        <button class="btn ghost sm" data-a="all">${t("看整次提交的对比")}</button></div>
+      <div class="prov-state"><b>${esc(c.message.split("\n")[0])}</b>${c.message.includes("\n") ? `<pre class="tiny" style="white-space:pre-wrap;margin:4px 0 0">${esc(c.message.split("\n").slice(1).join("\n").trim())}</pre>` : ""}
+        <div class="tiny mono">${esc(c.hash.slice(0, 12))} · ${esc(c.author)} · ${esc(new Date(c.at).toLocaleString())}</div></div>
+      ${c.files.map((f, i) => `<div class="git-row" data-f="${i}" style="cursor:pointer">
+        <span class="gs gs-${{ M: "modified", A: "added", D: "deleted", R: "renamed" }[f.status] || "modified"}">${esc(f.status)}</span>
+        <span class="gp">${gbdi(f.orig ? f.orig + " → " + f.path : f.path)}</span>${gnum(f)}</div>`).join("")}`;
+    box.onclick = (e) => {
+      const a = e.target.dataset && e.target.dataset.a;
+      if (a === "back") { GIT.view = null; return gitRender(); }
+      if (a === "all") { GIT.file = ""; GIT.view = { kind: "diff", commit: hash }; return gitRender(); }
+      const row = e.target.closest("[data-f]");
+      if (row) { GIT.file = c.files[+row.dataset.f].path; GIT.view = { kind: "diff", commit: hash }; gitRender(); }
+    };
+  }
+
+  /** 文件面板：给改过的文件标个色点（不是仓库就什么都不做） */
+  let fsDots = null, fsDotsAt = 0;
+  async function fsGitDots() {
+    const dir = state.fs.path;
+    let s;
+    // 选中、过滤都会重画列表：同一目录 5 秒内复用上次的结果，别每点一下就跑一次 git status
+    if (fsDots && fsDots.dir === dir && Date.now() - fsDotsAt < 5000) s = fsDots.s;
+    else {
+      try { s = await api(`/api/git/status?dir=${encodeURIComponent(dir)}`); } catch { return; }
+      fsDots = { dir, s }; fsDotsAt = Date.now();
+    }
+    if (!s || s.notRepo || s.error || dir !== state.fs.path) return;
+    const rel = dir.replace(/\/$/, "").replace(/^\/sdcard(?=\/|$)/, "/storage/emulated/0");
+    const here = path => { const full = s.root + "/" + path; return full.startsWith(rel + "/") ? full.slice(rel.length + 1) : null; };
+    const mark = new Map();
+    for (const f of s.files) {
+      const r = here(f.path); if (r == null) continue;
+      const top = r.split("/")[0];
+      if (!mark.has(top)) mark.set(top, r.includes("/") ? "modified" : f.kind);
+    }
+    $("fs-list").querySelectorAll(".fs-item").forEach((el) => {
+      const e = fsVisible()[Number(el.dataset.i)];
+      const k = e && mark.get(e.name);
+      if (k && !el.querySelector(".fs-git-dot")) el.querySelector(".it-title").insertAdjacentHTML("afterend", `<span class="fs-git-dot ${k}" title="${esc(gsTitle(k))}"></span>`);
+    });
+  }
+
   const viewerEl = $("viewer");
   const VW = {
     path: "", kind: "", size: 0, mode: "", text: "", mtime: 0, dirty: false,
@@ -3668,7 +4011,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   async function openViewer(path, kind, size) {
     if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
     closeViewerPdf();
-    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1 });
+    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null });
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
@@ -3710,6 +4053,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "save") return vwSave(false);
     if (a === "md") { VW.text = vwText(); return vwRenderText("md"); }
     if (a === "edit") return vwRenderText("edit");
+    if (a === "gitdiff") return vwShowDiff();
+    if (a === "githist") return openGit(VW.path, { file: VW.git.rel, tab: "history" });
     if (a === "wrap") {
       VW.wrap = !VW.wrap;
       localStorage.setItem("cc.vw.wrap", VW.wrap ? "1" : "0");
@@ -3742,6 +4087,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     VW.dirty = false;
     vwRenderText(mode);
+    vwGitCheck();
   }
 
   function vwRenderActs() {
@@ -3751,7 +4097,41 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       acts.push([t("换行"), "wrap", VW.wrap]);
       acts.push([VW.dirty ? t("保存") + " •" : t("保存"), "save", VW.dirty]);
     }
+    // 在 git 仓库里：改过就给「对比」（和上次提交比，红删绿增），随时可看这个文件的历史
+    if (VW.git && VW.git.root) {
+      if (VW.mode === "diff") acts.unshift([t("编辑"), "edit"]);
+      else if (VW.git.kind) acts.push([t("对比"), "gitdiff"]);
+      acts.push([t("历史"), "githist"]);
+    }
     vwActs(acts);
+  }
+
+  /** 这个文件在不在 git 仓库里、改没改（编辑器顶栏显示「已修改 +3 −1」） */
+  async function vwGitCheck() {
+    const p = VW.path;
+    VW.git = null;
+    let s;
+    try { s = await api("/api/git/status?dir=" + encodeURIComponent(p)); } catch { return; }
+    if (p !== VW.path || !s || s.notRepo || s.error) return;
+    const real = p.replace(/^\/sdcard(?=\/)/, "/storage/emulated/0");
+    const rel = real.startsWith(s.root + "/") ? real.slice(s.root.length + 1) : null;
+    if (rel == null) return;
+    const f = s.files.find((x) => x.path === rel);
+    VW.git = { root: s.root, rel, kind: f ? f.kind : "", add: f ? f.add : 0, del: f ? f.del : 0 };
+    $("vw-info").textContent = fmtSize(VW.size) + (f ? " · " + gsTitle(f.kind) + (f.add != null ? ` +${f.add} −${f.del ?? 0}` : "") : " · " + t("和上次提交一样"));
+    vwRenderActs();
+  }
+
+  async function vwShowDiff() {
+    VW.text = vwText();
+    VW.mode = "diff";
+    vwRenderActs();
+    $("vw-body").innerHTML = `<div class="vw-diff">${VW.dirty ? `<div class="tiny">${t("还有没保存的修改；这里对比的是磁盘上的版本和上次提交。")}</div>` : ""}<div class="tiny">${t("读取中…")}</div></div>`;
+    try {
+      const r = await api("/api/git/diff?" + new URLSearchParams({ dir: VW.path, file: VW.path }));
+      if (VW.mode !== "diff") return;
+      $("vw-body").querySelector(".vw-diff").innerHTML = (VW.dirty ? `<div class="tiny">${t("还有没保存的修改；这里对比的是磁盘上的版本和上次提交。")}</div>` : "") + diffHtml(r.diff);
+    } catch (e) { $("vw-body").querySelector(".vw-diff").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; }
   }
 
   function vwRenderText(mode) {
@@ -3791,6 +4171,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("vw-info").textContent = fmtSize(VW.size);
     vwRenderActs();
     toast(t("已保存"));
+    vwGitCheck();                     // 存完改动行数变了
   }
 
   function vwImage() {
@@ -4465,6 +4846,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["term-textview", () => $("term-textview").classList.add("hidden")],
       ["browser", closeBrowser],
       ["term", closeTerm],
+      ["git", closeGit],
       ["viewer", closeViewer],          // 有未保存修改会先问；选了不丢弃也算处理过，别把界面退到后台
       ["files", closeFiles],
       ["popup", hidePopup],
@@ -4487,7 +4869,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return false;
   };
   if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
-  window.__cc = { view, srv, state, send, abort, openSession, newConversation };
+  window.__cc = { view, srv, state, send, abort, openSession, newConversation,
+    openGit, openViewer, openFiles, openDrawer, provCard: (id) => { state.provView = id; renderProvCard(); } };
 
   // ── 启动 ──────────────────────────────────────────────────────────
   (async function boot() {

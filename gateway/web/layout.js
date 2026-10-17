@@ -16,8 +16,8 @@
   "use strict";
   const W2 = 840, W3 = 1000, SHORT = 500;
   const MIN_CHAT = 380, MIN_PANE = 320;
-  const PANES = ["files", "viewer", "term", "browser"];   // 宽屏时进右侧工作区的
-  const NAMES = { files: "文件", viewer: "查看", term: "终端", browser: "浏览器" };
+  const PANES = ["files", "viewer", "git", "term", "browser"];   // 宽屏时进右侧工作区的
+  const NAMES = { files: "文件", viewer: "查看", git: "版本", term: "终端", browser: "浏览器" };
   // 浏览器窗格是外壳的原生视图，永远浮在页面上面 —— 这些浮层开着时得先把它藏起来，不然会被它挡住
   const COVERS = ["lightbox", "sheet", "popup", "drawer", "dropzone"];
   const LS_RATIO = "cc_lay_ratio", LS_DOCK = "cc_lay_dock";
