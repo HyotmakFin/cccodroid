@@ -3720,6 +3720,7 @@ async function startRun(item) {
   writeUser(message);
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
+  run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
   run.replays = 0;
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
@@ -3814,7 +3815,7 @@ async function startRun(item) {
   };
   const onResult = (r) => {
     lastResult = r;
-    if (!run.pendingInject.length) closeInput();
+    if (!run.pendingInject.length && !run.bgTasks) closeInput();
   };
   const onReplay = () => {
     // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
@@ -3830,6 +3831,9 @@ async function startRun(item) {
       if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
       return;
     }
+    // 后台任务（run_in_background 的命令、后台子代理）：result 之后它们跑完，claude 会在同一进程里接着再跑一轮。
+    // 那时 stdin 要还开着，否则这一轮里所有授权请求都报「Tool permission request failed: AbortError: Stream closed」。
+    if (ev.type === "system" && ev.subtype === "background_tasks_changed" && Array.isArray(ev.tasks)) run.bgTasks = ev.tasks.length;
     translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
   };
 
