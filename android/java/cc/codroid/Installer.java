@@ -100,7 +100,10 @@ final class Installer {
      * 通用下载：断点续传 + 重试 + sha256（sha 为 null 则不校验）。.part 旁边的 .sha256 记着它属于哪个版本，
      * 换了版本就作废重下，别把两个版本拼在一起。
      */
-    File download(String url, File done, long size, String sha) throws IOException {
+    File download(String url, File done, long size, String sha) throws IOException { return download(url, null, done, size, sha); }
+
+    /** alt：备用地址（同一个文件的镜像）。主地址连着失败两次就换过去，接着同一个 .part 续传；内容由 sha256 把关，镜像不需要被信任 */
+    File download(String url, String alt, File done, long size, String sha) throws IOException {
         if (done.isFile() && (size <= 0 || done.length() == size) && (sha == null || sha.equals(sha256(done)))) return done;
         File part = new File(done.getPath() + ".part"), tag = new File(done.getPath() + ".sha256");
         done.getParentFile().mkdirs();
@@ -112,6 +115,11 @@ final class Installer {
         for (int attempt = 1; size <= 0 || part.length() < size; attempt++) {
             try { fetchRange(url, part, size); if (size <= 0) break; }
             catch (IOException e) {
+                if (alt != null && !url.equals(alt) && attempt >= 2) {
+                    url = alt;
+                    ui.step("  GitHub 下载不顺（" + e.getMessage() + "），改从 cccodroid.net 镜像续传…");
+                    continue;
+                }
                 if (attempt >= 8) throw e;
                 ui.step("  网络中断（" + e.getMessage() + "），" + (attempt * 3) + " 秒后续传…");
                 try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }

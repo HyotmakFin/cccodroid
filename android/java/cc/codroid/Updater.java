@@ -39,6 +39,9 @@ import org.json.JSONObject;
 final class Updater {
     static final String TAG = "cccodroid-upd";
     static final String REPO = "greyoak111/cccodroid";
+    /** 备用源：cccodroid.net 镜像了最近几个版本的 APK 和一份同形状的发布列表（dl/releases.json）。
+     *  只在 GitHub 连不上 / 下载不顺时用；下来的 APK 照样核 sha256 和签名。工具包太大，没有镜像 */
+    static final String MIRROR = "https://cccodroid.net";
     /** 工具包与本 APK 的接口版本：lock.json 里的 compat（缺省 1）对不上就不装，防止新工具包配旧外壳 */
     static final int DEVKIT_COMPAT = 1;
     static final String CH = "updates";
@@ -63,7 +66,7 @@ final class Updater {
         volatile String current = "", latest = "", state = "unknown", message = "";
         volatile long done, total;
         // 下载需要的东西
-        volatile String url, sha, base, tarSha;
+        volatile String url, alt, sha, base, tarSha;
         volatile long size, need;
         volatile File file;
         Item(String id, String name) { this.id = id; this.name = name; }
@@ -174,11 +177,19 @@ final class Updater {
         lastError = "";
         refreshCurrent();
         JSONArray rels = null;
+        boolean mirror = false;
         try { rels = new JSONArray(new String(Installer.httpGetSmall(feed()), StandardCharsets.UTF_8)); }
-        catch (Exception e) { lastError = "连不上 GitHub：" + e.getMessage(); app.set("error", lastError); devkit.set("error", lastError); }
+        catch (Exception e) {
+            lastError = "连不上 GitHub：" + e.getMessage();
+            // GitHub 不通：应用本身改看镜像的发布列表；工具包没有镜像，如实说查不了（别报成"已是最新"）
+            try { rels = new JSONArray(new String(Installer.httpGetSmall(MIRROR + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; }
+            catch (Exception e2) { app.set("error", lastError); }
+            devkit.set("error", lastError);
+        }
         if (rels != null) {
-            try { checkApp(rels); } catch (Exception e) { app.set("error", e.getMessage()); }
-            try { checkDevkit(rels); } catch (Exception e) { devkit.set("error", e.getMessage()); }
+            try { checkApp(rels); if (mirror && !"error".equals(app.state)) app.message = app.message.isEmpty() ? "来自 cccodroid.net 镜像" : app.message + " · 来自 cccodroid.net 镜像"; }
+            catch (Exception e) { app.set("error", e.getMessage()); }
+            if (!mirror) try { checkDevkit(rels); } catch (Exception e) { devkit.set("error", e.getMessage()); }
         }
         try { checkClaude(); } catch (Exception e) { claude.set("error", "连不上 downloads.claude.ai：" + e.getMessage()); }
         prefs().edit().putLong("lastCheck", System.currentTimeMillis()).apply();
@@ -198,6 +209,7 @@ final class Updater {
                 JSONObject a = as.getJSONObject(k);
                 if (!a.optString("name").equals("cccodroid.apk")) continue;
                 app.url = a.getString("browser_download_url");
+                app.alt = app.url.startsWith(MIRROR + "/") ? null : MIRROR + "/dl/" + tag + "/cccodroid.apk";
                 app.size = a.optLong("size");
                 String d = a.optString("digest", "");
                 app.sha = d.startsWith("sha256:") ? d.substring(7) : null;
@@ -335,7 +347,7 @@ final class Updater {
                 long free = new StatFs(env.files.getPath()).getAvailableBytes();
                 if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, "空间不够：需要约 %.1f GB，只剩 %.1f GB", need / 1e9, free / 1e9));
             }
-            installer(it).download(it.url, it.file, it.size, it.sha);
+            installer(it).download(it.url, it == app ? it.alt : null, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
             if (it == devkit) prefs().edit().putString("devkitStaged", new JSONObject().put("file", it.file.getPath())
                 .put("base", it.base).put("sha256", it.sha).put("size", it.size).put("tarSha256", it.tarSha == null ? "" : it.tarSha).toString()).apply();
