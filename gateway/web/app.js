@@ -921,7 +921,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       permBar.innerHTML = state.settings.permNotice ? `
         <div class="pb-note"><span>${t("权限模式已改为「逐项确认」，与官方一致：改文件、跑命令前会先问你。想恢复全部放行，点下方的权限标签。")}</span>
         <button class="pb-x" aria-label="${t("关闭")}">✕</button></div>` : "";
-      if (permWaiting && srv.run) setStatus(t("生成中…"), "warn");
+      if (permWaiting && isBusy()) setStatus(t("生成中…"), "warn");
       permWaiting = false;
       return;
     }
@@ -1110,11 +1110,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     let iv = setInterval(tick, 1000);
     return {
       attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; el.hidden = !!tail; tick(); },
-      stop() {
+      stop(at) {          // at：真正结束的时刻（重放时事件比现在早）
         if (!iv) return;
         clearInterval(iv); iv = 0;
         el.classList.remove("live"); el.hidden = false;
-        el.textContent = t("用时 {d}", { d: fmtDur(Date.now() - t0, true) });
+        el.textContent = t("用时 {d}", { d: fmtDur((at || Date.now()) - t0, true) });
       },
     };
   }
@@ -1431,7 +1431,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (rv.av.empty) rv.av.remove();
         renderUser(ev.text, liveEl);
         rv.av = AssistantView(liveEl, true);
+        rv.avDone = false;
+        if (rv.idle) { rv.idle = false; rv.timer = RunTimer(Date.now()); }   // 空闲时发来的消息：算新的一轮
         rv.timer?.attach(rv.av);          // 计时算整轮的，跟着最新的气泡走
+        scrollDown(true);
+        return;
+      }
+      case "run_idle": {
+        // 这一轮答完了，只是 Claude 起的后台任务（本地服务之类）还在跑
+        const rv = runViews.get(ev.runId);
+        if (rv && !rv.idle) { rv.idle = true; rv.timer?.stop(ev.at); rv.av.finish(); rv.avDone = true; }
+        if (view.runIds.has(ev.runId)) setStatus(t("就绪 · 后台任务在跑（{n} 个）", { n: ev.bg || 0 }), "ok");
+        return;
+      }
+      case "run_busy": {
+        // 后台任务回报了，Claude 接着干：另起一个气泡、重新计时
+        const rv = runViews.get(ev.runId);
+        if (!rv || !rv.idle) return;
+        rv.idle = false;
+        if (rv.avDone) { rv.av = AssistantView(liveEl, true); rv.avDone = false; }
+        rv.timer = RunTimer(ev.startedAt);
+        rv.timer.attach(rv.av);
         scrollDown(true);
         return;
       }
@@ -1551,7 +1571,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     srv.queueAll = s.queue || [];
     if (s.maxParallel) srv.max = s.maxParallel;
     pickViewRun();
-    const busy = !!srv.run;
+    const busy = isBusy();
     sendEl.classList.toggle("busy", busy && !inputEl.value.trim());
     inputEl.placeholder = busy
       ? t("生成中 · 回车 = 排队 · ⚡ = 插话（不打断）")
@@ -1562,6 +1582,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const livePerms = new Set((srv.run?.perms || []).map((p) => p.id));
     for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !livePerms.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");
     if (busy) setStatus(t("生成中…"), "warn");
+    else if (srv.run?.idle) setStatus(t("就绪 · 后台任务在跑（{n} 个）", { n: srv.run.bg || 0 }), "ok");
     else if (srv.runs.length) setStatus(t("另有 {n} 个会话在生成", { n: srv.runs.length }), "ok");
     // 别的会话在等你确认：当前视图看不到它的卡片，状态栏和会话列表里提醒
     const elsewhere = srv.runs.filter((r) => r !== srv.run && r.perms && r.perms.length);
@@ -1599,7 +1620,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
     scrollDown(true);
   }
-  const isBusy = () => !!srv.run;
+  const isBusy = () => !!srv.run && !srv.run.idle;
 
   /** 并行多会话：从网关的全部轮次和队列里挑出属于当前视图的 */
   function runInView(r) {
@@ -1624,7 +1645,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function renderQueue() {
     const q = srv.queue;
     queueStrip.classList.toggle("hidden", !q.length);
-    const busy = !!srv.run;
+    const busy = isBusy();
     queueStrip.innerHTML = q.length ? `
       <div class="q-head">
         <span>${q.some((it) => it.held)

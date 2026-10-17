@@ -1212,4 +1212,5 @@ window.I18N_DICT.en = {
   "链接要指向一个 .gguf 文件": "The link must point to a .gguf file",
   "分卷模型（…-00001-of-0000N.gguf）不支持，请找单文件版本": "Split models (…-00001-of-0000N.gguf) aren’t supported; find a single-file version",
   "mmproj 是多模态投影文件，不能单独对话": "mmproj is a multimodal projector file and can’t be used for chat on its own",
+  "就绪 · 后台任务在跑（{n} 个）": "Ready · {n} background task(s) running",
 };

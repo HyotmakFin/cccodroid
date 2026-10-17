@@ -3195,6 +3195,7 @@ const newRunId = () => `r${BOOT}${(++RUN_N).toString(36)}`;
 const runInfo = (r) => r && {
   id: r.id, cid: r.cid, text: r.text.slice(0, 2000), sessionId: r.sessionId, follow: r.follow, startedAt: r.startedAt,
   perms: r.perms ? [...r.perms.values()] : [],
+  idle: !!r.idle, bg: r.bgTasks || 0,
 };
 
 /** 改权限模式：存进设置（下一轮沿用），正在跑的那一轮当场切（set_permission_mode） */
@@ -3356,6 +3357,7 @@ function enqueue(body) {
   // claude 会在当前这一步（比如一次工具调用）结束后把它并进对话，同一轮里接着干 —— 和终端里边干边打字一样。
   // 塞不进去（这一轮已在收尾、或者不是同一个会话）就排到队首，这一轮一结束马上发。
   const busyRun = laneRun(laneOfItem(item));
+  if (busyRun && busyRun.idle && tryInject(busyRun, item)) { item.injected = true; publishState(); return item; }
   if ((body.mode === "inject" || body.mode === "interrupt") && busyRun) {
     if (tryInject(busyRun, item)) { item.injected = true; return item; }
     QUEUE.unshift(item);
@@ -3795,6 +3797,8 @@ async function startRun(item) {
   const onInit = (init) => {
     LAST_INIT = init;
     run.sessionId = init.session_id;
+    // 新会话的 run_start 发出时还没有会话号：回填进日志，别的视图切过来、整轮重放时才认得出这是它的
+    for (const e of run.log || []) if (e.type === "run_start" && !e.sessionId) e.sessionId = run.sessionId;
     RUN_SESSIONS.set(run.id, run.sessionId);
     if (RUN_SESSIONS.size > 500) RUN_SESSIONS.delete(RUN_SESSIONS.keys().next().value);
     rememberSession(run.sessionId);
@@ -3815,7 +3819,12 @@ async function startRun(item) {
   };
   const onResult = (r) => {
     lastResult = r;
-    if (!run.pendingInject.length && !run.bgTasks) closeInput();
+    if (run.pendingInject.length) return;
+    if (!run.bgTasks) return closeInput();
+    // 答完了，只是后台任务（本地服务之类）还在跑：界面上算这一轮结束，进程和 stdin 留着等任务回报
+    run.idle = true;
+    emit({ type: "run_idle", bg: run.bgTasks, at: Date.now() });
+    publishState();
   };
   const onReplay = () => {
     // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
@@ -3833,7 +3842,16 @@ async function startRun(item) {
     }
     // 后台任务（run_in_background 的命令、后台子代理）：result 之后它们跑完，claude 会在同一进程里接着再跑一轮。
     // 那时 stdin 要还开着，否则这一轮里所有授权请求都报「Tool permission request failed: AbortError: Stream closed」。
-    if (ev.type === "system" && ev.subtype === "background_tasks_changed" && Array.isArray(ev.tasks)) run.bgTasks = ev.tasks.length;
+    if (ev.type === "system" && ev.subtype === "background_tasks_changed" && Array.isArray(ev.tasks)) {
+      run.bgTasks = ev.tasks.length;
+      if (run.idle && run.bgTasks) { emit({ type: "run_idle", bg: run.bgTasks }); publishState(); }
+    }
+    // 空闲中 claude 又动起来了（后台任务回报、或用户发来的新消息）：重新算「生成中」
+    if (run.idle && (ev.type === "assistant" || ev.type === "stream_event" || (ev.type === "system" && ev.subtype === "init"))) {
+      run.idle = false;
+      emit({ type: "run_busy", startedAt: Date.now() });
+      publishState();
+    }
     translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
   };
 
