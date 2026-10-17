@@ -139,7 +139,7 @@ node devkit/devkit.mjs build --target cc.codroid   # 构建开发工具包（也
 `build.sh` 目前在作者的安卓设备上运行，依赖设备上的 JDK、d8、aapt2、GCC 与签名工具。路径写在脚本开头，在别的环境构建需要相应调整。
 
 开发工具包由 GitHub Actions 构建并发布：推 `devkit-YYYY.MM.DD` 这样的 tag 即可（见 [.github/workflows/devkit.yml](.github/workflows/devkit.yml)）。
-App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt) 决定。
+App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt) 决定；同一版的大小与 SHA-256 摘在 [devkit-pin.json](devkit-pin.json) 里随 APK 走，首装（GitHub、cccodroid.net 镜像或本地文件三选一）和认本地文件都以它为准。换版本时改完前者跑 `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`，两个文件一起提交，`build.sh` 会核对它们是同一版。
 
 目录：
 

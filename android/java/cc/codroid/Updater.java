@@ -91,6 +91,7 @@ final class Updater {
             if (f.isFile() && f.length() == st.optLong("size")) {
                 devkit.file = f; devkit.base = st.getString("base"); devkit.sha = st.getString("sha256");
                 devkit.size = st.getLong("size"); devkit.url = devkit.base + f.getName(); devkit.latest = tagOf(devkit.base);
+                devkit.alt = devkitMirror(devkit.base, f.getName());
                 devkit.tarSha = st.optString("tarSha256", null);
                 devkit.set("ready", "");
                 dropStagedIfInstalled();
@@ -153,6 +154,88 @@ final class Updater {
      */
     String installedDevkitBase() { return env.devkitInfo().optString("base", ""); }
     private String installedDevkitSha() { return env.devkitInfo().optString("sha256", ""); }
+    /** 同一个文件在 dl.cccodroid.net 上的地址：GitHub 下得不顺时接着续传（内容照样核 sha256） */
+    static String devkitMirror(String base, String file) { return Installer.DEVKIT_MIRROR + tagOf(base) + "/" + file; }
+
+    /** 本 APK 绑定的那一版工具包的清单（assets/devkit-pin.json，打包时从 Release 的 devkit.lock.json 摘出来）。
+     *  首装从镜像下、本地文件认身份，都拿它当准：校验值跟着 APK 走，不靠下载来源 */
+    static JSONObject devkitPin(Context c) {
+        try (java.io.InputStream in = c.getAssets().open("devkit-pin.json")) {
+            return new JSONObject(new String(readAll(in), StandardCharsets.UTF_8));
+        } catch (Exception e) { return null; }
+    }
+
+    /**
+     * 本地工具包文件是哪一版：拿它的 sha256（gz 或 tar 都行）对已知清单 —— 本 APK 自带的钉子、刚查到的最新版、
+     * GitHub 上最近几个 devkit-* 的 devkit.lock.json。认出来返回 {tag, base, target, compat, sha256(gz), tarSha256}；
+     * 认不出（自己构建的、来路不明的、没网查不了）返回 null，由调用方决定要不要让用户硬装。
+     */
+    JSONObject identifyDevkit(String sha) {
+        JSONObject pin = devkitPin(ctx);
+        JSONObject hit = matchLock(pin, sha, pin != null ? pin.optString("base") : "");
+        if (hit != null) return hit;
+        try {
+            JSONArray rels = new JSONArray(new String(Installer.httpGetSmall(feed()), StandardCharsets.UTF_8));
+            int n = 0;
+            for (int i = 0; i < rels.length() && n < 8; i++) {
+                JSONObject r = rels.getJSONObject(i);
+                String tag = r.optString("tag_name");
+                if (r.optBoolean("draft") || !tag.startsWith("devkit-")) continue;
+                n++;
+                String base = "https://github.com/" + REPO + "/releases/download/" + tag + "/";
+                try {
+                    hit = matchLock(new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8)), sha, base);
+                    if (hit != null) return hit;
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) { Log.i(TAG, "identifyDevkit: 查不了线上清单 " + e); }
+        return null;
+    }
+
+    private static JSONObject matchLock(JSONObject lock, String sha, String base) {
+        if (lock == null || sha == null) return null;
+        JSONObject gz = lock.optJSONObject("gz"), tar = lock.optJSONObject("tar");
+        String gzSha = gz != null ? gz.optString("sha256") : "", tarSha = tar != null ? tar.optString("sha256") : "";
+        if (!sha.equals(gzSha) && !sha.equals(tarSha)) return null;
+        try {
+            return new JSONObject().put("tag", tagOf(base)).put("base", base).put("target", lock.optString("target"))
+                .put("compat", lock.optInt("compat", 1)).put("sha256", gzSha).put("tarSha256", tarSha);
+        } catch (Exception e) { return null; }
+    }
+
+    /** 能不能装到本 APK 上：包名对得上、接口版本一致。返回不能装的原因，能装返回 null */
+    String devkitIncompatible(JSONObject id) {
+        if (id == null) return null;
+        if (!ctx.getPackageName().equals(id.optString("target")) || id.optInt("compat", 1) != DEVKIT_COMPAT)
+            return Tr.f("{0} 与本版 cccodroid 不兼容", id.optString("tag"));
+        return null;
+    }
+
+    /** 更新卡片的「从本地文件安装」：在 MainActivity 的线程里调，进度打到安装界面。id 为 null = 用户确认过硬装 */
+    void applyLocalDevkit(Installer ins, Installer.Source src, long total, boolean gzip, String sha, JSONObject id) throws Exception {
+        if (devkitMoving()) throw new IOException(Tr.t("工具包正在下载或安装，等它结束再试"));
+        devkit.set("installing", "");
+        GatewayService.pause(true);
+        try {
+            for (int i = 0; i < 40 && pingGateway(); i++) Thread.sleep(250);
+            String base = id != null ? id.optString("base") : "";
+            String gzSha = id != null && !id.optString("sha256").isEmpty() ? id.optString("sha256") : sha;
+            String tarSha = id != null ? id.optString("tarSha256", null) : null;
+            ins.installDevkit(src.open(), total, gzip, base, gzSha, tarSha);
+            refreshCurrent();
+            devkit.set("uptodate", id != null ? "" : Tr.t("本地文件（未核对来源）"));
+            Ledger.add(env, "install", true, Tr.t("从本地文件装上 ") + (id != null ? id.optString("tag") : sha.substring(0, 12)),
+                new JSONObject().put("sha256", gzSha).put("verified", id != null));
+        } catch (Exception e) {
+            devkit.set("error", e.getMessage());
+            Ledger.add(env, "install", false, Tr.t("本地安装失败：") + e.getMessage(), null);
+            throw e;
+        } finally {
+            GatewayService.pause(false);
+            releaseApp();
+        }
+    }
+
     private String pinnedDevkitBase() {
         try (java.io.InputStream in = ctx.getAssets().open("devkit-sources.txt")) {
             return new String(readAll(in), StandardCharsets.UTF_8).trim().split("\\s+")[0];
@@ -256,6 +339,7 @@ final class Updater {
         devkit.tarSha = tar != null ? tar.optString("sha256", null) : null;
         devkit.need = tar != null ? tar.optLong("bytes") : devkit.size * 4;
         devkit.url = base + gz.getString("file");
+        devkit.alt = devkitMirror(base, gz.getString("file"));
         devkit.file = new File(env.files, gz.getString("file"));
         String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
         devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
@@ -348,7 +432,7 @@ final class Updater {
                 long free = new StatFs(env.files.getPath()).getAvailableBytes();
                 if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, Tr.t("空间不够：需要约 %.1f GB，只剩 %.1f GB"), need / 1e9, free / 1e9));
             }
-            installer(it).download(it.url, it == app ? it.alt : null, it.file, it.size, it.sha);
+            installer(it).download(it.url, it.alt, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
             if (it == devkit) prefs().edit().putString("devkitStaged", new JSONObject().put("file", it.file.getPath())
                 .put("base", it.base).put("sha256", it.sha).put("size", it.size).put("tarSha256", it.tarSha == null ? "" : it.tarSha).toString()).apply();
@@ -554,6 +638,7 @@ final class Updater {
             devkit.tarSha = tar != null ? tar.optString("sha256", null) : null;
             devkit.need = tar != null ? tar.optLong("bytes") : devkit.size * 4;
             devkit.url = base + gz.getString("file");
+            devkit.alt = devkitMirror(base, gz.getString("file"));
             devkit.file = new File(env.files, gz.getString("file"));
             devkit.set("available", Tr.t("修复：重装 ") + devkit.latest);
             repairing = true;

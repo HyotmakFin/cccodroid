@@ -138,7 +138,7 @@ node devkit/devkit.mjs build --target cc.codroid   # build the toolchain (CI can
 `build.sh` currently runs on the author's Android device and relies on the JDK, d8, aapt2, GCC and signing tools there. Paths are at the top of the script; adjust them to build elsewhere.
 
 The toolchain is built and published by GitHub Actions: push a tag like `devkit-YYYY.MM.DD` (see [.github/workflows/devkit.yml](.github/workflows/devkit.yml)).
-Which toolchain version the app downloads is set in [devkit-sources.txt](devkit-sources.txt).
+Which toolchain version the app downloads is set in [devkit-sources.txt](devkit-sources.txt). The size and SHA-256 of that version live in [devkit-pin.json](devkit-pin.json), which ships inside the APK: the first install (from GitHub, the cccodroid.net mirror, or a local file) and the check on local files both trust it rather than the download source. When you switch versions, edit the former, run `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`, and commit both; `build.sh` checks that they match.
 
 Layout:
 

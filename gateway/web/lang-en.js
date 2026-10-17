@@ -1106,4 +1106,7 @@ window.I18N_DICT.en = {
   "已切到 {b}": "Switched to {b}",
   "分支": "Branches",
   "没在加载的消息里找到「{q}」": "Couldn't find “{q}” in the loaded messages",
+  "选一个已经下好的工具包文件来安装": "Install from a toolkit file you've already downloaded",
+  "本地文件…": "Local file…",
+  "从本地文件安装开发工具包？\n\n选一个 devkit-cc.codroid.tar.gz（或 .tar），可以在 GitHub 发布页或 cccodroid.net 下载。装之前会核对它是不是已发布的版本；装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。": "Install the dev toolkit from a local file?\n\nChoose a devkit-cc.codroid.tar.gz (or .tar); you can download one from the GitHub releases page or cccodroid.net. It's checked against the published releases before installing, and the service pauses for 1–2 minutes during the install.\nAnything you installed into the toolkit with pip / npm -g is kept.",
 };

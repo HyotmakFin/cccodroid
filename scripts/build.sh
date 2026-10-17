@@ -31,6 +31,11 @@ if [ -n "$DEVKIT_BASES" ]; then echo "$DEVKIT_BASES" | tr " " "\n" > "$A/assets/
 else cp "$ROOT/devkit-sources.txt" "$A/assets/devkit-sources.txt"; fi
 [ -s "$A/assets/devkit-sources.txt" ] || { echo "✗ devkit-sources.txt 为空（/sdcard 的 FUSE 有时报过时的大小 0，cp 会拷出空文件：rm 后重写源文件）"; exit 1; }
 echo "  工具包来源：$(tr "\n" " " < "$A/assets/devkit-sources.txt")"
+# 绑定那一版的清单（首装从镜像下、认本地文件时以它为准）。必须和 devkit-sources.txt 的第一个地址是同一版
+DK_BASE=$(head -1 "$A/assets/devkit-sources.txt")
+if [ -n "$DEVKIT_BASES" ]; then node "$ROOT/scripts/pin-devkit.mjs" "$DK_BASE" "$A/assets/devkit-pin.json" || exit 1
+else cp "$ROOT/devkit-pin.json" "$A/assets/devkit-pin.json"; fi
+node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));if(p.base!==process.argv[2]){console.error("✗ devkit-pin.json 是 "+p.base+"，devkit-sources.txt 是 "+process.argv[2]+"：跑 node scripts/pin-devkit.mjs 重新生成");process.exit(1)}' "$A/assets/devkit-pin.json" "$DK_BASE" || exit 1
 # 原生小库：seccomp 拦截 → ENOSYS（不依赖 libc，见源码注释）。Android 14 上没有它 claude 起不来
 mkdir -p "$A/assets/app/lib"
 cc4 -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \

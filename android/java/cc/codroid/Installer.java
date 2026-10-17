@@ -28,61 +28,40 @@ final class Installer {
     void step(String m) { ui.step(m); }
 
     // ── devkit 下载 ────────────────────────────────────────────────────
+    /** 工具包镜像（VPS 直连，不过 Cloudflare 代理）：dl.cccodroid.net/devkit/<tag>/ 与 GitHub Release 里的文件逐字节相同 */
+    static final String DEVKIT_MIRROR = "https://dl.cccodroid.net/devkit/";
+
     /**
-     * 从 Release 取工具包：先读同一 Release 里的 devkit.lock.json（gz 的文件名、大小、sha256），
-     * 再把 .tar.gz 下到私有目录 —— 断点续传（Range）、失败重试、多个地址依次换，sha256 对上才交给 installDevkit。
-     * 先落盘再解压：边下边解的话网络一断就得从头来，600MB 在手机网络上经不起。
-     * @param bases Release 下载目录（…/releases/download/<tag>/），按顺序尝试
+     * 首次安装：按 APK 自带的清单（assets/devkit-pin.json：gz 的文件名、大小、sha256）下载 .tar.gz 到私有目录 ——
+     * 断点续传（Range）、失败重试，首选地址连着失败就换备用地址接着同一个 .part 续传，sha256 对上才交给 installDevkit。
+     * 校验值来自 APK 本身，所以镜像不需要被信任。先落盘再解压：边下边解的话网络一断就得从头来。
+     * @param primary/alt 首选与备用的完整下载地址（GitHub / 镜像，按用户选的顺序）
      * @return 校验过的本地 .tar.gz
      */
-    File downloadDevkit(String[] bases) throws IOException {
-        IOException last = null;
-        for (String base : bases) {
-            try {
-                ui.step(Tr.t("获取工具包清单：") + base);
-                JSONObject lock = new JSONObject(new String(httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
-                JSONObject gz = lock.getJSONObject("gz");
-                String name = gz.getString("file"), sha = gz.getString("sha256");
-                long size = gz.getLong("bytes");
-                File done = new File(env.files, name), part = new File(env.files, name + ".part"), tag = new File(env.files, name + ".sha256");
-                lastBase = base; lastSha = sha;
-                JSONObject tarInfo = lock.optJSONObject("tar");
-                lastTarSha = tarInfo != null ? tarInfo.optString("sha256", null) : null;
-                // 空间先算清再下：下到一半才报「No space left」，用户白等十分钟还看不懂。
-                // 峰值 = 还没下完的压缩包 + 解开后的全部文件（压缩包解完才删）+ Claude Code 与余量
-                long have = done.isFile() ? done.length() : part.length();
-                long tarBytes = tarInfo != null ? tarInfo.optLong("bytes", 0) : 0;
-                long need = Math.max(0, size - have) + (tarBytes > 0 ? tarBytes : size * 3) + (400L << 20);
-                long free = new android.os.StatFs(env.files.getPath()).getAvailableBytes();
-                if (free < need) throw new NoSpace(need, free);
-                if (done.isFile() && done.length() == size && sha.equals(sha256(done))) return done;
-                // .part 属于别的版本就作废，别把两个版本拼在一起
-                if (!tag.isFile() || !sha.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
-                    part.delete();
-                    write(tag, sha + "\n");
-                }
-                ui.step(String.format(Tr.t("下载开发工具包 %.0f MB%s…"), size / 1048576.0, part.length() > 0 ? String.format(Tr.t("（续传，已有 %.0f MB）"), part.length() / 1048576.0) : ""));
-                for (int attempt = 1; part.length() < size; attempt++) {
-                    try { fetchRange(base + name, part, size); }
-                    catch (IOException e) {
-                        if (attempt >= 8) throw e;
-                        ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
-                        try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
-                    }
-                }
-                ui.step(Tr.t("校验 sha256…"));
-                String got = sha256(part);
-                if (!sha.equals(got)) { part.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
-                if (!part.renameTo(done)) throw new IOException(Tr.t("换名失败: ") + part);
-                tag.delete();
-                return done;
-            } catch (Exception e) {
-                if (e instanceof NoSpace) throw (NoSpace) e;      // 换个下载地址也没用
-                last = e instanceof IOException ? (IOException) e : new IOException(e.getMessage(), e);
-                ui.step("  ✗ " + e.getMessage());
-            }
-        }
-        throw last != null ? last : new IOException(Tr.t("没有可用的下载地址"));
+    File downloadDevkit(JSONObject pin, String primary, String alt) throws IOException {
+        JSONObject gz = pin.optJSONObject("gz"), tarInfo = pin.optJSONObject("tar");
+        if (gz == null) throw new IOException(Tr.t("APK 里的工具包清单坏了"));
+        String name = gz.optString("file"), sha = gz.optString("sha256");
+        long size = gz.optLong("bytes");
+        File done = new File(env.files, name), part = new File(env.files, name + ".part");
+        lastBase = pin.optString("base"); lastSha = sha;
+        lastTarSha = tarInfo != null ? tarInfo.optString("sha256", null) : null;
+        // 空间先算清再下：下到一半才报「No space left」，用户白等十分钟还看不懂。
+        // 峰值 = 还没下完的压缩包 + 解开后的全部文件（压缩包解完才删）+ Claude Code 与余量
+        long have = done.isFile() ? done.length() : part.length();
+        long tarBytes = tarInfo != null ? tarInfo.optLong("bytes", 0) : 0;
+        long need = Math.max(0, size - have) + (tarBytes > 0 ? tarBytes : size * 3) + (400L << 20);
+        long free = new android.os.StatFs(env.files.getPath()).getAvailableBytes();
+        if (free < need) throw new NoSpace(need, free);
+        ui.step(Tr.t("下载来源：") + host(primary));
+        ui.step(String.format(Tr.t("下载开发工具包 %.0f MB%s…"), size / 1048576.0, part.length() > 0 ? String.format(Tr.t("（续传，已有 %.0f MB）"), part.length() / 1048576.0) : ""));
+        File f = download(primary, alt, done, size, sha);
+        ui.step(Tr.t("✓ sha256 与清单一致"));
+        return f;
+    }
+
+    static String host(String url) {
+        try { return new URL(url).getHost(); } catch (Exception e) { return url; }
     }
 
     /** 存储空间不够：消息直接给用户看，写清要多少、还剩多少 */
@@ -115,9 +94,9 @@ final class Installer {
         for (int attempt = 1; size <= 0 || part.length() < size; attempt++) {
             try { fetchRange(url, part, size); if (size <= 0) break; }
             catch (IOException e) {
-                if (alt != null && !url.equals(alt) && attempt >= 2) {
-                    url = alt;
-                    ui.step("  " + Tr.f("GitHub 下载不顺（{0}），改从 cccodroid.net 镜像续传…", e.getMessage()));
+                if (alt != null && !url.equals(alt) && attempt >= 2) {      // 只换一次，别两头来回跳
+                    ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(alt)));
+                    url = alt; alt = null;
                     continue;
                 }
                 if (attempt >= 8) throw e;
@@ -209,7 +188,6 @@ final class Installer {
     void installDevkit(String source, String base, String sha, String tarSha) throws IOException {
         // 本地文件没给 sha：自己算一个。已装记录里有了内容身份，更新检查才不会把它误认成别的版本
         if (sha == null && !source.startsWith("http")) { ui.step(Tr.t("计算工具包校验和…")); sha = sha256(new File(source)); }
-        ui.step(Tr.t("解包开发工具包…"));
         InputStream raw; long total;
         if (source.startsWith("http")) {
             HttpURLConnection c = (HttpURLConnection) new URL(source).openConnection();
@@ -219,10 +197,39 @@ final class Installer {
             File f = new File(source);
             raw = new FileInputStream(f); total = f.length();
         }
+        installDevkit(raw, total, source.endsWith(".gz"), base, sha, tarSha);
+    }
+
+    /** 本地文件（系统文件选择器给的 content://）的来源：要读两遍（先认身份、再解包），所以给个能重开的入口 */
+    interface Source { InputStream open() throws IOException; }
+
+    /** 认本地包：读一遍算 sha256，看开头是不是 gzip（content:// 不一定有文件名）。返回 {sha256, "gz"|"tar"} */
+    String[] scanLocal(Source src, long total) throws IOException {
+        ui.step(Tr.t("核对文件…"));
+        try (InputStream in = new BufferedInputStream(src.open(), 1 << 20)) {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[1 << 20];
+            long n = 0, tick = 0;
+            int b0 = -1, b1 = -1;
+            for (int r; (r = in.read(buf)) > 0; ) {
+                if (n == 0 && r >= 2) { b0 = buf[0] & 0xff; b1 = buf[1] & 0xff; }
+                md.update(buf, 0, r);
+                n += r;
+                if (n - tick > (8 << 20)) { tick = n; ui.bytes(n, total); }
+            }
+            ui.bytes(n, total);
+            if (n < 1024) throw new IOException(Tr.t("文件太小，不是工具包"));
+            return new String[]{hex(md.digest()), b0 == 0x1f && b1 == 0x8b ? "gz" : "tar"};
+        } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
+    }
+
+    /** 从流解包安装。tarSha 非空时边解边核，对不上整个丢掉、旧工具包不动（读两遍之间文件被换掉也拦得住） */
+    void installDevkit(InputStream raw, long total, boolean gzip, String base, String sha, String tarSha) throws IOException {
+        ui.step(Tr.t("解包开发工具包…"));
         Counting in = new Counting(new BufferedInputStream(raw, 1 << 20), total);
         MessageDigest md;
         try { md = MessageDigest.getInstance("SHA-256"); } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
-        java.security.DigestInputStream s = new java.security.DigestInputStream(source.endsWith(".gz") ? new GZIPInputStream(in, 1 << 16) : in, md);
+        java.security.DigestInputStream s = new java.security.DigestInputStream(gzip ? new GZIPInputStream(in, 1 << 16) : in, md);
         File tmp = usrNew();
         deleteTree(tmp);
         tmp.mkdirs();

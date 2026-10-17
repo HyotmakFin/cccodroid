@@ -39,7 +39,7 @@ import java.util.concurrent.CountDownLatch;
  * 每一步都能重入：装到一半被杀，下次打开从缺的那一步接着来。
  */
 public class MainActivity extends Activity {
-    /** 本地工具包（离线安装 / 开发期）：放在共享目录就优先用它；下载地址见 assets/devkit-sources.txt */
+    /** 本地工具包（离线安装 / 开发期）：放在共享目录的话，首装的来源选择里多一项直接用它（照样核对来源） */
     static final String[] LOCAL_DEVKIT = {
         "/sdcard/cccodroid/devkit-cc.codroid.tar.gz", "/sdcard/cccodroid/devkit-cc.codroid.tar",
     };
@@ -70,6 +70,12 @@ public class MainActivity extends Activity {
     private static File savePending;
     /** 安装失败时露出来；点了从头再走 boot（每一步都会跳过已经完成的部分） */
     private android.widget.Button retry, stuck;
+    /** 首装时「工具包从哪装」的选择面板（安装页上，平时藏着） */
+    private LinearLayout chooser;
+    static final int REQ_DEVKIT = 10;
+    /** 首装选本地文件时，boot 线程在这等系统文件选择器回来；null = 是更新卡片发起的 */
+    private volatile CountDownLatch pickWait;
+    private volatile Uri picked;
 
     @Override protected void onCreate(Bundle b) {
         Tr.init(this);
@@ -139,16 +145,7 @@ public class MainActivity extends Activity {
                 }
                 Updater.get(this).dropStagedIfInstalled();
                 if (!env.devkitReady()) {
-                    String src = null;
-                    for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { src = l; break; }
-                    if (src != null) {
-                        say(Tr.t("开发工具包来源：") + src);
-                        ins.installDevkit(src);
-                    } else {
-                        File gz = ins.downloadDevkit(readAsset("devkit-sources.txt").trim().split("\\s+"));
-                        ins.installDevkit(gz.getPath());
-                        gz.delete();      // 解完就删，腾出 600MB
-                    }
+                    installFirstDevkit(ins);
                     say(Tr.t("✓ 开发工具包就绪"));
                     Ledger.add(env, "install", true, Tr.t("首次安装开发工具包"), null);
                 }
@@ -260,6 +257,203 @@ public class MainActivity extends Activity {
         if (web == null || sid == null || !sid.matches("[0-9A-Za-z-]{8,64}")) return;
         web.evaluateJavascript("(function f(n){var c=window.__cc;if(c&&c.view){setTimeout(function(){if(c.view.sessionId!==\"" + sid
             + "\")c.openSession(\"" + sid + "\")},n?800:0)}else if(n<50)setTimeout(function(){f(n+1)},200)})(0)", null);
+    }
+
+    // ── 工具包从哪装：GitHub / cccodroid.net 镜像 / 本地文件 ──────────────────
+    /** 首装：让用户选来源，照着走。两个下载源互为备用（首选连着失败就换另一个接着续传）；本地文件没选就回到选择 */
+    private void installFirstDevkit(Installer ins) throws Exception {
+        org.json.JSONObject pin = Updater.devkitPin(this);
+        if (pin == null || pin.optJSONObject("gz") == null) throw new java.io.IOException(Tr.t("APK 里的工具包清单坏了"));
+        String file = pin.getJSONObject("gz").getString("file"), base = pin.getString("base");
+        String gh = base + file, mirror = Updater.devkitMirror(base, file);
+        String local = null;
+        for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { local = l; break; }
+        while (true) {
+            String c = chooseDevkitSource(pin, local);
+            if ("github".equals(c) || "mirror".equals(c)) {
+                boolean m = "mirror".equals(c);
+                File gz = ins.downloadDevkit(pin, m ? mirror : gh, m ? gh : mirror);
+                ins.installDevkit(gz.getPath());
+                gz.delete();      // 解完就删，腾出 650 MB
+                return;
+            }
+            Uri uri = "path".equals(c) ? Uri.fromFile(new File(local)) : pickDevkitBlocking();
+            if (uri == null) { say(Tr.t("没选文件")); continue; }
+            if (installLocal(ins, uri, false)) return;
+        }
+    }
+
+    /** 在安装页上摆出来源选择，等用户点一个。返回 github / mirror / local / path */
+    private String chooseDevkitSource(org.json.JSONObject pin, String local) throws InterruptedException {
+        final String[] pick = {null};
+        CountDownLatch done = new CountDownLatch(1);
+        SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+        String last = sp.getString("devkitSrc", "");
+        org.json.JSONObject gz = pin.optJSONObject("gz"), tar = pin.optJSONObject("tar");
+        File part = new File(env.files, gz.optString("file") + ".part");
+        ui.post(() -> {
+            boolean dark = uiDark();
+            int fg = Color.parseColor(dark ? "#ece9e1" : "#29261f"), dim = Color.parseColor(dark ? "#aaa59b" : "#5d594f");
+            int line = Color.parseColor(dark ? "#3a3935" : "#e0dcd0"), accent = Color.parseColor(dark ? "#d97757" : "#c96442");
+            chooser.removeAllViews();
+            TextView q = new TextView(this);
+            q.setTextColor(fg);
+            q.setTextSize(14);
+            q.setPadding(0, dp(4), 0, dp(8));
+            String txt = Tr.f("开发工具包约 {0} MB（解开后约 {1} GB），从哪里装？",
+                String.valueOf(gz.optLong("bytes") >> 20), String.format(java.util.Locale.ROOT, "%.1f", (tar != null ? tar.optLong("bytes") : 0) / 1073741824.0));
+            if (part.length() > 0) txt += "\n" + Tr.f("已经下了 {0} MB，两个下载源都能接着续传。", String.valueOf(part.length() >> 20));
+            q.setText(txt);
+            chooser.addView(q);
+            String[][] opts = {
+                {"github", Tr.t("从 GitHub 下载"), Tr.t("海外网络一般最快")},
+                {"mirror", Tr.t("从 cccodroid.net 镜像下载"), Tr.t("GitHub 慢或连不上时用；文件与 GitHub 上的一致，照样核对 sha256")},
+                {"local", Tr.t("选择本地文件…"), Tr.t("已经下好的 devkit-cc.codroid.tar.gz（或 .tar）；装之前核对是不是发布版")},
+                local != null ? new String[]{"path", Tr.t("用共享目录里的文件"), local} : null,
+            };
+            for (String[] o : opts) {
+                if (o == null) continue;
+                LinearLayout card = new LinearLayout(this);
+                card.setOrientation(LinearLayout.VERTICAL);
+                card.setPadding(dp(14), dp(10), dp(14), dp(10));
+                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                bg.setCornerRadius(dp(10));
+                bg.setStroke(dp(1), o[0].equals(last) ? accent : line);
+                card.setBackground(bg);
+                TextView t1 = new TextView(this);
+                t1.setText(o[1] + (o[0].equals(last) ? "  · " + Tr.t("上次选的") : ""));
+                t1.setTextColor(fg);
+                t1.setTextSize(15);
+                TextView t2 = new TextView(this);
+                t2.setText(o[2]);
+                t2.setTextColor(dim);
+                t2.setTextSize(12);
+                card.addView(t1);
+                card.addView(t2);
+                card.setClickable(true);
+                card.setOnClickListener(v -> {
+                    if (pick[0] != null) return;
+                    pick[0] = o[0];
+                    sp.edit().putString("devkitSrc", o[0]).apply();
+                    chooser.setVisibility(View.GONE);
+                    done.countDown();
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                lp.bottomMargin = dp(8);
+                chooser.addView(card, lp);
+            }
+            chooser.setVisibility(View.VISIBLE);
+        });
+        done.await();
+        return pick[0];
+    }
+
+    private static Intent devkitPickIntent() {
+        return new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+    }
+
+    /** 首装：弹系统文件选择器并等它回来；没选返回 null */
+    private Uri pickDevkitBlocking() throws InterruptedException {
+        CountDownLatch l = new CountDownLatch(1);
+        picked = null;
+        pickWait = l;
+        ui.post(() -> {
+            try { startActivityForResult(devkitPickIntent(), REQ_DEVKIT); }
+            catch (Exception e) { say("✗ " + e.getMessage()); l.countDown(); }
+        });
+        l.await();
+        pickWait = null;
+        return picked;
+    }
+
+    private InputStream openUri(Uri u) throws java.io.IOException {
+        if ("file".equals(u.getScheme())) return new java.io.FileInputStream(u.getPath());
+        InputStream in = getContentResolver().openInputStream(u);
+        if (in == null) throw new java.io.IOException(Tr.t("读不了这个文件"));
+        return in;
+    }
+
+    private long sizeOf(Uri u) {
+        if ("file".equals(u.getScheme())) return new File(u.getPath()).length();
+        try (android.database.Cursor c = getContentResolver().query(u, new String[]{android.provider.OpenableColumns.SIZE}, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    /** 后台线程里弹一个确认框并等结果 */
+    private boolean askBlocking(String msg, String yes) throws InterruptedException {
+        final boolean[] ok = {false};
+        CountDownLatch l = new CountDownLatch(1);
+        ui.post(() -> new android.app.AlertDialog.Builder(this).setMessage(msg)
+            .setPositiveButton(yes, (d, w) -> ok[0] = true)
+            .setNegativeButton(Tr.t("取消"), null)
+            .setOnDismissListener(d -> l.countDown()).show());
+        l.await();
+        return ok[0];
+    }
+
+    /**
+     * 本地工具包：先读一遍算 sha256、对照已发布的清单认身份；认不出就明说风险、让用户决定；认出来但不兼容就不装。
+     * 第二遍解包时再按清单的 tar sha256 边解边核，两遍之间文件被换掉也会被拦下。
+     * @param replacing true = 更新卡片发起、替换已装的（要停网关）；false = 首装
+     * @return false = 用户取消
+     */
+    private boolean installLocal(Installer ins, Uri uri, boolean replacing) throws Exception {
+        Updater upd = Updater.get(this);
+        long total = sizeOf(uri);
+        Installer.Source src = () -> openUri(uri);
+        String[] scan = ins.scanLocal(src, total);
+        say("sha256 " + scan[0]);
+        say(Tr.t("对照已发布的工具包…"));
+        org.json.JSONObject id = upd.identifyDevkit(scan[0]);
+        if (id == null) {
+            if (!askBlocking(Tr.f("这个文件不是已发布的工具包（也可能是现在没网、查不到清单）。\n\nsha256 前 12 位：{0}\n\n只在它是你自己构建的、或者确定来源可靠时才继续：工具包里的程序能读写 cccodroid 里的一切。", scan[0].substring(0, 12)),
+                    Tr.t("仍然安装"))) { say(Tr.t("已取消")); return false; }
+            say("⚠ " + Tr.t("没核对上来源，按你的确认继续"));
+        } else {
+            String why = upd.devkitIncompatible(id);
+            if (why != null) throw new java.io.IOException(why);
+            say(Tr.f("✓ 是已发布的 {0}", id.optString("tag")));
+        }
+        boolean gzip = "gz".equals(scan[1]);
+        if (replacing) upd.applyLocalDevkit(ins, src, total, gzip, scan[0], id);
+        else ins.installDevkit(src.open(), total, gzip, id != null ? id.optString("base") : "",
+            id != null && !id.optString("sha256").isEmpty() ? id.optString("sha256") : scan[0], id != null ? id.optString("tarSha256", null) : null);
+        return true;
+    }
+
+    /** 更新卡片的「从本地文件安装」：选好文件后切到进度页，认身份、替换，装完回到界面 */
+    private void applyLocalDevkitUi(Uri uri) {
+        Updater upd = Updater.get(this);
+        new Thread(() -> {
+            if (Updater.gatewayBusy() || upd.devkitMoving()) {
+                ui.post(() -> android.widget.Toast.makeText(this, Tr.t("有任务正在跑，等它结束再更新开发工具包"), android.widget.Toast.LENGTH_LONG).show());
+                return;
+            }
+            CountDownLatch shown = new CountDownLatch(1);
+            ui.post(() -> {
+                if (web != null) { web.destroy(); web = null; }
+                booted = false;
+                buildSetupUi();
+                shown.countDown();
+            });
+            try {
+                shown.await();
+                say(Tr.t("从本地文件安装开发工具包…"));
+                boolean done = installLocal(new Installer(env, new Installer.Progress() {
+                    public void step(String m) { say(m); }
+                    public void bytes(long d, long t) { progress(d, t); }
+                }), uri, true);
+                if (done) say(Tr.t("✓ 开发工具包已更新，等待网关…"));
+            } catch (Exception e) {
+                say("✗ " + e.getMessage());
+                say(Tr.t("（旧的工具包已经不在了的话，划掉应用重新打开会重新安装）"));
+                try { Thread.sleep(4000); } catch (InterruptedException ignored) {}
+            }
+            try { for (int i = 0; i < 120 && !ping(); i++) Thread.sleep(500); } catch (InterruptedException ignored) {}
+            ui.post(() -> { showWeb(); booted = true; });
+        }, "devkit-local").start();
     }
 
     /** 替换工具包：网关要停，界面切回进度页，装完再回来 */
@@ -466,6 +660,10 @@ public class MainActivity extends Activity {
                 catch (Exception e) { say(Tr.t("✗ 诊断包没打成：") + e.getMessage()); }
             }, "stuck").start())
             .setNegativeButton(Tr.t("取消"), null).show());
+        chooser = new LinearLayout(this);
+        chooser.setOrientation(LinearLayout.VERTICAL);
+        chooser.setVisibility(View.GONE);
+        col.addView(chooser, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout acts = new LinearLayout(this);
         acts.addView(retry, new LinearLayout.LayoutParams(-2, -2));
         acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
@@ -568,6 +766,10 @@ public class MainActivity extends Activity {
                 if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
             }
             /** 冻结脱困：WebView 偶发把这个文档的触摸滚动整个吞掉，同站重载不好，跨站跳一次再回来才好。见 bounce() */
+            /** 更新卡片的「从本地文件安装」：弹系统文件选择器，选好后由 applyLocalDevkitUi 接手 */
+            @android.webkit.JavascriptInterface public void pickDevkit() {
+                ui.post(() -> { pickWait = null; try { startActivityForResult(devkitPickIntent(), REQ_DEVKIT); } catch (Exception ignored) {} });
+            }
             @android.webkit.JavascriptInterface public void unfreeze() { ui.post(() -> bounce()); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
@@ -755,6 +957,13 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         if (req == 9) { if (pane != null) pane.onResult(res, data); return; }
+        if (req == REQ_DEVKIT) {
+            Uri u = res == RESULT_OK && data != null ? data.getData() : null;
+            CountDownLatch w = pickWait;
+            if (w != null) { picked = u; w.countDown(); }
+            else if (u != null) applyLocalDevkitUi(u);
+            return;
+        }
         if (req == 8) {
             if (res == RESULT_OK && data != null && data.getData() != null) finishSaveAs(data.getData());
             else { savePending = null; savedJs(false, "cancel"); }

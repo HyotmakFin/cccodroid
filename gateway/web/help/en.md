@@ -4,7 +4,7 @@ cccodroid runs the **official, unmodified Claude Code** on your phone, wraps it 
 
 ## Getting started
 
-1. **The first launch** downloads the toolchain (about 650 MB) and the official Claude Code (about 230 MB). Downloads resume after interruptions and every file is hash-checked. Free space is checked first; if there is not enough, you are told how much is needed.
+1. **The first launch** installs the toolchain (about 650 MB) and the official Claude Code (about 230 MB). For the toolchain it first asks where to get it: **GitHub**, the **cccodroid.net mirror**, or a **local file** (for example a `devkit-cc.codroid.tar.gz` you downloaded on a computer; see [cccodroid.net/download](https://cccodroid.net/en/download/#devkit)). The two download sources back each other up: if one stalls, the app switches to the other and resumes. Whatever the source, the file is checked against the SHA-256 that ships inside the APK. Free space is checked first; if there is not enough, you are told how much is needed.
 2. **Connect a model** (Settings → Provider). Pick one:
    - **Sign in with a Claude account**: if you have a Pro / Max subscription or a Console account, authorize once in the browser and you are sent back to the app. No key needed.
    - **Enter an API key**: an Anthropic key, or the official Anthropic-compatible endpoints of DeepSeek, Zhipu GLM, Qwen or Kimi. You can also add any compatible endpoint.
@@ -149,6 +149,7 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 - **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens, keeping anything you installed with pip / npm -g.
 - Updates never cut each other off. A replacement is checked against the release manifest before the old version is touched; if it is interrupted, the next launch finishes it or rolls back.
 - **Verify / Repair**: checks every toolchain file against its hash; Repair reinstalls the same version and keeps your own packages.
+- **Local file…**: installs the toolchain from a file you've already downloaded (offline, or when the network is too slow). It's checked against the published releases first; if it doesn't match, you're told plainly and decide yourself.
 - **Repair ledger**: every install, verification, repair and startup recovery is recorded and can be read in Settings.
 
 ## Troubleshooting
