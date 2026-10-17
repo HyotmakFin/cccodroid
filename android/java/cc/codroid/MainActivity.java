@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -82,6 +83,9 @@ public class MainActivity extends Activity {
         // 安装页、空白 WebView 都按界面里选的外观（浅 / 深 / 跟随系统）上色，别再"界面浅色、启动页深色"
         setTheme(uiDark() ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(b);
+        // 启动画面结束就直接拿掉，不做淡出：淡出那半秒它压在安装页上，深浅不一致时就是一块颜色不对的区域
+        if (Build.VERSION.SDK_INT >= 31) getSplashScreen().setOnExitAnimationListener(v -> v.remove());
+        syncSplash();
         env = new Env(this);
         buildSetupUi();
         edgeToEdge();
@@ -220,6 +224,13 @@ public class MainActivity extends Activity {
     }
     /** 界面里选的外观：theme.js 每次定下来都经 CCApp.themePref 存一份；没存过（第一次装）= 跟随系统 */
     private boolean uiDark() { return BrowserPane.night(this); }
+    /** 安卓 13+：下一次启动的启动画面按界面里选的外观上色（选「跟随系统」就交还系统）。系统记住这个选择，进程没起来时也生效 */
+    private void syncSplash() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        String p = getSharedPreferences("ui", MODE_PRIVATE).getString("theme", "auto");
+        int id = "auto".equals(p) ? 0 : getResources().getIdentifier("dark".equals(p) ? "LaunchDark" : "LaunchLight", "style", getPackageName());
+        try { getSplashScreen().setSplashScreenTheme(id); } catch (Exception ignored) {}
+    }
     /** 状态栏 / 导航栏跟着界面换色；浅色时图标改深色 */
     private void applyBars(boolean dark) {
         android.view.Window w = getWindow();
@@ -832,7 +843,8 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void langPref(String code) { Tr.set(code); }
             @android.webkit.JavascriptInterface public void themePref(String p) {
                 if ("auto".equals(p) || "light".equals(p) || "dark".equals(p))
-                    getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).apply();
+                    getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).commit();
+                ui.post(MainActivity.this::syncSplash);
                 // 之后新开的系统控件（下拉框的选项窗、对话框）也跟着换深浅，不用重开应用
                 ui.post(() -> setTheme(uiDark() ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar));
             }

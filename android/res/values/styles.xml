@@ -6,4 +6,7 @@
         <item name="android:colorAccent">#c96442</item>
     </style>
     <color name="launch_bg">#faf9f5</color>
+    <!-- 不随系统深浅变的两份底色：安卓 13+ 用 setSplashScreenTheme 按界面里选的外观指定启动画面（见 MainActivity.syncSplash） -->
+    <color name="launch_light">#faf9f5</color>
+    <color name="launch_dark">#1f1e1d</color>
 </resources>

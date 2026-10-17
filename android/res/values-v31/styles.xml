@@ -9,4 +9,20 @@
         <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/launch_bg</item>
     </style>
+    <!-- 系统深色、界面浅色（或反过来）时，上面那份会跟系统走，淡出时叠在安装页上就是一块颜色不对的区域。
+         这两份固定深浅，由 MainActivity.syncSplash 按界面里的选择指定给下一次启动 -->
+    <style name="LaunchLight" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_light</item>
+        <item name="android:colorAccent">#c96442</item>
+        <item name="android:windowSplashScreenBackground">@color/launch_light</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/launch_light</item>
+    </style>
+    <style name="LaunchDark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/launch_dark</item>
+        <item name="android:colorAccent">#d97757</item>
+        <item name="android:windowSplashScreenBackground">@color/launch_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/launch_dark</item>
+    </style>
 </resources>
