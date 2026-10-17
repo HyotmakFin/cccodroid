@@ -1070,6 +1070,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         scrollDown();
       },
       note(t, solid) { undot(); last = null; if (solid) any = true; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); keepTail(); },
+      // 同一个 key 的提示原地更新（加载模型、读提示的进度），不一条条往下堆
+      noteK(k, t) {
+        const ex = [...bubble.querySelectorAll(".run-note[data-k]")].find((n) => n.dataset.k === k);
+        if (ex) { ex.textContent = t; return; }
+        undot(); last = null;
+        bubble.insertAdjacentHTML("beforeend", `<p class="run-note" data-k="${esc(k)}">${esc(t)}</p>`); keepTail();
+      },
       finish(aborted) {
         if (ended) return;
         ended = true;
@@ -1456,6 +1463,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "tool_use":       av.tool(ev.id, ev.name, ev.input); break;
       case "tool_result":    toolResult(ev.id, ev.ok, ev.text); scrollDown(); break;
       case "compacting":     av.note(t("正在压缩上下文…")); scrollDown(); break;
+      case "note":           av.noteK(ev.key, ev.text); scrollDown(); break;
       case "compacted":
         av.note(ev.pre != null && ev.post != null
           ? t("上下文已压缩：{pre} → {post} tokens", { pre: ev.pre.toLocaleString(), post: ev.post.toLocaleString() })
@@ -1987,7 +1995,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   // ── 文件浏览器 ────────────────────────────────────────────────────
-  const KIND_ICON = { dir: "📁", image: "🖼", video: "🎬", audio: "🎵", pdf: "📕", text: "📄", other: "📦" };
+  const KIND_ICON = { dir: "📁", image: "🖼", video: "🎬", audio: "🎵", pdf: "📕", text: "📄", docx: "📘", sheet: "📗", office: "📙", other: "📦" };
 
   function crumbs(p) {
     const parts = String(p).split("/").filter(Boolean);
@@ -2559,6 +2567,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
       if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
+      if (c.id === "llama-cpp" && c.state === "ok") desc += '<details class="llm-dl" id="llm-dl"' + (llmDl.open ? " open" : "") + "><summary>" + t("下载模型") + '</summary><div id="llm-dl-body">' + llmDl.html + "</div></details>";
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
       const tags = ["cat:" + (c.category && CAT()[c.category] ? c.category : "other")];
       if (c.state === "ok") tags.push("inst");
@@ -2573,10 +2582,56 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("comp-count").textContent = (r.items || []).length || "";
     renderIdx("comp", [["inst", t("已装")], ["upd", t("要更新")], ...Object.entries(CAT()).map(([k, v]) => ["cat:" + k, v])]);
     if ($("gh-auth")) loadGhAuth(refresh);
+    if ($("llm-dl")) {
+      $("llm-dl").addEventListener("toggle", () => { llmDl.open = $("llm-dl").open; if (llmDl.open) loadLlmDl(); });
+      if (llmDl.open) loadLlmDl();
+    }
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
     if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
       compTimer = setTimeout(loadComponents, 1000);
   }
+
+  // ── llama-cpp 组件下的「下载模型」子卡：内置目录（网关里固定 sha256），一键下载 / 取消 / 删除 ──
+  const llmDl = { open: false, html: "", timer: 0 };
+  async function loadLlmDl() {
+    clearTimeout(llmDl.timer);
+    const r = await api("/api/local/catalog").catch((e) => ({ items: [], err: e.message }));
+    const GB = (n) => (n / 1073741824).toFixed(1) + " GB";
+    llmDl.html = '<div class="tiny dim">' + t("模型放在 /sdcard/cccodroid/models，下好后到 设置 → 模型服务 → 端侧小模型 使用。本机内存 {ram} GB。", { ram: r.ram || "?" }) + "</div>" +
+      (r.err ? '<div class="tiny err">' + esc(r.err) + "</div>" : "") +
+      (r.items || []).map((m) => {
+        const j = m.job;
+        let st = "", act = "";
+        if (j && (j.phase === "downloading" || j.phase === "verifying")) {
+          const pct = j.total ? Math.min(100, (j.done / j.total) * 100).toFixed(1) : 0;
+          st = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + (j.phase === "verifying" ? t("校验中") : t("下载中")) + " " + GB(j.done) + " / " + GB(j.total) + "</div>";
+          act = '<button class="btn sm ghost" data-lm="cancel" data-id="' + esc(m.id) + '">' + t("取消") + "</button>";
+        } else if (m.have) {
+          st = '<span class="tiny">' + t("已下载") + (m.inUse ? " · " + t("正在使用") : "") + "</span>";
+          act = '<button class="btn sm ghost" data-lm="remove" data-id="' + esc(m.id) + '">' + t("删除") + "</button>";
+        } else {
+          if (j && j.phase === "error") st = '<div class="tiny err">' + t("下载失败：{msg}", { msg: esc(j.err) }) + "</div>";
+          act = '<button class="btn sm" data-lm="download" data-id="' + esc(m.id) + '">' + (j ? t("重试") : t("下载")) + "</button>";
+        }
+        return '<div class="llm-item"><div class="llm-row"><code>' + esc(m.id) + "</code> <span class=\"tiny\">" + GB(m.bytes) + "</span>" +
+          (m.rec ? ' <span class="tiny ok">' + t("推荐") + "</span>" : "") + (m.big ? ' <span class="tiny warn">' + t("对本机偏大") + "</span>" : "") +
+          '<span class="llm-act">' + act + "</span></div>" + '<div class="tiny dim">' + esc(m.note) + "</div>" + st + "</div>";
+      }).join("");
+    if ($("llm-dl-body")) $("llm-dl-body").innerHTML = llmDl.html;
+    const busy = (r.items || []).some((m) => m.job && m.job.phase !== "error");
+    if (busy && llmDl.open && $("llm-dl") && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+      llmDl.timer = setTimeout(loadLlmDl, 1000);
+  }
+  $("tab-ext").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-lm]");
+    if (!b || b.disabled) return;
+    const op = b.dataset.lm, id = b.dataset.id;
+    if (op === "remove" && !confirm(t("删除模型 {name}？", { name: id }))) return;
+    b.disabled = true;
+    const r = await post("/api/local/model", { op, id }).catch((er) => ({ ok: false, message: er.message }));
+    if (!r.ok) toast(t("失败：{msg}", { msg: r.message || "" }), true);
+    loadLlmDl();
+  });
 
   // ── gh 登录卡：设备码流程。令牌只在 gh 自己那儿，网关只回账号名与状态 ──
   const ghAuth = { html: "", at: 0, timer: 0, polling: false };
@@ -3233,8 +3288,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const provEn = () => !/^zh/.test((window.I18N && I18N.lang) || "zh");
   const pLabel = (x) => (provEn() && x.labelEn) || x.label;
   const pHint = (x) => (provEn() && x.hintEn) || x.hint || "";
-  const GROUP_NAME = provEn() ? { claude: "Claude", third: "Third-party (just add a key)", custom: "Custom endpoints" }
-    : { claude: "Claude", third: t("第三方（填 Key 即用）"), custom: t("自定义接口") };
+  const GROUP_NAME = provEn() ? { claude: "Claude", third: "Third-party (just add a key)", local: "On-device", custom: "Custom endpoints" }
+    : { claude: "Claude", third: t("第三方（填 Key 即用）"), local: t("端侧（本机运行）"), custom: t("自定义接口") };
   const post = (p, body) => api(p, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}),
   });
@@ -3255,7 +3310,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         const st = p.login ? "" : (p.hasKey ? "" : (provEn() ? " · no key yet" : t(" · 未配 Key")));
         return `<option value="${esc(p.id)}">${tag}${esc(pLabel(p))}${st}</option>`;
       };
-      sel.innerHTML = ["claude", "third", "custom"].map((g) =>
+      sel.innerHTML = ["claude", "third", "local", "custom"].filter((g) => g !== "local" || groups.local).map((g) =>
         `<optgroup label="${GROUP_NAME[g]}">` + (groups[g] || []).map(opt).join("") +
         (g === "custom" ? `<option value="__new__">${provEn() ? "+ Add a custom endpoint…" : t("＋ 新增自定义接口…")}</option>` : "") + `</optgroup>`).join("");
       sel.value = state.provView;
@@ -3279,6 +3334,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const p = (state.providers || []).find((x) => x.id === id);
     if (!p) { box.innerHTML = ""; return; }
     if (p.login) return renderLoginCard(box, p);
+    if (p.local) return renderLocalCard(box, p);
     if (p.custom) return renderCustomCard(box, p);
     return renderKeyCard(box, p);
   }
@@ -3294,6 +3350,63 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     await loadSettings();
     await refreshStatus();
     toast(t("已切到 {name}（下一条消息生效）", { name: p.label }));
+  }
+
+  // ── 端侧小模型卡：llama.cpp 装没装、有没有 GPU、模型目录里有哪些、聊天 / 自定义模式、服务状态 ──
+  async function renderLocalCard(box, p) {
+    box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div><div class="tiny">${t("读取中…")}</div>`;
+    let j;
+    try { j = await api("/api/local"); } catch (e) { box.innerHTML += `<div class="prov-state err">${esc(e.message)}</div>`; return; }
+    if (state.provView !== p.id) return;
+    const gb = (n) => (n / 1073741824).toFixed(1) + " GB";
+    const ok = (b) => b ? "✓" : "✗";
+    const sv = j.server || {}, cu = j.custom || {};
+    const cmdText = t("请阅读 {skill}，帮我给端侧小模型配置一个自定义模式。", { skill: (cu.skill || "~/.claude/skills/local-model-mode/SKILL.md") });
+    const svText = sv.state === "ready" ? t("已加载 {name}（{min} 分钟不用自动卸载）", { name: sv.model, min: Math.round(sv.idleMs / 60000) })
+      : sv.state === "loading" ? t("正在加载 {name}…", { name: sv.model })
+      : sv.state === "error" ? t("上次没起来：{msg}", { msg: sv.err || "?" })
+      : t("未运行（发消息时自动加载）");
+    box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
+      <div class="tiny">${esc(pHint(p))}</div>
+      <div class="local-facts tiny">
+        <div>${ok(j.bin)} ${j.bin ? t("llama.cpp 已装") : t("没装 llama.cpp：到「扩展」页装 llama-cpp 组件")}</div>
+        <div>${j.gpu ? "✓ " + t("GPU 推理（Vulkan）") : "· " + t("只有 CPU 推理（装 GPU 驱动组件可以快几倍）")}</div>
+        <div>· ${t("内存 {total}，可用 {avail}；上下文 {ctx} token，{n} 线程", { total: gb(j.memTotal), avail: gb(j.memAvail), ctx: j.ctx.toLocaleString(), n: j.threads })}</div>
+      </div>
+      <div class="tiny" style="margin:8px 0 4px">${t("模型（{dir}）", { dir: esc(j.dirs[0] || "") })}</div>
+      ${j.models.length ? `<div class="local-models">${j.models.map((m) => `<div class="tiny">· <code>${esc(m.id)}</code> ${gb(m.size)}</div>`).join("")}</div>`
+        : `<div class="tiny dim">${t("还没有模型。到「扩展」页 llama-cpp 组件下的「下载模型」一键下载，或把 .gguf 文件放进上面的目录。")}</div>`}
+      ${(j.cpuOnly || []).length ? `<div class="tiny warn" style="margin-top:6px">${t("在 GPU 上崩过、已改走 CPU：{names}", { names: j.cpuOnly.map(esc).join(", ") })}
+        <button class="btn sm ghost" data-act="gpureset">${t("再试 GPU")}</button></div>` : ""}
+      <div class="tiny" style="margin:10px 0 4px">${t("模式")}</div>
+      <div class="local-mode">
+        <label><input type="radio" name="lm" value="chat" ${j.mode !== "custom" ? "checked" : ""}> ${t("聊天")}<span class="tiny dim"> — ${t("不给工具，提示最短、回得最快")}</span></label>
+        <label><input type="radio" name="lm" value="custom" ${j.mode === "custom" ? "checked" : ""} ${cu.ok ? "" : "disabled"}> ${cu.ok ? esc(cu.label) : t("自定义")}<span class="tiny dim"> — ${
+          cu.ok ? (cu.tools ? t("工具：{tools}", { tools: esc(cu.tools) }) : t("不给工具")) : cu.have ? "" : t("还没配置")}</span></label>
+        ${cu.have && !cu.ok ? `<div class="tiny err">${t("配置文件有误，已按聊天模式跑：{msg}", { msg: esc(cu.err) })}</div>` : ""}
+      </div>
+      <div class="local-custom tiny dim">
+        ${t("手机算力有限，小模型干不了活，所以只内置聊天。想自己折腾的话，可以写 {file} 开一个自定义模式（指定工具、系统提示、llama-server 参数）。最省事的办法：切到云端模型，把下面这句发给它：", { file: "<code>" + esc(cu.path || "~/.cccodroid/local-mode.json") + "</code>" })}
+        <div class="local-copy"><code>${esc(cmdText)}</code><button class="btn sm ghost" data-act="copy">${t("复制")}</button></div>
+      </div>
+      <div class="prov-state">${esc(svText)}${sv.loadMs ? ` · ${t("加载用了 {s} 秒", { s: (sv.loadMs / 1000).toFixed(1) })}` : ""}</div>
+      <div class="row-actions">
+        ${sv.state === "ready" || sv.state === "loading" ? `<button class="btn sm ghost" data-act="stop">${t("卸载模型")}</button>` : ""}
+        <button class="btn sm ghost" data-act="refresh">${t("刷新")}</button>
+        ${j.bin && j.models.length ? useBtn(p) : ""}
+      </div>`;
+    box.onclick = async (e) => {
+      const act = e.target.dataset && e.target.dataset.act;
+      if (act === "use") return useProvider(p);
+      if (act === "refresh") return renderLocalCard(box, p);
+      if (act === "stop") { await post("/api/local", { stop: true }).catch((e2) => toast(e2.message, true)); return renderLocalCard(box, p); }
+      if (act === "gpureset") { await post("/api/local", { gpuReset: true }).catch((e2) => toast(e2.message, true)); return renderLocalCard(box, p); }
+      if (act === "copy") { navigator.clipboard?.writeText(cmdText); return toast(t("已复制")); }
+    };
+    box.querySelectorAll('input[name="lm"]').forEach((r) => r.addEventListener("change", async () => {
+      await post("/api/local", { mode: r.value }).catch((e2) => toast(e2.message, true));
+      toast(t("已切换（下一条消息生效）"));
+    }));
   }
 
   // ── 账户登录卡 ──
@@ -4669,7 +4782,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (VW.dirty) draftClear();
     closeViewerPdf();
     vwDropEd();
-    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "" });
+    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "", wb: null, sheets: null });
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
@@ -4677,6 +4790,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (VW.kind === "text") return vwLoadText(isMd(path) ? (localStorage.getItem("cc.vw.mdmode") === "edit" ? "edit" : "md") : "edit");
     if (VW.kind === "image") return vwImage();
     if (VW.kind === "pdf") return vwPdf();
+    if (VW.kind === "docx") return vwDocx();
+    if (VW.kind === "sheet") return vwSheet();
+    if (VW.kind === "office") return vwOffice();
     if (VW.kind === "video" || VW.kind === "audio") {
       vwActs([]);
       const tag = VW.kind === "video" ? "video" : "audio";
@@ -4712,6 +4828,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "md") { VW.text = vwText(); if (isMd(VW.path)) localStorage.setItem("cc.vw.mdmode", "md"); return vwRenderText("md"); }
     if (a === "edit") { if (isMd(VW.path) && VW.mode === "md") localStorage.setItem("cc.vw.mdmode", "edit"); return vwRenderText("edit"); }
     if (a === "gitdiff") return vwShowDiff();
+    if (a === "aspdf") return vwOffice();
+    if (a === "native") { closeViewerPdf(); return VW.kind === "docx" ? vwDocx() : vwSheet(); }
     if (a === "githist") return openGit(VW.path, { file: VW.git.rel, tab: "history" });
     if (a === "wrap") {
       VW.wrap = !VW.wrap;
@@ -5062,6 +5180,217 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
   }
 
+  // ── Office 文档 ──────────────────────────────────────────────────
+  // docx：mammoth 转成网页（看文字、标题、表格、图片，不追求版式）；表格：SheetJS 读出来画成网格。
+  // 两者都可以切到「原版式」—— 和 ppt / doc 等一样交给 LibreOffice 转成 PDF（网关缓存结果）。
+  const scriptP = {};
+  function loadScript(src) {
+    return scriptP[src] || (scriptP[src] = new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = ok;
+      s.onerror = () => { delete scriptP[src]; s.remove(); no(new Error(t("加载失败：{src}", { src }))); };
+      document.head.appendChild(s);
+    }));
+  }
+  async function vwFetchBuf() {
+    const r = await fetch(fileUrl(VW.path));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.arrayBuffer();
+  }
+  const vwStill = (p0) => VW.path === p0 && !viewerEl.classList.contains("hidden");
+  const vwLoading = (msg) => { $("vw-body").innerHTML = `<div class="vw-empty">${msg || t("读取中…")}</div>`; };
+  function vwFail(msg, withPdf) {
+    $("vw-body").innerHTML = `<div class="vw-empty"><div>${esc(msg)}</div>
+      ${withPdf ? `<button class="btn ghost sm" data-a="aspdf">${t("用 LibreOffice 转成 PDF 看")}</button>` : ""}
+      <a class="btn ghost sm" href="${fileUrl(VW.path, true)}" download>${t("下载")}</a></div>`;
+    $("vw-body").querySelector('[data-a="aspdf"]')?.addEventListener("click", () => vwOffice());
+  }
+
+  // 文档里的东西只留看得的：去掉脚本一类元素和事件属性，链接只留 http(s) / mailto / 页内，图片只留 data:
+  function cleanHtml(html) {
+    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+    doc.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,base,svg,math").forEach((n) => n.remove());
+    for (const el of doc.body.querySelectorAll("*")) {
+      for (const a of [...el.attributes]) {
+        const n = a.name.toLowerCase();
+        if (n.startsWith("on") || n === "style" || n === "srcset" || n === "formaction") el.removeAttribute(a.name);
+      }
+      if (el.hasAttribute("href")) {
+        const h = el.getAttribute("href").trim();
+        if (/^(https?:|mailto:)/i.test(h)) { el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); }
+        else if (!h.startsWith("#")) el.removeAttribute("href");
+      }
+      if (el.hasAttribute("src") && !/^data:image\/(png|jpe?g|gif|webp|bmp)[;,]/i.test(el.getAttribute("src"))) el.removeAttribute("src");
+    }
+    return doc.body.innerHTML;
+  }
+
+  async function vwDocx() {
+    const p0 = VW.path;
+    vwActs([[t("原版式"), "aspdf"]]);
+    vwLoading();
+    let r;
+    try {
+      await loadScript("/office/mammoth.browser.min.js");
+      r = await window.mammoth.convertToHtml({ arrayBuffer: await vwFetchBuf() });
+    } catch (e) {
+      if (vwStill(p0)) vwFail(t("这个文档读不出来：{msg}", { msg: e.message || String(e) }), true);
+      return;
+    }
+    if (!vwStill(p0)) return;
+    const html = cleanHtml(r.value || "");
+    $("vw-body").innerHTML = `<div class="vw-doc"><article class="vw-docx bubble">${html || `<p class="dim">${t("（文档是空的）")}</p>`}</article></div>`;
+    // 目录之类的页内链接：在查看器里滚过去，别去改页面地址
+    $("vw-body").querySelector(".vw-docx").addEventListener("click", (e) => {
+      const l = e.target.closest("a[href^=\"#\"]"); if (!l) return;
+      e.preventDefault();
+      const id = decodeURIComponent(l.getAttribute("href").slice(1));
+      const to = id && [...$("vw-body").querySelectorAll("[id],a[name]")].find((n) => n.id === id || n.getAttribute("name") === id);
+      if (to) to.scrollIntoView({ block: "start" });
+    });
+    const words = ($("vw-body").textContent || "").replace(/\s+/g, "").length;
+    $("vw-info").textContent = `${fmtSize(VW.size)} · ${t("{n} 字", { n: words.toLocaleString() })}`;
+  }
+
+  const SHEET_MAX_R = 5000, SHEET_MAX_C = 200;
+  async function vwSheet() {
+    const p0 = VW.path;
+    vwActs([[t("原版式"), "aspdf"]]);
+    vwLoading();
+    let wb;
+    try {
+      await loadScript("/office/xlsx.full.min.js");
+      wb = window.XLSX.read(await vwFetchBuf(), { type: "array", cellStyles: false, cellNF: true });
+    } catch (e) {
+      if (vwStill(p0)) vwFail(t("这个表格读不出来：{msg}", { msg: e.message || String(e) }), true);
+      return;
+    }
+    if (!vwStill(p0)) return;
+    const meta = (wb.Workbook && wb.Workbook.Sheets) || [];
+    const names = wb.SheetNames.filter((n, i) => !(meta[i] && meta[i].Hidden));
+    VW.wb = wb; VW.sheets = names.length ? names : wb.SheetNames;
+    $("vw-body").innerHTML = `<div class="vw-sheet"><div class="vw-grid-wrap"></div>
+      <div class="vw-cellbar tiny"></div>
+      <div class="vw-tabs">${VW.sheets.map((n, i) => `<button class="vw-tab" data-i="${i}">${esc(n)}</button>`).join("")}</div></div>`;
+    const box = $("vw-body").querySelector(".vw-sheet");
+    box.querySelector(".vw-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest(".vw-tab"); if (b) vwSheetShow(Number(b.dataset.i));
+    });
+    box.querySelector(".vw-grid-wrap").addEventListener("click", (e) => {
+      const td = e.target.closest("td[data-c]"); if (!td) return;
+      box.querySelectorAll("td.sel").forEach((x) => x.classList.remove("sel"));
+      td.classList.add("sel");
+      const X = window.XLSX, ws = wb.Sheets[VW.sheets[VW.sheetI]];
+      const addr = X.utils.encode_cell({ r: Number(td.parentNode.dataset.r), c: Number(td.dataset.c) });
+      const cell = ws[addr];
+      const val = sheetText(cell);
+      box.querySelector(".vw-cellbar").textContent = `${addr}  ${val}${cell && cell.f ? `   =${cell.f}` : ""}`;
+    });
+    vwSheetShow(0);
+  }
+  // Excel 的默认日期格式（编号 14）各地显示不同，SheetJS 一律写成美式 m/d/yy —— 这种按年-月-日显示
+  function sheetText(cell) {
+    if (!cell) return "";
+    const w = cell.w != null ? cell.w : String(cell.v ?? "");
+    if (cell.t === "n" && cell.z && /^\d{1,2}\/\d{1,2}\/\d{2,4}( |$)/.test(w) && window.XLSX.SSF.is_date(cell.z)) {
+      const d = window.XLSX.SSF.parse_date_code(cell.v), p = (n) => String(n).padStart(2, "0");
+      if (!d) return w;
+      const time = /[hs]/i.test(cell.z.replace(/"[^"]*"/g, ""));   // 格式里没有时分秒就只显示日期
+      return `${d.y}-${p(d.m)}-${p(d.d)}${time ? ` ${p(d.H)}:${p(d.M)}${d.S ? ":" + p(d.S) : ""}` : ""}`;
+    }
+    return w;
+  }
+  function vwSheetShow(i) {
+    const X = window.XLSX, wb = VW.wb, name = VW.sheets[i], ws = wb.Sheets[name];
+    VW.sheetI = i;
+    const box = $("vw-body").querySelector(".vw-sheet");
+    box.querySelectorAll(".vw-tab").forEach((b) => b.classList.toggle("on", Number(b.dataset.i) === i));
+    box.querySelector(".vw-cellbar").textContent = "";
+    const wrap = box.querySelector(".vw-grid-wrap");
+    if (!ws || !ws["!ref"]) { wrap.innerHTML = `<div class="vw-empty">${t("（这张表是空的）")}</div>`; return; }
+    const rg = X.utils.decode_range(ws["!ref"]);
+    const r1 = Math.min(rg.e.r, rg.s.r + SHEET_MAX_R - 1), c1 = Math.min(rg.e.c, rg.s.c + SHEET_MAX_C - 1);
+    // 合并单元格：左上角那格带 rowspan/colspan，被盖住的格子不画
+    const span = new Map(), covered = new Set();
+    for (const m of ws["!merges"] || []) {
+      span.set(m.s.r + "," + m.s.c, [m.e.r - m.s.r + 1, m.e.c - m.s.c + 1]);
+      for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) if (r !== m.s.r || c !== m.s.c) covered.add(r + "," + c);
+    }
+    const cols = ws["!cols"] || [], rows = ws["!rows"] || [];
+    let h = `<table class="vw-grid"><colgroup><col class="rh">`;
+    for (let c = rg.s.c; c <= c1; c++) {
+      const w = cols[c] ? (cols[c].hidden ? 0 : cols[c].wpx || (cols[c].wch ? cols[c].wch * 7 + 5 : 0)) : 0;
+      h += `<col style="width:${w ? Math.max(24, Math.min(400, Math.round(w))) : 80}px">`;
+    }
+    h += `</colgroup><thead><tr><th class="corner"></th>`;
+    for (let c = rg.s.c; c <= c1; c++) h += `<th>${X.utils.encode_col(c)}</th>`;
+    h += `</tr></thead><tbody>`;
+    for (let r = rg.s.r; r <= r1; r++) {
+      if (rows[r] && rows[r].hidden) continue;
+      h += `<tr data-r="${r}"><th>${r + 1}</th>`;
+      for (let c = rg.s.c; c <= c1; c++) {
+        const k = r + "," + c;
+        if (covered.has(k)) continue;
+        const cell = ws[X.utils.encode_cell({ r, c })];
+        const sp = span.get(k);
+        const txt = sheetText(cell);
+        const num = cell && (cell.t === "n" || cell.t === "d");
+        h += `<td data-c="${c}"${sp ? ` rowspan="${sp[0]}" colspan="${sp[1]}"` : ""}${num ? ` class="n"` : cell && cell.t === "e" ? ` class="err"` : ""}>${esc(txt)}</td>`;
+      }
+      h += `</tr>`;
+    }
+    h += `</tbody></table>`;
+    const cut = rg.e.r > r1 || rg.e.c > c1;
+    if (cut) h += `<div class="vw-cut tiny">${t("表太大，只显示了前 {r} 行、{c} 列；完整内容请用「原版式」或下载后用别的应用看", { r: r1 - rg.s.r + 1, c: c1 - rg.s.c + 1 })}</div>`;
+    wrap.innerHTML = h;
+    wrap.scrollTop = 0; wrap.scrollLeft = 0;
+    $("vw-info").textContent = `${fmtSize(VW.size)} · ${name} · ${X.utils.encode_range({ s: rg.s, e: rg.e })}`;
+  }
+
+  // ppt / doc / … 以及 docx、表格的「原版式」：网关用 LibreOffice 转成 PDF（第一次要等，之后读缓存）
+  async function vwOffice() {
+    const p0 = VW.path, back = VW.kind === "docx" || VW.kind === "sheet";
+    closeViewerPdf();
+    vwActs(back ? [[t("网页版式"), "native"]] : []);
+    vwLoading(`<div>${t("正在用 LibreOffice 转成 PDF…")}</div><div class="tiny dim">${t("第一次打开会慢一些，转好的会缓存起来")}</div>`);
+    let r;
+    try {
+      r = await api("/api/office/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: VW.path }) });
+    } catch (e) { if (vwStill(p0)) vwFail(e.message, false); return; }
+    if (!vwStill(p0)) return;
+    if (r.missing) return vwOfficeMissing(r.can);
+    if (!r.ok) return vwFail(r.message || t("转换失败"), false);
+    return vwPdf(r.url, back ? [[t("网页版式"), "native"]] : []);
+  }
+  function vwOfficeMissing(can) {
+    if (!can) return vwFail(t("这种文件要用 LibreOffice 转换后才能看，这里没有 LibreOffice。"), false);
+    $("vw-body").innerHTML = `<div class="vw-empty">
+      <div>${t("看这类文件要先装 LibreOffice（下载约 190 MB，装好约 830 MB）。装一次，以后 PPT、Word、Excel 都能直接看。")}</div>
+      <button class="btn sm" data-a="lo-install">${t("安装 LibreOffice")}</button>
+      <a class="btn ghost sm" href="${fileUrl(VW.path, true)}" download>${t("下载")}</a></div>`;
+    $("vw-body").querySelector('[data-a="lo-install"]').addEventListener("click", vwOfficeInstall);
+    api("/api/office/info").then((j) => { if (j.install && j.install.running) vwOfficeInstall(); }).catch(() => {});
+  }
+  async function vwOfficeInstall() {
+    const p0 = VW.path;
+    $("vw-body").innerHTML = `<div class="vw-empty"><div>${t("正在安装 LibreOffice…可以先去干别的，装好回来再打开。")}</div>
+      <div class="tiny dim vw-lo-line"></div></div>`;
+    let j;
+    try { j = await api("/api/office/install", { method: "POST" }); } catch (e) { return vwFail(e.message, false); }
+    while (!j.have && j.install && j.install.running) {
+      if (!vwStill(p0)) return;
+      const el = $("vw-body").querySelector(".vw-lo-line");
+      if (el) el.textContent = j.install.line || "";
+      await new Promise((ok) => setTimeout(ok, 1500));
+      try { j = await api("/api/office/info"); } catch {}
+    }
+    if (!vwStill(p0)) return;
+    if (j.have) { toast(t("LibreOffice 装好了")); return vwOffice(); }
+    vwFail(t("LibreOffice 没装上：{msg}", { msg: (j.install && j.install.line) || "?" }), false);
+    $("vw-body").querySelector(".vw-empty").insertAdjacentHTML("beforeend", `<button class="btn ghost sm" data-a="lo-retry">${t("重试")}</button>`);
+    $("vw-body").querySelector('[data-a="lo-retry"]').addEventListener("click", vwOfficeInstall);
+  }
+
   let pdfjsP = null;
   function loadPdfjs() {
     if (!pdfjsP) {
@@ -5073,14 +5402,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return pdfjsP;
   }
 
-  async function vwPdf() {
-    vwActs([["−", "zoom-"], ["+", "zoom+"]]);
+  async function vwPdf(url, extra) {
+    const p0 = VW.path;
+    vwActs([["−", "zoom-"], ["+", "zoom+"]].concat(extra || []));
     $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
     let lib, doc;
     try {
       lib = await loadPdfjs();
       const task = lib.getDocument({
-        url: fileUrl(VW.path), cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, wasmUrl: "/pdfjs/wasm/",
+        url: url || fileUrl(VW.path), cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, wasmUrl: "/pdfjs/wasm/",
         isEvalSupported: false,
       });
       task.onPassword = (cb, reason) => {
@@ -5092,7 +5422,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("vw-body").innerHTML = `<div class="vw-empty">${t("PDF 打不开：{msg}", { msg: esc(e.message || String(e)) })}</div>`;
       return;
     }
-    if (VW.kind !== "pdf" || viewerEl.classList.contains("hidden")) { doc.destroy(); return; }
+    if (!vwStill(p0) || VW.pdf) { doc.destroy(); return; }
     VW.pdf = doc;
     const p1 = await doc.getPage(1);
     const vp = p1.getViewport({ scale: 1 });

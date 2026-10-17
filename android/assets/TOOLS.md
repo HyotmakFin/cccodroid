@@ -6,12 +6,13 @@
   共享存储（/sdcard 下）**不能执行程序、不能建符号链接、npm install 会失败** —— 别在那里编译或装依赖。从那里拷出的文件没有可执行位，要 `chmod +x`。
 - 临时文件用 `$TMPDIR`；`/tmp` 不可写。
 - 安卓没有 `/usr/bin/env`、`/bin/bash`，但 shell 已加载 termux-exec：`#!/usr/bin/env node|python3`、`#!/bin/bash` 的脚本照常直接执行。
-- **回复里提到本机文件或目录时，写完整的绝对路径**（如 `{{WORKSPACE}}/app/main.py`、`/storage/emulated/0/…/report.pdf`，需要时带 `:行号`），不要写 `~/`、`./` 或只写文件名：界面会把绝对路径变成链接，用户点一下就在应用内的查看器里打开（Markdown、代码、图片、PDF、音视频都能看，文本可直接编辑）。路径里尽量别带空格。
+- **回复里提到本机文件或目录时，写完整的绝对路径**（如 `{{WORKSPACE}}/app/main.py`、`/storage/emulated/0/…/report.pdf`，需要时带 `:行号`），不要写 `~/`、`./` 或只写文件名：界面会把绝对路径变成链接，用户点一下就在应用内的查看器里打开（Markdown、代码、图片、PDF、Office 文档、音视频都能看，文本可直接编辑）。路径里尽量别带空格。
 - 本机起了网页服务（开发服务器、预览页）时，在回复里给出 `http://127.0.0.1:<端口>/` 这样的链接：用户点开就在应用内浏览器里看。
 - **缺工具用 `pkg install <包>` 装**（Termux 官方仓库，按本应用路径改写后安装；`apt` 同义）。`pkg search <词>` 搜、`pkg show <包>` 看详情、`pkg uninstall <包>` 卸。
   本机实测过的包（rust/cargo、golang、zig、ruby、php、lua54、python-numpy、neovim、vim、tmux、redis、postgresql 等，`pkg verified` 看全表）直接装；
   别的包要加 `--unverified`，装完自己验证能不能跑，不行就 `pkg uninstall`。工具包自带的包（clang、python、node…）不经 pkg 升级。
   工具包更新后，之前用 pkg 装的包会提示 `pkg restore` 装回。Python / Node 的库照常用 pip / npm 装（有 `python-<库>` 的预编译包时优先 pkg，省去现场编译）。
+- **Office 文档转换**：`pkg install libreoffice`（约 190 MB）后可无头转换，如 `soffice --headless --convert-to pdf --outdir <目录> <文件>`（docx/xlsx/pptx/doc/odt 互转同理）。没有 X11，别开图形界面。用户在查看器里看 PPT 时装过的话这里已经有了。
 
 ## 可用工具（cccodroid-selftest 逐项实测）
 

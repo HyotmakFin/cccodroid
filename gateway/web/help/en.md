@@ -81,6 +81,7 @@ Sidebar → Sessions:
 
 - Edit and save text and code directly. If the file changed on disk after you opened it (say Claude edited it), you are asked before anything is overwritten.
 - Markdown is rendered, with an edit toggle. Images fit the screen; tap for 1:1. PDFs render page by page as you scroll (CJK text and password-protected files work).
+- Office files: Word (docx) shows text, headings, tables and images directly; Excel (xlsx / xls / ods) shows as a grid with sheet tabs at the bottom — tap a cell to see its full content and formula. PowerPoint, legacy doc files and the “Original layout” button use LibreOffice in the background to convert to PDF (install it with one tap the first time, about a 190 MB download; results are cached, so reopening is instant).
 
 **Terminal** (>_):
 
@@ -109,6 +110,7 @@ The layout follows the **window width**, not the orientation:
 - **Provider**: pick a provider, enter a key, test the connection; account sign-in lives here as well.
 - **Model**, **thinking effort** (`--effort`, higher thinks longer), **output style**, **auto-compact window** (summarize history when the conversation nears this many tokens).
 - **Extra directories** (`--add-dir`): let Claude read and write outside the workspace, for example `/sdcard/SomeFolder`. They also become shortcuts in the file browser.
+- **On-device model**: with the llama-cpp component installed you can chat with a small model offline (download Qwen2.5 0.5B / 1.5B / 3B from the llama-cpp component on the Extensions page). Phone hardware is limited, so only chat is built in. To tinker, write `~/.cccodroid/local-mode.json` for a custom mode — the card has a ready-made sentence you can copy to a cloud model so it sets one up for you.
 - **Notifications**: whether to notify when a task ends or Claude is waiting for you.
 - **Shizuku**, **updates** and **troubleshooting** are covered below.
 

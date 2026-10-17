@@ -38,6 +38,8 @@ const REPOS = [
     mirrors: ["https://packages.termux.dev/apt/termux-main/", "https://grimler.se/termux/termux-main/"] },
   { name: "glibc", base: "https://packages-cf.termux.dev/apt/termux-glibc/", dist: "glibc", component: "stable", arch: "aarch64",
     mirrors: ["https://packages.termux.dev/apt/termux-glibc/"] },
+  { name: "x11", base: "https://packages-cf.termux.dev/apt/termux-x11/", dist: "x11", component: "main", arch: "aarch64",
+    mirrors: ["https://packages.termux.dev/apt/termux-x11/"] },
 ];
 // 在本应用里没有意义的包（给 Termux App 本身发广播的）
 const EXCLUDE = new Set(["termux-am", "termux-am-socket", "termux-api", "termux-tools", "termux-exec", "termux-keyring", "termux-licenses"]);
@@ -63,6 +65,7 @@ const VERIFIED = {
   rsync: "rsync --version",
   redis: "redis-server --version",
   postgresql: "postgres --version",
+  libreoffice: "soffice --headless --version",  // 无头转 PDF（文件查看器看 ppt/doc 用），2026-10-17 实测
 };
 
 const HELP = `用法：pkg <命令> [参数]

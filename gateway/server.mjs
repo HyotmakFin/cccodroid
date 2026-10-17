@@ -217,6 +217,18 @@ const PRESETS = {
     ],
   },
 };
+// 端侧小模型（cccodroid）：llama.cpp 的 llama-server 自带 Anthropic Messages 端点（/v1/messages），claude 直连本机。
+// 不要密钥（给个占位值，llama-server 不校验）；模型清单就是模型目录里的 .gguf，服务由网关按需拉起，见「端侧小模型」一节
+const LLAMA_PORT = Number(process.env.CCAPP_LLAMA_PORT) || 8811;
+if (PREFIX) PRESETS.local = {
+  label: "端侧小模型（本机）", labelEn: "On-device model", group: "local", local: true,
+  baseUrl: `http://127.0.0.1:${LLAMA_PORT}`, authStyle: "x-api-key", apiKey: "local", defaultModel: null,
+  // 手机上读一万多 token 的提示要几分钟：别让 claude 等两分钟就当超时。
+  // 重试只给两次：本机服务挂了就是挂了，默认十次退避要白等三分钟
+  extraEnv: { API_TIMEOUT_MS: "3000000", CLAUDE_CODE_MAX_RETRIES: "2" },
+  hint: "用本机的 llama.cpp 跑小模型聊天，不联网、不花钱。手机算力有限，干活请用云端模型。",
+  hintEn: "Chat with a small model running on this device via llama.cpp — offline and free. Phone hardware is limited; use a cloud model for real work.",
+};
 // 预置条目只从配置文件里取这些"属于用户"的字段；其余（名字、线路表、端点）以目录为准，
 // 这样旧配置里抄死的 label/baseUrl 不会把目录更新挡住。自定义条目则整条都是用户的。
 const USER_FIELDS = ["apiKey", "apiKeyEnv", "endpoint", "defaultModel", "fastModel", "extraEnv"];
@@ -271,7 +283,7 @@ function providerView(id, v) {
   const key = String(v.apiKey || "").trim();
   return {
     id, label: v.label || id, labelEn: v.labelEn || "", group: v.group || "custom", custom: !!v.custom,
-    login: !!v.login, nativeModels: !!v.nativeModels,
+    login: !!v.login, nativeModels: !!v.nativeModels, local: !!v.local,
     baseUrl: v.baseUrl || "", modelsUrl: v.modelsUrl || "", authStyle: v.authStyle || "bearer",
     endpoints: (v.endpoints || []).map((e) => ({ id: e.id, label: e.label, labelEn: e.labelEn || "" })), endpoint: v.endpoint || null,
     defaultModel: v.defaultModel || null, fastModel: v.fastModel || null,
@@ -571,6 +583,10 @@ const SETTINGS = {
   // 静态程序兼容：claude 外面套 seccomp-enosys-run -f，它拉起的整棵进程树里撞 seccomp 的静态二进制
   // （CGO_ENABLED=0 的 Go 程序之类）拿到 ENOSYS 而不是被 SIGSYS 打死。出问题时可关，回到不套的老样子
   staticCompat: true,
+  // 端侧小模型：chat = 纯聊天（不给工具，提示只有几十 token）；custom = 用户自己的 ~/.cccodroid/local-mode.json
+  localMode: "chat",
+  // GPU 上崩过（Vulkan DeviceLost）的模型，以后直接走 CPU
+  localCpuOnly: [],
 };
 
 function loadSettings() {
@@ -740,6 +756,10 @@ async function fetchModels(force) {
   const p = PROVIDER;
   if (!force && MODELS && MODELS_FOR === p.id && Date.now() - MODELS_AT < 600000) return MODELS;
 
+  if (p.local) {   // 端侧：模型目录里有什么就是什么（每次现扫，刚放进去的文件马上能选）
+    MODELS = localModels(); MODELS_AT = 0; MODELS_FOR = p.id;
+    return MODELS;
+  }
   if (isLoginMode(p)) {
     MODELS = (p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS;
     MODELS_AT = Date.now(); MODELS_FOR = p.id;
@@ -1067,7 +1087,8 @@ function claudeEnv() {
   // 不是上下文，claude 自己有合理默认，硬塞只会带来副作用。
 
   // 自动压缩窗口：用户设了才插，没设就让 claude 自己按窗口比例决定
-  if (SETTINGS.autoCompactWindow) {
+  // 端侧小模型不传：窗口只有几万 token 时，claude 同时看到窗口和压缩线，每次发请求前都判定「已超线」先去压缩（实测）
+  if (SETTINGS.autoCompactWindow && !p.local) {
     env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(SETTINGS.autoCompactWindow);
   }
   // 厂商文档要求的额外变量（如 GLM 的 API_TIMEOUT_MS）。只收字符串，且不许借道改密钥/端点
@@ -1874,6 +1895,10 @@ const EXT_KIND = {
   image: [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".avif", ".ico", ".heic"],
   video: [".mp4", ".webm", ".mkv", ".mov", ".3gp"],
   audio: [".mp3", ".wav", ".ogg", ".m4a", ".flac", ".opus"],
+  // Office：docx、表格在前端渲染；其余交给 LibreOffice 转 PDF
+  docx:  [".docx", ".docm", ".dotx"],
+  sheet: [".xlsx", ".xlsm", ".xlsb", ".xls", ".ods"],
+  office: [".pptx", ".ppt", ".ppsx", ".pps", ".potx", ".odp", ".doc", ".dot", ".odt", ".rtf", ".wps", ".dps", ".et", ".key", ".pages", ".numbers"],
   text:  [".txt", ".md", ".log", ".csv", ".json", ".yaml", ".yml", ".xml", ".html", ".js", ".mjs",
           ".css", ".c", ".h", ".cpp", ".py", ".sh", ".java", ".kt", ".rs", ".go", ".ts", ".sql",
           ".toml", ".ini", ".conf", ".cfg", ".properties", ".gradle", ".kts", ".tsx", ".jsx", ".cjs",
@@ -2655,7 +2680,7 @@ function compRun(job, cmd, args, opts = {}) {
     child.stdout.on("data", () => {});
     child.stderr.on("data", (d) => { err = (err + d).slice(-2000); });
     child.on("error", reject);
-    child.on("exit", (code) => { job.child = null; job.cancelled ? reject(new Error("cancelled")) : code === 0 ? resolve() : reject(new Error(`${path.basename(cmd)} 退出码 ${code}：${err.trim().split("\n").pop() || ""}`)); });
+    child.on("exit", (code) => { job.child = null; job.cancelled ? reject(new Error("cancelled")) : code === 0 ? resolve() : reject(new Error(`${path.basename(cmd)} 退出码 ${code}：${err.trim().split("\n").filter((l) => l.trim() && !/Exiting with failure status|Error is not recoverable/.test(l)).slice(-3).join(" · ") || err.trim().split("\n").pop() || ""}`)); });
   });
 }
 
@@ -2800,9 +2825,24 @@ function compHealSkills() {
 // 启动后预取一次索引：首次打开「扩展」页时不用干等两份索引下载验签
 if (PREFIX) setTimeout(() => { compHealSkills(); compIndex(false).catch(() => {}); }, 8000).unref?.();
 
+// 暂存区是所有组件共用的：只清这一个组件自己的东西（<id>-<sha12>.tar.gz[.part] 和解包目录 <id>）。
+// 以前卸载时整个 .staging 一起删，别的组件正在下载的 .part 就被连带删掉 —— curl 写完退出、校验时报 ENOENT
+function compClearStage(id) {
+  const stage = path.join(COMP_DIR, ".staging");
+  let list = []; try { list = fs.readdirSync(stage); } catch { return; }
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return;   // 组件 id 只有小写字母、数字、连字符
+  const mine = new RegExp("^" + id + "-[0-9a-f]{12}\\.tar\\.gz(\\.part)?$");
+  for (const n of list) if (n === id || mine.test(n)) fs.rmSync(path.join(stage, n), { recursive: true, force: true });
+}
+
 async function compRunInstall(id, b, job) {
   const stage = path.join(COMP_DIR, ".staging"), gz = path.join(stage, `${id}-${b.sha256.slice(0, 12)}.tar.gz`), tree = path.join(stage, id);
   fs.mkdirSync(stage, { recursive: true });
+  // 上回留下的压缩包也要先核对：以前只看存不存在，一份写坏的（被并发清理打断过）会被反复拿去解包，怎么重试都失败
+  if (fs.existsSync(gz)) {
+    job.phase = "verifying"; job.done = 0; job.total = b.bytes;
+    if ((await sha256File(gz, job)) !== b.sha256) { log(`[comp] ${id} 暂存的压缩包校验不符，删掉重下`); fs.rmSync(gz, { force: true }); }
+  }
   // 1) 下载（断点续传：.part 的名字带着 sha，换了版本不会接错）
   if (!fs.existsSync(gz)) {
     const part = gz + ".part";
@@ -2830,7 +2870,9 @@ async function compRunInstall(id, b, job) {
   job.phase = "verifying"; job.done = 0; job.total = b.installed || 0;
   fs.rmSync(tree, { recursive: true, force: true });
   fs.mkdirSync(tree, { recursive: true });
-  await compRun(job, path.join(PREFIX, "bin", "tar"), ["-xzf", gz, "-C", tree]);
+  // 解包失败就把压缩包也删了：下次重试从头下载，不再拿同一份去撞
+  try { await compRun(job, path.join(PREFIX, "bin", "tar"), ["-xzf", gz, "-C", tree]); }
+  catch (e) { if (!job.cancelled) fs.rmSync(gz, { force: true }); throw e; }
   const lx = `libexec/devkit/components/${id}`;
   const man = fs.readFileSync(path.join(tree, "usr", lx, "MANIFEST"), "utf8").trim().split("\n");
   for (const line of man) {
@@ -2893,7 +2935,7 @@ function compRemove(id) {
   }
   compRemoveFiles(id, rec);
   fs.rmSync(compRecFile(id), { force: true });
-  fs.rmSync(path.join(COMP_DIR, ".staging"), { recursive: true, force: true });
+  compClearStage(id);
   COMP_JOBS.delete(id);
   log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
   return { ok: true };
@@ -3604,6 +3646,19 @@ async function startRun(item) {
   let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
   if (!PERM_MODES.includes(permMode)) permMode = "default";
 
+  // 端侧小模型：先确保 llama-server 跑着、载的是这个模型（第一次要加载十几秒）
+  if (PROVIDER.local) {
+    try {
+      const m = await ensureLlama(model, (key, text) => emit({ type: "note", key, text }));
+      model = m.id;
+      LL.run = run;
+    } catch (e) {
+      emit({ type: "error", message: e.message });
+      return endRun(run, { failed: true });
+    }
+    if (run.aborted) return endRun(run, { failed: true });
+  }
+
   const argv = [
     "-p",
     // 流式输入：stdin 一直开着，跑到一半还能再递消息进去（插话）。
@@ -3623,7 +3678,14 @@ async function startRun(item) {
 
   // 告诉 claude 这台设备上有什么现成工具 —— 不说它就不会去用。
   // 和用户自己的追加提示合成一条：重复给同一个单值参数，解析器一般只留一个，合成一条最稳
-  const appendPrompt = [toolsHint(), SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  // 端侧：--bare 换成很短的系统提示和精简工具（见「端侧小模型」一节）；本机工具清单太长，小模型读不起，不附
+  // 内置只有聊天（不给工具）；自定义模式的工具清单和提示由用户的配置文件给（见 localCustom）
+  const lcust = PROVIDER.local ? localCustomActive() : null;
+  if (PROVIDER.local) argv.push("--bare", "--tools", lcust ? lcust.tools : "");
+  // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
+  const localHint = !PROVIDER.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
+    : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
+  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
@@ -3873,6 +3935,431 @@ function screencapOnce() {
     });
   });
 }
+
+// ── Office 文档：docx / xlsx 前端自己渲染；ppt / pptx / doc / odt… 交给 LibreOffice 转成 PDF 再看 ──
+// LibreOffice 不在工具包里（装好约 830 MB），第一次要看时由用户点一下用 pkg 装。
+// 转出来的 PDF 按「路径 + 大小 + 修改时间」缓存在 home/.cache/office-pdf，同一份文件第二次秒开。
+const OFFICE_DIR = path.join(CFG.home, ".cache", "office-pdf");
+const OFFICE_KEEP = 40;
+const sofficePath = () => PREFIX ? path.join(PREFIX, "bin", "soffice") : "";
+const officeHave = () => { const s = sofficePath(); return !!s && fs.existsSync(s); };
+const officeKey = (file, st) => crypto.createHash("sha1").update(`${file}|${st.size}|${st.mtimeMs}`).digest("hex").slice(0, 20);
+
+// 文档里写的多是 Windows 字体（宋体、微软雅黑…），本机没有；不配的话 fontconfig 会挑到 Noto CJK 的日文 / 韩文字形。
+// 宋体一类映射到 Noto Serif CJK SC，黑体一类映射到 Noto Sans CJK SC（安卓系统自带这两套）
+function officeFonts() {
+  const f = path.join(OFFICE_DIR, "fonts.conf");
+  const alias = (list, to) => list.map((n) => `  <alias binding="same"><family>${n}</family><prefer><family>${to}</family></prefer></alias>`).join("\n");
+  const xml = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">${PREFIX}/etc/fonts/fonts.conf</include>
+  <cachedir>${path.join(OFFICE_DIR, "fc-cache")}</cachedir>
+${alias(["SimSun", "宋体", "NSimSun", "新宋体", "FangSong", "仿宋", "仿宋_GB2312", "KaiTi", "楷体", "楷体_GB2312", "STSong", "华文宋体", "STFangsong", "华文仿宋", "STKaiti", "华文楷体", "Songti SC", "方正书宋_GBK", "方正仿宋_GBK", "方正楷体_GBK", "MingLiU", "PMingLiU", "新細明體"], "Noto Serif CJK SC")}
+${alias(["Microsoft YaHei", "微软雅黑", "Microsoft YaHei UI", "SimHei", "黑体", "DengXian", "等线", "PingFang SC", "STHeiti", "华文黑体", "华文细黑", "Heiti SC", "思源黑体", "Source Han Sans SC", "方正黑体_GBK", "Microsoft JhengHei", "微軟正黑體"], "Noto Sans CJK SC")}
+  <alias><family>serif</family><prefer><family>Noto Serif CJK SC</family></prefer></alias>
+  <alias><family>sans-serif</family><prefer><family>Noto Sans CJK SC</family></prefer></alias>
+  <match target="pattern"><test name="lang" compare="contains"><string>zh</string></test>
+    <edit name="family" mode="append"><string>Noto Sans CJK SC</string></edit></match>
+</fontconfig>
+`;
+  let cur = ""; try { cur = fs.readFileSync(f, "utf8"); } catch {}
+  if (cur !== xml) fs.writeFileSync(f, xml);
+  return f;
+}
+
+// 一次只转一个（LibreOffice 吃内存，同一个配置目录也不能两个实例同时用）；同一份文件重复请求合并成一个
+const officeJobs = new Map();
+let officeQ = Promise.resolve();
+function officePdf(file) {
+  const st = fs.statSync(file);
+  const key = officeKey(file, st), out = path.join(OFFICE_DIR, key + ".pdf");
+  if (fs.existsSync(out)) { try { const n = new Date(); fs.utimesSync(out, n, n); } catch {} return Promise.resolve(out); }
+  if (officeJobs.has(key)) return officeJobs.get(key);
+  const job = (officeQ = officeQ.catch(() => {}).then(() => officeConvert(file, key, out)));
+  officeJobs.set(key, job);
+  job.finally(() => officeJobs.delete(key)).catch(() => {});
+  return job;
+}
+function officeConvert(file, key, out) {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(OFFICE_DIR, { recursive: true });
+    const work = path.join(OFFICE_DIR, "work-" + key);
+    fs.rmSync(work, { recursive: true, force: true });
+    fs.mkdirSync(work);
+    // 文件名可能带空格、中文、奇怪符号：先拷成固定名字再转，转出来的就是 in.pdf
+    const ext = path.extname(file).toLowerCase().replace(/[^.a-z0-9]/g, "") || ".bin";
+    const src = path.join(work, "in" + ext);
+    fs.copyFileSync(file, src);
+    const env = { ...termEnv(), FONTCONFIG_FILE: officeFonts(), SAL_USE_VCLPLUGIN: "svp" };
+    const args = ["-env:UserInstallation=file://" + path.join(OFFICE_DIR, "profile"), "--headless", "--norestore", "--nologo",
+      "--convert-to", "pdf", "--outdir", work, src];
+    const nice = path.join(PREFIX, "bin", "nice");
+    // 经 Claude 用的那个 shell 包装起：soffice 是 #!$PREFIX/bin/sh 脚本，里面还会调别的脚本
+    const argv = [ensureShell(), "-c", 'exec "$0" "$@"', ...(fs.existsSync(nice) ? [nice, "-n", "5"] : []), sofficePath(), ...args];
+    const t0 = Date.now();
+    const c = spawn(argv[0], argv.slice(1), { env, cwd: work, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    let log2 = "";
+    const grab = (d) => { if (log2.length < 8192) log2 += d; };
+    c.stdout.on("data", grab); c.stderr.on("data", grab);
+    const timer = setTimeout(() => { try { killTree(c); } catch {} }, 4 * 60e3);
+    c.on("error", (e) => { clearTimeout(timer); reject(e); });
+    c.on("close", (code) => {
+      clearTimeout(timer);
+      const pdf = path.join(work, "in.pdf");
+      if (fs.existsSync(pdf) && fs.statSync(pdf).size > 0) {
+        fs.renameSync(pdf, out);
+        fs.rmSync(work, { recursive: true, force: true });
+        log(`[office] ${path.basename(file)} → PDF ${Math.round((Date.now() - t0) / 100) / 10}s`);
+        officePrune();
+        return resolve(out);
+      }
+      fs.rmSync(work, { recursive: true, force: true });
+      const why = log2.trim().split("\n").filter((l) => /error|fail|exception/i.test(l)).pop() || log2.trim().split("\n").pop() || "";
+      log(`[office] 转换失败 rc=${code}：${log2.trim().slice(-400)}`);
+      reject(new Error(tz("LibreOffice 没转出来") + (why ? "：" + why.slice(0, 200) : `（rc=${code}）`)));
+    });
+  });
+}
+function officePrune() {
+  try {
+    const list = fs.readdirSync(OFFICE_DIR).filter((f) => f.endsWith(".pdf"))
+      .map((f) => ({ f: path.join(OFFICE_DIR, f), t: fs.statSync(path.join(OFFICE_DIR, f)).mtimeMs })).sort((a, b) => b.t - a.t);
+    for (const x of list.slice(OFFICE_KEEP)) fs.rmSync(x.f, { force: true });
+  } catch {}
+}
+
+// 一键安装：后台跑 pkg install libreoffice，前端轮询进度
+let officeInst = null;   // { running, line, rc, at }
+function officeInstall() {
+  if (officeInst && officeInst.running) return officeInst;
+  const pkg = path.join(process.env.CCAPP_BIN || HERE, "pkg.mjs");
+  officeInst = { running: true, line: "", rc: null, at: Date.now() };
+  const st = officeInst;
+  const c = spawn(process.execPath, [pkg, "install", "libreoffice"], { env: termEnv(), cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  let tail = "";
+  const eat = (d) => {
+    tail = (tail + d.toString()).slice(-4000);
+    const lines = tail.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length) st.line = lines[lines.length - 1].slice(0, 200);
+  };
+  c.stdout.on("data", eat); c.stderr.on("data", eat);
+  c.on("error", (e) => { st.running = false; st.rc = -1; st.line = e.message; });
+  c.on("close", (code) => {
+    st.running = false; st.rc = code;
+    if (code === 0 && !officeHave()) st.rc = 1;
+    log(`[office] 安装 LibreOffice 结束 rc=${st.rc}：${st.line}`);
+  });
+  return st;
+}
+
+// ── 端侧小模型：网关按需拉起 llama-server，空闲一阵自动停（模型常驻要占好几 GB 内存） ──
+// 模型放 /sdcard/cccodroid/models（和 llama-cpp 组件的 llama-run 同一个目录）或 home/models。
+// claude 以 --bare --tools "" 跑：内置只有聊天，提示只有七十 token 左右（完整模式两万 token，手机上光读提示就要好几分钟）。
+// 实测 1.5B/3B 都撑不起工具调用（命令写成文字、读目录、选错命令），所以干活不内置；
+// 想折腾的用户写 ~/.cccodroid/local-mode.json 开「自定义模式」，配法见随包装进去的 local-model-mode 技能。
+const LOCAL_MODEL_DIRS = PREFIX ? ["/sdcard/cccodroid/models", path.join(CFG.home, "models")] : [];
+const LLAMA_IDLE_MS = 10 * 60e3;
+const LLAMA_LOG = path.join(CFG.home, ".cache", "llama-server.log");
+const llamaBin = () => PREFIX ? path.join(PREFIX, "bin", "llama-server") : "";
+const LL = { child: null, file: "", id: "", sig: "", gpu: false, state: "off", since: 0, lastUse: 0, err: "", run: null, loadMs: 0 };
+const LOCAL_MODE_FILE = path.join(CFG.home, ".cccodroid", "local-mode.json");
+
+/** 自定义模式的配置：{ have, ok, cfg } 或 { have, ok:false, err }。每次现读，改完下一条消息就生效 */
+function localCustom() {
+  let raw;
+  try { raw = fs.readFileSync(LOCAL_MODE_FILE, "utf8"); } catch { return { have: false, ok: false, path: LOCAL_MODE_FILE }; }
+  const bad = (err) => ({ have: true, ok: false, err, path: LOCAL_MODE_FILE });
+  let j; try { j = JSON.parse(raw); } catch (e) { return bad("JSON: " + e.message); }
+  if (!j || typeof j !== "object" || Array.isArray(j)) return bad(tz("顶层要是一个对象"));
+  const str = (v, max) => typeof v === "string" && v.length <= max;
+  if (j.label != null && !str(j.label, 40)) return bad(tz("{k} 要是不超过 {n} 字的文本", { k: "label", n: 40 }));
+  if (j.tools != null && !str(j.tools, 500)) return bad(tz("{k} 要是不超过 {n} 字的文本", { k: "tools", n: 500 }));
+  if (j.systemPrompt != null && !str(j.systemPrompt, 20000)) return bad(tz("{k} 要是不超过 {n} 字的文本", { k: "systemPrompt", n: 20000 }));
+  if (j.llamaArgs != null && !(Array.isArray(j.llamaArgs) && j.llamaArgs.length <= 40 && j.llamaArgs.every((x) => str(x, 300))))
+    return bad(tz("llamaArgs 要是文本数组（最多 40 项）"));
+  if (j.ctx != null && !(Number.isInteger(j.ctx) && j.ctx >= 512 && j.ctx <= 262144)) return bad(tz("ctx 要是 512 到 262144 之间的整数"));
+  // 这几个由网关管，用户改了就接不上
+  const owned = (j.llamaArgs || []).find((x) => ["-m", "--model", "--host", "--port", "-np", "--parallel"].includes(x));
+  if (owned) return bad(tz("llamaArgs 里不能改 {k}（由网关管）", { k: owned }));
+  return { have: true, ok: true, path: LOCAL_MODE_FILE,
+    cfg: { label: j.label || tz("自定义"), tools: j.tools || "", systemPrompt: j.systemPrompt || "", llamaArgs: j.llamaArgs || [], ctx: j.ctx || 0 } };
+}
+/** 当前生效的自定义配置；没选自定义、文件不在或写坏了都回落聊天（返回 null） */
+function localCustomActive() {
+  if (SETTINGS.localMode !== "custom") return null;
+  const c = localCustom();
+  return c.ok ? c.cfg : null;
+}
+let llStarting = null;
+
+function localModels() {
+  const out = [], seen = new Set();
+  for (const d of LOCAL_MODEL_DIRS) {
+    let list = []; try { list = fs.readdirSync(d); } catch {}
+    for (const f of list) {
+      // mmproj-*.gguf 是多模态的视觉投影，不是能单独对话的模型
+      if (!/\.gguf$/i.test(f) || /^mmproj/i.test(f)) continue;
+      const id = f.replace(/\.gguf$/i, "");
+      if (seen.has(id)) continue;
+      let st; try { st = fs.statSync(path.join(d, f)); } catch { continue; }
+      if (!st.isFile() || st.size < 10e6) continue;
+      seen.add(id);
+      out.push({ id, name: id, file: path.join(d, f), size: st.size, context_window: llamaCtx(), max_output_tokens: 0, input_modalities: ["text"], effort: null });
+    }
+  }
+  return out.sort((a, b) => a.size - b.size);
+}
+function memTotalKB() { try { return Number((fs.readFileSync("/proc/meminfo", "utf8").match(/MemTotal:\s+(\d+)/) || [])[1]) || 0; } catch { return 0; } }
+function memAvailKB() { try { return Number((fs.readFileSync("/proc/meminfo", "utf8").match(/MemAvailable:\s+(\d+)/) || [])[1]) || 0; } catch { return 0; } }
+// 上下文按内存给：KV 缓存随上下文线性涨（3B 模型 32k 上下文约 1.2 GB）
+function llamaCtx() { const c = localCustomActive(); if (c && c.ctx) return c.ctx; const g = memTotalKB() / 1048576; return g >= 11 ? 32768 : g >= 7 ? 16384 : 8192; }
+// 线程数：只用比最慢那档快的核（小核掺进来反而拖慢一倍，llama-run 实测 10.3 vs 25.0 t/s）
+function llamaThreads() {
+  const f = [];
+  for (let i = 0; i < 16; i++) { try { f.push(Number(fs.readFileSync(`/sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq`, "utf8"))); } catch { break; } }
+  if (!f.length) return 4;
+  const min = Math.min(...f), fast = f.filter((x) => x > min).length;
+  return Math.max(2, Math.min(8, fast || f.length));
+}
+// 有没有真 GPU 驱动：Vulkan 清单里除了 lavapipe（软件实现）还有别的（gpu-driver 组件装的 Turnip）
+function llamaGpu() {
+  for (const d of [path.join(PREFIX, "share", "vulkan", "icd.d"), path.join(PREFIX, "etc", "vulkan", "icd.d")]) {
+    try { if (fs.readdirSync(d).some((f) => f.endsWith(".json") && !/lvp|lavapipe/i.test(f))) return true; } catch {}
+  }
+  return false;
+}
+async function llamaHealthy() {
+  try { const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/health`, { signal: AbortSignal.timeout(3000) }); return r.ok; } catch { return false; }
+}
+function llamaInfo() {
+  const cust = localCustom();
+  return {
+    custom: { have: cust.have, ok: cust.ok, err: cust.err || "", path: cust.path, label: cust.ok ? cust.cfg.label : "",
+      tools: cust.ok ? cust.cfg.tools : "", skill: LOCAL_SKILL_FILE },
+    cpuOnly: SETTINGS.localCpuOnly || [],
+    can: !!PREFIX, bin: !!PREFIX && fs.existsSync(llamaBin()), gpu: !!PREFIX && llamaGpu(),
+    ctx: llamaCtx(), threads: llamaThreads(), memTotal: memTotalKB() * 1024, memAvail: memAvailKB() * 1024,
+    dirs: LOCAL_MODEL_DIRS, models: localModels().map(({ id, size, file }) => ({ id, size, file })),
+    mode: SETTINGS.localMode === "custom" ? "custom" : "chat",
+    server: { state: LL.state, model: LL.id, since: LL.since, lastUse: LL.lastUse, err: LL.err, loadMs: LL.loadMs, idleMs: LLAMA_IDLE_MS },
+  };
+}
+
+/** 确保 llama-server 跑着、载的是要的模型。note(key, text) 往当前这一轮里报进度 */
+async function ensureLlama(want, note) {
+  const list = localModels();
+  const m = list.find((x) => x.id === want) || list[0];
+  if (!m) throw new Error(tz("还没有端侧模型：把 .gguf 文件放进 {dir}", { dir: LOCAL_MODEL_DIRS[0] }));
+  if (!fs.existsSync(llamaBin())) throw new Error(tz("没装 llama.cpp：到「扩展」页装 llama-cpp 组件"));
+  LL.lastUse = Date.now();
+  const sig = llamaPlan(m).sig;
+  if (LL.child && LL.sig === sig && LL.state === "ready" && await llamaHealthy()) return m;
+  if (llStarting && LL.sig === sig) { await llStarting; return m; }
+  if (llStarting) { try { await llStarting; } catch {} }
+  if (LL.child) llamaStop("换模型或参数");
+  llStarting = llamaStart(m, note).finally(() => { llStarting = null; });
+  await llStarting;
+  return m;
+}
+/** 这次该用什么参数起服务。sig 不同（换模型、换模式、GPU 回退）就得重启 */
+function llamaPlan(m) {
+  const gpu = llamaGpu() && !(SETTINGS.localCpuOnly || []).includes(m.id), ctx = llamaCtx();
+  const cust = localCustomActive();
+  // -np 1：只开一个槽，KV 缓存不被四等分（默认 4 槽，每槽只剩四分之一上下文）；
+  // --cache-reuse：同一段提示前缀第二轮起直接复用，不再从头读。自定义参数放最后，同名参数以它为准
+  const args = ["-m", m.file, "--host", "127.0.0.1", "--port", String(LLAMA_PORT), "-c", String(ctx), "-np", "1",
+    "-t", String(llamaThreads()), "--jinja", "--cache-reuse", "256", "--no-webui",
+    ...(gpu ? ["-ngl", "99"] : ["-dev", "none"]), ...(cust ? cust.llamaArgs : [])];
+  return { gpu, ctx, args, sig: JSON.stringify(args) };
+}
+function llamaStart(m, note) {
+  return new Promise((resolve, reject) => {
+    const { gpu, ctx, args, sig } = llamaPlan(m);
+    fs.mkdirSync(path.dirname(LLAMA_LOG), { recursive: true });
+    const logFd = fs.openSync(LLAMA_LOG, "w");
+    const argv = [ensureShell(), "-c", 'exec "$0" "$@"', llamaBin(), ...args];
+    log(`[local] 启动 llama-server：${m.id}（${gpu ? "GPU" : "CPU"}，上下文 ${ctx}）`);
+    note && note("load", tz("正在加载端侧模型 {name}（{how}）…", { name: m.id, how: gpu ? "GPU" : "CPU" }));
+    const c = spawn(argv[0], argv.slice(1), { env: termEnv(), cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    Object.assign(LL, { child: c, file: m.file, id: m.id, sig, gpu, state: "loading", since: Date.now(), err: "", loadMs: 0 });
+    let tail = "", lastNote = 0;
+    const eat = (d) => {
+      try { fs.writeSync(logFd, d); } catch {}
+      tail = (tail + d).slice(-6000);
+      // 读提示的进度（llama-server 每读一批打一行 progress = 0.41）报给当前这一轮：首字前别让人干等
+      const s = String(d), mm = s.match(/prompt processing, n_tokens =\s*(\d+), progress = ([\d.]+)/g);
+      if (mm && LL.run && !LL.run.ended && Date.now() - lastNote > 1500) {
+        const last = mm[mm.length - 1].match(/n_tokens =\s*(\d+), progress = ([\d.]+)/);
+        const pct = Math.round(Number(last[2]) * 100);
+        lastNote = Date.now();
+        runEmit(LL.run, { type: "note", key: "prefill", text: tz("端侧模型正在读提示：{pct}%", { pct }) });
+      }
+    };
+    c.stdout.on("data", eat); c.stderr.on("data", eat);
+    let done = false;
+    const fail = (msg) => { if (done) return; done = true; LL.state = "error"; LL.err = msg; reject(new Error(msg)); };
+    c.on("error", (e) => fail(e.message));
+    c.on("close", (code) => {
+      try { fs.closeSync(logFd); } catch {}
+      const ours = LL.child === c, wasReady = LL.state === "ready";     // ours：不是网关自己停的（llamaStop 会先把 child 清掉）
+      if (ours) Object.assign(LL, { child: null, state: LL.state === "error" ? "error" : "off" });
+      log(`[local] llama-server 退出 rc=${code}`);
+      // GPU 上崩了（Adreno 跑 3B 实测会 vk::DeviceLostError，KGSL 把 GPU 重置）：记下这个模型以后走 CPU
+      if (ours && gpu && /DeviceLost|ErrorDeviceLost|VK_ERROR|vk::/i.test(tail)) {
+        const list = SETTINGS.localCpuOnly || (SETTINGS.localCpuOnly = []);
+        if (!list.includes(m.id)) { list.push(m.id); saveSettings(); }
+        const msg = tz("{name} 在 GPU 上崩溃了，以后改用 CPU 跑；重发一次即可", { name: m.id });
+        Object.assign(LL, { state: "error", err: msg });
+        log("[local] " + msg);
+        if (LL.run && !LL.run.ended) runEmit(LL.run, { type: "note", key: "gpu", text: msg });
+        return fail(msg);
+      }
+      if (ours && wasReady) Object.assign(LL, { state: "error", err: tz("llama-server 意外退出（rc={code}）", { code }) });
+      const why = tail.split("\n").filter((l) => /error|failed|out of memory|unable/i.test(l)).pop() || "";
+      fail(tz("端侧模型没起来") + (why ? "：" + why.trim().slice(0, 200) : `（rc=${code}）`));
+    });
+    const t0 = Date.now();
+    (async () => {
+      while (!done && Date.now() - t0 < 240e3) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (done) return;
+        if (await llamaHealthy()) {
+          done = true;
+          Object.assign(LL, { state: "ready", loadMs: Date.now() - t0, lastUse: Date.now() });
+          log(`[local] 模型已加载 ${m.id}（${Math.round(LL.loadMs / 100) / 10}s）`);
+          note && note("load", tz("端侧模型已加载（{s} 秒）", { s: Math.round(LL.loadMs / 100) / 10 }));
+          return resolve();
+        }
+      }
+      if (!done) { try { killTree(c); } catch {} fail(tz("端侧模型加载超时")); }
+    })();
+  });
+}
+function llamaStop(why) {
+  const c = LL.child;
+  if (!c) return;
+  log(`[local] 停 llama-server（${why}）`);
+  Object.assign(LL, { child: null, state: "off", run: null });
+  try { killTree(c); } catch {}
+}
+// 空闲自动停：没有在跑的会话、十分钟没用过，就把模型卸掉还内存
+if (PREFIX) setInterval(() => {
+  if (!LL.child) return;
+  if (RUNS.size) { LL.lastUse = Date.now(); return; }
+  if (Date.now() - LL.lastUse > LLAMA_IDLE_MS) llamaStop("空闲");
+}, 60e3).unref?.();
+
+// ── 端侧模型下载：内置一份小目录（固定 sha256），魔搭优先、HF 备用，curl 断点续传 ──
+// 目录写死在网关里；以后想不发版加模型，再挪进组件市场的签名索引
+const LOCAL_CATALOG = [
+  { id: "qwen2.5-0.5b-instruct-q4_k_m", repo: "Qwen2.5-0.5B-Instruct-GGUF", bytes: 491400032, minRamGB: 3,
+    sha256: "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db", note: "最快，只能简单聊几句" },
+  { id: "qwen2.5-1.5b-instruct-q4_k_m", repo: "Qwen2.5-1.5B-Instruct-GGUF", bytes: 1117320736, minRamGB: 5,
+    sha256: "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e", note: "速度和质量的平衡点" },
+  { id: "qwen2.5-3b-instruct-q4_k_m", repo: "Qwen2.5-3B-Instruct-GGUF", bytes: 2104932768, minRamGB: 8,
+    sha256: "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d", note: "回答最好，也最慢" },
+];
+const modelUrls = (e) => [
+  `https://modelscope.cn/models/Qwen/${e.repo}/resolve/master/${e.id}.gguf`,
+  `https://huggingface.co/Qwen/${e.repo}/resolve/main/${e.id}.gguf`,
+];
+const MDL = new Map();     // id → { phase: downloading|verifying|error, done, total, err, cancelled, child }
+
+/** 模型下到哪：优先共享目录（和 llama-run 一处），写不进就放 home/models */
+function modelDir() {
+  for (const d of LOCAL_MODEL_DIRS) {
+    try { fs.mkdirSync(d, { recursive: true }); fs.accessSync(d, fs.constants.W_OK); return d; } catch {}
+  }
+  throw new Error(tz("模型目录写不进去"));
+}
+function localCatalog() {
+  const have = new Map(localModels().map((m) => [m.id, m]));
+  const ram = memTotalKB() / 1048576;
+  // 推荐：内存装得下的最大一档（但 3B 只推给 11 GB 以上的机器，其余推 1.5B）
+  const rec = ram >= 11 ? LOCAL_CATALOG[2].id : ram >= 5 ? LOCAL_CATALOG[1].id : LOCAL_CATALOG[0].id;
+  return {
+    ram: Math.round(ram * 10) / 10,
+    items: LOCAL_CATALOG.map((e) => {
+      const j = MDL.get(e.id), h = have.get(e.id);
+      return { id: e.id, bytes: e.bytes, note: tz(e.note), big: ram < e.minRamGB, rec: e.id === rec,
+        have: !!h, file: h ? h.file : "", inUse: !!(h && LL.child && LL.file === h.file),
+        job: j ? { phase: j.phase, done: j.done, total: j.total, err: j.err || "" } : null };
+    }),
+  };
+}
+async function modelDownload(id) {
+  const e = LOCAL_CATALOG.find((x) => x.id === id);
+  if (!e) throw new Error(tz("目录里没有这个模型"));
+  const cur = MDL.get(id);
+  if (cur && cur.phase !== "error") return;
+  const dir = modelDir(), dst = path.join(dir, e.id + ".gguf"), part = dst + ".part";
+  if (fs.existsSync(dst)) return;
+  const job = { phase: "downloading", done: 0, total: e.bytes, err: "", cancelled: false, child: null };
+  MDL.set(id, job);
+  const tick = setInterval(() => { if (job.phase === "downloading") { try { job.done = fs.statSync(part).size; } catch {} } }, 500);
+  (async () => {
+    try {
+      let lastErr = null;
+      for (const url of modelUrls(e)) {
+        for (let i = 0; i < 3 && !job.cancelled; i++) {
+          try {
+            await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "20000", "--speed-time", "60", "-o", part, url]);
+            lastErr = null; break;
+          } catch (er) { lastErr = er; }
+          // 下全了没改名（续传回 416）：直接去校验
+          let n = 0; try { n = fs.statSync(part).size; } catch {}
+          if (n === e.bytes) { lastErr = null; break; }
+        }
+        if (!lastErr || job.cancelled) break;
+        log(`[local] 模型下载换源：${lastErr.message}`);
+      }
+      if (job.cancelled) throw new Error("cancelled");
+      if (lastErr) throw lastErr;
+      job.phase = "verifying"; job.done = 0;
+      if ((await sha256File(part, job)) !== e.sha256) { fs.rmSync(part, { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
+      fs.renameSync(part, dst);
+      MDL.delete(id);
+      MODELS_AT = 0;
+      log(`[local] 模型已下载 ${id}`);
+    } catch (er) {
+      if (job.cancelled) { MDL.delete(id); try { fs.rmSync(part, { force: true }); } catch {} return; }
+      Object.assign(job, { phase: "error", err: er.message });
+      log(`[local] 模型下载失败 ${id}：${er.message}`);
+    } finally { clearInterval(tick); }
+  })();
+}
+function modelCancel(id) {
+  const j = MDL.get(id);
+  if (!j) return;
+  if (j.phase === "error") return MDL.delete(id);
+  j.cancelled = true;
+  if (j.child) { try { killTree(j.child); } catch {} }
+}
+/** 删模型：只删模型目录里的 .gguf；正在用就先卸载 */
+function modelRemove(id) {
+  const m = localModels().find((x) => x.id === id);
+  if (!m) throw new Error(tz("没有这个模型"));
+  if (!LOCAL_MODEL_DIRS.includes(path.dirname(m.file))) throw new Error(tz("不在模型目录里"));
+  if (LL.child && LL.file === m.file) llamaStop("删除模型");
+  fs.rmSync(m.file, { force: true });
+  MODELS_AT = 0;
+}
+
+// 配自定义模式的技能：随包带着，启动时装进 ~/.claude/skills（云端 Claude 读它帮用户配）。
+// 装过的文件里还留着托管标记才覆盖更新；用户删了标记就当是他自己的版本，不动
+const LOCAL_SKILL_FILE = path.join(CFG.home, ".claude", "skills", "local-model-mode", "SKILL.md");
+function installLocalSkill() {
+  try {
+    const src = fs.readFileSync(path.join(HERE, "web", "skills", "local-model-mode", "SKILL.md"), "utf8");
+    let cur = null; try { cur = fs.readFileSync(LOCAL_SKILL_FILE, "utf8"); } catch {}
+    if (cur === src || (cur != null && !cur.includes("cccodroid:managed"))) return;
+    fs.mkdirSync(path.dirname(LOCAL_SKILL_FILE), { recursive: true });
+    fs.writeFileSync(LOCAL_SKILL_FILE, src);
+    log("[local] 已装 local-model-mode 技能");
+  } catch (e) { log(`[local] 技能没装上：${e.message}`); }
+}
+if (PREFIX) installLocalSkill();
 
 /** 把应用界面叫回前台。cccodroid 由 App 进程做（Shizuku 或通知）；开发端直接 priv am start */
 function toFront(text) {
@@ -5311,6 +5798,54 @@ const server = http.createServer(async (req, res) => {
     // ── 能力清单 ──
     if (req.method === "GET" && p === "/api/capabilities") {
       return sendJson(res, 200, capabilities());
+    }
+
+    // ── 端侧小模型：状态 / 切模式 / 停服务 ──
+    if (req.method === "GET" && p === "/api/local") return sendJson(res, 200, llamaInfo());
+    if (req.method === "POST" && p === "/api/local") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      if (b.mode === "chat" || b.mode === "custom") { SETTINGS.localMode = b.mode; saveSettings(); }
+      if (b.gpuReset) { SETTINGS.localCpuOnly = []; saveSettings(); }
+      if (b.stop) llamaStop("用户停止");
+      return sendJson(res, 200, llamaInfo());
+    }
+    if (req.method === "GET" && p === "/api/local/catalog") return sendJson(res, 200, PREFIX ? localCatalog() : { ram: 0, items: [] });
+    if (req.method === "POST" && p === "/api/local/model") {
+      if (!PREFIX) return sendJson(res, 400, { ok: false, message: "unsupported" });
+      const b = JSON.parse((await readBody(req)) || "{}");
+      try {
+        if (b.op === "download") await modelDownload(String(b.id || ""));
+        else if (b.op === "cancel") modelCancel(String(b.id || ""));
+        else if (b.op === "remove") modelRemove(String(b.id || ""));
+        else throw new Error("bad op");
+        return sendJson(res, 200, { ok: true, ...localCatalog() });
+      } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }
+    }
+
+    // ── Office：LibreOffice 在不在、一键安装、转 PDF（结果按文件缓存）──
+    if (req.method === "GET" && p === "/api/office/info") {
+      return sendJson(res, 200, { have: officeHave(), can: !!PREFIX, install: officeInst });
+    }
+    if (req.method === "POST" && p === "/api/office/install") {
+      if (!PREFIX) return sendJson(res, 400, { error: "unsupported" });
+      if (officeHave()) return sendJson(res, 200, { have: true });
+      return sendJson(res, 200, { have: false, install: officeInstall() });
+    }
+    if (p === "/api/office/pdf") {
+      const r = safeFilePath(req.method === "GET" ? u.searchParams.get("path") : JSON.parse((await readBody(req)) || "{}").path);
+      if (r.error) return sendJson(res, r.status || 404, { error: r.error });
+      if (req.method === "GET") {
+        const out = path.join(OFFICE_DIR, officeKey(r.file, fs.statSync(r.file)) + ".pdf");
+        let st; try { st = fs.statSync(out); } catch { return sendJson(res, 404, { error: "not converted" }); }
+        res.writeHead(200, { "content-type": "application/pdf", "content-length": st.size, "cache-control": "no-store" });
+        const rs = fs.createReadStream(out);
+        rs.on("error", () => { try { res.destroy(); } catch {} });
+        rs.pipe(res);
+        return;
+      }
+      if (!officeHave()) return sendJson(res, 200, { ok: false, missing: true, can: !!PREFIX });
+      try { await officePdf(r.file); } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }
+      return sendJson(res, 200, { ok: true, url: "/api/office/pdf?path=" + encodeURIComponent(r.file) });
     }
 
     // ── 取文件内容（消息里的图片、文件预览、下载都走这里）──
