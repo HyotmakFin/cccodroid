@@ -236,7 +236,8 @@ final class Updater {
         devkit.latest = best;
         // 正在下、正在装、正在校验，或者已下好一份等着装：别动它的文件与哈希（文件名各版本相同，换了哈希就和落盘的那份对不上）
         String st0 = devkit.state;
-        if ("downloading".equals(st0) || "installing".equals(st0) || "verifying".equals(st0) || "ready".equals(st0)) return;
+        if ("verifying".equals(st0)) { recheckDevkit = true; return; }   // 校验完再补查（见 verifyAsync）
+        if ("downloading".equals(st0) || "installing".equals(st0) || "ready".equals(st0)) return;
         String base = "https://github.com/" + REPO + "/releases/download/" + best + "/";
         JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
         if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT) {
@@ -475,6 +476,18 @@ final class Updater {
 
     // ── 校验与修复 ─────────────────────────────────────────────────────────
     /** 后台核对已装工具包。full=false：只看文件在不在（启动时自动跑）；full=true：逐个算哈希（用户点的） */
+    /** 检查更新时工具包正在校验、被跳过了：校验一结束就补查一次，不然它会一直显示「未检查」 */
+    private volatile boolean recheckDevkit;
+
+    private void recheckAfterVerify() {
+        if (!recheckDevkit) return;
+        recheckDevkit = false;
+        new Thread(() -> {
+            try { for (int i = 0; i < 120 && checking; i++) Thread.sleep(250); } catch (InterruptedException ignored) {}
+            checkAsync(true);
+        }, "upd-recheck").start();
+    }
+
     JSONObject verifyAsync(boolean full) {
         JSONObject r = new JSONObject();
         try {
@@ -499,15 +512,21 @@ final class Updater {
                                 .put("missing", v.optInt("missing")).put("changed", v.optInt("changed")).put("samples", v.optJSONArray("samples")));
                     if (!v.optBoolean("manifest")) {
                         devkit.set(full ? "damaged" : prev, full ? Tr.t("这一版工具包没带文件清单，没法逐个核对；可以修复（重装同一版本）") : prevMsg);
+                        if (!full) recheckAfterVerify();
                         return;
                     }
                     int bad = v.optInt("missing") + v.optInt("changed");
-                    if (bad == 0) { devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? Tr.f("已核对 {0} 个文件，全部完好", v.optInt("total")) : prevMsg); return; }
+                    if (bad == 0) {
+                        devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? Tr.f("已核对 {0} 个文件，全部完好", v.optInt("total")) : prevMsg);
+                        recheckAfterVerify();
+                        return;
+                    }
                     devkit.set("damaged", (v.optInt("missing") > 0 ? Tr.f("缺 {0} 个文件", v.optInt("missing")) : "")
                         + (v.optInt("missing") > 0 && v.optInt("changed") > 0 ? "、" : "")
                         + (v.optInt("changed") > 0 ? Tr.f("{0} 个文件内容不对", v.optInt("changed")) : "") + Tr.t("，点修复重装同一版本"));
                     if (!full) notifyDamaged(v);
                 } catch (Exception e) {
+                    recheckDevkit = false;
                     devkit.set("error", Tr.t("校验失败：") + e.getMessage());
                     Ledger.add(env, "verify", false, Tr.t("校验失败：") + e.getMessage(), null);
                 }
