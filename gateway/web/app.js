@@ -3098,12 +3098,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         : t("Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。");
       $("priv-actions").insertAdjacentHTML("afterbegin", `<button class="btn sm" data-act="repair">${st.pairOk === 0 ? t("重新配对") : t("配对")}</button>`);
     }
-    if (st.bootMissed) {
+    // 说的是「这次开机」，允许了自启动也要等下次开机才会消失；点「已允许」就收起到下次开机
+    if (st.bootMissed && !(st.bootAt && Math.abs(st.bootAt - (+localStorage.getItem("cc.bootAck") || 0)) <= 1)) {
       se.classList.remove("hidden");
       se.className = "prov-state warn";
-            se.textContent = t("这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。") +
-        t("想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。");
-      $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">${t("去允许自启动")}</button>`);
+      se.textContent = t("这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。") +
+        t("想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动，下次开机生效。");
+      $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">${t("去允许自启动")}</button>` +
+        (st.bootAt ? `<button class="btn sm ghost" data-act="bootack" data-boot="${st.bootAt}">${t("已允许，下次开机再看")}</button>` : ""));
     }
     if (st.dev) {                                     // 开发端：Shizuku 由它自己的应用管理，这里只报实测状态
       $("priv-actions").innerHTML = "";
@@ -3129,6 +3131,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!act) return;
     if (act === "open") await post("/api/priv/open").catch(() => {});
     if (act === "appsettings") return post("/api/app/open_app_settings").catch(() => {});
+    // 原地换成一句确认、不重排：整段收起会让下面的开关挪到手指底下被误点。下次打开设置页才真正消失
+    if (act === "bootack") { localStorage.setItem("cc.bootAck", e.target.dataset.boot); $("priv-setup").textContent = t("好的，下次开机后再检查。"); e.target.disabled = true; return; }
     if (act === "repair") { await post("/api/app/shz_repair").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
     if (act === "activate") { await post("/api/app/shz_activate").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
     if (act === "request") {

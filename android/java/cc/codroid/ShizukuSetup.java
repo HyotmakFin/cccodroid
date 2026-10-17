@@ -121,6 +121,7 @@ final class ShizukuSetup {
         SharedPreferences sp = prefs();
         o.put("bootMissed", sp.getBoolean("paired", false) && sp.getBoolean("autostart", true)
             && bootAt > sp.getLong("pairedAt", Long.MAX_VALUE) && sp.getLong("bootSeen", 0) < bootAt);
+        o.put("bootAt", bootAt / 60000);                     // 本次开机的分钟数：前端据此把「我已允许」记到下次开机
         o.put("wireless", Build.VERSION.SDK_INT >= 30);
     }
 

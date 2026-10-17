@@ -198,7 +198,7 @@ window.I18N_DICT.en = {
   "无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。": "The wireless-debugging pairing for cccodroid was revoked: it still works now, but after a reboot it cannot be reactivated automatically.",
   "Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。": "Shizuku was not started by cccodroid, so cccodroid cannot reactivate it after a reboot. Pairing once fixes that.",
   "这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。": "The system did not notify cccodroid at boot (blocked by auto-start management), so it could not be activated automatically; opening cccodroid will catch up.",
-  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。": "To activate at boot: allow auto-start / background start for cccodroid in the app details.",
+  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动，下次开机生效。": "To activate at boot: allow auto-start / background start for cccodroid in the app details. Takes effect from the next boot.",
   "在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。": "Start the service in the Shizuku app (enable “Start on boot (wireless debugging)”) and make sure this app is authorized.",
   "已请求": "Requested",
   "配对码是 6 位数字": "The pairing code is 6 digits",
@@ -801,4 +801,6 @@ window.I18N_DICT.en = {
   "这一轮还在生成，等它跑完再退出登录。": "This turn is still generating. Sign out after it finishes.",
   "这一轮已经结束了": "This turn has already ended",
   "这项已经回答过了": "This has already been answered",
+  "已允许，下次开机再看": "Done, check at next boot",
+  "好的，下次开机后再检查。": "OK, will check again after the next boot.",
 };

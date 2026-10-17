@@ -187,7 +187,7 @@ window.I18N_DICT["fr"] = {
   "无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。": "L'appairage en débogage sans fil pour cccodroid a été révoqué : cela fonctionne encore, mais après un redémarrage la réactivation automatique ne sera plus possible.",
   "Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。": "Shizuku n'a pas été démarré par cccodroid, donc cccodroid ne peut pas le réactiver après un redémarrage. Un appairage suffit.",
   "这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。": "Le système n'a pas notifié cccodroid au démarrage (bloqué par la gestion du démarrage automatique) : l'activation automatique n'a donc pas eu lieu. Ouvrir cccodroid rattrapera le retard.",
-  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。": "Pour activer au démarrage : autorisez le démarrage automatique / en arrière-plan pour cccodroid dans les détails de l'application.",
+  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动，下次开机生效。": "Pour activer au démarrage : autorisez le démarrage automatique / en arrière-plan pour cccodroid dans les détails de l'application. Effectif au prochain démarrage.",
   "在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。": "Démarrez le service dans l'application Shizuku (activez « Démarrer au boot (débogage sans fil) ») et vérifiez que cette application est autorisée.",
   "已请求": "Demandé",
   "配对码是 6 位数字": "Le code d'appairage comporte 6 chiffres",
@@ -772,4 +772,6 @@ window.I18N_DICT["fr"] = {
   "这一轮还在生成，等它跑完再退出登录。": "Ce tour est encore en cours de génération. Déconnectez-vous une fois terminé.",
   "这一轮已经结束了": "Ce tour est déjà terminé",
   "这项已经回答过了": "Il a déjà été répondu à cette demande",
+  "已允许，下次开机再看": "C'est fait, revoir au prochain démarrage",
+  "好的，下次开机后再检查。": "D'accord, nouvelle vérification après le prochain démarrage.",
 };

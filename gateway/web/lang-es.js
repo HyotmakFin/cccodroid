@@ -187,7 +187,7 @@ window.I18N_DICT["es"] = {
   "无线调试里 cccodroid 的配对已被取消：现在还能用，但重启手机后没法自动激活。": "El emparejamiento de depuración inalámbrica de cccodroid se revocó: ahora sigue funcionando, pero tras reiniciar no podrá reactivarse automáticamente.",
   "Shizuku 不是由 cccodroid 激活的：重启手机后 cccodroid 没法自动激活它。配对一次即可。": "Shizuku no lo inició cccodroid, así que cccodroid no puede reactivarlo tras reiniciar. Basta con emparejarlo una vez.",
   "这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。": "El sistema no avisó a cccodroid al arrancar (bloqueado por la gestión de inicio automático), así que no se pudo activar automáticamente; abrir cccodroid lo pondrá al día.",
-  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动。": "Para activarlo al arrancar: permite el inicio automático / en segundo plano para cccodroid en los detalles de la aplicación.",
+  "想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动，下次开机生效。": "Para activarlo al arrancar: permite el inicio automático / en segundo plano para cccodroid en los detalles de la aplicación. Se aplica a partir del próximo arranque.",
   "在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。": "Inicia el servicio en la aplicación Shizuku (activa «Iniciar al arrancar (depuración inalámbrica)») y comprueba que esta aplicación está autorizada.",
   "已请求": "Solicitado",
   "配对码是 6 位数字": "El código de emparejamiento tiene 6 dígitos",
@@ -772,4 +772,6 @@ window.I18N_DICT["es"] = {
   "这一轮还在生成，等它跑完再退出登录。": "Este turno aún se está generando. Cierra la sesión cuando termine.",
   "这一轮已经结束了": "Este turno ya terminó",
   "这项已经回答过了": "Esto ya se respondió",
+  "已允许，下次开机再看": "Hecho, revisar en el próximo arranque",
+  "好的，下次开机后再检查。": "De acuerdo, se volverá a comprobar tras el próximo arranque.",
 };
