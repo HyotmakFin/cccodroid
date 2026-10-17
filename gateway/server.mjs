@@ -2121,11 +2121,18 @@ async function gitRepo(p) {
   const r = await git(dir, ["rev-parse", "--show-toplevel"]);
   if (r.code) return { error: /not a git repository/i.test(r.err) ? "not_repo" : r.err, notRepo: /not a git repository/i.test(r.err), dir };
   const root = r.out.trim();
-  for (const s of [CFG.home, CFG.runtime]) {
-    let rr; try { rr = fs.realpathSync(s); } catch { rr = s; }
-    if (rr && (root === rr || root.startsWith(rr + path.sep))) return { error: "forbidden", status: 403 };
-  }
+  if (gitPrivate(root)) return { error: "forbidden", status: 403 };
   return { root, dir };
+}
+/** 仓库根落在私有目录（HOME / 运行时）里就不碰；但 cccodroid 的工作区本身就在 HOME 下面，工作区里的仓库放行 */
+function gitPrivate(d) {
+  const under = (a, b) => { const r = path.relative(b, a); return r === "" || (!r.startsWith("..") && !path.isAbsolute(r)); };
+  const real = (s) => { try { return fs.realpathSync(s); } catch { return s; } };
+  const priv = [CFG.home, CFG.runtime].filter(Boolean).map(real);
+  const ws = realWorkspace();
+  // 在工作区里就放行；但工作区若就是 HOME（或它的上级），这条豁免作废
+  if (ws && under(d, ws) && !priv.some((rr) => under(rr, ws))) return false;
+  return priv.some((rr) => under(d, rr) || under(rr, d));
 }
 /** 仓库里的相对路径：前端给的可能是绝对路径 */
 /** 仓库里的相对路径：前端给的可能是绝对路径，且 /sdcard 与 /storage/emulated/0 是同一处，按真实路径比（文件删了就解析它的目录） */
@@ -2182,10 +2189,7 @@ async function handleGit(req, res, p, u) {
   const repo = await gitRepo(req.method === "POST" ? body.dir : q("dir"));
   // 还不是仓库：只允许「建一个」（私有目录除外）
   if (repo.notRepo && act === "init" && req.method === "POST") {
-    for (const s of [CFG.home, CFG.runtime]) {
-      let rr; try { rr = fs.realpathSync(s); } catch { rr = s; }
-      if (rr && (repo.dir === rr || repo.dir.startsWith(rr + path.sep))) return sendJson(res, 403, { error: "forbidden" });
-    }
+    if (gitPrivate(repo.dir)) return sendJson(res, 403, { error: "forbidden" });
     const r = await git(repo.dir, ["init"]);
     log(`[git] 新建仓库 ${repo.dir}`);
     return sendJson(res, r.code ? 500 : 200, r.code ? { error: r.err } : { ok: true, root: repo.dir });
