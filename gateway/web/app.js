@@ -188,7 +188,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, l, u) => hold(`<a class="weblink" href="${u}" target="_blank" rel="noopener">${l}</a>`))
       // 裸网址也能点（本机开发服务 http://127.0.0.1:端口 最常见）；句末标点不算
       .replace(/https?:\/\/[^\s<>"'`）)】」，。；、\u0000]+/g, (u) => {
-        const tail = (u.match(/[.,;:!?]+$/) || [""])[0];
+        // 结尾的 * 也不算：**http://…** 这种加粗包着的网址，不然 ** 会进链接、点开 404
+        const tail = (u.match(/[.,;:!?*]+$/) || [""])[0];
         const h = u.slice(0, u.length - tail.length);
         return hold(`<a class="weblink" href="${h}" target="_blank" rel="noopener">${h}</a>`) + tail;
       })
@@ -2254,7 +2255,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
-    const liveSids = new Set(srv.runs.map((r) => r.sessionId).filter(Boolean));
+    // 空闲（答完了、只剩后台任务在跑）的不算「生成中」，单独标出来
+    const liveSids = new Set(srv.runs.filter((r) => !r.idle).map((r) => r.sessionId).filter(Boolean));
+    const idleSids = new Set(srv.runs.filter((r) => r.idle).map((r) => r.sessionId).filter(Boolean));
     const askSids = new Set(srv.runs.filter((r) => r.perms && r.perms.length).map((r) => r.sessionId).filter(Boolean));
     const picking = sess.mode === "select";
     const item = (s) => `
@@ -2265,7 +2268,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           <span title="${esc(new Date(s.mtime).toLocaleString())}">${t("更新 {time}", { time: fmtStamp(s.mtime) })}</span>
           <span title="${s.created ? esc(new Date(s.created).toLocaleString()) : ""}">${t("创建 {time}", { time: fmtStamp(s.created) })}</span>
           <span>${fmtSize(s.sizeKb * 1024)}</span>
-          ${askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : ""}
+          ${askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : idleSids.has(s.id) ? `<span class="badge">${t("后台任务在跑")}</span>` : ""}
           ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
           ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
         </div>

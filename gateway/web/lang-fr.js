@@ -1184,4 +1184,5 @@ window.I18N_DICT["fr"] = {
   "分卷模型（…-00001-of-0000N.gguf）不支持，请找单文件版本": "Les modèles en plusieurs parties (…-00001-of-0000N.gguf) ne sont pas pris en charge ; cherchez une version en un seul fichier",
   "mmproj 是多模态投影文件，不能单独对话": "mmproj est un fichier de projection multimodale, inutilisable seul pour discuter",
   "就绪 · 后台任务在跑（{n} 个）": "Prêt · {n} tâche(s) en arrière-plan",
+  "后台任务在跑": "Tâches en arrière-plan",
 };
