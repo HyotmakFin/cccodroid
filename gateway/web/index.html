@@ -193,6 +193,7 @@
                         <button class="btn sm" data-act="pair" data-i18n>配对</button>
           </div>
           <div class="row-actions" id="priv-actions"></div>
+          <div class="priv-audit hidden" id="priv-audit"></div>
           <label class="tiny hidden" id="priv-auto-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
             <input type="checkbox" id="priv-auto" style="width:auto;margin:0">
                         <span data-i18n>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</span>
@@ -573,6 +574,8 @@
 <div id="sheet" class="hidden">
   <div class="sheet-panel">
         <button class="sheet-item" data-act="attach" data-i18n>附加图片 / 文件</button>
+    <button class="sheet-item" data-act="shot" data-i18n>截屏给 Claude</button>
+    <button class="sheet-item" data-act="shot5" data-i18n>5 秒后截屏（先切到要截的应用）</button>
     <button class="sheet-item" data-act="browse" data-i18n>浏览文件…</button>
     <button class="sheet-item" data-act="new" data-i18n>新建会话</button>
     <button class="sheet-item" data-act="model" data-i18n>切换模型 /model</button>

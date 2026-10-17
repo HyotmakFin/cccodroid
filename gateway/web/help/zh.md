@@ -40,6 +40,7 @@ cccodroid 在手机上跑**官方原版 Claude Code**，外面套一层图形界
 - **生成中还能接着发**：回车 = 排队，等这一轮跑完再发；⚡ = 插话，递进正在跑的这一轮、不打断。排队的消息停在对话末尾，可以「立即发送」。
 - **停止键只管停止**：排队的消息会挂起，不会自动发出。
 - `/` 唤起斜杠命令，`@` 引用文件路径（输入时会弹出补全）。
+- **给 Claude 递东西**：回形针附加文件；在相册、文件管理器、浏览器里点「分享 → cccodroid」，文件直接成为附件（文字插进输入框）；＋ 面板里的「截屏给 Claude」截下当前屏幕（要 Shizuku），分屏时连另一半一起截，「5 秒后截屏」留出时间切到别的应用，截完自动回来。
 - **思考过程**默认折叠，点开才显示。
 - **步骤折叠**：两段回复之间的工具调用（连同中间的思考）收成一行，例如「3 个步骤 · Bash … · 完成」，点开看每一步的参数和结果。有待你确认、执行失败或带图片的组会自动展开。
 - **回复里的路径能点**：绝对路径（或 `file.js:12`）点一下就在查看器里打开；目录打开文件浏览器。网页链接在应用内浏览器里打开。
@@ -124,12 +125,19 @@ Claude 要改文件、跑命令、联网前，按**权限模式**决定要不要
 
 侧栏 →「能力」能看到当前可用的斜杠命令、工具、技能、子代理、MCP 服务器和插件。
 
+**Termux 仓库的包：`pkg`**（终端里，Claude 也会用）：
+
+- `pkg install rust` 这样装，`pkg search 关键词` 搜，`pkg uninstall` 卸（不再被需要的依赖一起卸）。包按 cccodroid 的路径改写后原样运行。
+- 本机实测过的包直接装：rust / cargo、golang、zig、ruby、php、lua、python-numpy、neovim、vim、tmux、redis、postgresql 等，`pkg verified` 看全表。别的包要加 `--unverified`，装完自己试试能不能用。
+- 工具包自带的包（clang、python、node…）不经 pkg 升级，随工具包更新。更新工具包后，之前用 pkg 装的包要 `pkg restore` 装回（会提示）。
+
 ## Shizuku 与系统权限（可选）
 
 - 设置页「一键安装并激活」：从 Shizuku 官方下载（核对签名），经「无线调试」激活，不用电脑。配对码在屏幕顶部的通知里填。
 - 激活后，终端和 Claude 都能用 `priv '<命令>'` 以 shell 身份执行 `pm` / `am` / `settings` / `logcat` / `screencap` 等。
 - 重启手机后，cccodroid 会自己打开无线调试、重新激活（需连着 Wi‑Fi）。
 - 有 Shizuku 时，保活更稳，应用更新也能在空闲时静默安装。
+- 每条经 `priv` 执行的命令都会记下来（时间、谁发起的、命令、退出码），设置页 Shizuku 一栏点「特权命令记录」查看。只存在本机。
 
 ## 内存管家（可选，默认关）
 
@@ -141,7 +149,8 @@ Claude 要改文件、跑命令、联网前，按**权限模式**决定要不要
 - **终端里**：
   - `cc-mem status` 看内存账；
   - `cc-mem run -- 命令` 跑重活：开跑前清场，跑的时候谁复活就再停谁，结束后报告；
-  - `cc-mem tame 包名` 长期限制某个应用的后台，`cc-mem untame` 恢复。
+  - `cc-mem tame 包名` 长期限制某个应用的后台，`cc-mem untame` 恢复；
+  - `make -j$(cc-mem jobs)`：按现在的可用内存给出安全的并行数（不用打开内存管家也能用）。
 - 被停掉的应用，在你下次打开它之前可能收不到消息。这是开关默认关闭的原因。
 
 ## 更新与修复
@@ -171,6 +180,7 @@ Claude 要改文件、跑命令、联网前，按**权限模式**决定要不要
 ```
 python3 -m venv .venv && . .venv/bin/activate && pip install requests
 npm i -g typescript
+pkg install rust && cargo new demo                # Termux 仓库的包
 clang hello.c -o hello && ./hello
 ffmpeg -i in.mp4 -c:v h264_mediacodec out.mp4   # 手机硬件编码
 cccodroid-selftest                                # 逐项自检工具链

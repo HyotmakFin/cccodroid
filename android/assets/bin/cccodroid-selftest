@@ -84,7 +84,7 @@ t "grep -r" "grep -rc hi-c a.c"; t "find" "find . -maxdepth 1 -name 'a.c'"; t "s
 t "tar/xz/zstd/zip" "tar cJf x.txz a.c && tar cf - a.c | zstd -q > x.zst && zip -q x.zip a.c && unzip -l x.zip | tail -1"
 t "less/file" "file a"
 t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
-t "pkg 是说明替身" "pkg install x 2>&1 | head -1 | grep -q 'pkg / apt' && echo 替身正常"
+t "pkg（应用自带）" "pkg verified | grep -q '^rust ' && pkg list >/dev/null && echo \"\$(command -v pkg)\""
 t "su/sudo 不应存在" "! command -v sudo"
 echo "== 音视频（ffmpeg）"
 if command -v ffmpeg >/dev/null; then

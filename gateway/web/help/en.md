@@ -40,6 +40,7 @@ The thin bar under it shows **context usage**: how much of the model's window th
 - **Keep typing while Claude works**: Enter queues the message until this turn ends; ⚡ (interject) slips it into the running turn without stopping it. Queued messages wait at the end of the conversation and can be sent right away.
 - **Stop only stops**: queued messages are put on hold, not sent automatically.
 - `/` opens slash commands, `@` inserts a file path (with suggestions as you type).
+- **Handing things to Claude**: the paperclip attaches files; in your gallery, file manager or browser, Share → cccodroid turns the file into an attachment (shared text goes into the input box); "Screenshot to Claude" in the + panel captures the screen (needs Shizuku), including the other half in split screen, and "Screenshot in 5 s" gives you time to switch apps, then brings you back.
 - **Thinking** is collapsed until you tap it.
 - **Folded steps**: tool calls between two pieces of reply text, with the thinking in between, fold into one line such as "3 steps · Bash … · Done". Tap to see each step's input and output. Groups with a pending approval, a failure or an image open by themselves.
 - **Paths in replies are links**: an absolute path (or `file.js:12`) opens in the viewer; a directory opens the file browser. Web links open in the in-app browser.
@@ -124,12 +125,19 @@ Changes take effect with the **next message**. Everything goes through Claude Co
 
 Sidebar → Capabilities lists the slash commands, tools, skills, subagents, MCP servers and plugins currently available.
 
+**Packages from the Termux repository: `pkg`** (in the terminal; Claude uses it too):
+
+- Install with `pkg install rust`, search with `pkg search <word>`, remove with `pkg uninstall` (dependencies nothing else needs go too). Packages are rewritten for cccodroid's paths and run as they are.
+- Packages tested on a device install directly: rust / cargo, golang, zig, ruby, php, lua, python-numpy, neovim, vim, tmux, redis, postgresql and more; `pkg verified` lists them all. Anything else needs `--unverified`; try it after installing.
+- Packages that come with the devkit (clang, python, node…) aren't upgraded by pkg; they update with the devkit. After a devkit update, run `pkg restore` to bring back what you installed with pkg (you'll be reminded).
+
 ## Shizuku and system permissions (optional)
 
 - "Install and activate" in Settings downloads Shizuku from its official release (signature checked) and activates it through Wireless debugging, no computer needed. Enter the pairing code in the notification at the top of the screen.
 - Once active, the terminal and Claude can run `priv '<command>'` as the shell user: `pm`, `am`, `settings`, `logcat`, `screencap` and so on.
 - After a reboot, cccodroid turns Wireless debugging back on and re-activates Shizuku by itself (Wi‑Fi required).
 - With Shizuku, keep-alive is more reliable and app updates can install silently when idle.
+- Every command run through `priv` is logged (time, who started it, the command, exit code). See it under Shizuku in Settings → "Privileged command log". The log stays on the device.
 
 ## Memory manager (optional, off by default)
 
@@ -141,7 +149,8 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 - **In the terminal**:
   - `cc-mem status` shows where memory goes;
   - `cc-mem run -- command` runs a heavy job: it clears the field first, stops anything that comes back while the job runs, and reports at the end;
-  - `cc-mem tame <package>` restricts an app's background activity for good, and `cc-mem untame` undoes it.
+  - `cc-mem tame <package>` restricts an app's background activity for good, and `cc-mem untame` undoes it;
+  - `make -j$(cc-mem jobs)` picks a safe parallel job count from the memory available right now (works without turning the memory manager on).
 - A stopped app may not deliver messages until you open it again. That is why the switch is off by default.
 
 ## Updates and repair
@@ -171,6 +180,7 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 ```
 python3 -m venv .venv && . .venv/bin/activate && pip install requests
 npm i -g typescript
+pkg install rust && cargo new demo                # packages from the Termux repo
 clang hello.c -o hello && ./hello
 ffmpeg -i in.mp4 -c:v h264_mediacodec out.mp4   # hardware encoding
 cccodroid-selftest                                # check the whole toolchain

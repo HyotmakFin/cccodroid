@@ -268,7 +268,8 @@ final class Priv {
             JSONObject resp;
             switch (op) {
                 case "exec": {
-                    Thread stdin = exec(req, in, out);
+                    int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                    Thread stdin = exec(req, in, out, pid);
                     // 只关写方向，再等客户端自己关。直接 close 的话，客户端还没送完的 stdin 帧留在我们这边没读，
                     // 它下一次写就是 EPIPE —— Node 遇到写错误会当场销毁套接字，连已经到手的输出和退出码一起丢掉。
                     try { sock.shutdownOutput(); } catch (IOException ignored) {}
@@ -333,9 +334,12 @@ final class Priv {
     }
 
     /** 返回负责转发 stdin 的线程（它在客户端关闭时结束）；没起进程就返回 null */
-    private static Thread exec(JSONObject req, InputStream in, OutputStream rawOut) throws Exception {
+    private static Thread exec(JSONObject req, InputStream in, OutputStream rawOut, int peerPid) throws Exception {
         DataOutputStream out = new DataOutputStream(rawOut);
+        long t0 = System.currentTimeMillis();
+        String who = caller(peerPid);
         if (!granted()) {
+            audit(t0, who, req, 126, 0);
             frame(out, 4, (installed() ? (running() ? Tr.t("Shizuku 还没授权给 cccodroid（设置 → Shizuku 里点授权）") : Tr.t("Shizuku 没在运行，先打开 Shizuku 启动服务"))
                 : Tr.t("没装 Shizuku（https://shizuku.rikka.app/）")).getBytes(StandardCharsets.UTF_8));
             frameExit(out, 126);
@@ -354,7 +358,7 @@ final class Priv {
         String dir = req.optString("cwd", "/");
         java.lang.Process p;
         try { p = newProcess(argv, envp, dir); }
-        catch (Throwable t) { frame(out, 4, (Tr.t("起进程失败：") + t).getBytes(StandardCharsets.UTF_8)); frameExit(out, 127); return null; }
+        catch (Throwable t) { audit(t0, who, req, 127, 0); frame(out, 4, (Tr.t("起进程失败：") + t).getBytes(StandardCharsets.UTF_8)); frameExit(out, 127); return null; }
 
         Thread o1 = pump(p.getInputStream(), out, 1);
         Thread o2 = pump(p.getErrorStream(), out, 2);
@@ -381,8 +385,52 @@ final class Priv {
         inT.start();
         int rc = p.waitFor();
         o1.join(); o2.join();
+        audit(t0, who, req, rc, System.currentTimeMillis() - t0);
         frameExit(out, rc);
         return inT;
+    }
+
+    // ── 审计：每条经 priv 执行的命令记一行 JSON（何时、谁发起、命令、退出码、用时），设置页可查 ──
+    // 只在本应用私有目录；超过 1 MB 轮转成 .1（只留一份旧的）。命令截到 600 字符
+    static final String AUDIT = "home/priv-audit.jsonl";
+    private static final int AUDIT_MAX = 1 << 20;
+
+    /** 发起方：看连上来的那个进程（priv.mjs）继承的环境变量，再看它的父进程是不是 cc-mem */
+    private static String caller(int pid) {
+        if (pid <= 0) return "?";
+        try {
+            byte[] env = java.nio.file.Files.readAllBytes(new java.io.File("/proc/" + pid + "/environ").toPath());
+            String e = "\0" + new String(env, StandardCharsets.UTF_8) + "\0";
+            String parent = "";
+            try {
+                String st = new String(java.nio.file.Files.readAllBytes(new java.io.File("/proc/" + pid + "/stat").toPath()), StandardCharsets.UTF_8);
+                String ppid = st.substring(st.lastIndexOf(')') + 2).split(" ")[1];
+                parent = new String(java.nio.file.Files.readAllBytes(new java.io.File("/proc/" + ppid + "/cmdline").toPath()), StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+            if (parent.contains("cc-mem")) return "cc-mem";
+            if (e.contains("\0CCAPP_RUN=1\0")) return "claude";
+            if (e.contains("\0CCAPP_TERMINAL=1\0")) return "terminal";
+            if (e.contains("\0CCAPP_PORT=")) return "gateway";
+        } catch (Exception ignored) {}
+        return "other";
+    }
+
+    private static synchronized void audit(long t0, String who, JSONObject req, int rc, long ms) {
+        try {
+            JSONArray a = req.optJSONArray("argv");
+            StringBuilder cmd = new StringBuilder();
+            if (a != null) {
+                // priv '命令' 到这里是 [/system/bin/sh, -c, 命令]：只记命令本身
+                if (a.length() == 3 && "/system/bin/sh".equals(a.optString(0)) && "-c".equals(a.optString(1))) cmd.append(a.optString(2));
+                else for (int i = 0; i < a.length(); i++) { if (i > 0) cmd.append(' '); cmd.append(a.optString(i)); }
+            }
+            String c = cmd.length() > 600 ? cmd.substring(0, 600) + "…" : cmd.toString();
+            JSONObject o = new JSONObject().put("t", t0).put("by", who).put("cmd", c).put("rc", rc).put("ms", ms);
+            java.io.File f = new java.io.File(ctx.getFilesDir(), AUDIT);
+            f.getParentFile().mkdirs();
+            if (f.length() > AUDIT_MAX) f.renameTo(new java.io.File(f.getPath() + ".1"));
+            try (java.io.FileOutputStream w = new java.io.FileOutputStream(f, true)) { w.write((o + "\n").getBytes(StandardCharsets.UTF_8)); }
+        } catch (Exception e) { Log.w(TAG, "审计日志没写成", e); }
     }
 
     /** 把客户端还在发的东西读干净，直到它关闭（最多等 5 秒） */

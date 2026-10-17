@@ -78,7 +78,8 @@ final class Env {
         e.put("PREFIX", usr.getPath());
         e.put("HOME", home.getPath());
         e.put("TMPDIR", new File(usr, "tmp").getPath());
-        e.put("PATH", usr.getPath() + "/bin:" + new File(app, "bin").getPath() + ":/system/bin:/system/xbin");
+        // app/pre 在最前：只放 pkg / apt（压过工具包里同名的旧说明替身）
+        e.put("PATH", new File(app, "pre").getPath() + ":" + usr.getPath() + "/bin:" + new File(app, "bin").getPath() + ":/system/bin:/system/xbin");
         e.put("LANG", "en_US.UTF-8");
         e.put("TERM", "xterm-256color");
         // typst 自带的只有拉丁字体，不给它路径中文就渲染成空白方框；安卓的字体都在 /system/fonts

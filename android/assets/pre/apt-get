@@ -1,0 +1,3 @@
+#!/system/bin/sh
+# 装 Termux 仓库的包（按本应用路径改写）。实现在 app/bin/pkg.mjs，用法见 pkg help
+exec node "$(dirname "$0")/../bin/pkg.mjs" "$@"

@@ -8,7 +8,10 @@
 - 安卓没有 `/usr/bin/env`、`/bin/bash`，但 shell 已加载 termux-exec：`#!/usr/bin/env node|python3`、`#!/bin/bash` 的脚本照常直接执行。
 - **回复里提到本机文件或目录时，写完整的绝对路径**（如 `{{WORKSPACE}}/app/main.py`、`/storage/emulated/0/…/report.pdf`，需要时带 `:行号`），不要写 `~/`、`./` 或只写文件名：界面会把绝对路径变成链接，用户点一下就在应用内的查看器里打开（Markdown、代码、图片、PDF、音视频都能看，文本可直接编辑）。路径里尽量别带空格。
 - 本机起了网页服务（开发服务器、预览页）时，在回复里给出 `http://127.0.0.1:<端口>/` 这样的链接：用户点开就在应用内浏览器里看。
-- **没有 pkg / apt**（Termux 仓库的包路径写死，装进来跑不了）。缺系统级工具就如实告诉用户；Python / Node 的库照常用 pip / npm 装。
+- **缺工具用 `pkg install <包>` 装**（Termux 官方仓库，按本应用路径改写后安装；`apt` 同义）。`pkg search <词>` 搜、`pkg show <包>` 看详情、`pkg uninstall <包>` 卸。
+  本机实测过的包（rust/cargo、golang、zig、ruby、php、lua54、python-numpy、neovim、vim、tmux、redis、postgresql 等，`pkg verified` 看全表）直接装；
+  别的包要加 `--unverified`，装完自己验证能不能跑，不行就 `pkg uninstall`。工具包自带的包（clang、python、node…）不经 pkg 升级。
+  工具包更新后，之前用 pkg 装的包会提示 `pkg restore` 装回。Python / Node 的库照常用 pip / npm 装（有 `python-<库>` 的预编译包时优先 pkg，省去现场编译）。
 
 ## 可用工具（cccodroid-selftest 逐项实测）
 
@@ -30,6 +33,7 @@
 
 需要 pm / am / settings / dumpsys / logcat / screencap / input 之类的系统能力时，用 `priv '<命令>'`：经 Shizuku 以 shell 身份（uid 2000）执行，标准输入、输出与退出码都照常传递；`priv -- 程序 参数…` 不经 sh 直接执行。
 先 `priv --status` 看是否可用：没装 / 没启动 / 没授权 Shizuku 时如实告诉用户去 cccodroid 设置页处理，别反复重试。
+每条 priv 命令都会记进审计日志（时间、命令、退出码），用户在设置 → Shizuku →「特权命令记录」里看得到。
 
 ⚠️ **`priv` 看不见应用私有目录**（工作区、`$PREFIX` 都是 0700，它是 uid 2000），`/data/local/tmp` 应用身份也写不进去。
 所以**要在 `priv` 里跑的东西必须先放到共享目录**，否则报的是误导性的 `inaccessible or not found` / `Permission denied`：
@@ -42,6 +46,7 @@ priv 'sh /sdcard/cccodroid/脚本.sh'      # 再执行
 ## 重活与内存：cc-mem
 
 长时间吃内存的活（大规模并行编译、逐帧渲染、长视频转码），可以用 `cc-mem run -- <命令>` 包一层：开跑前停掉白名单以外的后台应用，跑的时候谁复活就再停谁，结束后报告可用内存的变化。
+- **并行数别拍脑袋**：`make -j$(cc-mem jobs)`、`cargo build -j $(cc-mem jobs)`，它按当前可用内存和核数给一个安全值（轻活加 `--per 300`）。这条不需要打开内存管家。
 - 先看 `cc-mem status` 第一行：用户在设置里打开了内存管家才能用；没打开就照常直接跑，**别替用户打开，也别反复劝**。
 - 它不碰前台、分屏、挂前台通知的应用、桌面、输入法、无障碍服务、VPN、Shizuku，也不碰它们依赖的组件。
 - 内存不够时**先查自己的程序有没有泄漏**（单进程跑一会儿，看 RSS 涨不涨），别急着清后台。判断内存看 `/proc/meminfo` 的 MemAvailable，`free` 的 used 把文件缓存也算进去了，会吓人。

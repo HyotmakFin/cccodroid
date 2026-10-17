@@ -413,6 +413,8 @@ a.weblink{overflow-wrap:anywhere}
 .sheet-panel{
   width:100%;background:var(--bg2);border-top-left-radius:18px;border-top-right-radius:18px;
   padding:10px 12px calc(var(--safe-b) + 14px);animation:up .18s ease;
+  /* 分屏 / 横屏时窗口矮：面板比窗口高的话顶上几项会被挤出屏幕，改成面板内滚动 */
+  max-height:calc(100% - var(--safe-t, 0px));overflow-y:auto;overscroll-behavior:contain;
 }
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
 .sheet-item{
@@ -1048,3 +1050,11 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .msg.hit-flash .bubble{animation:hitflash 2.4s ease-out}
 @keyframes hitflash{0%,30%{box-shadow:0 0 0 2px var(--accent)}100%{box-shadow:0 0 0 2px transparent}}
 mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
+
+/* 特权命令记录（设置 → Shizuku） */
+.priv-audit{margin-top:8px;max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px}
+.audit-row{padding:5px 0;border-bottom:1px solid var(--line);font-size:12px}
+.audit-row:last-child{border-bottom:0}
+.audit-row .audit-meta{display:block;color:var(--fg3);margin-bottom:2px}
+.audit-row code{white-space:pre-wrap;word-break:break-all}
+.audit-row.bad .audit-meta{color:var(--err)}

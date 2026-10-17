@@ -3637,7 +3637,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         se.textContent = t("在 Shizuku 应用里启动服务（建议开「开机启动（无线调试）」），并确认已授权给本应用。") + (st.message ? "（" + st.message + "）" : "");
       }
     }
-    $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">${t("刷新")}</button>`);
+    $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">${t("刷新")}</button>` +
+      (st.dev ? "" : `<button class="btn sm ghost" data-act="audit">${t("特权命令记录")}</button>`));
     $("priv-auto-row").classList.toggle("hidden", !(wl && st.paired));
     $("priv-auto").checked = st.autostart !== false;
     $("priv-ka-row").classList.toggle("hidden", !!st.dev);
@@ -3648,11 +3649,31 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     clearTimeout(privPoll);
     if (busy && !$("tab-settings").classList.contains("hidden")) privPoll = setTimeout(loadPriv, 1500);
   }
+  // 经 priv 执行过的命令（谁发起、命令、退出码、用时）。再点一次收起
+  const privBy = (k) => ({ claude: "Claude", terminal: t("终端"), gateway: "cccodroid", "cc-mem": t("内存管家"), other: t("其他") })[k] || k;
+  async function togglePrivAudit() {
+    const box = $("priv-audit");
+    if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    box.textContent = t("加载中…");
+    try {
+      const r = await api("/api/priv/audit");
+      if (!r.items.length) { box.innerHTML = `<div class="tiny">${t("还没有经 priv 执行过命令")}</div>`; return; }
+      const two = (n) => String(n).padStart(2, "0");
+      box.innerHTML = `<div class="tiny" style="margin-bottom:6px">${t("最近 {n} 条（最新的在前）。只记在本机，不上传。", { n: r.items.length })}</div>` +
+        r.items.map((x) => {
+          const d = new Date(x.t);
+          const when = `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+          return `<div class="audit-row${x.rc ? " bad" : ""}"><span class="audit-meta">${when} · ${esc(privBy(x.by))} · rc=${x.rc}${x.ms >= 1000 ? " · " + (x.ms / 1000).toFixed(1) + "s" : ""}</span><code>${esc(x.cmd)}</code></div>`;
+        }).join("");
+    } catch (e) { box.textContent = e.message; }
+  }
   $("priv-actions").addEventListener("click", async (e) => {
     const act = e.target.dataset && e.target.dataset.act;
     if (!act) return;
     if (act === "open") await post("/api/priv/open").catch(() => {});
     if (act === "appsettings") return post("/api/app/open_app_settings").catch(() => {});
+    if (act === "audit") return togglePrivAudit();
     // 原地换成一句确认、不重排：整段收起会让下面的开关挪到手指底下被误点。下次打开设置页才真正消失
     if (act === "bootack") { localStorage.setItem("cc.bootAck", e.target.dataset.boot); $("priv-setup").textContent = t("好的，下次开机后再检查。"); e.target.disabled = true; return; }
     if (act === "repair") { await post("/api/app/shz_repair").catch((e2) => toast(e2.message, true)); return setTimeout(loadPriv, 500); }
@@ -5545,6 +5566,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     toast(t("已开始新会话"));
   });
 
+  // 截屏当附件（经 priv / Shizuku）。立刻截：分屏时连另一半一起截；延时截：先切到要截的应用，截完自动回来
+  async function screenshot(delay) {
+    // 立刻截：不弹提示（会被截进去），等面板收起、动画走完再截
+    if (delay) toast(t("{n} 秒后截屏，现在可以切到要截的应用", { n: delay }));
+    else await new Promise((r) => setTimeout(r, 450));
+    try {
+      const j = await api("/api/screenshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delay }) });
+      state.attachments.push(j);
+      insertAtCursor("@" + j.path);
+      renderAttachments();
+      toast(t("已附加截屏"));
+    } catch (e) { toast(e.message, true); }
+  }
+
   // ＋ 快捷面板
   const sheetEl = $("sheet");
   $("btn-plus").addEventListener("click", () => sheetEl.classList.remove("hidden"));
@@ -5557,6 +5592,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "new") return $("btn-new").click();
     if (a === "caps") return openDrawer("caps");
     if (a === "attach") return pickFiles();
+    if (a === "shot" || a === "shot5") return screenshot(a === "shot5" ? 5 : 0);
     if (a === "browse") return openFiles();
     send("/" + a);
   });

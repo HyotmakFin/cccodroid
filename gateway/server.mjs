@@ -979,8 +979,9 @@ function claudeEnv() {
     // 死引用原本指向不存在的 Termux share/terminfo，TUI 程序（hx、gdb -tui…）拿不到
     // 终端能力；我们 prefix 里那份是齐的（221K），指过去就活了。
     TERMINFO_DIRS: PREFIX ? path.join(PREFIX, "share", "terminfo") : path.join(PATHS.toolchain, "dshtc", "prefix", "share", "terminfo"),
-    // 工具链在前：这样 claude 调 git/gcc/rg/magick… 命中的是我们搬过来的包装脚本
-    PATH: PREFIX ? [path.join(PREFIX, "bin"), process.env.CCAPP_BIN, "/system/bin", "/system/xbin"].filter(Boolean).join(":") : [
+    // 工具链在前：这样 claude 调 git/gcc/rg/magick… 命中的是我们搬过来的包装脚本。
+    // 最前面的 app/pre 只放 pkg / apt：工具包里有同名的旧说明替身，改它会被完整性校验判成"改动"，只能靠 PATH 顺序压过去
+    PATH: PREFIX ? [process.env.CCAPP_BIN && path.join(process.env.CCAPP_BIN, "..", "pre"), path.join(PREFIX, "bin"), process.env.CCAPP_BIN, "/system/bin", "/system/xbin"].filter(Boolean).join(":") : [
       path.join(PATHS.toolchain, "payload", "bin"),
       // 开发端自己加的工具（python3/pip、java/javac/d8/apksigner、strace、adb…）：放在 tc.tar 之外，启动重新部署时不会被冲掉
       path.join(CFG.runtime, "..", "devbin"),
@@ -1905,6 +1906,13 @@ const SECRET_NAMES = new Set([
 ]);
 const SECRET_RE = /(^|\/)(\.ssh|\.gnupg|\.aws|\.config\/gcloud)(\/|$)/;
 
+/** 在不在工作区里（按真实路径）。cccodroid 的工作区就在 home 下面（files/home/workspace）——
+ *  只按 home 拦，工作区里的文件（附件、Claude 生成的图）就全成了 403，缩略图和查看器都打不开 */
+function inWorkspace(real) {
+  let ws; try { ws = fs.realpathSync(CFG.workspace); } catch { ws = CFG.workspace; }
+  return real === ws || real.startsWith(ws + path.sep);
+}
+
 function safeFilePath(p) {
   if (!p) return { error: "path required" };
   let full = String(p).trim();
@@ -1914,7 +1922,7 @@ function safeFilePath(p) {
   let real;
   try { real = fs.realpathSync(full); } catch (e) { return { error: "not found", detail: e.message }; }
 
-  for (const root of [CFG.home, CFG.runtime, SEED_FILE]) {
+  for (const root of inWorkspace(real) ? [SEED_FILE] : [CFG.home, CFG.runtime, SEED_FILE]) {
     if (!root) continue;
     let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
     if (real === rr || real.startsWith(rr + path.sep)) return { error: "forbidden", status: 403 };
@@ -1935,7 +1943,7 @@ function safeWritePath(p) {
   if (fs.existsSync(full)) return safeFilePath(full);
   let dir;
   try { dir = fs.realpathSync(path.dirname(full)); } catch (e) { return { error: "no such directory", status: 400 }; }
-  for (const root of [CFG.home, CFG.runtime]) {
+  for (const root of inWorkspace(dir) ? [] : [CFG.home, CFG.runtime]) {
     let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
     if (dir === rr || dir.startsWith(rr + path.sep)) return { error: "forbidden", status: 403 };
   }
@@ -3831,6 +3839,39 @@ async function startRun(item) {
   child.on("close", finish);
 }
 
+/** 整屏截图（PNG）。cccodroid：priv 的 stdout 是干净的二进制通道，直接收；
+ *  开发端的 rish 会把输出随机拆到 stdout / stderr，二进制会坏 —— 先写到共享存储再读回来 */
+async function screencap() {
+  let last = "";
+  for (let i = 0; i < 2; i++) {
+    const r = await screencapOnce();
+    // 完整的 PNG 以 IEND 块收尾；只看开头的魔数会把截断的文件当成好的（界面上就是一张坏图）
+    if (r.buf && r.buf.length > 64 && r.buf.readUInt32BE(0) === 0x89504e47 && r.buf.subarray(-8, -4).toString("latin1") === "IEND") return r.buf;
+    last = `${r.buf ? r.buf.length : 0} B${r.code != null ? " rc=" + r.code : ""}${r.err ? " " + r.err : ""}`;
+    log(`[screenshot] 第 ${i + 1} 次不完整：${last}`);
+  }
+  throw new Error(tz("截屏失败（Shizuku 可用吗？设置 → Shizuku）") + " · " + last);
+}
+function screencapOnce() {
+  return new Promise((resolve) => {
+    if (PREFIX) {
+      const c = spawn(process.execPath, [path.join(process.env.CCAPP_BIN || HERE, "priv.mjs"), "screencap -p"], { env: claudeEnv(), stdio: ["ignore", "pipe", "pipe"] });
+      const out = [], err = [];
+      c.stdout.on("data", (d) => out.push(d));
+      c.stderr.on("data", (d) => err.push(d));
+      const t = setTimeout(() => c.kill("SIGKILL"), 20000);
+      c.on("close", (code) => { clearTimeout(t); resolve({ buf: Buffer.concat(out), code, err: Buffer.concat(err).toString().trim().slice(0, 160) }); });
+      c.on("error", (e) => { clearTimeout(t); resolve({ buf: null, err: e.message }); });
+      return;
+    }
+    const tmp = "/sdcard/Download/.ccapp-screen.png";
+    execFile("priv", [`screencap -p ${tmp}`], { timeout: 20000, env: process.env }, (e) => {
+      let buf = null; try { buf = fs.readFileSync(tmp); fs.rmSync(tmp, { force: true }); } catch {}
+      resolve({ buf, err: e ? e.message.slice(0, 160) : "" });
+    });
+  });
+}
+
 /** 把应用界面叫回前台。cccodroid 由 App 进程做（Shizuku 或通知）；开发端直接 priv am start */
 function toFront(text) {
   if (PREFIX) return privCall({ op: "to_front", text }, 8000);
@@ -4189,14 +4230,88 @@ async function devApp(op, b) {
   return { ok: false, message: tz("开发端不支持：{op}", { op }) };
 }
 
+// ── 本机实况：TOOLS.md 是打包时在测试机上测的，这里补上「这台设备上实际怎样」 ──
+// 自检（cccodroid-selftest）在本机跑一遍，失败项和 INFO（比如有没有硬件编码器）接在 TOOLS.md 后面；
+// 装了哪些组件、用 pkg 装了哪些包，每轮现读。自检只在工具包或应用版本变了之后、空闲时重跑（要一两分钟 CPU）
+const ENV_FACTS = PREFIX ? path.join(CFG.home, ".cccodroid-env.json") : "";
+function envFactsKey() {
+  const dk = devkitIdentity() || {};
+  let tag = ""; try { tag = fs.readFileSync(path.join(HERE, "TAG"), "utf8").trim(); } catch {}
+  return `${dk.sha256 || dk.tag || "?"}|${tag}`;
+}
+let envFactsJob = null;
+function envFactsRun() {
+  const st = path.join(process.env.CCAPP_BIN || "", "cccodroid-selftest");
+  if (!PREFIX || envFactsJob || !fs.existsSync(st)) return;
+  const key = envFactsKey(), nice = path.join(PREFIX, "bin", "nice");
+  // 经 Claude 用的同一个 shell 包装起（挂着 termux-exec）：直接调 bash 的话 #!/usr/bin/env 一类脚本全报 bad interpreter，
+  // 自检就会把「这台设备上 shebang 不能用」这种假结论告诉 Claude
+  const sh = ensureShell();
+  const argv = fs.existsSync(nice) ? [nice, "-n", "10", sh, st] : [sh, st];
+  let out = "";
+  log("[env] 本机自检开始（工具包或应用换了版本）");
+  envFactsJob = spawn(argv[0], argv.slice(1), { env: termEnv(), cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  envFactsJob.stdout.on("data", (d) => { if (out.length < 1 << 20) out += d; });
+  envFactsJob.stderr.on("data", () => {});
+  const t = setTimeout(() => { try { killTree(envFactsJob); } catch {} }, 15 * 60e3);
+  envFactsJob.on("close", () => {
+    clearTimeout(t); envFactsJob = null;
+    const r = { key, at: Date.now(), pass: 0, fail: [], info: [] };
+    for (const l of out.split("\n")) {
+      if (l.startsWith("PASS ")) r.pass++;
+      else if (l.startsWith("FAIL ")) r.fail.push(l.slice(5, 260));
+      else if (l.startsWith("INFO ")) r.info.push(l.slice(5, 260));
+    }
+    if (!r.pass) { log("[env] 自检没跑出结果，下次再试"); return; }
+    try { fs.writeFileSync(ENV_FACTS, JSON.stringify(r, null, 1)); } catch {}
+    log(`[env] 本机自检：通过 ${r.pass} 项，失败 ${r.fail.length} 项`);
+  });
+}
+// 空闲（没有 claude 在跑）且结果过期时才跑：启动 2 分钟后看一次，之后每 5 分钟
+function envFactsTick() {
+  if (RUNS.size || envFactsJob) return;
+  let cur = null; try { cur = JSON.parse(fs.readFileSync(ENV_FACTS, "utf8")); } catch {}
+  if (!cur || cur.key !== envFactsKey()) envFactsRun();
+}
+if (PREFIX) { setTimeout(envFactsTick, 2 * 60e3).unref?.(); setInterval(envFactsTick, 5 * 60e3).unref?.(); }
+
+function envFacts() {
+  const out = [];
+  const dk = devkitIdentity();
+  if (dk && dk.tag) out.push(`- 工具包：${dk.tag}`);
+  // 扩展页装的组件
+  try {
+    const comps = fs.readdirSync(COMP_DIR).filter((f) => f.endsWith(".json")).map((f) => compRecord(f.slice(0, -5)))
+      .filter((r) => r && r.state === "ok").map((r) => `${r.id} ${r.version}${r.bin && r.bin.length ? `（命令：${r.bin.join("、")}）` : ""}`);
+    if (comps.length) out.push(`- 已装组件：${comps.join("；")}`);
+  } catch {}
+  // pkg 装的包（只列用户点名装的，依赖不列）
+  try {
+    const db = JSON.parse(fs.readFileSync(path.join(path.dirname(PREFIX), "pkg", "installed.json"), "utf8")).pkgs || {};
+    const have = new Set(fs.readdirSync(path.join(PREFIX, "var/lib/dpkg/info")).filter((f) => f.endsWith(".list")).map((f) => f.slice(0, -5)));
+    const mine = Object.entries(db).filter(([, r]) => !r.auto);
+    const ok = mine.filter(([n]) => have.has(n)).map(([n, r]) => `${n} ${r.version}`), lost = mine.filter(([n]) => !have.has(n)).map(([n]) => n);
+    if (ok.length) out.push(`- 用 pkg 装过：${ok.join("、")}`);
+    if (lost.length) out.push(`- 工具包更新后这些 pkg 包已不在：${lost.join("、")}（要用就先 \`pkg restore\`）`);
+  } catch {}
+  let r = null; try { r = JSON.parse(fs.readFileSync(ENV_FACTS, "utf8")); } catch {}
+  if (r) {
+    const stale = r.key !== envFactsKey() ? "（工具包或应用更新前测的）" : "";
+    out.push(`- 本机自检${stale}：通过 ${r.pass} 项${r.fail.length ? `，**失败 ${r.fail.length} 项 —— 下列功能在这台设备上不能用，别依赖，需要时如实告诉用户**：` : "，全部通过"}`);
+    for (const f of r.fail.slice(0, 12)) out.push(`  - ${f}`);
+    for (const i of r.info.slice(0, 8)) out.push(`- ${i}`);
+  }
+  return out.length ? "## 本机实况（自动生成）\n\n" + out.join("\n") : "";
+}
+
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
 function toolsHint() {
   if (PREFIX) {
-    // 随包的 TOOLS.md 是逐项实测过的工具清单与用法（cccodroid-selftest 验证），优先用它
+    // 随包的 TOOLS.md 是逐项实测过的工具清单与用法（cccodroid-selftest 验证），优先用它；后面接本机实况
     try {
       const t = fs.readFileSync(path.join(HERE, "TOOLS.md"), "utf8")
         .replaceAll("{{WORKSPACE}}", CFG.workspace).replaceAll("{{SHARED}}", process.env.CCAPP_SHARED || "（无存储权限，不可用）");
-      if (t.trim()) return t.trim();
+      if (t.trim()) return [t.trim(), envFacts()].filter(Boolean).join("\n\n");
     } catch {}
     return [
       "这是一台安卓设备，原生运行（不是 chroot/proot/虚拟机）。开发工具包已在 PATH 中（前缀 $PREFIX，来自 Termux 官方仓库）：",
@@ -5303,6 +5418,22 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // ── 截屏给 Claude：经 priv 以 shell 身份 screencap，存进 uploads 当附件。delay 秒后再截（先切到要截的应用），截完叫回前台 ──
+    if (req.method === "POST" && p === "/api/screenshot") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const delay = Math.max(0, Math.min(30, Number(b.delay) || 0));
+      if (delay) await new Promise((r) => setTimeout(r, delay * 1000));
+      let png;
+      try { png = await screencap(); } catch (e) { return sendJson(res, 500, { ok: false, message: e.message }); }
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      const out = path.join(UPLOAD_DIR, `${stamp}-screen.png`);
+      fs.writeFileSync(out, png);
+      log(`[screenshot] ${png.length}B → ${out}`);
+      if (delay) toFront(tz("截好了")).catch(() => {});
+      return sendJson(res, 200, { ok: true, path: out, name: path.basename(out), size: png.length, mime: "image/png", kind: "image" });
+    }
+
     // ── 目录浏览（@ 引用文件 + 文件面板共用）──
     if (req.method === "GET" && p === "/api/files") {
       const dir = u.searchParams.get("path") || CFG.workspace;
@@ -5412,6 +5543,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/api/priv/status") return sendJson(res, 200, await privCall({ op: "status" }));
     if (req.method === "POST" && p === "/api/priv/request") return sendJson(res, 200, await privCall({ op: "request" }));
     if (req.method === "POST" && p === "/api/priv/open") return sendJson(res, 200, await privCall({ op: "open_manager" }));
+    // 特权命令记录：cccodroid 的 Priv.java 每执行一条就往 home/priv-audit.jsonl 记一行。最新的在前
+    if (req.method === "GET" && p === "/api/priv/audit") {
+      const f = path.join(CFG.home, "priv-audit.jsonl"), items = [];
+      for (const ff of [f, f + ".1"]) {
+        let txt = ""; try { txt = fs.readFileSync(ff, "utf8"); } catch {}
+        for (const l of txt.split("\n").reverse()) { if (items.length >= 300) break; try { if (l) items.push(JSON.parse(l)); } catch {} }
+        if (items.length >= 300) break;
+      }
+      return sendJson(res, 200, { ok: true, supported: !!PREFIX, items });
+    }
     if (req.method === "POST" && p === "/api/priv/keepalive") {
       const b = JSON.parse((await readBody(req)) || "{}");
       return sendJson(res, 200, await privCall({ op: "keepalive", enable: b.enable !== false }, 60000));

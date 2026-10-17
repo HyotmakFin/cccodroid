@@ -8,6 +8,7 @@
 // 其余处于「服务 / 缓存」档的应用都可以停。
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -24,7 +25,10 @@ const HELP = `用法:
   cc-mem protected                列出受保护的应用及原因
   cc-mem tame <包名…>             长期限制后台（治反复复活的）；cc-mem untame <包名…> 恢复原状
   cc-mem tamed                    列出被限制的应用
-内存管家默认关闭：status / protected / clear --dry-run 随时可用，其余要先在设置里打开。`;
+  cc-mem jobs [--per <MB>] [--explain]
+                                  按现在的可用内存算安全的并行数，只打印一个数字：make -j$(cc-mem jobs)
+                                  --per 每个任务估多少 MB（默认 700，C++ 编译的量级；轻活给 200～300）
+内存管家默认关闭：status / protected / jobs / clear --dry-run 随时可用，其余要先在设置里打开。`;
 
 // ── 基础 ──────────────────────────────────────────────────────────────
 function privArgv() {
@@ -321,6 +325,20 @@ function cmdTame(pkgs, undo) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2), { mode: 0o600 });
 }
 
+// ── 并行数：留出系统和前台要用的，剩下的按每个任务的估计量分；不超过 CPU 核数 ──
+function cmdJobs(argv) {
+  const i = argv.indexOf("--per"), per = Math.max(50, Number(i >= 0 ? argv[i + 1] : 700) || 700) * 1048576;
+  const m = meminfo(), cpus = Math.max(1, (os.availableParallelism ? os.availableParallelism() : os.cpus().length));
+  const reserve = Math.max(1.5 * 1073741824, m.total * 0.12);   // 系统、输入法、WebView、Claude 本身
+  const n = Math.max(1, Math.min(cpus, Math.floor((m.available - reserve) / per)));
+  if (argv.includes("--explain")) {
+    const g = (b) => (b / 1073741824).toFixed(1) + " GB";
+    console.error(`可用 ${g(m.available)} − 预留 ${g(reserve)}，每个任务按 ${Math.round(per / 1048576)} MB 算 → ${n}（CPU ${cpus} 核）` +
+      (n === 1 && m.available - reserve < per ? "。内存紧：先 cc-mem status 看谁占着，或单线程跑" : ""));
+  }
+  console.log(n);
+}
+
 // ── 入口 ──────────────────────────────────────────────────────────────
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (f) => rest.includes(f);
@@ -330,6 +348,7 @@ try {
   else if (cmd === "protected") await cmdProtected();
   else if (cmd === "clear") await cmdClear(flag("--hard"), flag("--dry-run"), flag("--json"));
   else if (cmd === "run") await cmdRun(rest);
+  else if (cmd === "jobs") cmdJobs(rest);
   else if (cmd === "tame") cmdTame(rest, false);
   else if (cmd === "untame") cmdTame(rest, true);
   else if (cmd === "tamed") { const st = readJson(STATE_FILE, { tamed: {} }); const e = Object.entries(st.tamed); console.log(e.length ? e.map(([p, v]) => `${p}（原来 ${v}）`).join("\n") : "（无）"); }

@@ -250,6 +250,60 @@ public class MainActivity extends Activity {
         else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
         else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
         else if (Notify.ACTION_OPEN.equals(a)) openSession(i.getStringExtra("session"));
+        else if (Intent.ACTION_SEND.equals(a) || Intent.ACTION_SEND_MULTIPLE.equals(a)) receiveShare(i);
+    }
+
+    // ── 分享进来的东西：文件拷进工作区的 uploads/（和网页上传同一处、同样的命名），文字插进输入框 ──
+    private void receiveShare(Intent i) {
+        java.util.ArrayList<android.net.Uri> uris = new java.util.ArrayList<>();
+        if (Intent.ACTION_SEND_MULTIPLE.equals(i.getAction())) {
+            java.util.ArrayList<android.net.Uri> l = i.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (l != null) uris.addAll(l);
+        } else {
+            android.net.Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (u != null) uris.add(u);
+        }
+        String text = i.getStringExtra(Intent.EXTRA_TEXT);
+        i.setAction(null);                                  // 同一个意图只收一次（转屏重建时别再收）
+        if (uris.isEmpty() && (text == null || text.isEmpty())) return;
+        new Thread(() -> {
+            java.io.File dir = new java.io.File(env.workspace(), "uploads");
+            dir.mkdirs();
+            int n = 0;
+            for (android.net.Uri u : uris) {
+                String name = displayName(u).replaceAll("[^\\w.\\-()\\u4e00-\\u9fff]+", "_").replaceAll("^[.\\s]+", "");
+                if (name.length() > 120) name = name.substring(name.length() - 120);
+                String stamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date());
+                java.io.File out = new java.io.File(dir, stamp + "-" + (name.isEmpty() ? "shared.bin" : name));
+                for (int k = 2; out.exists(); k++) out = new java.io.File(dir, stamp + "-" + k + "-" + name);
+                try (InputStream in = getContentResolver().openInputStream(u); OutputStream o = new FileOutputStream(out)) {
+                    byte[] buf = new byte[1 << 16];
+                    for (int r; (r = in.read(buf)) > 0; ) o.write(buf, 0, r);
+                    n++;
+                    toPage("ccapp-attach", out.getPath());
+                } catch (Exception e) {
+                    out.delete();
+                    ui.post(() -> android.widget.Toast.makeText(this, Tr.f("分享的文件没收下：{0}", e.getMessage()), android.widget.Toast.LENGTH_LONG).show());
+                }
+            }
+            // 分享文件时 EXTRA_TEXT 常是标题之类的附带说明，只有单纯分享文字时才插进去
+            if (n == 0 && uris.isEmpty() && text != null) toPage("ccapp-insert", text);
+        }, "share-in").start();
+    }
+    /** 页面可能还在启动：等 __cc 就绪再派发（app.js 里有对应的监听） */
+    private void toPage(String event, String value) {
+        ui.post(() -> {
+            if (web == null) return;
+            web.evaluateJavascript("(function f(n){if(window.__cc&&window.__cc.view){window.dispatchEvent(new CustomEvent(" + org.json.JSONObject.quote(event)
+                + ",{detail:{value:" + org.json.JSONObject.quote(value) + "}}))}else if(n<150)setTimeout(function(){f(n+1)},200)})(0)", null);
+        });
+    }
+    private String displayName(android.net.Uri u) {
+        try (android.database.Cursor c = getContentResolver().query(u, new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst() && c.getString(0) != null) return c.getString(0);
+        } catch (Exception ignored) {}
+        String s = u.getLastPathSegment();
+        return s == null ? "shared.bin" : s.substring(s.lastIndexOf('/') + 1);
     }
 
     /** 从「已完成」通知点进来：切到那个会话（界面正显示它就不动）。页面可能还在启动，等 __cc 就绪 */
@@ -504,7 +558,7 @@ public class MainActivity extends Activity {
             Installer.deleteTree(env.app);
             copyAssetDir("app", env.app);
             // lib/ 里除了 .so 还有可执行的 seccomp-enosys-run、ptyhost
-            for (String d : new String[]{"scripts", "bin", "lib"}) {
+            for (String d : new String[]{"scripts", "bin", "pre", "lib"}) {
                 File[] fs = new File(env.app, d).listFiles();
                 if (fs != null) for (File f : fs) f.setExecutable(true, true);
             }
