@@ -805,6 +805,13 @@ try { NAMES = JSON.parse(fs.readFileSync(PATHS.names, "utf8")); } catch {}
 function saveNames() {
   try { fs.writeFileSync(PATHS.names, JSON.stringify(NAMES, null, 2), { mode: 0o600 }); } catch {}
 }
+// 置顶表：会话号 → 置顶时刻
+const PINS_FILE = path.join(CFG.home, "ccapp-session-pins.json");
+let PINS = {};
+try { PINS = JSON.parse(fs.readFileSync(PINS_FILE, "utf8")); } catch {}
+function savePins() {
+  try { fs.writeFileSync(PINS_FILE, JSON.stringify(PINS, null, 2), { mode: 0o600 }); } catch {}
+}
 
 // ── 给 claude 造一个它认得的 shell ────────────────────────────────────
 // 安卓既没有 /bin/sh 也没有 bash：claude 扫 /bin、/usr/bin 找 bash/zsh，
@@ -1235,7 +1242,7 @@ function peekSession(file) {
   return hit;
 }
 function peekSessionRaw(file) {
-  let title = "", cwd = "", firstMsg = "";
+  let title = "", cwd = "", firstMsg = "", created = 0;
   try {
     const fd = fs.openSync(file, "r");
     const buf = Buffer.alloc(196608);
@@ -1245,6 +1252,7 @@ function peekSessionRaw(file) {
       if (!line.trim()) continue;
       let ev; try { ev = JSON.parse(line); } catch { continue; }
       if (ev.cwd && !cwd) cwd = ev.cwd;
+      if (!created && ev.timestamp) created = Date.parse(ev.timestamp) || 0;
       if (ev.type === "attachment") continue;
 
       let text = "";
@@ -1261,7 +1269,7 @@ function peekSessionRaw(file) {
     }
   } catch {}
   title = firstMsg.replace(/\s+/g, " ").trim().slice(0, 90);
-  return { title: title || "(无标题)", cwd };
+  return { title: title || "(无标题)", cwd, created };
 }
 
 function listSessions(limit = 150) {
@@ -1290,10 +1298,13 @@ function listSessions(limit = 150) {
   }
 
   found.sort((a, b) => b.mtime - a.mtime);
-  return found.slice(0, limit).map((s) => {
+  const shown = found.filter((s, i) => i < limit || PINS[s.id]);
+  return shown.map((s) => {
     const meta = peekSession(s.file);
     return {
       id: s.id,
+      created: meta.created || 0,
+      pinned: PINS[s.id] || 0,
       title: NAMES[s.id] || meta.title,
       renamed: !!NAMES[s.id],
       cwd: meta.cwd,
@@ -1302,6 +1313,99 @@ function listSessions(limit = 150) {
       currentProject: meta.cwd === CFG.workspace || meta.cwd === realWorkspace(),
     };
   });
+}
+
+// ── 会话内容搜索 ──
+// 每个 jsonl 只抽人和助手的正文（跳过工具结果、<…> 包起来的系统注入），按读到的字节偏移增量追加。
+// 索引放内存：首次搜索要扫一遍全部会话，之后只读新追加的部分。
+const SEARCH_IDX = new Map();   // file → { off, text, lower }
+function searchText(line) {
+  if (line.length > 4e6 || !(line.includes('"user"') || line.includes('"assistant"'))) return "";
+  let ev; try { ev = JSON.parse(line); } catch { return ""; }
+  if ((ev.type !== "user" && ev.type !== "assistant") || ev.isMeta) return "";
+  const c = ev.message?.content, out = [];
+  if (typeof c === "string") out.push(c);
+  else if (Array.isArray(c)) for (const b of c) if (b && b.type === "text" && typeof b.text === "string") out.push(b.text);
+  return out.filter((t) => t && !t.startsWith("<")).join(" ").replace(/\s+/g, " ").trim();
+}
+async function indexSessionFile(file, size) {
+  let e = SEARCH_IDX.get(file);
+  if (!e || size < e.off) e = { off: 0, text: "", lower: "" };
+  if (size > e.off) {
+    const fh = await fs.promises.open(file, "r");
+    try {
+      let pos = e.off, rest = Buffer.alloc(0);
+      const parts = [];
+      while (pos < size) {
+        const buf = Buffer.alloc(Math.min(4 << 20, size - pos));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, pos);
+        if (!bytesRead) break;
+        pos += bytesRead;
+        const chunk = rest.length ? Buffer.concat([rest, buf.subarray(0, bytesRead)]) : buf.subarray(0, bytesRead);
+        const nl = chunk.lastIndexOf(10);
+        if (nl < 0) { rest = Buffer.from(chunk); continue; }
+        rest = Buffer.from(chunk.subarray(nl + 1));
+        for (const line of chunk.toString("utf8", 0, nl).split("\n")) { const t = searchText(line); if (t) parts.push(t); }
+        await new Promise((r) => setImmediate(r));   // 别一口气把事件循环占住
+      }
+      e.off = pos - rest.length;   // 半行留到下次
+      if (parts.length) {
+        const add = (e.text ? "\n" : "") + parts.join("\n");
+        e.text += add; e.lower += add.toLowerCase();
+      }
+    } finally { await fh.close(); }
+  }
+  SEARCH_IDX.set(file, e);
+  return e;
+}
+let searchChain = Promise.resolve();
+function searchSessions(q) {
+  const run = searchChain.then(() => searchSessionsNow(q));
+  searchChain = run.catch(() => {});
+  return run;
+}
+async function searchSessionsNow(q) {
+  const needle = q.replace(/\s+/g, " ").trim().toLowerCase().slice(0, 200);
+  if (!needle) return { q, results: [] };
+  const t0 = Date.now();
+  const files = [];
+  let dirs = [];
+  try { dirs = fs.readdirSync(PATHS.projects, { withFileTypes: true }).filter((d) => d.isDirectory()); } catch {}
+  for (const d of dirs) {
+    const dir = path.join(PATHS.projects, d.name);
+    let names = [];
+    try { names = fs.readdirSync(dir).filter((f) => f.endsWith(".jsonl")); } catch { continue; }
+    for (const f of names) {
+      const full = path.join(dir, f);
+      try { const st = fs.statSync(full); files.push({ id: f.slice(0, -6), file: full, mtime: st.mtimeMs, size: st.size }); } catch {}
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  const seen = new Set(files.map((f) => f.file));
+  for (const k of SEARCH_IDX.keys()) if (!seen.has(k)) SEARCH_IDX.delete(k);
+
+  const results = [];
+  for (const f of files) {
+    const meta = peekSession(f.file);
+    const title = NAMES[f.id] || meta.title;
+    let e;
+    try { e = await indexSessionFile(f.file, f.size); } catch { continue; }
+    let i = e.lower.indexOf(needle), count = 0, snippet = "";
+    if (i >= 0) {
+      const a = Math.max(0, i - 30), b = Math.min(e.text.length, i + needle.length + 60);
+      snippet = (a > 0 ? "…" : "") + e.text.slice(a, b).replace(/\n/g, " ") + (b < e.text.length ? "…" : "");
+      for (let j = i; j >= 0 && count < 99; j = e.lower.indexOf(needle, j + needle.length)) count++;
+    }
+    const inTitle = title.toLowerCase().includes(needle);
+    if (!inTitle && i < 0) continue;
+    results.push({
+      id: f.id, title, renamed: !!NAMES[f.id], cwd: meta.cwd, mtime: f.mtime, created: meta.created || 0,
+      pinned: PINS[f.id] || 0, sizeKb: Math.round(f.size / 1024), snippet, count, inTitle,
+    });
+  }
+  const ms = Date.now() - t0;
+  if (ms > 1500) log(`会话搜索 ${files.length} 个文件用了 ${ms}ms`);
+  return { q, results: results.slice(0, 100), total: results.length, ms };
 }
 
 function findSessionFile(id) {
@@ -1336,9 +1440,10 @@ function trashSession(id) {
   const side = path.join(PATHS.projects, found.project, id);
   if (fs.existsSync(side)) fs.renameSync(side, path.join(slot, "dir"));
   fs.writeFileSync(path.join(slot, "meta.json"), JSON.stringify({
-    id, project: found.project, title: NAMES[id] || meta.title, renamed: !!NAMES[id],
+    id, project: found.project, title: NAMES[id] || meta.title, renamed: !!NAMES[id], pinned: PINS[id] || 0,
     cwd: meta.cwd, mtime: st.mtimeMs, size: st.size, deletedAt: Date.now(),
   }));
+  if (PINS[id]) { delete PINS[id]; savePins(); }
   PEEK_CACHE.delete(found.file);
   delete NAMES[id]; saveNames();
   // 删的正好是「最近跑过的那条」：别让前端下次打开时又指回去（会显示「找不到这个会话」而不是欢迎页）
@@ -1370,6 +1475,7 @@ function restoreSession(id) {
   fs.renameSync(path.join(slot, id + ".jsonl"), path.join(dir, id + ".jsonl"));
   if (fs.existsSync(path.join(slot, "dir"))) fs.renameSync(path.join(slot, "dir"), path.join(dir, id));
   if (meta.renamed && meta.title) { NAMES[id] = meta.title; saveNames(); }
+  if (meta.pinned) { PINS[id] = meta.pinned; savePins(); }
   fs.rmSync(slot, { recursive: true, force: true });
   return { ok: true };
 }
@@ -4770,6 +4876,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── 会话 ──
+    if (req.method === "GET" && p === "/api/sessions/search") {
+      return sendJson(res, 200, await searchSessions(String(u.searchParams.get("q") || "")));
+    }
     if (req.method === "GET" && p === "/api/sessions") {
       const list = listSessions();
       return sendJson(res, 200, { sessions: list, workspace: CFG.workspace, count: list.length });
@@ -4906,6 +5015,13 @@ const server = http.createServer(async (req, res) => {
         if (!name) return sendJson(res, 400, { error: "empty" });
         NAMES[id] = name; saveNames();
         return sendJson(res, 200, { ok: true, title: name });
+      }
+
+      if (req.method === "POST" && action === "pin") {
+        const b = JSON.parse((await readBody(req)) || "{}");
+        if (b.pin === false) delete PINS[id]; else PINS[id] = Date.now();
+        savePins();
+        return sendJson(res, 200, { ok: true, pinned: PINS[id] || 0 });
       }
     }
 

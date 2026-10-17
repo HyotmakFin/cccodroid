@@ -2150,41 +2150,112 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     try {
       const r = await api("/api/sessions");
       state.sessions = r.sessions || [];
-      renderSessions();
+      if (sess.q.trim()) resessSearch(); else renderSessions();
     } catch {}
   }
 
   // 会话页三种视图：普通列表 / 多选（导出、批量删除）/ 回收站
-  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30 };
+  // q：搜索词；hits：网关返回的内容命中（null = 还没回来）；pinFold：置顶组折叠
+  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30, q: "", hits: null, pinFold: localStorage.getItem("cc.pinFold") === "1" };
+
+  // 精确到分钟；今年的省掉年份
+  function fmtStamp(ms) {
+    if (!ms) return "—";
+    const d = new Date(ms), p = (n) => String(n).padStart(2, "0");
+    const md = p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+    return d.getFullYear() === new Date().getFullYear() ? md : d.getFullYear() + "-" + md;
+  }
+  // 按最后变动分组：今天 / 7 天内（不含今天）/ 30 天内 / 某年某月
+  function sessGroup(ms) {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const day = 86400000, t0 = d0.getTime();
+    if (ms >= t0) return t("今天");
+    if (ms >= t0 - 7 * day) return t("7 天内");
+    if (ms >= t0 - 30 * day) return t("30 天内");
+    try { return new Date(ms).toLocaleDateString(document.documentElement.lang || undefined, { year: "numeric", month: "long" }); }
+    catch { const d = new Date(ms); return d.getFullYear() + "-" + (d.getMonth() + 1); }
+  }
+  // 先转义再标出命中（不区分大小写）
+  function markHit(text, q) {
+    if (!q) return esc(text);
+    const lo = text.toLowerCase(), n = q.toLowerCase();
+    let out = "", i = 0;
+    for (let j = lo.indexOf(n); j >= 0; j = lo.indexOf(n, i)) { out += esc(text.slice(i, j)) + "<mark>" + esc(text.slice(j, j + n.length)) + "</mark>"; i = j + n.length; }
+    return out + esc(text.slice(i));
+  }
 
   function renderSessions() {
     const box = $("session-list");
     renderSessBar();
+    $("sess-q").classList.toggle("hidden", sess.mode === "trash");
     if (sess.mode === "trash") return renderTrash(box);
-    if (!state.sessions.length) {
+    const q = sess.q.trim();
+    if (!q && !state.sessions.length) {
       box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
     const liveSids = new Set(srv.runs.map((r) => r.sessionId).filter(Boolean));
     const askSids = new Set(srv.runs.filter((r) => r.perms && r.perms.length).map((r) => r.sessionId).filter(Boolean));
     const picking = sess.mode === "select";
-    box.innerHTML = state.sessions.map((s) => `
+    const item = (s) => `
       <div class="item ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
-        <div class="it-title">${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}> ` : ""}${esc(s.title)}</div>
+        <div class="it-title">${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}> ` : ""}${s.pinned && q ? '<span class="pin-ic">📌</span>' : ""}${markHit(s.title, q)}</div>
+        ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
         <div class="it-meta">
-          <span>${relTime(s.mtime)}</span>
-          <span>${s.sizeKb} KB</span>
+          <span title="${esc(new Date(s.mtime).toLocaleString())}">${t("更新 {time}", { time: fmtStamp(s.mtime) })}</span>
+          <span title="${s.created ? esc(new Date(s.created).toLocaleString()) : ""}">${t("创建 {time}", { time: fmtStamp(s.created) })}</span>
+          <span>${fmtSize(s.sizeKb * 1024)}</span>
           ${askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : ""}
           ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
           ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
         </div>
         ${picking ? "" : `<div class="it-acts">
           <button data-a="open">${t("切换到此会话")}</button>
+          <button data-a="pin">${s.pinned ? t("取消置顶") : t("置顶")}</button>
           <button data-a="rename">${t("重命名")}</button>
           <button data-a="del">${t("删除")}</button>
         </div>`}
-      </div>`).join("");
+      </div>`;
+    if (q) {
+      // 标题先在本地筛，内容命中等网关回来再补上
+      const list = sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()));
+      box.innerHTML = (sess.hits ? "" : `<div class="tiny">${t("正在搜索对话内容…")}</div>`)
+        + (list.length ? list.map(item).join("") : sess.hits ? `<div class="tiny">${t("没有找到包含「{q}」的会话。", { q: esc(q) })}</div>` : "");
+      return;
+    }
+    const pins = state.sessions.filter((s) => s.pinned), rest = state.sessions.filter((s) => !s.pinned);
+    let html = "";
+    if (pins.length) {
+      html += `<div class="sess-grp pin ${sess.pinFold ? "folded" : ""}" data-g="pin"><span class="chev">▾</span>${t("置顶")} · ${pins.length}</div>`;
+      if (!sess.pinFold) html += pins.map(item).join("");
+    }
+    let last = "";
+    for (const s of rest) {
+      const g = sessGroup(s.mtime);
+      if (g !== last) { html += `<div class="sess-grp">${esc(g)}</div>`; last = g; }
+      html += item(s);
+    }
+    box.innerHTML = html;
   }
+
+  // 搜索：输完停 300ms 再问网关；过时的回复丢掉
+  let sessQT = 0, sessQN = 0;
+  $("sess-q").addEventListener("input", (e) => {
+    sess.q = e.target.value; sess.hits = null;
+    clearTimeout(sessQT);
+    renderSessions();
+    const q = sess.q.trim();
+    if (!q) return;
+    const n = ++sessQN;
+    sessQT = setTimeout(async () => {
+      try {
+        const r = await api("/api/sessions/search?q=" + encodeURIComponent(q));
+        if (n === sessQN && sess.q.trim() === q) { sess.hits = r.results || []; renderSessions(); }
+      } catch (err) { if (n === sessQN) { sess.hits = []; renderSessions(); toast(err.message, true); } }
+    }, 300);
+  });
+  // 刷新列表时搜索结果也跟着重查
+  function resessSearch() { if (sess.q.trim()) $("sess-q").dispatchEvent(new Event("input")); }
 
   function renderSessBar() {
     const bar = $("sess-bar");
@@ -2302,6 +2373,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   $("session-list").addEventListener("click", async (e) => {
+    if (e.target.closest(".sess-grp.pin")) {
+      sess.pinFold = !sess.pinFold;
+      localStorage.setItem("cc.pinFold", sess.pinFold ? "1" : "0");
+      return renderSessions();
+    }
     const el = e.target.closest(".item");
     if (!el) return;
     const id = el.dataset.id;
@@ -2325,8 +2401,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return loadTrash();
     }
     if (a === "open") { closeDrawer(); openSession(id); return; }
+    if (a === "pin") {
+      const cur = state.sessions.find((s) => s.id === id) || (sess.hits || []).find((s) => s.id === id);
+      try { await post(`/api/session/${encodeURIComponent(id)}/pin`, { pin: !(cur && cur.pinned) }); }
+      catch (err) { return toast(err.message, true); }
+      loadSessions();
+      return;
+    }
     if (a === "rename") {
-      const cur = state.sessions.find((s) => s.id === id);
+      const cur = state.sessions.find((s) => s.id === id) || (sess.hits || []).find((s) => s.id === id);
       const name = prompt(t("新的会话名称"), cur?.title || "");
       if (!name) return;
       try {
