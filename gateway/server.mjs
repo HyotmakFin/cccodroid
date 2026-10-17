@@ -473,8 +473,8 @@ async function billingInfo(id, force) {
       try {
         const d = await queryBalance(v, k);
         if (d && d.currency && Number.isFinite(d.balance)) noteBalance(id, d.currency, d.balance);
-        BAL_CACHE.set(id, { at: Date.now(), data: d || {} });
-        Object.assign(out, d || {});
+        BAL_CACHE.set(id, { at: Date.now(), data: { ...(d || {}), balanceAt: Date.now() } });
+        Object.assign(out, d || {}, { balanceAt: Date.now() });
       } catch (e) { out.balanceError = e.message; }
     }
   }
@@ -484,12 +484,15 @@ async function billingInfo(id, force) {
   return out;
 }
 
-/** 一轮跑完顺手查一次余额（能查的平台），消费记录才连得上。同一家 20 秒内只查一次 */
+/** 一轮跑完补查余额（能查的平台），消费记录才连得上。
+ *  平台扣费有延迟（DeepSeek 实测跑完 20 秒还没扣、几分钟后才扣），所以分几次查：30 秒、3 分钟、10 分钟。
+ *  又跑了一轮就重新排，连续干活时不会越堆越多 */
 const billPending = new Map();
 function billAfterRun(id) {
   const v = PROVIDERS_CFG.providers[id];
-  if (!v || billKind(v).kind === "none" || !String(v.apiKey || "").trim() || billPending.has(id)) return;
-  billPending.set(id, setTimeout(() => { billPending.delete(id); billingInfo(id, true).catch(() => {}); }, 20000));
+  if (!v || billKind(v).kind === "none" || !String(v.apiKey || "").trim()) return;
+  for (const t of billPending.get(id) || []) clearTimeout(t);
+  billPending.set(id, [30e3, 180e3, 600e3].map((ms) => { const t = setTimeout(() => billingInfo(id, true).catch(() => {}), ms); t.unref?.(); return t; }));
 }
 
 let PROVIDER = BUILTIN_PROVIDER;

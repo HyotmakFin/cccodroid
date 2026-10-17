@@ -3011,6 +3011,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return { v: from === "CNY" ? v / fx.rate : v * fx.rate, cur: to, approx: true };
   }
   const compact = (n) => { try { return new Intl.NumberFormat(I18N.lang, { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch { return String(n); } };
+  let billTimer = 0;
   async function loadBill(p, force) {
     const el = $("pc-bill"); if (!el) return;
     if (!el.innerHTML) el.innerHTML = `<div class="tiny">${t("查询余额…")}</div>`;
@@ -3067,9 +3068,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${tk.length ? "" : `<div class="tiny">${t("用这个接口跑完一轮后开始记录")}</div>`}`);
     if (fx && fx.rate && [b.currency, b.ledgerCurrency].some((c) => c && c !== billCur()))
       rows.push(`<div class="tiny">${esc(t("按 1 美元 ≈ {r} 人民币换算（{src}，{time}）", { r: fx.rate.toFixed(3), src: fx.src, time: new Date(fx.at).toLocaleString() }))}</div>`);
+    if (b.balanceAt && b.ledgerCurrency) rows.push(`<div class="tiny">${esc(t("{time} 查询；平台扣费有几分钟延迟，跑完会自动补查", { time: new Date(b.balanceAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }))}</div>`);
     el.innerHTML = `<div class="bill-head"><span class="sub">${t("余额与消费")}</span>
       <button class="btn sm ghost" data-bill="refresh">${t("刷新")}</button></div>${rows.join("")}`;
     el.querySelector('[data-bill="refresh"]').onclick = (e) => { e.stopPropagation(); loadBill(p, true); };
+    // 卡片开着就每分钟重拉一次（网关有 60 秒缓存，跑完后的补查结果也会被带出来）
+    clearTimeout(billTimer);
+    billTimer = setTimeout(() => { if (state.provView === p.id && $("pc-bill") && !document.hidden) loadBill(p); }, 60e3);
   }
 
   function renderKeyCard(box, p) {
@@ -4010,13 +4015,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   async function openViewer(path, kind, size) {
     if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
+    if (VW.dirty) draftClear();
     closeViewerPdf();
-    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null });
+    vwDropEd();
+    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "" });
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
     viewerEl.classList.remove("hidden");
-    if (VW.kind === "text") return vwLoadText(isMd(path) ? "md" : "edit");
+    if (VW.kind === "text") return vwLoadText(isMd(path) ? (localStorage.getItem("cc.vw.mdmode") === "edit" ? "edit" : "md") : "edit");
     if (VW.kind === "image") return vwImage();
     if (VW.kind === "pdf") return vwPdf();
     if (VW.kind === "video" || VW.kind === "audio") {
@@ -4051,8 +4058,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     if (a === "download") { location.href = fileUrl(VW.path, true); return; }
     if (a === "save") return vwSave(false);
-    if (a === "md") { VW.text = vwText(); return vwRenderText("md"); }
-    if (a === "edit") return vwRenderText("edit");
+    if (a === "md") { VW.text = vwText(); if (isMd(VW.path)) localStorage.setItem("cc.vw.mdmode", "md"); return vwRenderText("md"); }
+    if (a === "edit") { if (isMd(VW.path) && VW.mode === "md") localStorage.setItem("cc.vw.mdmode", "edit"); return vwRenderText("edit"); }
     if (a === "gitdiff") return vwShowDiff();
     if (a === "githist") return openGit(VW.path, { file: VW.git.rel, tab: "history" });
     if (a === "wrap") {
@@ -4067,7 +4074,41 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
   });
 
-  function vwText() { const ta = $("vw-text"); return ta ? ta.value : VW.text; }
+  function vwText() { if (VW.ed) return VW.ed.getText(); const ta = $("vw-text"); return ta ? ta.value : VW.text; }
+  function vwDropEd() { if (VW.ed) { try { VW.ed.destroy(); } catch {} VW.ed = null; } }
+
+  /** 顶栏小字：大小 · git 状态 · 字数（md 编辑时） */
+  function vwInfo() {
+    let s = fmtSize(VW.size) + (VW.gitInfo || "");
+    if (VW.ed) {
+      s += " · " + t("{n} 字", { n: VW.ed.words().toLocaleString() });
+      const sel = VW.ed.selWords();
+      if (sel) s += " · " + t("选中 {n} 字", { n: sel.toLocaleString() });
+    }
+    $("vw-info").textContent = s;
+  }
+
+  // 草稿：没保存的修改每隔一会儿存进 localStorage，应用被杀、WebView 重载也不丢；保存或放弃后清掉
+  const draftKey = () => "cc.draft:" + VW.path;
+  function draftSave() {
+    clearTimeout(VW.dt);
+    VW.dt = setTimeout(() => {
+      if (!VW.dirty) return;
+      const text = vwText();
+      if (text.length > 1024 * 1024) return;
+      try { localStorage.setItem(draftKey(), JSON.stringify({ at: Date.now(), text })); } catch {}
+    }, 800);
+  }
+  function draftClear() { clearTimeout(VW.dt); try { localStorage.removeItem(draftKey()); } catch {} }
+  function draftTake() {
+    let d;
+    try { d = JSON.parse(localStorage.getItem(draftKey()) || "null"); } catch {}
+    if (!d || typeof d.text !== "string") return null;
+    if (d.text === VW.text) { draftClear(); return null; }
+    if (confirm(t("上次有没保存的修改（{time}），要恢复吗？\n确定：恢复\n取消：丢掉草稿", { time: new Date(d.at).toLocaleString() }))) return d.text;
+    draftClear();
+    return null;
+  }
 
   async function vwLoadText(mode) {
     if (VW.size > VW_EDIT_MAX) {
@@ -4086,6 +4127,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return;
     }
     VW.dirty = false;
+    const draft = draftTake();
+    if (draft != null) { VW.text = draft; VW.dirty = true; mode = "edit"; }
     vwRenderText(mode);
     vwGitCheck();
   }
@@ -4094,7 +4137,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const acts = [];
     if (isMd(VW.path)) acts.push(VW.mode === "md" ? [t("编辑"), "edit"] : [t("预览"), "md"]);
     if (VW.mode === "edit") {
-      acts.push([t("换行"), "wrap", VW.wrap]);
+      if (!isMd(VW.path)) acts.push([t("换行"), "wrap", VW.wrap]);
       acts.push([VW.dirty ? t("保存") + " •" : t("保存"), "save", VW.dirty]);
     }
     // 在 git 仓库里：改过就给「对比」（和上次提交比，红删绿增），随时可看这个文件的历史
@@ -4118,12 +4161,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (rel == null) return;
     const f = s.files.find((x) => x.path === rel);
     VW.git = { root: s.root, rel, kind: f ? f.kind : "", add: f ? f.add : 0, del: f ? f.del : 0 };
-    $("vw-info").textContent = fmtSize(VW.size) + (f ? " · " + gsTitle(f.kind) + (f.add != null ? ` +${f.add} −${f.del ?? 0}` : "") : " · " + t("和上次提交一样"));
+    VW.gitInfo = f ? " · " + gsTitle(f.kind) + (f.add != null ? ` +${f.add} −${f.del ?? 0}` : "") : " · " + t("和上次提交一样");
+    vwInfo();
     vwRenderActs();
   }
 
   async function vwShowDiff() {
     VW.text = vwText();
+    vwDropEd();
     VW.mode = "diff";
     vwRenderActs();
     $("vw-body").innerHTML = `<div class="vw-diff">${VW.dirty ? `<div class="tiny">${t("还有没保存的修改；这里对比的是磁盘上的版本和上次提交。")}</div>` : ""}<div class="tiny">${t("读取中…")}</div></div>`;
@@ -4135,20 +4180,92 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   function vwRenderText(mode) {
+    vwDropEd();
     VW.mode = mode;
+    if (mode === "edit" && isMd(VW.path) && !VW.plainMd) { vwRenderActs(); return vwMdEditor(); }
     if (mode === "md") {
       $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text)}</div>`;
     } else {
       $("vw-body").innerHTML = `<textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>`;
       const ta = $("vw-text");
       ta.value = VW.text;
-      ta.addEventListener("input", () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } });
+      ta.addEventListener("input", () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } draftSave(); });
       ta.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); vwSave(false); }
         else if (e.key === "Tab" && !e.ctrlKey && !e.altKey) { e.preventDefault(); document.execCommand("insertText", false, "\t"); }
       });
     }
     vwRenderActs();
+  }
+
+  // ── Markdown 编辑器（CodeMirror 6，按需加载，见 claude-apk/mdedit/） ──
+  let mdeditP = null;
+  const loadMdEdit = () => mdeditP || (mdeditP = import("/mdedit/mdedit.js").catch((e) => { mdeditP = null; throw e; }));
+  const MI = (d) => `<svg viewBox="0 0 24 24">${d}</svg>`;
+  const MDBAR = [
+    ["undo", "撤销", MI('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')],
+    ["redo", "重做", MI('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>')],
+    0,
+    ["heading", "标题", "H"],
+    ["bold", "粗体", "<b>B</b>"],
+    ["italic", "斜体", '<i style="font-family:Georgia,serif">I</i>'],
+    ["strike", "删除线", "<s>S</s>"],
+    0,
+    ["quote", "引用", MI('<path d="M5 5v14M10 7h9M10 12h9M10 17h6"/>')],
+    ["ul", "无序列表", MI('<path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="6" r=".9"/><circle cx="5" cy="12" r=".9"/><circle cx="5" cy="18" r=".9"/>')],
+    ["ol", "有序列表", MI('<path d="M11 6h9M11 12h9M11 18h9M4 4.5h1.5V9M4 9h3M4 14.6c.6-.8 3-.9 3 .6 0 1.1-3 2-3 3.3h3.2"/>')],
+    ["task", "任务列表", MI('<path d="M3.5 4h7v7h-7zM5.3 7.6l1.4 1.4 2.3-2.7M13.5 7.5h7M3.5 14h7v7h-7zM13.5 17.5h7"/>')],
+    0,
+    ["link", "链接", MI('<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>')],
+    ["image", "图片", MI('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>')],
+    ["code", "代码", MI('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>')],
+    ["hr", "分割线", MI('<path d="M3 12h18"/>')],
+    0,
+    ["search", "查找替换", MI('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>')],
+  ];
+  /** md 里的图片地址 → 能加载的地址（相对路径按这个文件所在目录算） */
+  function mdImgSrc(u) {
+    if (/^(https?:|data:|blob:)/i.test(u)) return u;
+    try { u = decodeURI(u); } catch {}
+    let p = u.startsWith("/") ? u : VW.path.replace(/\/[^/]*$/, "") + "/" + u;
+    const out = [];
+    for (const seg of p.split("/")) { if (seg === "..") out.pop(); else if (seg !== "." && seg !== "") out.push(seg); }
+    return fileUrl("/" + out.join("/"));
+  }
+  async function vwMdEditor() {
+    const path = VW.path, body = $("vw-body");
+    body.innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    let m;
+    try { m = await loadMdEdit(); } catch (e) {
+      toast(t("编辑器加载失败，改用纯文本：{msg}", { msg: e.message || String(e) }), true);
+      VW.plainMd = true;
+      return vwRenderText("edit");
+    }
+    if (VW.path !== path || VW.mode !== "edit" || VW.ed) return;
+    body.innerHTML = `<div class="vw-mded"></div><div class="vw-mdbar">${MDBAR.map((b) => b
+      ? `<button type="button" data-md="${b[0]}" title="${esc(t(b[1]))}" aria-label="${esc(t(b[1]))}">${b[2]}</button>`
+      : '<span class="sep"></span>').join("")}</div>`;
+    VW.ed = m.createMdEditor(body.querySelector(".vw-mded"), {
+      doc: VW.text,
+      onChange: () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } draftSave(); },
+      onSelect: () => { clearTimeout(VW.wt); VW.wt = setTimeout(vwInfo, 200); },
+      onSave: () => vwSave(false),
+      resolveSrc: mdImgSrc,
+      placeholder: t("开始写…"),
+      phrases: {
+        "Find": t("查找"), "Replace": t("替换"), "next": t("下一个"), "previous": t("上一个"), "all": t("全部"),
+        "match case": t("区分大小写"), "regexp": t("正则"), "by word": t("整词"),
+        "replace": t("替换"), "replace all": t("全部替换"), "close": t("关闭"),
+      },
+      ph: {
+        bold: t("粗体"), italic: t("斜体"), strike: t("删除线"), code: t("代码"),
+        link: { text: t("链接文字"), url: "https://" }, image: { text: t("图片说明"), url: t("图片路径") },
+      },
+    });
+    const bar = body.querySelector(".vw-mdbar");
+    bar.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });   // 点按钮不收键盘
+    bar.addEventListener("click", (e) => { const b = e.target.closest("[data-md]"); if (b && VW.ed) VW.ed.run(b.dataset.md); });
+    vwInfo();
   }
 
   async function vwSave(force) {
@@ -4162,13 +4279,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (r.status === 409) {
       if (confirm(t("文件在你打开之后被改过了（可能是 Claude 改的）。\n确定：用你的版本覆盖\n取消：放弃你的修改，重新载入"))) return vwSave(true);
       VW.dirty = false;
+      draftClear();
       return vwLoadText("edit");
     }
     let j = {};
     try { j = await r.json(); } catch {}
     if (!r.ok) return toast(t("保存失败：{msg}", { msg: j.error || r.status }), true);
     VW.text = text; VW.mtime = j.mtime; VW.size = j.size; VW.dirty = false;
-    $("vw-info").textContent = fmtSize(VW.size);
+    draftClear();
+    vwInfo();
     vwRenderActs();
     toast(t("已保存"));
     vwGitCheck();                     // 存完改动行数变了
@@ -4317,8 +4436,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   function closeViewer() {
     if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
+    if (VW.dirty) draftClear();
     VW.dirty = false;
     closeViewerPdf();
+    vwDropEd();
     $("vw-body").innerHTML = "";
     viewerEl.classList.add("hidden");
     // 文件面板开着就刷新一下：大小 / 修改时间可能变了
@@ -4870,7 +4991,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   };
   if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
   window.__cc = { view, srv, state, send, abort, openSession, newConversation,
-    openGit, openViewer, openFiles, openDrawer, provCard: (id) => { state.provView = id; renderProvCard(); } };
+    openGit, openViewer, openFiles, openDrawer, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };
 
   // ── 启动 ──────────────────────────────────────────────────────────
   (async function boot() {

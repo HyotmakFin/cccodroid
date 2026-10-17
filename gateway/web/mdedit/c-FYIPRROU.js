@@ -1,0 +1,1 @@
+import{a,b,c,d,e}from"./c-XA47POTQ.js";import"./c-DGP52ZR3.js";import"./c-IKZZBTE3.js";import"./c-QHTZUWII.js";import"./c-M2RUKMFQ.js";export{e as autoCloseTags,d as html,a as htmlCompletionSource,b as htmlCompletionSourceWith,c as htmlLanguage};

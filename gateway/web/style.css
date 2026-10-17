@@ -895,3 +895,57 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .fs-git-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-start:6px;vertical-align:middle;flex:0 0 auto}
 .fs-git-dot.modified,.fs-git-dot.renamed{background:var(--warn)} .fs-git-dot.new,.fs-git-dot.added{background:var(--ok)} .fs-git-dot.deleted,.fs-git-dot.conflict{background:var(--err)}
 .vw-diff{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+
+/* ── Markdown 编辑器（CodeMirror 6，claude-apk/mdedit/）：边写边排版，光标所在行露出原文 ──
+   CodeMirror 自己会注入基础样式（运行时插在后面），这里用多一层选择器压过它 */
+.vw-mded{flex:1;min-height:0;display:flex;flex-direction:column}
+.vw-mded .cm-editor{flex:1;min-height:0;height:100%;background:transparent;color:var(--fg)}
+.vw-mded .cm-editor.cm-focused{outline:0}
+.vw-mded .cm-editor .cm-scroller{font-family:inherit;font-size:16px;line-height:1.85;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.vw-mded .cm-editor .cm-content{max-width:760px;margin:0 auto;padding:14px 16px 35vh;caret-color:var(--accent)}
+.vw-mded .cm-editor .cm-line{padding:0 2px}
+.vw-mded .cm-editor .cm-cursor{border-left:2px solid var(--accent)}
+.vw-mded .cm-selectionBackground,.vw-mded .cm-focused .cm-selectionBackground{background:color-mix(in srgb,var(--accent) 28%,transparent) !important}
+.vw-mded .cm-content ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+.vw-mded .cm-placeholder{color:var(--fg3)}
+.vw-mded .cm-line.cm-md-h{font-weight:650;color:var(--strong);line-height:1.45}
+.vw-mded .cm-line.cm-md-h1{font-size:1.55em;padding-top:.55em}
+.vw-mded .cm-line.cm-md-h2{font-size:1.32em;padding-top:.45em}
+.vw-mded .cm-line.cm-md-h3{font-size:1.15em;padding-top:.35em}
+.vw-mded .cm-line.cm-md-h4{font-size:1.05em;padding-top:.25em}
+.vw-mded .cm-line.cm-md-quote{border-inline-start:3px solid var(--accent-dim);padding-inline-start:12px;color:var(--fg2)}
+.vw-mded .cm-md-code{background:var(--bg3);border-radius:5px;padding:1px 4px;font-family:var(--mono);font-size:.86em}
+.vw-mded .cm-line.cm-md-pre{background:var(--code-bg);font-family:var(--mono);font-size:.84em;line-height:1.6;padding:0 12px;border-inline:1px solid var(--line)}
+.vw-mded .cm-line.cm-md-pre-top{border-top:1px solid var(--line);border-start-start-radius:10px;border-start-end-radius:10px;padding-top:5px}
+.vw-mded .cm-line.cm-md-pre-bot{border-bottom:1px solid var(--line);border-end-start-radius:10px;border-end-end-radius:10px;padding-bottom:5px}
+.vw-mded .cm-line.cm-md-fence{color:var(--fg3)}
+.vw-mded .cm-md-bullet{color:var(--accent);font-weight:700;padding:0 .2em}
+.vw-mded .cm-md-olmark{color:var(--fg2)}
+.vw-mded .cm-md-check{width:1.05em;height:1.05em;vertical-align:-.15em;margin:0 .4em 0 0}
+.vw-mded .cm-md-done{color:var(--fg3);text-decoration:line-through}
+.vw-mded .cm-line.cm-md-hr{position:relative}
+.vw-mded .cm-line.cm-md-hr::after{content:"";position:absolute;left:2px;right:2px;top:50%;border-top:1px solid var(--line)}
+.vw-mded .cm-md-link{color:var(--tool);text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:2px}
+.vw-mded .cm-md-img{display:block;margin:6px 0}
+.vw-mded .cm-md-img img{display:block;max-width:100%;max-height:50vh;border-radius:8px}
+.vw-mded .cm-md-img.bad{display:none}
+.vw-mded .cm-line.cm-md-table,.vw-mded .cm-line.cm-md-html{font-family:var(--mono);font-size:.84em;color:var(--fg2)}
+/* 查找替换面板 */
+.vw-mded .cm-panels{background:var(--bg2);color:var(--fg);border-color:var(--line)}
+.vw-mded .cm-panels-top{border-bottom:1px solid var(--line)}
+.vw-mded .cm-panel.cm-search{font-size:13px;padding:6px 34px 6px 8px;display:flex;flex-wrap:wrap;gap:5px 6px;align-items:center}
+.vw-mded .cm-panel.cm-search br{display:none}
+.vw-mded .cm-search .cm-textfield{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:14px;margin:0;flex:1 1 150px;min-width:0}
+.vw-mded .cm-search .cm-button{background:var(--bg3);background-image:none;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:4px 10px;font-size:13px;margin:0}
+.vw-mded .cm-search label{font-size:12px;color:var(--fg2);display:inline-flex;align-items:center;gap:3px;margin:0}
+.vw-mded .cm-search [name=close]{color:var(--fg2);font-size:22px;top:4px;inset-inline-end:8px}
+.vw-mded .cm-searchMatch{background:color-mix(in srgb,var(--warn) 30%,transparent) !important;outline:0 !important}
+.vw-mded .cm-searchMatch-selected{background:color-mix(in srgb,var(--accent) 50%,transparent) !important}
+/* 底部格式栏：键盘弹起时贴在键盘上方，横着能滑 */
+.vw-mdbar{display:flex;gap:1px;overflow-x:auto;padding:4px 0 0;border-top:1px solid var(--line);flex:0 0 auto;scrollbar-width:none}
+.vw-mdbar::-webkit-scrollbar{display:none}
+.vw-mdbar button{flex:0 0 auto;min-width:38px;height:38px;border:0;background:none;color:var(--fg2);border-radius:8px;font-size:16px;font-weight:600;font-family:inherit;display:flex;align-items:center;justify-content:center;padding:0 8px}
+.vw-mdbar button:active{background:var(--bg3);color:var(--fg)}
+.vw-mdbar svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vw-mdbar .sep{flex:0 0 1px;background:var(--line);margin:9px 3px}
+@media (min-width:700px){.vw-mdbar{justify-content:center}}
