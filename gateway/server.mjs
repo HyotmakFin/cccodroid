@@ -585,8 +585,6 @@ const SETTINGS = {
   staticCompat: true,
   // 端侧小模型：chat = 纯聊天（不给工具，提示只有几十 token）；custom = 用户自己的 ~/.cccodroid/local-mode.json
   localMode: "chat",
-  // GPU 上崩过（Vulkan DeviceLost）的模型，以后直接走 CPU
-  localCpuOnly: [],
 };
 
 function loadSettings() {
@@ -4137,7 +4135,6 @@ function llamaInfo() {
   return {
     custom: { have: cust.have, ok: cust.ok, err: cust.err || "", path: cust.path, label: cust.ok ? cust.cfg.label : "",
       tools: cust.ok ? cust.cfg.tools : "", skill: LOCAL_SKILL_FILE },
-    cpuOnly: SETTINGS.localCpuOnly || [],
     can: !!PREFIX, bin: !!PREFIX && fs.existsSync(llamaBin()), gpu: !!PREFIX && llamaGpu(),
     ctx: llamaCtx(), threads: llamaThreads(), memTotal: memTotalKB() * 1024, memAvail: memAvailKB() * 1024,
     dirs: LOCAL_MODEL_DIRS, models: localModels().map(({ id, size, file }) => ({ id, size, file })),
@@ -4164,7 +4161,7 @@ async function ensureLlama(want, note) {
 }
 /** 这次该用什么参数起服务。sig 不同（换模型、换模式、GPU 回退）就得重启 */
 function llamaPlan(m) {
-  const gpu = llamaGpu() && !(SETTINGS.localCpuOnly || []).includes(m.id), ctx = llamaCtx();
+  const gpu = llamaGpu(), ctx = llamaCtx();
   const cust = localCustomActive();
   // -np 1：只开一个槽，KV 缓存不被四等分（默认 4 槽，每槽只剩四分之一上下文）；
   // --cache-reuse：同一段提示前缀第二轮起直接复用，不再从头读。自定义参数放最后，同名参数以它为准
@@ -4205,17 +4202,12 @@ function llamaStart(m, note) {
       const ours = LL.child === c, wasReady = LL.state === "ready";     // ours：不是网关自己停的（llamaStop 会先把 child 清掉）
       if (ours) Object.assign(LL, { child: null, state: LL.state === "error" ? "error" : "off" });
       log(`[local] llama-server 退出 rc=${code}`);
-      // GPU 上崩了（Adreno 跑 3B 实测会 vk::DeviceLostError，KGSL 把 GPU 重置）：记下这个模型以后走 CPU
-      if (ours && gpu && /DeviceLost|ErrorDeviceLost|VK_ERROR|vk::/i.test(tail)) {
-        const list = SETTINGS.localCpuOnly || (SETTINGS.localCpuOnly = []);
-        if (!list.includes(m.id)) { list.push(m.id); saveSettings(); }
-        const msg = tz("{name} 在 GPU 上崩溃了，以后改用 CPU 跑；重发一次即可", { name: m.id });
-        Object.assign(LL, { state: "error", err: msg });
-        log("[local] " + msg);
-        if (LL.run && !LL.run.ended) runEmit(LL.run, { type: "note", key: "gpu", text: msg });
-        return fail(msg);
+      // 跑着跑着崩了（大模型在 GPU 上可能 vk::DeviceLostError）：只报出来，不替用户改走 CPU —— 想换用 llamaArgs 自己配
+      if (ours && wasReady) {
+        const why = tail.split("\n").filter((l) => /error|failed|DeviceLost|out of memory/i.test(l)).pop() || "";
+        Object.assign(LL, { state: "error", err: tz("llama-server 意外退出（rc={code}）", { code }) + (why ? "：" + why.trim().slice(0, 200) : "") });
+        if (LL.run && !LL.run.ended) runEmit(LL.run, { type: "note", key: "crash", text: LL.err });
       }
-      if (ours && wasReady) Object.assign(LL, { state: "error", err: tz("llama-server 意外退出（rc={code}）", { code }) });
       const why = tail.split("\n").filter((l) => /error|failed|out of memory|unable/i.test(l)).pop() || "";
       fail(tz("端侧模型没起来") + (why ? "：" + why.trim().slice(0, 200) : `（rc=${code}）`));
     });
@@ -4250,19 +4242,68 @@ if (PREFIX) setInterval(() => {
   if (Date.now() - LL.lastUse > LLAMA_IDLE_MS) llamaStop("空闲");
 }, 60e3).unref?.();
 
-// ── 端侧模型下载：内置一份小目录（固定 sha256），魔搭优先、HF 备用，curl 断点续传 ──
-// 目录写死在网关里；以后想不发版加模型，再挪进组件市场的签名索引
+// ── 端侧模型下载：内置目录（llama.cpp 能跑的主流开源模型，Q4_K_M 量化，sha256 取自 HuggingFace LFS 记录），curl 断点续传 ──
+// 源：ms=1 的（Qwen 官方仓库）先走魔搭；都会试 HuggingFace 和 hf-mirror.com。超过 6B 的下载前提醒一句，不拦。
+// 目录外的模型：贴 .gguf 直链下载（不知道哈希，只核对 GGUF 文件头）。
+// tag：think = 会先输出思考过程；code = 偏写代码
 const LOCAL_CATALOG = [
-  { id: "qwen2.5-0.5b-instruct-q4_k_m", repo: "Qwen2.5-0.5B-Instruct-GGUF", bytes: 491400032, minRamGB: 3,
-    sha256: "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db", note: "最快，只能简单聊几句" },
-  { id: "qwen2.5-1.5b-instruct-q4_k_m", repo: "Qwen2.5-1.5B-Instruct-GGUF", bytes: 1117320736, minRamGB: 5,
-    sha256: "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e", note: "速度和质量的平衡点" },
-  { id: "qwen2.5-3b-instruct-q4_k_m", repo: "Qwen2.5-3B-Instruct-GGUF", bytes: 2104932768, minRamGB: 8,
-    sha256: "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d", note: "回答最好，也最慢" },
-];
+  { fam: "Qwen3", params: 0.6, repo: "bartowski/Qwen_Qwen3-0.6B-GGUF", file: "Qwen_Qwen3-0.6B-Q4_K_M.gguf", bytes: 484220320,
+    sha256: "9acfc1e001311f34b4252001b626f2e466d592a42065f66571bff3790d4e1b14", tag: "think" },
+  { fam: "Qwen3", params: 1.7, repo: "bartowski/Qwen_Qwen3-1.7B-GGUF", file: "Qwen_Qwen3-1.7B-Q4_K_M.gguf", bytes: 1282439584,
+    sha256: "72c5c3cb38fa32d5256e2fe30d03e7a64c6c79e668ad84057e3bd66e250b24fb", tag: "think" },
+  { fam: "Qwen3", params: 4, repo: "Qwen/Qwen3-4B-GGUF", file: "Qwen3-4B-Q4_K_M.gguf", bytes: 2497280256,
+    sha256: "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5", tag: "think", ms: 1 },
+  { fam: "Qwen3", params: 8.2, repo: "Qwen/Qwen3-8B-GGUF", file: "Qwen3-8B-Q4_K_M.gguf", bytes: 5027783488,
+    sha256: "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785", tag: "think", ms: 1 },
+  { fam: "Qwen3", params: 14.8, repo: "Qwen/Qwen3-14B-GGUF", file: "Qwen3-14B-Q4_K_M.gguf", bytes: 9001752960,
+    sha256: "500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0", tag: "think", ms: 1 },
+  { fam: "Qwen2.5", params: 0.5, repo: "Qwen/Qwen2.5-0.5B-Instruct-GGUF", file: "qwen2.5-0.5b-instruct-q4_k_m.gguf", bytes: 491400032,
+    sha256: "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db", ms: 1 },
+  { fam: "Qwen2.5", params: 1.5, repo: "Qwen/Qwen2.5-1.5B-Instruct-GGUF", file: "qwen2.5-1.5b-instruct-q4_k_m.gguf", bytes: 1117320736,
+    sha256: "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e", ms: 1 },
+  { fam: "Qwen2.5", params: 3.1, repo: "Qwen/Qwen2.5-3B-Instruct-GGUF", file: "qwen2.5-3b-instruct-q4_k_m.gguf", bytes: 2104932768,
+    sha256: "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d", ms: 1 },
+  { fam: "Qwen2.5", params: 7.6, repo: "bartowski/Qwen2.5-7B-Instruct-GGUF", file: "Qwen2.5-7B-Instruct-Q4_K_M.gguf", bytes: 4683074240,
+    sha256: "65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423" },
+  { fam: "Qwen2.5", params: 14.8, repo: "bartowski/Qwen2.5-14B-Instruct-GGUF", file: "Qwen2.5-14B-Instruct-Q4_K_M.gguf", bytes: 8988110976,
+    sha256: "e47ad95dad6ff848b431053b375adb5d39321290ea2c638682577dafca87c008" },
+  { fam: "Qwen2.5 Coder", params: 1.5, repo: "bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF", file: "Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf", bytes: 986048800,
+    sha256: "f530705d447660a4336c329981af164b471b60b974b1d808d57e8ec9fe23b239", tag: "code" },
+  { fam: "Qwen2.5 Coder", params: 7.6, repo: "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF", file: "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf", bytes: 4683074336,
+    sha256: "1664fccab734674a50763490a8c6931b70e3f2f8ec10031b54806d30e5f956b6", tag: "code" },
+  { fam: "DeepSeek-R1 Distill", params: 1.8, repo: "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF", file: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", bytes: 1117320800,
+    sha256: "1741e5b2d062b07acf048bf0d2c514dadf2a48f94e2b4aa0cfe069af3838ee2f", tag: "think" },
+  { fam: "DeepSeek-R1 Distill", params: 7.6, repo: "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", file: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", bytes: 4683073504,
+    sha256: "731ece8d06dc7eda6f6572997feb9ee1258db0784827e642909d9b565641937b", tag: "think" },
+  { fam: "Llama 3", params: 1.2, repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", bytes: 807694464,
+    sha256: "6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83" },
+  { fam: "Llama 3", params: 3.2, repo: "bartowski/Llama-3.2-3B-Instruct-GGUF", file: "Llama-3.2-3B-Instruct-Q4_K_M.gguf", bytes: 2019377696,
+    sha256: "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff" },
+  { fam: "Llama 3", params: 8, repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", bytes: 4920739232,
+    sha256: "7b064f5842bf9532c91456deda288a1b672397a54fa729aa665952863033557c" },
+  { fam: "Gemma 3", params: 1, repo: "bartowski/google_gemma-3-1b-it-GGUF", file: "google_gemma-3-1b-it-Q4_K_M.gguf", bytes: 806058496,
+    sha256: "12bf0fff8815d5f73a3c9b586bd8fee8e7b248c935de70dec367679873d0f29d" },
+  { fam: "Gemma 3", params: 4, repo: "bartowski/google_gemma-3-4b-it-GGUF", file: "google_gemma-3-4b-it-Q4_K_M.gguf", bytes: 2489758112,
+    sha256: "4996030242583a40aa151ff93f49ed787ac8c25e4120c3ae4588b2e2a7d1ae94" },
+  { fam: "Gemma 3", params: 12, repo: "bartowski/google_gemma-3-12b-it-GGUF", file: "google_gemma-3-12b-it-Q4_K_M.gguf", bytes: 7300575264,
+    sha256: "fc57f67efa46d711c346e587cbef7d049e95f3df8db2eb2271153343ef0acc7b" },
+  { fam: "Phi-4", params: 3.8, repo: "bartowski/microsoft_Phi-4-mini-instruct-GGUF", file: "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf", bytes: 2491874688,
+    sha256: "01999f17c39cc3074afae5e9c539bc82d45f2dd7faa3917c66cbef76fce8c0c2" },
+  { fam: "Phi-4", params: 14.7, repo: "bartowski/phi-4-GGUF", file: "phi-4-Q4_K_M.gguf", bytes: 9053114816,
+    sha256: "009aba717c09d4a35890c7d35eb59d54e1dba884c7c526e7197d9c13ab5911d9" },
+  { fam: "Mistral", params: 7.2, repo: "bartowski/Mistral-7B-Instruct-v0.3-GGUF", file: "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf", bytes: 4372812000,
+    sha256: "1270d22c0fbb3d092fb725d4d96c457b7b687a5f5a715abe1e818da303e562b6" },
+  { fam: "GLM-4", params: 9.4, repo: "bartowski/THUDM_GLM-4-9B-0414-GGUF", file: "THUDM_GLM-4-9B-0414-Q4_K_M.gguf", bytes: 6166574464,
+    sha256: "2b95f0b88eca423bfb874c4f8e7b9574ec76acab2befd272076e8a8dce31216a" },
+  { fam: "Granite", params: 2.5, repo: "bartowski/ibm-granite_granite-3.3-2b-instruct-GGUF", file: "ibm-granite_granite-3.3-2b-instruct-Q4_K_M.gguf", bytes: 1545303616,
+    sha256: "555b91485955bc96eb445b57dd4bbf8809aa7d8cce7c313f4f8bc5b2340896b4" },
+  { fam: "SmolLM2", params: 1.7, repo: "bartowski/SmolLM2-1.7B-Instruct-GGUF", file: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf", bytes: 1055609824,
+    sha256: "77665ea4815999596525c636fbeb56ba8b080b46ae85efef4f0d986a139834d7" },
+].map((e) => ({ ...e, id: e.file.replace(/\.gguf$/i, "") }));
 const modelUrls = (e) => [
-  `https://modelscope.cn/models/Qwen/${e.repo}/resolve/master/${e.id}.gguf`,
-  `https://huggingface.co/Qwen/${e.repo}/resolve/main/${e.id}.gguf`,
+  ...(e.ms ? [`https://modelscope.cn/models/${e.repo}/resolve/master/${e.file}`] : []),
+  `https://huggingface.co/${e.repo}/resolve/main/${e.file}`,
+  `https://hf-mirror.com/${e.repo}/resolve/main/${e.file}`,
 ];
 const MDL = new Map();     // id → { phase: downloading|verifying|error, done, total, err, cancelled, child }
 
@@ -4275,33 +4316,30 @@ function modelDir() {
 }
 function localCatalog() {
   const have = new Map(localModels().map((m) => [m.id, m]));
-  const ram = memTotalKB() / 1048576;
-  // 推荐：内存装得下的最大一档（但 3B 只推给 11 GB 以上的机器，其余推 1.5B）
-  const rec = ram >= 11 ? LOCAL_CATALOG[2].id : ram >= 5 ? LOCAL_CATALOG[1].id : LOCAL_CATALOG[0].id;
-  return {
-    ram: Math.round(ram * 10) / 10,
-    items: LOCAL_CATALOG.map((e) => {
-      const j = MDL.get(e.id), h = have.get(e.id);
-      return { id: e.id, bytes: e.bytes, note: tz(e.note), big: ram < e.minRamGB, rec: e.id === rec,
-        have: !!h, file: h ? h.file : "", inUse: !!(h && LL.child && LL.file === h.file),
-        job: j ? { phase: j.phase, done: j.done, total: j.total, err: j.err || "" } : null };
-    }),
-  };
+  const inUse = (h) => !!(h && LL.child && LL.file === h.file);
+  const jobView = (j) => j ? { phase: j.phase, done: j.done, total: j.total, err: j.err || "" } : null;
+  const items = LOCAL_CATALOG.map((e) => {
+    const h = have.get(e.id);
+    return { id: e.id, fam: e.fam, params: e.params, tag: e.tag || "", bytes: e.bytes, repo: e.repo,
+      have: !!h, inUse: inUse(h), job: jobView(MDL.get(e.id)) };
+  });
+  // 贴链接下载的：进行中 / 失败的任务也列出来
+  for (const [id, j] of MDL) if (j.url) items.push({ id, fam: "", params: 0, tag: "", bytes: j.total, repo: j.url, custom: true, have: false, inUse: false, job: jobView(j) });
+  return { ram: Math.round(memTotalKB() / 104857.6) / 10, big: 6, items };
 }
-async function modelDownload(id) {
-  const e = LOCAL_CATALOG.find((x) => x.id === id);
-  if (!e) throw new Error(tz("目录里没有这个模型"));
-  const cur = MDL.get(id);
+/** 下载一个模型。e：{ id, file, bytes?, sha256?, url? }；没有 sha256 的只核对 GGUF 文件头 */
+function modelFetch(e, urls) {
+  const cur = MDL.get(e.id);
   if (cur && cur.phase !== "error") return;
   const dir = modelDir(), dst = path.join(dir, e.id + ".gguf"), part = dst + ".part";
-  if (fs.existsSync(dst)) return;
-  const job = { phase: "downloading", done: 0, total: e.bytes, err: "", cancelled: false, child: null };
-  MDL.set(id, job);
+  if (fs.existsSync(dst)) throw new Error(tz("已经有同名模型了"));
+  const job = { phase: "downloading", done: 0, total: e.bytes || 0, err: "", cancelled: false, child: null, url: e.url || "" };
+  MDL.set(e.id, job);
   const tick = setInterval(() => { if (job.phase === "downloading") { try { job.done = fs.statSync(part).size; } catch {} } }, 500);
   (async () => {
     try {
       let lastErr = null;
-      for (const url of modelUrls(e)) {
+      for (const url of urls) {
         for (let i = 0; i < 3 && !job.cancelled; i++) {
           try {
             await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "20000", "--speed-time", "60", "-o", part, url]);
@@ -4309,7 +4347,8 @@ async function modelDownload(id) {
           } catch (er) { lastErr = er; }
           // 下全了没改名（续传回 416）：直接去校验
           let n = 0; try { n = fs.statSync(part).size; } catch {}
-          if (n === e.bytes) { lastErr = null; break; }
+          if (e.bytes && n === e.bytes) { lastErr = null; break; }
+          if (/ 22：|404|403|401/.test(lastErr.message)) break;    // 这个源没有这个文件：别重试，换源
         }
         if (!lastErr || job.cancelled) break;
         log(`[local] 模型下载换源：${lastErr.message}`);
@@ -4317,17 +4356,44 @@ async function modelDownload(id) {
       if (job.cancelled) throw new Error("cancelled");
       if (lastErr) throw lastErr;
       job.phase = "verifying"; job.done = 0;
-      if ((await sha256File(part, job)) !== e.sha256) { fs.rmSync(part, { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
+      if (e.sha256) {
+        if ((await sha256File(part, job)) !== e.sha256) { fs.rmSync(part, { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
+      } else {
+        const fd = fs.openSync(part, "r"), head = Buffer.alloc(4);
+        try { fs.readSync(fd, head, 0, 4, 0); } finally { fs.closeSync(fd); }
+        if (head.toString("latin1") !== "GGUF") { fs.rmSync(part, { force: true }); throw new Error(tz("下下来的不是 GGUF 模型文件（已删除）")); }
+      }
       fs.renameSync(part, dst);
-      MDL.delete(id);
+      MDL.delete(e.id);
       MODELS_AT = 0;
-      log(`[local] 模型已下载 ${id}`);
+      log(`[local] 模型已下载 ${e.id}`);
     } catch (er) {
-      if (job.cancelled) { MDL.delete(id); try { fs.rmSync(part, { force: true }); } catch {} return; }
+      if (job.cancelled) { MDL.delete(e.id); try { fs.rmSync(part, { force: true }); } catch {} return; }
       Object.assign(job, { phase: "error", err: er.message });
-      log(`[local] 模型下载失败 ${id}：${er.message}`);
+      log(`[local] 模型下载失败 ${e.id}：${er.message}`);
     } finally { clearInterval(tick); }
   })();
+}
+function modelDownload(id) {
+  const e = LOCAL_CATALOG.find((x) => x.id === id);
+  if (e) return modelFetch(e, modelUrls(e));
+  const j = MDL.get(id);
+  if (j && j.url) return modelFetch({ id, url: j.url }, [j.url]);     // 贴链接下载的重试
+  throw new Error(tz("目录里没有这个模型"));
+}
+/** 贴 .gguf 直链下载：只认 https，文件名只留安全字符 */
+function modelFromUrl(raw) {
+  let u; try { u = new URL(String(raw).trim()); } catch { throw new Error(tz("链接不对")); }
+  if (u.protocol !== "https:") throw new Error(tz("只支持 https 链接"));
+  // HuggingFace 的 blob 页面换成真正的下载地址
+  if (/(^|\.)(huggingface\.co|hf-mirror\.com)$/.test(u.hostname)) u.pathname = u.pathname.replace("/blob/", "/resolve/");
+  const name = decodeURIComponent(u.pathname.split("/").pop() || "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,150}\.gguf$/i.test(name)) throw new Error(tz("链接要指向一个 .gguf 文件"));
+  if (/-\d{5}-of-\d{5}\.gguf$/i.test(name)) throw new Error(tz("分卷模型（…-00001-of-0000N.gguf）不支持，请找单文件版本"));
+  if (/^mmproj/i.test(name)) throw new Error(tz("mmproj 是多模态投影文件，不能单独对话"));
+  const id = name.replace(/\.gguf$/i, "");
+  MDL.delete(id);
+  return modelFetch({ id, url: u.href }, [u.href]);
 }
 function modelCancel(id) {
   const j = MDL.get(id);
@@ -5805,7 +5871,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/local") {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (b.mode === "chat" || b.mode === "custom") { SETTINGS.localMode = b.mode; saveSettings(); }
-      if (b.gpuReset) { SETTINGS.localCpuOnly = []; saveSettings(); }
       if (b.stop) llamaStop("用户停止");
       return sendJson(res, 200, llamaInfo());
     }
@@ -5814,7 +5879,8 @@ const server = http.createServer(async (req, res) => {
       if (!PREFIX) return sendJson(res, 400, { ok: false, message: "unsupported" });
       const b = JSON.parse((await readBody(req)) || "{}");
       try {
-        if (b.op === "download") await modelDownload(String(b.id || ""));
+        if (b.op === "download") modelDownload(String(b.id || ""));
+        else if (b.op === "url") modelFromUrl(b.url || "");
         else if (b.op === "cancel") modelCancel(String(b.id || ""));
         else if (b.op === "remove") modelRemove(String(b.id || ""));
         else throw new Error("bad op");

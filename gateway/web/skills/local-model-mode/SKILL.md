@@ -45,14 +45,14 @@ claude 始终以 `--bare` 运行（极简系统提示，不读 CLAUDE.md、不�
 
 ```
 -m <模型> --host 127.0.0.1 --port 8811 -c <按内存> -np 1 -t <大核数> --jinja --cache-reuse 256 --no-webui
-GPU 驱动装了：-ngl 99；没装或该模型在 GPU 上崩过：-dev none
+GPU 驱动装了：-ngl 99（全部层放 GPU）；没装：-dev none。想强制 CPU 就在 llamaArgs 里写 ["-dev", "none"]
 ```
 
 常用可调：`--temp`、`--top-k`、`--top-p`、`--min-p`、`--repeat-penalty`、`-ub`（GPU 上崩时试 `-ub 128`）、`--chat-template-file`。
 
 ## 怎么测（不用开界面）
 
-模型目录：`/sdcard/cccodroid/models/`。先在设置页发一条消息让网关拉起服务（或自己另起一个端口），然后：
+模型目录：`/sdcard/cccodroid/models/`（扩展页 llama-cpp 组件下能一键下载 26 个常见模型，也能贴 .gguf 直链）。先在设置页发一条消息让网关拉起服务（或自己另起一个端口），然后：
 
 ```sh
 cd 某个测试目录
@@ -69,7 +69,7 @@ env ANTHROPIC_BASE_URL=http://127.0.0.1:8811 ANTHROPIC_API_KEY=local \
 ## 已知实测结论（Snapdragon 8+ Gen 1，Qwen2.5 Instruct Q4_K_M）
 
 - 0.5B / 1.5B：基本撑不起工具调用；1.5B 只给 Bash 时 6 题里 5 题把命令写成文字，剩下一题对所有问题都回 `ls 文件名`。
-- 3B：比 1.5B 稍好，但会对目录用 Read（EISDIR）、会选错命令；GPU 上可能 `vk::DeviceLostError`（网关会自动改走 CPU）。
+- 3B：比 1.5B 稍好，但会对目录用 Read（EISDIR）、会选错命令；GPU 上可能 `vk::DeviceLostError`（网关只报错，不替你改；试 `-ub 128`、减少 `-ngl` 层数，或强制 CPU）。
 - CPU 速度：3B 读提示约 14 token/s、生成约 10 token/s；1.5B 读提示约 28 token/s。带 Bash 工具时提示约 700 token，首字要等半分钟。
 - 想让小模型干活，可以试：只给一个工具（`Bash`）、降温度（`--temp 0.2`）、在 systemPrompt 里写几组「问题 → 命令」示例、要求一句话回报结果。7B 以上模型效果会好很多，但手机内存和速度未必吃得消。
 

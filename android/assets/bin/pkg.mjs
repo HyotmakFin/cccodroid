@@ -290,10 +290,13 @@ function download(p) {
   if (fs.existsSync(dest) && hashFile(dest) === p.h) return dest;
   const part = dest + ".part";
   const tty = process.stderr.isTTY;
+  let gone = 0;                                                // 回 404 的源数：全是 404 就是索引过期（包已经换了新版本）
   for (const base of [p.repo.base, ...p.repo.mirrors]) {
     for (let i = 0; i < 3; i++) {
-      const r = spawnSync(BIN("curl"), ["-fL", tty ? "-#" : "-sS", "-C", "-", "--speed-limit", "10000", "--speed-time", "30", "-o", part, base + p.f],
-        { env: ENV, stdio: ["ignore", "inherit", "inherit"] });
+      // 进度条走 stderr 照常显示；stdout 只收 HTTP 状态码
+      const r = spawnSync(BIN("curl"), ["-fL", tty ? "-#" : "-sS", "-C", "-", "--speed-limit", "10000", "--speed-time", "30", "-w", "%{http_code}", "-o", part, base + p.f],
+        { env: ENV, stdio: ["ignore", "pipe", "inherit"] });
+      if (String(r.stdout || "").trim() === "404") { gone++; break; }
       let size = 0; try { size = fs.statSync(part).size; } catch {}
       if (size >= p.s) {
         if (size === p.s && hashFile(part) === p.h) { fs.renameSync(part, dest); return dest; }
@@ -302,6 +305,7 @@ function download(p) {
     }
     console.error(`  ${new URL(base).host} 下载不顺，换镜像…`);
   }
+  if (gone === 1 + p.repo.mirrors.length) { const e = new Error(`${p.name} ${p.v}：仓库里已经没有这个文件（索引过期）`); e.stale = true; throw e; }
   throw new Error(`${p.name}：下载失败或文件校验不符`);
 }
 
@@ -574,7 +578,14 @@ function install(names, { unverified = false, auto = false, upgrade = false } = 
   for (const [i, n] of order.entries()) {
     const p = ix.pkgs.get(n);
     console.log(`下载 [${i + 1}/${order.length}] ${n} ${p.v}（${mb(p.s)}）`);
-    debs.push([p, download(p)]);
+    try { debs.push([p, download(p)]); }
+    catch (e) {
+      // 索引是一天一刷，期间仓库发了新版、旧文件被删就会 404：刷新索引重新求解，只重来一次
+      if (!e.stale || FORCE_UPDATE) throw e;
+      console.error(`${e.message}，刷新仓库索引后重试…`);
+      FORCE_UPDATE = true; IDX = null;
+      return install(names, { unverified, auto, upgrade });
+    }
   }
   const d = db(), placed = [];
   for (const [p, deb] of debs) {

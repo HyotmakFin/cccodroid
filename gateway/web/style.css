@@ -1102,3 +1102,9 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .llm-row code { word-break: break-all; }
 .llm-act { margin-left: auto; }
 .tiny.warn{color:var(--warn)} .tiny.err{color:var(--err)} .llm-dl .ok{color:var(--ok)}
+.llm-fam { border-top: 1px solid var(--line); }
+.llm-fam > summary { cursor: pointer; padding: 6px 0; font-size: 13px; }
+.llm-fam .llm-item { padding-left: 10px; }
+.llm-url { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.llm-url-row { display: flex; gap: 6px; margin-top: 4px; }
+.llm-url-row input { flex: 1; min-width: 0; }

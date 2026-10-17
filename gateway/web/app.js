@@ -2591,33 +2591,60 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       compTimer = setTimeout(loadComponents, 1000);
   }
 
-  // ── llama-cpp 组件下的「下载模型」子卡：内置目录（网关里固定 sha256），一键下载 / 取消 / 删除 ──
-  const llmDl = { open: false, html: "", timer: 0 };
+  // ── llama-cpp 组件下的「下载模型」子卡：内置目录按家族折叠（网关里固定 sha256），一键下载 / 取消 / 删除；也能贴 .gguf 直链 ──
+  const llmDl = { open: false, html: "", timer: 0, fam: new Set(), items: new Map(), big: 6, url: "" };
   async function loadLlmDl() {
     clearTimeout(llmDl.timer);
     const r = await api("/api/local/catalog").catch((e) => ({ items: [], err: e.message }));
     const GB = (n) => (n / 1073741824).toFixed(1) + " GB";
-    llmDl.html = '<div class="tiny dim">' + t("模型放在 /sdcard/cccodroid/models，下好后到 设置 → 模型服务 → 端侧小模型 使用。本机内存 {ram} GB。", { ram: r.ram || "?" }) + "</div>" +
+    const TAG = { think: t("会先思考"), code: t("偏写代码") };
+    llmDl.big = r.big || 6;
+    llmDl.items = new Map((r.items || []).map((m) => [m.id, m]));
+    const row = (m) => {
+      const j = m.job;
+      let st = "", act = "";
+      if (j && (j.phase === "downloading" || j.phase === "verifying")) {
+        const pct = j.total ? Math.min(100, (j.done / j.total) * 100).toFixed(1) : 0;
+        st = (j.total ? '<div class="comp-bar"><i style="width:' + pct + '%"></i></div>' : "") +
+          '<div class="tiny">' + (j.phase === "verifying" ? t("校验中") : t("下载中")) + " " + GB(j.done) + (j.total ? " / " + GB(j.total) : "") + "</div>";
+        act = '<button class="btn sm ghost" data-lm="cancel" data-id="' + esc(m.id) + '">' + t("取消") + "</button>";
+      } else if (m.have) {
+        st = '<span class="tiny">' + t("已下载") + (m.inUse ? " · " + t("正在使用") : "") + "</span>";
+        act = '<button class="btn sm ghost" data-lm="remove" data-id="' + esc(m.id) + '">' + t("删除") + "</button>";
+      } else {
+        if (j && j.phase === "error") st = '<div class="tiny err">' + t("下载失败：{msg}", { msg: esc(j.err) }) + "</div>";
+        act = '<button class="btn sm' + (m.params > llmDl.big ? " ghost" : "") + '" data-lm="download" data-id="' + esc(m.id) + '">' + (j ? t("重试") : t("下载")) + "</button>" +
+          (m.custom ? '<button class="btn sm ghost" data-lm="cancel" data-id="' + esc(m.id) + '">' + t("移除") + "</button>" : "");
+      }
+      const info = m.custom ? '<span class="tiny dim">' + esc(m.repo) + "</span>"
+        : '<span class="tiny">' + m.params + "B · " + GB(m.bytes) + "</span>" + (m.tag ? ' <span class="tiny dim">' + TAG[m.tag] + "</span>" : "") +
+          (m.params > llmDl.big ? ' <span class="tiny warn">' + t("偏大") + "</span>" : "");
+      return '<div class="llm-item"><div class="llm-row"><code>' + esc(m.id) + "</code> " + info + '<span class="llm-act">' + act + "</span></div>" + st + "</div>";
+    };
+    const fams = [];
+    for (const m of r.items || []) if (!m.custom && !fams.includes(m.fam)) fams.push(m.fam);
+    const custom = (r.items || []).filter((m) => m.custom);
+    llmDl.html = '<div class="tiny dim">' + t("模型放在 /sdcard/cccodroid/models，下好后到 设置 → 模型服务 → 端侧小模型 使用。本机内存 {ram} GB。都是 Q4_K_M 量化；手机上 1–4B 比较实用，超过 6B 会很慢。", { ram: r.ram || "?" }) + "</div>" +
       (r.err ? '<div class="tiny err">' + esc(r.err) + "</div>" : "") +
-      (r.items || []).map((m) => {
-        const j = m.job;
-        let st = "", act = "";
-        if (j && (j.phase === "downloading" || j.phase === "verifying")) {
-          const pct = j.total ? Math.min(100, (j.done / j.total) * 100).toFixed(1) : 0;
-          st = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + (j.phase === "verifying" ? t("校验中") : t("下载中")) + " " + GB(j.done) + " / " + GB(j.total) + "</div>";
-          act = '<button class="btn sm ghost" data-lm="cancel" data-id="' + esc(m.id) + '">' + t("取消") + "</button>";
-        } else if (m.have) {
-          st = '<span class="tiny">' + t("已下载") + (m.inUse ? " · " + t("正在使用") : "") + "</span>";
-          act = '<button class="btn sm ghost" data-lm="remove" data-id="' + esc(m.id) + '">' + t("删除") + "</button>";
-        } else {
-          if (j && j.phase === "error") st = '<div class="tiny err">' + t("下载失败：{msg}", { msg: esc(j.err) }) + "</div>";
-          act = '<button class="btn sm" data-lm="download" data-id="' + esc(m.id) + '">' + (j ? t("重试") : t("下载")) + "</button>";
-        }
-        return '<div class="llm-item"><div class="llm-row"><code>' + esc(m.id) + "</code> <span class=\"tiny\">" + GB(m.bytes) + "</span>" +
-          (m.rec ? ' <span class="tiny ok">' + t("推荐") + "</span>" : "") + (m.big ? ' <span class="tiny warn">' + t("对本机偏大") + "</span>" : "") +
-          '<span class="llm-act">' + act + "</span></div>" + '<div class="tiny dim">' + esc(m.note) + "</div>" + st + "</div>";
-      }).join("");
-    if ($("llm-dl-body")) $("llm-dl-body").innerHTML = llmDl.html;
+      fams.map((f) => {
+        const list = r.items.filter((m) => !m.custom && m.fam === f);
+        const n = list.filter((m) => m.have).length, busy = list.some((m) => m.job && m.job.phase !== "error");
+        return '<details class="llm-fam" data-fam="' + esc(f) + '"' + (llmDl.fam.has(f) || busy ? " open" : "") + "><summary>" + esc(f) +
+          ' <span class="tiny dim">' + list.length + (n ? " · " + t("已下载 {n}", { n }) : "") + "</span></summary>" + list.map(row).join("") + "</details>";
+      }).join("") +
+      custom.map(row).join("") +
+      '<div class="llm-url"><div class="tiny dim">' + t("目录里没有的：贴一个 .gguf 文件的下载链接（HuggingFace / 魔搭等）。不校验哈希，只核对文件头。") + "</div>" +
+      '<div class="llm-url-row"><input type="url" id="llm-url" placeholder="https://huggingface.co/…/resolve/main/xxx.gguf" value="' + esc(llmDl.url) + '">' +
+      '<button class="btn sm" data-lm="url">' + t("下载") + "</button></div></div>";
+    // 输入框里正打着字就别整块重绘（会丢光标）：只更新上面的列表
+    const body = $("llm-dl-body");
+    if (body) {
+      const typing = document.activeElement && document.activeElement.id === "llm-url";
+      if (typing) { const box = document.createElement("div"); box.innerHTML = llmDl.html; box.querySelector(".llm-url").replaceWith(body.querySelector(".llm-url")); body.replaceChildren(...box.childNodes); }
+      else body.innerHTML = llmDl.html;
+      body.querySelectorAll(".llm-fam").forEach((d) => d.addEventListener("toggle", () => { d.open ? llmDl.fam.add(d.dataset.fam) : llmDl.fam.delete(d.dataset.fam); }));
+      const inp = $("llm-url"); if (inp) inp.addEventListener("input", () => { llmDl.url = inp.value; });
+    }
     const busy = (r.items || []).some((m) => m.job && m.job.phase !== "error");
     if (busy && llmDl.open && $("llm-dl") && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
       llmDl.timer = setTimeout(loadLlmDl, 1000);
@@ -2625,11 +2652,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("tab-ext").addEventListener("click", async (e) => {
     const b = e.target.closest("button[data-lm]");
     if (!b || b.disabled) return;
-    const op = b.dataset.lm, id = b.dataset.id;
+    const op = b.dataset.lm, id = b.dataset.id, m = llmDl.items.get(id);
     if (op === "remove" && !confirm(t("删除模型 {name}？", { name: id }))) return;
+    if (op === "download" && m && m.params > llmDl.big && !confirm(t("{name} 约 {p}B 参数、{size}。手机上会很慢，内存也可能不够。仍然下载？", { name: id, p: m.params, size: (m.bytes / 1073741824).toFixed(1) + " GB" }))) return;
+    const body = { op, id };
+    if (op === "url") {
+      body.url = ($("llm-url") && $("llm-url").value.trim()) || "";
+      if (!body.url) return toast(t("先贴链接"), true);
+    }
     b.disabled = true;
-    const r = await post("/api/local/model", { op, id }).catch((er) => ({ ok: false, message: er.message }));
+    const r = await post("/api/local/model", body).catch((er) => ({ ok: false, message: er.message }));
     if (!r.ok) toast(t("失败：{msg}", { msg: r.message || "" }), true);
+    else if (op === "url") llmDl.url = "";
+    if (op === "url" && $("llm-url")) $("llm-url").blur();
     loadLlmDl();
   });
 
@@ -3376,8 +3411,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="tiny" style="margin:8px 0 4px">${t("模型（{dir}）", { dir: esc(j.dirs[0] || "") })}</div>
       ${j.models.length ? `<div class="local-models">${j.models.map((m) => `<div class="tiny">· <code>${esc(m.id)}</code> ${gb(m.size)}</div>`).join("")}</div>`
         : `<div class="tiny dim">${t("还没有模型。到「扩展」页 llama-cpp 组件下的「下载模型」一键下载，或把 .gguf 文件放进上面的目录。")}</div>`}
-      ${(j.cpuOnly || []).length ? `<div class="tiny warn" style="margin-top:6px">${t("在 GPU 上崩过、已改走 CPU：{names}", { names: j.cpuOnly.map(esc).join(", ") })}
-        <button class="btn sm ghost" data-act="gpureset">${t("再试 GPU")}</button></div>` : ""}
       <div class="tiny" style="margin:10px 0 4px">${t("模式")}</div>
       <div class="local-mode">
         <label><input type="radio" name="lm" value="chat" ${j.mode !== "custom" ? "checked" : ""}> ${t("聊天")}<span class="tiny dim"> — ${t("不给工具，提示最短、回得最快")}</span></label>
@@ -3400,7 +3433,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (act === "use") return useProvider(p);
       if (act === "refresh") return renderLocalCard(box, p);
       if (act === "stop") { await post("/api/local", { stop: true }).catch((e2) => toast(e2.message, true)); return renderLocalCard(box, p); }
-      if (act === "gpureset") { await post("/api/local", { gpuReset: true }).catch((e2) => toast(e2.message, true)); return renderLocalCard(box, p); }
       if (act === "copy") { navigator.clipboard?.writeText(cmdText); return toast(t("已复制")); }
     };
     box.querySelectorAll('input[name="lm"]').forEach((r) => r.addEventListener("change", async () => {
