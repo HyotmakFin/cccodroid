@@ -52,7 +52,7 @@ final class Updater {
 
     final Context ctx;
     final Env env;
-    private final Item app = new Item("app", "cccodroid"), devkit = new Item("devkit", Tr.t("开发工具包")), claude = new Item("claude", "Claude Code");
+    private final Item app = new Item("app", "cccodroid"), devkit = new Item("devkit", "开发工具包"), claude = new Item("claude", "Claude Code");
     private volatile boolean checking;
     private volatile String lastError = "";
     /** APK 已下好但因为工具包在忙而推迟安装；user=用户点的（走系统确认），否则静默规则 */
@@ -69,9 +69,9 @@ final class Updater {
         volatile String url, alt, sha, base, tarSha;
         volatile long size, need;
         volatile File file;
-        Item(String id, String name) { this.id = id; this.name = name; }
+        Item(String id, String name) { this.id = id; this.name = name; }   // name 存中文原句，输出时才按当前语言翻（单例建得早，那时界面可能还没报语言）
         JSONObject json() throws Exception {
-            return new JSONObject().put("id", id).put("name", name).put("current", current).put("latest", latest)
+            return new JSONObject().put("id", id).put("name", Tr.t(name)).put("current", current).put("latest", latest)
                 .put("state", state).put("message", message).put("done", done).put("total", total);
         }
         void set(String st, String msg) { state = st; message = msg == null ? "" : msg; Log.i(TAG, id + " → " + st + " " + message); }
@@ -570,7 +570,7 @@ final class Updater {
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle(Tr.f("{0} 有更新", it.name))
+            .setContentTitle(Tr.f("{0} 有更新", Tr.t(it.name)))
             .setContentText(text)
             .setStyle(new Notification.BigTextStyle().bigText(text))
             .setContentIntent(pi)
