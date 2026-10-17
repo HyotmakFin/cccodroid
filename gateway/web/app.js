@@ -159,8 +159,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       // 服务端带出来的 message 比光秃秃的 "HTTP 409" 有用得多
       // （比如切厂商时那句"这一轮还在生成中，等它跑完再切"）
       let msg = "HTTP " + r.status;
-      try { const j = await r.json(); msg = j.message || j.error || msg; } catch {}
-      const e = new Error(msg); e.status = r.status; throw e;
+      let j = null;
+      try { j = await r.json(); msg = j.message || j.error || msg; } catch {}
+      const e = new Error(msg); e.status = r.status; e.body = j; throw e;
     }
     return r.json();
   }
@@ -1197,8 +1198,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   /** 打开某个会话（null = 新会话）。重连事件流：网关会把正在跑的那一轮从头重放过来 */
-  function openSession(id) {
+  function openSession(id, jumpQ) {
     resetView(id);
+    view.jumpQ = id && jumpQ ? jumpQ : "";   // 从搜索结果点进来：历史加载完后跳到命中的那条
+    view.jumpPages = 0;
     renderSessions();
     connectBus(false);
   }
@@ -1259,6 +1262,34 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     olderEl.textContent = t("加载更早的消息");
     olderEl.classList.toggle("hidden", !r.cursor);
+    if (view.jumpQ) jumpToHit();
+  }
+
+  // 在已渲染的消息里从新往旧找搜索词；没找到就继续往前翻，最多翻 30 页
+  function jumpToHit() {
+    const q = view.jumpQ.toLowerCase(), norm = (x) => x.replace(/\s+/g, " ").toLowerCase();
+    const bubbles = [...histEl.querySelectorAll(".msg .bubble")].reverse();
+    const hit = bubbles.find((b) => norm(b.textContent).includes(q));
+    if (!hit) {
+      if (view.cursor && view.jumpPages++ < 30) { setTimeout(() => loadOlder(false)); return; }
+      view.jumpQ = "";
+      toast(t("没在加载的消息里找到「{q}」", { q }), true);
+      return;
+    }
+    view.jumpQ = "";
+    const tw = document.createTreeWalker(hit, NodeFilter.SHOW_TEXT), nodes = [];
+    for (let n; (n = tw.nextNode());) if (n.nodeValue.toLowerCase().includes(q)) nodes.push(n);
+    for (const n of nodes) {
+      const i = n.nodeValue.toLowerCase().indexOf(q);
+      const m = document.createElement("mark");
+      m.className = "jump-hit";
+      const r = n.splitText(i); r.splitText(q.length);
+      r.parentNode.replaceChild(m, r); m.appendChild(r);
+    }
+    const msg = hit.closest(".msg");
+    msg.classList.add("hit-flash");
+    setTimeout(() => msg.classList.remove("hit-flash"), 2400);
+    (hit.querySelector("mark.jump-hit") || msg).scrollIntoView({ block: "center" });
   }
   olderEl.addEventListener("click", () => loadOlder(false));
   chatScrollHooks.push(() => {
@@ -2400,7 +2431,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       await post("/api/trash/purge", { ids: [id] }).catch((err) => toast(err.message, true));
       return loadTrash();
     }
-    if (a === "open") { closeDrawer(); openSession(id); return; }
+    if (a === "open") {
+      const h = sess.q.trim() && (sess.hits || []).find((s) => s.id === id);
+      closeDrawer(); openSession(id, h && h.count ? sess.q.trim() : ""); return;
+    }
     if (a === "pin") {
       const cur = state.sessions.find((s) => s.id === id) || (sess.hits || []).find((s) => s.id === id);
       try { await post(`/api/session/${encodeURIComponent(id)}/pin`, { pin: !(cur && cur.pinned) }); }
@@ -4268,7 +4302,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("git-info").textContent = "";
     await gitLoad();
   }
-  function closeGit() { gitEl.classList.add("hidden"); $("git-body").innerHTML = ""; }
+  function closeGit() { gitEl.classList.add("hidden"); $("git-body").innerHTML = ""; $("git-sync").classList.add("hidden"); }
   $("git-close").addEventListener("click", closeGit);
   $("git-reload").addEventListener("click", () => gitLoad());
   gitEl.querySelector(".git-tabs").addEventListener("click", (e) => {
@@ -4282,6 +4316,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     try { s = await gapi("status"); } catch (e) { $("git-body").innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
     if (s.notRepo) {
       $("git-info").textContent = "";
+      $("git-sync").classList.add("hidden");
       $("git-body").innerHTML = `<div class="vw-empty"><div>${t("这个文件夹还不是 git 仓库。")}</div>
         <div class="tiny">${esc(s.dir || GIT.dir)}</div>
         <div class="tiny">${t("建一个仓库后，每次改动都能看到改了哪几行，还能随时退回之前的版本。")}</div>
@@ -4299,17 +4334,59 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     for (const p of [...GIT.sel]) if (!s.files.some((f) => f.path === p)) GIT.sel.delete(p);
     GIT.known = new Set(s.files.map((f) => f.path));
     $("git-name").textContent = s.root.split("/").pop();
-    $("git-info").textContent = (s.branch ? "⎇ " + s.branch : "") +
-      (s.ahead ? " · " + t("领先 {n}", { n: s.ahead }) : "") + (s.behind ? " · " + t("落后 {n}", { n: s.behind }) : "") +
-      " · " + (s.files.length ? t("{n} 个文件有改动", { n: s.files.length }) : t("没有改动"));
+    $("git-info").textContent = s.files.length ? t("{n} 个文件有改动", { n: s.files.length }) : t("没有改动");   // 分支与领先/落后在同步栏
+    gitSyncBar();
     gitRender();
   }
+
+  // ── 同步栏：当前分支 → 上游，抓取 / 拉取 / 推送 ──
+  // 拉取只做快进；分叉了就停下说清楚，可以交给 Claude 合并。推送第一次会顺便建立上游关联
+  let gitBusy = "";
+  function gitSyncBar() {
+    const s = GIT.status, bar = $("git-sync");
+    if (!s) { bar.classList.add("hidden"); return; }
+    bar.classList.remove("hidden");
+    const busy = (a) => gitBusy === a ? " …" : "";
+    const dis = gitBusy ? "disabled" : "";
+    bar.innerHTML = `<span class="gsy-br" data-a="branches" title="${esc(t("切换或新建分支"))}">⎇ ${gbdi(s.branch || "?")}</span>
+      <span class="tiny gsy-up">${s.upstream ? "→ " + gbdi(s.upstream) : esc(t("还没关联远端分支"))}</span>
+      <span style="flex:1"></span>
+      <button class="btn ghost sm" data-a="fetch" ${dis} title="${esc(t("看看远端有没有新提交（不改动你的文件）"))}">${t("抓取")}${busy("fetch")}</button>
+      <button class="btn ghost sm" data-a="pull" ${dis || (s.upstream ? "" : "disabled")} title="${esc(t("把远端的新提交拿下来（只快进）"))}">${t("拉取")}${s.behind ? " ↓" + s.behind : ""}${busy("pull")}</button>
+      <button class="btn sm" data-a="push" ${dis} title="${esc(t("把本地的新提交推上去"))}">${t("推送")}${s.ahead ? " ↑" + s.ahead : ""}${busy("push")}</button>`;
+  }
+  $("git-sync").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-a]"); if (!b || b.disabled) return;
+    const a = b.dataset.a;
+    if (a === "branches") { GIT.tab = "branches"; GIT.view = null; GIT.file = ""; return gitRender(); }
+    if (gitBusy) return;
+    if (a === "push" && GIT.status && !GIT.status.upstream && !confirm(t("第一次推送 {b}：会在远端建一个同名分支并关联起来。继续？", { b: GIT.status.branch }))) return;
+    gitBusy = a; gitSyncBar();
+    try {
+      const r = await gpost(a);
+      toast(r.message || t("完成"));
+    } catch (err) {
+      const m = err.message || "";
+      // 分叉：交给 Claude 合并（它会先说明打算怎么做，冲突时会停下来问）
+      if (a === "pull" && err.body && err.body.code === "diverged") {
+        if (confirm(m + "\n\n" + t("让 Claude 帮你把远端的提交合并进来？"))) {
+          const root = GIT.root; closeGit();
+          send(t("{root} 的当前分支和远端分叉了。请先 git fetch，说明两边各有哪些提交，然后把远端的提交合并进来（能变基就变基，有冲突先停下来问我），最后告诉我结果，不要推送。", { root }));
+          gitBusy = ""; return;
+        }
+      } else toast(m, true);
+    }
+    gitBusy = "";
+    GIT.known = null;
+    gitLoad();
+  });
 
   function gitRender() {
     gitEl.querySelectorAll(".git-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === GIT.tab));
     if (GIT.view && GIT.view.kind === "diff") return gitShowDiff(GIT.file, GIT.view.commit);
     if (GIT.view && GIT.view.kind === "commit") return gitShowCommit(GIT.view.commit);
     if (GIT.tab === "history") return gitShowLog(GIT.file);
+    if (GIT.tab === "branches") return gitShowBranches();
     gitShowChanges();
   }
 
@@ -4355,6 +4432,46 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       closeGit();
       send(t("请看一下 {root} 里这些文件的改动，写一句简洁的提交说明，然后只提交它们：{files}", { root: GIT.root, files: files.join("、") || t("（全部改动）") }));
     };
+  }
+
+  async function gitShowBranches() {
+    const box = $("git-body");
+    box.innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    let r;
+    try { r = await gapi("branches"); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (GIT.tab !== "branches") return;
+    const row = (b, remote) => `<div class="git-row gbr${b.current ? " cur" : ""}" data-b="${esc(b.name)}" data-remote="${remote ? 1 : ""}">
+        <span class="gbr-mark">${b.current ? "✓" : ""}</span>
+        <span class="gp">${gbdi(b.name)}<span class="tiny gbr-sub">${esc(b.subject || "")}</span></span>
+        ${b.gone ? `<span class="badge warn">${t("远端已删")}</span>` : ""}
+        ${b.ahead ? `<span class="badge">↑${b.ahead}</span>` : ""}${b.behind ? `<span class="badge">↓${b.behind}</span>` : ""}
+        <span class="tiny">${relTime(b.at)}</span>
+        ${b.current ? "" : `<button class="btn ghost sm" data-sw="1">${remote ? t("检出") : t("切换")}</button>`}
+      </div>`;
+    box.innerHTML = `<div class="git-new row-actions">
+        <input id="git-newbr" placeholder="${esc(t("新分支名，如 fix/login"))}" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="btn sm" id="git-newbr-ok">${t("新建并切过去")}</button></div>
+      <div class="tiny">${t("新分支从当前提交开始；没提交的改动会跟着带过去。")}</div>
+      <div class="git-sec">${t("本地分支")}</div>${[...r.local].sort((x, y) => (y.current ? 1 : 0) - (x.current ? 1 : 0)).map((b) => row(b, false)).join("") || `<div class="tiny">${t("还没有提交，所以也还没有分支。")}</div>`}
+      ${r.remote.length ? `<div class="git-sec">${t("只在远端的分支")}</div>${r.remote.map((b) => row(b, true)).join("")}` : ""}
+      ${r.remotes.length ? "" : `<div class="tiny">${t("这个仓库还没有设置远端（remote），推送和拉取用不了。")}</div>`}`;
+    const sw = async (name, create) => {
+      try { const x = await gpost("switch", { branch: name, create }); toast(x.message || t("已切换")); }
+      catch (e) { return toast(e.message, true); }
+      GIT.known = null; GIT.sel = new Set();
+      await gitLoad();
+    };
+    box.onclick = (e) => {
+      const b = e.target.closest("[data-sw]"); if (!b) return;
+      const rowEl = b.closest(".gbr");
+      sw(rowEl.dataset.b, false);
+    };
+    $("git-newbr-ok").onclick = () => {
+      const n = $("git-newbr").value.trim();
+      if (!n) { toast(t("填一个分支名"), true); return $("git-newbr").focus(); }
+      sw(n, true);
+    };
+    $("git-newbr").onkeydown = (e) => { if (e.key === "Enter") $("git-newbr-ok").click(); };
   }
 
   async function gitCommit(again) {
@@ -4571,6 +4688,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       VW.wrap = !VW.wrap;
       localStorage.setItem("cc.vw.wrap", VW.wrap ? "1" : "0");
       $("vw-text")?.classList.toggle("nowrap", !VW.wrap);
+      gutSchedule();
       return vwRenderActs();
     }
     if (a === "zoom-" || a === "zoom+") {
@@ -4669,6 +4787,105 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     VW.gitInfo = f ? " · " + gsTitle(f.kind) + (f.add != null ? ` +${f.add} −${f.del ?? 0}` : "") : " · " + t("和上次提交一样");
     vwInfo();
     vwRenderActs();
+    VW.gitMarks = null;
+    if (f && (f.kind === "modified" || f.kind === "renamed") && !f.binary) {
+      try {
+        const r = await api("/api/git/diff?" + new URLSearchParams({ dir: p, file: p }));
+        if (p === VW.path) { VW.gitMarks = gutMarks(r.diff); gutSchedule(); }
+      } catch {}
+    } else gutSchedule();
+  }
+
+  // ── 编辑器行号 + git 改动标记 ──
+  // 纯 textarea 没有行号：左边一列跟着滚动。自动换行时一行可能占好几行高，用一个看不见的镜像层量出每行的实际位置。
+  // 标记对的是磁盘上的版本和上次提交（没保存的修改不算，存完重新算）：绿 = 新加的行，蓝 = 改过的行，红三角 = 这里删过东西。
+  const GUT_MAX = 20000;                // 再长的文件不画行号，免得量一次卡半天
+  let gutTimer = 0, gutRO = null;
+  /** 统一 diff → Map(新文件行号 → { type, old:[原来的行] }) */
+  function gutMarks(diff) {
+    const m = new Map();
+    let n = 0, dels = [], adds = [];
+    const flush = () => {
+      if (adds.length) adds.forEach((ln, i) => m.set(ln, { type: dels.length ? "mod" : "add", old: i === 0 ? dels : null, first: i === 0 }));
+      else if (dels.length) m.set(n, { type: "del", old: dels });
+      dels = []; adds = [];
+    };
+    for (const line of String(diff || "").split("\n")) {
+      const h = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (h) { flush(); n = +h[1]; continue; }
+      if (!n || /^(\+\+\+|---) /.test(line) || line.startsWith("\\")) continue;
+      if (line[0] === "-") { if (adds.length) flush(); dels.push(line.slice(1)); }
+      else if (line[0] === "+") { adds.push(n++); }
+      else if (line[0] === " ") { flush(); n++; }
+    }
+    flush();
+    // 一段修改的所有行共用第一行记下的原文，点哪一行都能看到
+    let last = null;
+    for (const [ln, v] of [...m.entries()].sort((a, b) => a[0] - b[0])) { if (v.first) last = v; else if (v.type === "mod" && !v.old && last) v.old = last.old; }
+    return m;
+  }
+  function gutAttach(ta) {
+    const gin = ta.parentElement.querySelector(".vw-gut-in");
+    ta.addEventListener("scroll", () => { gin.style.transform = `translateY(${-ta.scrollTop}px)`; }, { passive: true });
+    if (gutRO) gutRO.disconnect();
+    gutRO = new ResizeObserver(() => gutSchedule());
+    gutRO.observe(ta);
+    ta.parentElement.querySelector(".vw-gut").addEventListener("click", (e) => {
+      const mk = e.target.closest(".gm"); if (!mk) return;
+      gutPop(+mk.dataset.ln, mk);
+    });
+    gutSchedule();
+  }
+  function gutSchedule() { clearTimeout(gutTimer); gutTimer = setTimeout(gutDraw, 120); }
+  function gutDraw() {
+    const ta = $("vw-text"); if (!ta) return;
+    const wrap = ta.parentElement, gut = wrap.querySelector(".vw-gut"), gin = wrap.querySelector(".vw-gut-in");
+    const lines = ta.value.split("\n");
+    if (lines.length > GUT_MAX) { gut.classList.add("hidden"); return; }
+    gut.classList.remove("hidden");
+    gut.style.width = (String(lines.length).length * 7.2 + 18) + "px";
+    // 镜像层：和 textarea 同宽同字体同换行规则，逐行量位置
+    const cs = getComputedStyle(ta);
+    const mir = document.createElement("div");
+    mir.className = "vw-mirror mono";
+    mir.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${ta.clientWidth}px;box-sizing:border-box;padding:${cs.padding};font:${cs.font};line-height:${cs.lineHeight};tab-size:${cs.tabSize};white-space:${cs.whiteSpace};word-break:${cs.wordBreak};overflow-wrap:${cs.overflowWrap}`;
+    const frag = document.createDocumentFragment();
+    for (const l of lines) { const d = document.createElement("div"); d.textContent = l || " "; frag.appendChild(d); }
+    mir.appendChild(frag);
+    wrap.appendChild(mir);
+    const kids = mir.children, marks = VW.gitMarks;
+    const lh = parseFloat(cs.lineHeight) || 19.5;
+    let html = "";
+    for (let i = 0; i < kids.length; i++) {
+      const top = kids[i].offsetTop, ln = i + 1, mk = marks && marks.get(ln);
+      html += `<div class="gl" style="top:${top}px;height:${lh}px;line-height:${lh}px">${ln}</div>`;
+      if (mk) html += mk.type === "del"
+        ? `<div class="gm del" data-ln="${ln}" style="top:${top - 4}px" title="${esc(t("这里删掉了 {n} 行", { n: mk.old.length }))}"></div>`
+        : `<div class="gm ${mk.type}" data-ln="${ln}" style="top:${top}px;height:${kids[i].offsetHeight}px"></div>`;
+    }
+    // 文件末尾删掉的行：标在最后一行下面
+    if (marks) for (const [ln, mk] of marks) if (ln > kids.length && mk.type === "del") {
+      const last = kids[kids.length - 1];
+      html += `<div class="gm del" data-ln="${ln}" style="top:${last.offsetTop + last.offsetHeight - 4}px"></div>`;
+    }
+    mir.remove();
+    gin.innerHTML = html;
+    gin.style.transform = `translateY(${-ta.scrollTop}px)`;
+  }
+  /** 点标记：这一处原来是什么样 */
+  function gutPop(ln, mk) {
+    const v = VW.gitMarks && VW.gitMarks.get(ln); if (!v) return;
+    const wrap = mk.closest(".vw-edwrap");
+    wrap.querySelector(".vw-gpop")?.remove();
+    const pop = document.createElement("div");
+    pop.className = "vw-gpop";
+    const old = v.old || [];
+    pop.innerHTML = `<div class="tiny">${v.type === "add" ? t("第 {n} 行是新加的（上次提交里没有）", { n: ln }) : v.type === "del" ? t("这里删掉了 {n} 行：", { n: old.length }) : t("改过；上次提交时是：")}</div>`
+      + (old.length ? `<pre class="gdel">${esc(old.slice(0, 40).join("\n"))}${old.length > 40 ? "\n…" : ""}</pre>` : "")
+      + `<div class="row-actions"><button class="btn ghost sm" data-a="diff">${t("看整个文件的对比")}</button><button class="btn ghost sm" data-a="x">${t("关闭")}</button></div>`;
+    pop.style.top = Math.max(4, Math.min(wrap.clientHeight - 60, parseFloat(mk.style.top) - $("vw-text").scrollTop + 22)) + "px";
+    pop.onclick = (e) => { const a = e.target.dataset.a; if (a === "x") pop.remove(); if (a === "diff") { pop.remove(); vwShowDiff(); } };
+    wrap.appendChild(pop);
   }
 
   async function vwShowDiff() {
@@ -4691,10 +4908,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (mode === "md") {
       $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text)}</div>`;
     } else {
-      $("vw-body").innerHTML = `<textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>`;
+      $("vw-body").innerHTML = `<div class="vw-edwrap"><div class="vw-gut"><div class="vw-gut-in"></div></div><textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>`;
       const ta = $("vw-text");
       ta.value = VW.text;
-      ta.addEventListener("input", () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } draftSave(); });
+      gutAttach(ta);
+      ta.addEventListener("input", () => { if (!VW.dirty) { VW.dirty = true; vwRenderActs(); } draftSave(); gutSchedule(); });
       ta.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); vwSave(false); }
         else if (e.key === "Tab" && !e.ctrlKey && !e.altKey) { e.preventDefault(); document.execCommand("insertText", false, "\t"); }

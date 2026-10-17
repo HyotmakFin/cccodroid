@@ -2050,6 +2050,37 @@ function git(cwd, args, { input, timeout = 30000, max = GIT_MAX } = {}) {
     if (input != null) { c.stdin.end(input); }
   });
 }
+/** 抓取 / 拉取 / 推送：联网，最长 3 分钟。
+ *  https 的凭据靠 gh auth setup-git（扩展页 GitHub 登录时配好的）；ssh 用本机钥匙。
+ *  绝不能停下来等人输入：GIT_TERMINAL_PROMPT=0 已在 git() 里；ssh 没配过 core.sshCommand 时加 BatchMode
+ *  （配过的——比如开发端走 443 端口的包装脚本——别用环境变量盖掉它）。 */
+async function gitNet(root, args) {
+  const sc = await git(root, ["config", "core.sshCommand"]);
+  const env = sc.out.trim() ? {} : { GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20" };
+  return new Promise((resolve) => {
+    execFile("git", ["-c", "core.quotePath=false", "-c", "color.ui=false", ...args],
+      { cwd: root, env: { ...termEnv(), GIT_TERMINAL_PROMPT: "0", LC_ALL: "C.UTF-8", ...env }, timeout: 180000, maxBuffer: 4 << 20, encoding: "utf8" },
+      (err, out, errOut) => resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: out || "", err: (errOut || (err && err.killed ? "timeout" : err?.message) || "").trim() }));
+  });
+}
+function gitNetHuman(err) {
+  const e = String(err || "");
+  if (/timeout/i.test(e) && e.length < 20) return tz("三分钟没连上，网络可能不通。");
+  if (/could not read Username|Authentication failed|terminal prompts disabled|Invalid username or password|403/i.test(e))
+    return tz("远端要登录。GitHub 的仓库：到「扩展 → GitHub」登录一次（会顺便配好 git 的 https 推送）；别的网站请在终端里配好凭据。");
+  if (/Permission denied \(publickey\)|Host key verification failed/i.test(e))
+    return tz("SSH 钥匙不被接受。把本机公钥加到远端账户，或者把远端地址换成 https 再用 GitHub 登录。");
+  if (/Could not resolve host|Network is unreachable|Connection timed out|Connection refused|unable to access/i.test(e))
+    return tz("连不上远端，检查一下网络或代理。");
+  if (/\[rejected\]|non-fast-forward|fetch first/i.test(e)) return tz("远端有你本地没有的新提交，先「拉取」再推送。");
+  if (/Not possible to fast-forward|diverging|have diverged/i.test(e))
+    return tz("本地和远端各有新提交（分叉了），没法直接快进。可以让 Claude 帮你合并或变基。");
+  if (/would be overwritten|Please commit your changes or stash them/i.test(e)) return tz("有没提交的改动会被覆盖。先提交或撤销那些文件再试。");
+  if (/No configured push destination|does not appear to be a git repository|No such remote/i.test(e)) return tz("这个仓库还没有设置远端（remote）。");
+  if (/no tracking information/i.test(e)) return tz("当前分支没有对应的远端分支，先推送一次建立关联。");
+  return "";
+}
+
 /** 从任意路径（文件或目录）找到所在仓库；密钥所在的私有目录一律不碰 */
 async function gitRepo(p) {
   let dir = String(p || CFG.workspace).trim();
@@ -2187,7 +2218,87 @@ async function handleGit(req, res, p, u) {
     return sendJson(res, 200, { root, hash, author, email, at: +at * 1000, message: (message || "").trim(), files });
   }
 
+  if (act === "branches") {
+    const r = await git(root, ["for-each-ref", "--sort=-committerdate",
+      "--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(upstream:track)%1f%(objectname:short)%1f%(committerdate:unix)%1f%(HEAD)%1f%(contents:subject)", "refs/heads", "refs/remotes"]);
+    if (r.code) return sendJson(res, 500, { error: r.err });
+    const local = [], remote = [];
+    for (const l of r.out.split("\n")) {
+      if (!l) continue;
+      const [ref, name, upstream, track, hash, at, head, subject] = l.split("\x1f");
+      const b = { name, upstream, hash, at: +at * 1000, subject: (subject || "").slice(0, 120) };
+      if (ref.startsWith("refs/heads/")) {
+        const a = (track || "").match(/ahead (\d+)/), be = (track || "").match(/behind (\d+)/);
+        local.push({ ...b, current: head === "*", ahead: a ? +a[1] : 0, behind: be ? +be[1] : 0, gone: /gone/.test(track || "") });
+      } else if (!ref.endsWith("/HEAD")) remote.push(b);
+    }
+    // 远端分支里已经有本地对应的就不重复列
+    const tracked = new Set(local.map((b) => b.upstream).filter(Boolean));
+    const rem = await git(root, ["remote"]);
+    return sendJson(res, 200, { root, local, remote: remote.filter((b) => !tracked.has(b.name)), remotes: rem.out.split("\n").filter(Boolean) });
+  }
+
   if (req.method !== "POST") return sendJson(res, 404, { error: "unknown" });
+
+  if (act === "fetch" || act === "pull" || act === "push") {
+    const st = await gitStatus(root);
+    if (st.error) return sendJson(res, 500, { error: st.error });
+    let args;
+    if (act === "fetch") args = ["fetch", "--prune", "--all"];
+    else if (act === "pull") {
+      if (!st.upstream) return sendJson(res, 409, { error: "no_upstream", message: tz("当前分支没有对应的远端分支，先推送一次建立关联。") });
+      if (st.files.some((f) => f.kind === "conflict")) return sendJson(res, 409, { error: "conflict", message: tz("还有没解决的冲突，先处理完再拉取。") });
+      args = ["pull", "--ff-only"];      // 只快进：分叉了就停下说清楚，不替用户做合并
+    } else {
+      if (!st.branch || /^HEAD|no branch/i.test(st.branch)) return sendJson(res, 409, { error: "detached", message: tz("现在不在任何分支上，先切到一个分支再推送。") });
+      if (st.upstream) args = ["push"];
+      else {
+        const rem = (await git(root, ["remote"])).out.split("\n").filter(Boolean);
+        if (!rem.length) return sendJson(res, 409, { error: "no_remote", message: tz("这个仓库还没有设置远端（remote）。") });
+        const to = rem.includes("origin") ? "origin" : rem[0];
+        args = ["push", "-u", to, st.branch];       // 第一次推：顺便建立关联，以后直接推/拉
+      }
+    }
+    const t0 = Date.now();
+    const r = await gitNet(root, args);
+    log(`[git] ${act} ${r.code ? "失败" : "完成"}（${Date.now() - t0}ms）@ ${root}`);
+    if (r.code) {
+      const human = gitNetHuman(r.err + "\n" + r.out);
+      const code = /Not possible to fast-forward|diverg/i.test(r.err) ? "diverged" : /\[rejected\]|non-fast-forward|fetch first/i.test(r.err) ? "rejected" : "";
+      return sendJson(res, 500, { error: human || r.err.split("\n").slice(-3).join("\n") || tz("失败"), code, detail: (r.err || r.out).slice(-2000) });
+    }
+    const after = await gitStatus(root);
+    const msg = act === "fetch" ? (after.behind ? tz("已抓取：远端有 {n} 个新提交", { n: after.behind }) : tz("已抓取：没有新提交"))
+      : act === "pull" ? (/Already up to date/i.test(r.out) ? tz("已经是最新的") : tz("已拉取"))
+      : (/Everything up-to-date/i.test(r.err) ? tz("没有要推送的提交") : tz("已推送"));
+    return sendJson(res, 200, { ok: true, message: msg, ahead: after.ahead, behind: after.behind, upstream: after.upstream });
+  }
+
+  if (act === "switch") {
+    const name = String(body.branch || "").trim();
+    // 分支名照 git check-ref-format 的规矩挡一遍，免得把奇怪参数传进命令行
+    if (!name || name.startsWith("-") || /[\s~^:?*\[\\]|\.\.|@\{|\/\/|\.lock$|\/$|\.$/.test(name)) return sendJson(res, 400, { error: tz("分支名不合法") });
+    const create = !!body.create;
+    const st = await gitStatus(root);
+    if (st.files.some((f) => f.kind === "conflict")) return sendJson(res, 409, { error: tz("还有没解决的冲突，先处理完再切换。") });
+    let r;
+    if (create) r = await git(root, ["switch", "-c", name]);
+    else {
+      // 只在远端有：git switch 会自动建一个跟踪它的本地分支（origin/foo → foo）
+      const local = await git(root, ["rev-parse", "--verify", "-q", "refs/heads/" + name]);
+      const m = name.match(/^([^/]+)\/(.+)$/);
+      if (local.code && m) {
+        const isRemote = await git(root, ["rev-parse", "--verify", "-q", "refs/remotes/" + name]);
+        r = isRemote.code ? await git(root, ["switch", name]) : await git(root, ["switch", "--track", name]);
+      } else r = await git(root, ["switch", name]);
+    }
+    if (r.code) return sendJson(res, 409, { error: gitNetHuman(r.err) || r.err.split("\n").slice(0, 4).join("\n") });
+    const cur = await git(root, ["branch", "--show-current"]);
+    log(`[git] ${create ? "新建并切到" : "切到"} ${cur.out.trim()} @ ${root}`);
+    // 没提交的改动会跟着带过去（git 允许时）——告诉用户一声
+    const carried = st.files.length;
+    return sendJson(res, 200, { ok: true, branch: cur.out.trim(), message: carried ? tz("已切到 {b}（{n} 个没提交的改动一起带过来了）", { b: cur.out.trim(), n: carried }) : tz("已切到 {b}", { b: cur.out.trim() }) });
+  }
 
   if (act === "commit") {
     const msg = String(body.message || "").trim();

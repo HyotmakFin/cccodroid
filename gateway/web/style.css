@@ -736,6 +736,22 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 }
 #vw-text.nowrap{white-space:pre;overflow-x:auto;word-break:normal}
 #vw-text:focus{border-color:var(--accent-dim)}
+.vw-edwrap{flex:1;min-height:0;display:flex;position:relative;background:var(--code-bg);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.vw-edwrap:focus-within{border-color:var(--accent-dim)}
+.vw-edwrap #vw-text{border:0;border-radius:0;background:transparent;padding-left:6px}
+.vw-gut{flex:0 0 auto;position:relative;overflow:hidden;border-right:1px solid var(--line);user-select:none;-webkit-user-select:none}
+.vw-gut-in{position:absolute;left:0;right:0;top:0;will-change:transform}
+.vw-gut .gl{position:absolute;right:7px;font-size:10.5px;color:var(--fg3);font-family:ui-monospace,monospace;opacity:.75}
+.vw-gut .gm{position:absolute;left:1px;width:4px;border-radius:2px;cursor:pointer}
+.vw-gut .gm::after{content:"";position:absolute;left:-2px;right:-8px;top:-3px;bottom:-3px}
+.vw-gut .gm.add{background:var(--ok)}
+.vw-gut .gm.mod{background:#5b9cf0}
+.vw-gut .gm.del{width:0;height:0;border-radius:0;border-left:6px solid #e5534b;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.vw-gpop{position:absolute;left:10px;right:10px;z-index:5;background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.35);max-height:60%;overflow:auto}
+.vw-gpop .tiny{margin:0 0 6px}
+.vw-gpop pre.gdel{margin:0 0 6px;padding:6px 8px;border-radius:6px;background:rgba(229,83,75,.12);color:var(--fg);font-size:12px;white-space:pre-wrap;word-break:break-all}
+.vw-gpop .btn{width:auto;margin:0}
+
 .vw-md{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;max-width:none;margin:0}
 .vw-img{flex:1;min-height:0;overflow:auto;display:flex;background:var(--code-bg);border-radius:9px}
 .vw-img img{margin:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
@@ -895,6 +911,20 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .git-log .meta{flex:1 1 100%;font-size:11px;color:var(--fg3)}
 .git-ref{font-size:10px;padding:0 5px;border-radius:5px;border:1px solid var(--accent);color:var(--accent);margin-inline-end:4px}
 .git-back{margin:0 0 8px}
+.git-sync{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;font-size:13px;min-width:0}
+.git-sync .btn{width:auto;margin:0}
+.gsy-br{cursor:pointer;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:3px 8px;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gsy-up{max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
+.git-new{flex-wrap:nowrap}
+.git-new input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:9px;color:var(--fg);padding:8px 10px;font:inherit;font-size:13.5px;outline:0;margin:0}
+.git-new input:focus{border-color:var(--accent-dim)}
+.git-sec{font-size:11.5px;color:var(--fg3);margin:12px 0 2px}
+.gbr .gbr-mark{width:14px;color:var(--accent);flex:0 0 auto;text-align:center}
+.gbr .gp{direction:ltr;display:flex;flex-direction:column;white-space:nowrap}
+.gbr .gbr-sub{margin:0;overflow:hidden;text-overflow:ellipsis}
+.gbr.cur .gp{color:var(--accent)}
+.gbr .tiny{margin:0;flex:0 0 auto}
+
 .gdiff{font-family:var(--mono,monospace);font-size:12px;line-height:1.45;margin:0 0 10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .gdiff .fh{padding:5px 8px;background:var(--bg2);color:var(--fg);font-weight:600;word-break:break-all;position:sticky;top:0}
 .gdiff .ln{display:flex;min-width:0}
@@ -1015,3 +1045,6 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .en-sys-list { margin:6px 0 0; padding:0; list-style:none; font-size:13px; }
 .en-sys-list li { display:flex; justify-content:space-between; gap:8px; padding:2px 0; border-bottom:1px solid var(--line); }
 .en-sys-list li.me { color:var(--accent); font-weight:600; }
+.msg.hit-flash .bubble{animation:hitflash 2.4s ease-out}
+@keyframes hitflash{0%,30%{box-shadow:0 0 0 2px var(--accent)}100%{box-shadow:0 0 0 2px transparent}}
+mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
