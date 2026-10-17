@@ -3855,7 +3855,9 @@ async function screencap() {
 function screencapOnce() {
   return new Promise((resolve) => {
     if (PREFIX) {
-      const c = spawn(process.execPath, [path.join(process.env.CCAPP_BIN || HERE, "priv.mjs"), "screencap -p"], { env: claudeEnv(), stdio: ["ignore", "pipe", "pipe"] });
+      // 去掉 CCAPP_RUN：特权命令记录按这个标记认「Claude 发起的」，截屏是用户在界面上点的
+      const env = claudeEnv(); delete env.CCAPP_RUN;
+      const c = spawn(process.execPath, [path.join(process.env.CCAPP_BIN || HERE, "priv.mjs"), "screencap -p"], { env, stdio: ["ignore", "pipe", "pipe"] });
       const out = [], err = [];
       c.stdout.on("data", (d) => out.push(d));
       c.stderr.on("data", (d) => err.push(d));
