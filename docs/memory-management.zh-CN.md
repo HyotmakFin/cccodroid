@@ -69,6 +69,19 @@ priv 'logcat -d -b events' | grep -E 'killinfo|am_mem_factor|am_kill'
 ### 其他细节
 
 - **进程名不等于包名。** `com.huawei.hwid.core` 只是进程名，所属的包是 `com.huawei.hwid`。拿进程名去 `am force-stop`，什么都不会发生，而且不报错。要以 `packageList` 为准。
-- **两档力度**：日常清理用 `am stop-app`（保留应用的定时任务，之后可能被唤醒）；`run` 用 `am force-stop`（取消定时任务，用户再打开之前都起不来）。
+- **两档力度**：日常清理用 `am stop-app`（进程当场全杀，但保留定时任务，之后可能被唤醒）；`run` 用 `am force-stop`（取消定时任务，用户再打开之前都起不来）。
 - **丢文件缓存做不到，也不必做。** `/proc/sys/vm/drop_caches` 要 root，shell 身份写入被拒。文件缓存本来就是可回收的，内核要用时直接丢，提前清空反而让后面的程序重新从闪存读。
-- **反复复活的应用**可以 `cc-mem tame 包名` 长期限制后台（`am set-bg-restriction-level … restricted`），`cc-mem untame` 恢复原来的级别。
+- **反复复活的应用**可以 `cc-mem tame 包名` 长期限制后台（`am set-bg-restriction-level … restricted`），`cc-mem untame` 恢复原来的级别。`run` 期间同一个包被压下 3 次还往回爬，会自动这样限制，结束报告里会列出来。
+
+### 实测：停掉之后会不会「复活风暴」
+
+有人担心停后台会让 ROM 把应用成批拉起来，反而更耗电更卡。2026-10-17 在联想平板（ZUI，安卓 15）上量过：
+
+| 场景 | 结果 |
+|---|---|
+| 不动，录 65 秒 | 没有任何进程启动 |
+| `cc-mem clear`（stop-app），停 13 个包 | 15 个进程当场被杀（系统日志记为 `fully stop … by user request`，连微信的推送进程也在内）；可用内存约 9.8G → 10.5–11G；之后 5 分钟只有两个联想自家的小服务（天气、udcplatform，各约 30M）回来，最早约 2 分钟 |
+| `cc-mem run -- sleep 150` | 期间微信、Outlook 各复活 1 次，被 force-stop 一次后没再回来，没有拉锯 |
+
+结论：至少在这台机器上没有风暴，复活的都是小进程。真正要注意的是反方向：stop-app 也会立刻杀掉聊天软件的推送进程，**被停的聊天软件在你再打开它之前可能收不到消息**。需要实时收消息的应用请加进白名单。
+

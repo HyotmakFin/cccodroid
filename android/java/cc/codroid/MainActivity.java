@@ -3,6 +3,7 @@ package cc.codroid;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -92,7 +93,25 @@ public class MainActivity extends Activity {
         boot();   // 没给也照样跑：工作区退回私有目录
     }
 
+    /**
+     * 装在分身 / 第二空间 / 安全文件夹 / 工作资料里：私有目录是 /data/user/<N>/cc.codroid，
+     * 比等长改写的 21 字节长，工具链里写死的 /data/data/cc.codroid 又指向主用户、跨用户被拒，跑不起来。
+     * files/.force-secondary-user 存在时也当成这种情况（调试界面用）。
+     */
+    static boolean secondaryUser(Context c) {
+        String fp = c.getFilesDir().getAbsolutePath();
+        return android.os.Process.myUid() / 100000 != 0
+            || !(fp.startsWith("/data/user/0/") || fp.startsWith("/data/data/"))
+            || new File(c.getFilesDir(), ".force-secondary-user").exists();
+    }
+
     private void boot() {
+        if (secondaryUser(this)) {
+            say(Tr.t("✗ cccodroid 只能装在手机的主空间里。"));
+            say(Tr.t("分身、第二空间、安全文件夹、工作资料里的应用目录路径不同，开发工具包跑不起来（Termux 也有同样的限制）。请卸载这里的 cccodroid，在主空间安装。"));
+            ui.post(() -> stuck.setVisibility(View.VISIBLE));
+            return;
+        }
         // 先起前台服务再干活：安装要下载几百 MB，期间用户一切走，
         // 没有前台服务的进程几秒内就会被冻结/回收（实测切一下前台下载就断了）。
         GatewayService.start(this);

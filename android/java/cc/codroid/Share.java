@@ -152,6 +152,8 @@ public final class Share extends ContentProvider {
             sb.append("cccodroid ").append(c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName).append('\n');
             sb.append("Android ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")  ")
               .append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append("  ").append(Build.SUPPORTED_ABIS[0]).append('\n');
+            sb.append("user=").append(android.os.Process.myUid() / 100000).append("  files=").append(c.getFilesDir().getAbsolutePath())
+              .append(MainActivity.secondaryUser(c) ? "  （非主空间）" : "").append('\n');
             sb.append("SoC ").append(Build.VERSION.SDK_INT >= 31 ? Build.SOC_MODEL : "?").append("  内核 ").append(System.getProperty("os.version")).append('\n');
             StatFs st = new StatFs(env.files.getPath());
             sb.append("私有目录剩余 ").append(st.getAvailableBytes() >> 20).append(" MB\n");

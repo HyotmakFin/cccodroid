@@ -253,6 +253,7 @@ async function cmdRun(argv) {
   console.error(`cc-mem: 清场 ${first.length} 个应用，可用内存 ${GB(start.available)} → ${GB(ready.available)}；开始执行`);
 
   const revived = new Map();            // 包名 → 复活被压次数
+  const tamedNow = new Set();
   let minAvail = ready.available, busy = false, done = false;
   const tick = setInterval(() => {
     const m = meminfo().available;
@@ -263,7 +264,12 @@ async function cmdRun(argv) {
       const back = plan().apps.filter((a) => !a.protect).map((a) => a.pkg);
       if (back.length) {
         stopPkgs(back, true);
-        for (const p of back) revived.set(p, (revived.get(p) || 0) + 1);
+        for (const p of back) {
+          const n = (revived.get(p) || 0) + 1;
+          revived.set(p, n);
+          // 学乖：一次重活里被压下 3 次还往回爬的，直接限制后台（cc-mem untame 可恢复）
+          if (n === 3 && !tamedNow.has(p)) { tamedNow.add(p); try { tame(p); } catch {} }
+        }
       }
     } catch {}
     busy = false;
@@ -279,8 +285,19 @@ async function cmdRun(argv) {
   const end = meminfo();
   const rv = [...revived].map(([p, n]) => `${p}×${n}`);
   console.error(`cc-mem: 结束（退出码 ${code}）。可用内存 开跑 ${GB(ready.available)}，最低 ${GB(minAvail)}，结束 ${GB(end.available)}` +
-    (rv.length ? `；期间压下复活 ${rv.length} 个：${rv.join("、")}` : "；期间没有应用复活"));
+    (rv.length ? `；期间压下复活 ${rv.length} 个：${rv.join("、")}` : "；期间没有应用复活") +
+    (tamedNow.size ? `；反复复活、已限制后台：${[...tamedNow].join("、")}（cc-mem untame <包名> 恢复）` : ""));
   process.exit(code);
+}
+
+// 限制一个包的后台，记下原来的级别；返回 priv 结果
+function tame(p) {
+  const st = readJson(STATE_FILE, { tamed: {} });
+  const prev = (priv(`am get-bg-restriction-level ${sh(p)}`).out.trim().split(/\s+/).pop()) || "adaptive_bucket";
+  if (!(p in st.tamed)) st.tamed[p] = prev;
+  const r = priv(`am set-bg-restriction-level ${sh(p)} restricted`);
+  if (r.code === 0) fs.writeFileSync(STATE_FILE, JSON.stringify(st, null, 2), { mode: 0o600 });
+  return { r, prev: st.tamed[p] };
 }
 
 function cmdTame(pkgs, undo) {
@@ -291,10 +308,9 @@ function cmdTame(pkgs, undo) {
     if (!PKG_RE.test(p)) { console.error(`跳过非法包名：${p}`); continue; }
     if (!undo) {
       if (CORE.some((r) => r.test(p))) { console.error(`跳过系统核心：${p}`); continue; }
-      const prev = (priv(`am get-bg-restriction-level ${sh(p)}`).out.trim().split(/\s+/).pop()) || "adaptive_bucket";
-      if (!(p in st.tamed)) st.tamed[p] = prev;
-      const r = priv(`am set-bg-restriction-level ${sh(p)} restricted`);
-      console.log(r.code === 0 ? `已限制后台：${p}（原来是 ${st.tamed[p]}）` : `失败：${p} ${r.err.trim()}`);
+      const { r, prev } = tame(p);
+      if (r.code === 0) st.tamed[p] = prev;
+      console.log(r.code === 0 ? `已限制后台：${p}（原来是 ${prev}）` : `失败：${p} ${r.err.trim()}`);
     } else {
       const prev = st.tamed[p] || "adaptive_bucket";
       const r = priv(`am set-bg-restriction-level ${sh(p)} ${sh(prev)}`);

@@ -69,6 +69,19 @@ So the memory manager reads `packageList`, `packageDependencies` and stable prov
 ### Other details
 
 - **A process name is not a package name.** `com.huawei.hwid.core` is a process; its package is `com.huawei.hwid`. Running `am force-stop` with the process name silently does nothing. Always go by `packageList`.
-- **Two strengths.** Routine cleanup uses `am stop-app`, which keeps the app's scheduled alarms and jobs, so the app may wake up later. `run` uses `am force-stop`, which cancels them, so the app stays down until the user opens it.
+- **Two strengths.** Routine cleanup uses `am stop-app`, which kills all of the app's processes at once but keeps its scheduled alarms and jobs, so the app may wake up later. `run` uses `am force-stop`, which cancels them, so the app stays down until the user opens it.
 - **Dropping the file cache is impossible here and unnecessary.** `/proc/sys/vm/drop_caches` needs root; the shell user is denied. The file cache is reclaimable anyway: the kernel drops it on demand, and clearing it in advance only makes later programs read from flash again.
-- **Apps that keep coming back** can be restricted for good with `cc-mem tame <package>` (`am set-bg-restriction-level … restricted`). `cc-mem untame` restores the previous level.
+- **Apps that keep coming back** can be restricted for good with `cc-mem tame <package>` (`am set-bg-restriction-level … restricted`). `cc-mem untame` restores the previous level. During `run`, a package that has to be put down 3 times is restricted this way automatically, and the end-of-run report lists it.
+
+### Measured: does stopping apps cause a "revival storm"?
+
+One concern is that stopping background apps makes the ROM relaunch them in bulk, costing more battery and memory than it saves. We measured it on 2026-10-17 on a Lenovo tablet (ZUI, Android 15):
+
+| Scenario | Result |
+|---|---|
+| Idle, 65 s recording | No process started at all |
+| `cc-mem clear` (stop-app), 13 packages | 15 processes killed at once (logged as `fully stop … by user request`, WeChat's push process included); available memory about 9.8G → 10.5–11G; in the next 5 minutes only two small Lenovo services came back (weather and udcplatform, ~30M each), the first after about 2 minutes |
+| `cc-mem run -- sleep 150` | WeChat and Outlook each came back once, were force-stopped once, and stayed down; no tug-of-war |
+
+So on this device there was no storm, and the apps that came back were small. The real catch is the opposite: stop-app also kills chat apps' push processes right away, so **a stopped chat app may not receive messages until you open it again**. Whitelist apps you need real-time messages from.
+
