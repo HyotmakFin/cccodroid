@@ -410,6 +410,21 @@
           </div>
         </details>
       </details>
+      <details class="field ext-sec" id="ext-hook-sec" data-sec="hook" open><summary><span data-i18n>Hooks（自动规则）</span> <span id="ext-h-count" class="pill"></span></summary>
+        <div class="tiny" data-i18n>hooks 就是「到了某个时刻，自动跑一条命令」：Claude 用工具之前或之后、你发消息时、它答完一轮时……命令可以拦下 Claude 的动作、给它补充说明，也可以顺手做些杂事（存档、记录、格式化）。</div>
+        <div class="ext-idx" id="hook-scope"></div>
+        <div id="hook-bar" class="hk-bar"></div>
+        <div id="ext-hooks" class="list"></div>
+        <details class="ext-more" id="hook-recipes-box"><summary data-i18n>常用规则（点「添加」，改改参数就能用）</summary>
+          <div id="hook-recipes" class="list"></div>
+        </details>
+        <details class="ext-more" id="hook-form-box"><summary data-i18n>自己写一条</summary>
+          <div id="hook-form" class="ext-form"></div>
+        </details>
+        <details class="ext-more"><summary data-i18n>hooks 是怎么工作的</summary>
+          <div class="tiny hk-help" data-i18n-html>命令在项目目录里用 bash 运行，Claude 会把这一刻的情况（哪个工具、什么参数、你说了什么……）以 JSON 从标准输入传给它。<br>退出码决定结果：<b>0</b> 正常放行；<b>2</b> 拦下这一步（「用工具之前」「你发出消息时」），stderr 里写的原因会转告 Claude；其他退出码算出错，不拦，Claude 照常继续。<br>「你发出消息时」和「会话开始时」的命令打印出来的内容，会作为补充说明交给 Claude。<br>改动在下一条消息生效。规则是普通的 shell 命令，能做的事和你在终端里一样多——别加来路不明的命令。</div>
+        </details>
+      </details>
     </section>
   </div>
 </aside>

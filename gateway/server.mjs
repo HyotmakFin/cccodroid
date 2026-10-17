@@ -4091,6 +4091,137 @@ async function removeMcp(name) {
 }
 
 // 技能：~/.claude/skills/<名字>/SKILL.md（开头 YAML 里有 name / description）
+// ── Hooks：到某个时刻自动跑的命令（claude 的 settings.json 里 "hooks" 一个键） ──
+// claude 没有管 hooks 的命令行，只能直接改 settings.json：只动 hooks / disableAllHooks 两个键，其余原样保留；
+// 写前留一份 .bak，和插件安装共用 EXT_LOCK，免得两边同时写。三处配置：用户级（所有项目）、项目级、项目本机级。
+const HOOK_EVENTS = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "UserPromptSubmit", "Stop",
+  "SubagentStart", "SubagentStop", "SessionStart", "SessionEnd", "Notification", "PreCompact", "PostCompact",
+  "InstructionsLoaded", "ConfigChange", "TaskCompleted", "TeammateIdle", "WorktreeCreate", "Setup"];
+const HOOK_SCRIPTS_DIR = path.join(CFG.home, ".claude", "hooks");
+// 常用规则用到的小脚本（源码在 claude-apk/hooks/，用 hooks/embed.mjs 生成这一行）；添加规则时写进 ~/.claude/hooks/
+const HOOK_SCRIPTS = {"cc-autosave.mjs":"// cccodroid 内置 hook（Claude 答完一轮时）：项目是 git 仓库、且有改动，就自动提交一次存档。只提交，不推送。\n// 用法：node cc-autosave.mjs '自动存档'   （参数是提交说明的前缀，后面自动加时间）\nimport fs from \"node:fs\";\nimport { execFileSync } from \"node:child_process\";\nlet j = {};\ntry { j = JSON.parse(fs.readFileSync(0, \"utf8\")); } catch {}\nconst cwd = j.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();\nconst git = (...a) => execFileSync(\"git\", a, { cwd, encoding: \"utf8\", stdio: [\"ignore\", \"pipe\", \"pipe\"] });\ntry { if (git(\"rev-parse\", \"--is-inside-work-tree\").trim() !== \"true\") process.exit(0); } catch { process.exit(0); }\ntry {\n  if (!git(\"status\", \"--porcelain\").trim()) process.exit(0);\n  git(\"add\", \"-A\");\n  const id = [];\n  try { git(\"config\", \"user.name\"); } catch { id.push(\"-c\", \"user.name=cccodroid\"); }\n  try { git(\"config\", \"user.email\"); } catch { id.push(\"-c\", \"user.email=autosave@cccodroid.local\"); }\n  const d = new Date(), p = (n) => String(n).padStart(2, \"0\");\n  const when = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;\n  git(...id, \"commit\", \"-q\", \"-m\", `${process.argv[2] || \"自动存档\"} ${when}`);\n} catch (e) {\n  process.stderr.write(\"自动存档失败：\" + String(e.stderr || e.message).slice(0, 300) + \"\\n\");\n}\n","cc-bash-log.mjs":"// cccodroid 内置 hook（用完工具之后，只管 Bash）：把 Claude 跑过的命令记进日志，方便事后翻看。\n// 用法：node cc-bash-log.mjs [日志文件]   默认 ~/.claude/bash-history.log\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nlet j = {};\ntry { j = JSON.parse(fs.readFileSync(0, \"utf8\")); } catch {}\nconst cmd = String((j.tool_input || {}).command || \"\");\nif (!cmd) process.exit(0);\nconst file = process.argv[2] || path.join(process.env.HOME || \".\", \".claude\", \"bash-history.log\");\nconst d = new Date(), p = (n) => String(n).padStart(2, \"0\");\nconst when = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;\ntry {\n  fs.mkdirSync(path.dirname(file), { recursive: true });\n  fs.appendFileSync(file, `${when}\\t${j.cwd || \"\"}\\n  ${cmd.replace(/\\n/g, \"\\n  \")}\\n`);\n} catch {}\n","cc-format.mjs":"// cccodroid 内置 hook（用完工具之后，管改文件的工具）：Claude 改完代码文件，用本机已装的格式化工具整理一遍。\n// 按扩展名找：ruff / black、prettier、gofmt、rustfmt、clang-format、shfmt，没装就什么也不做。\n// Markdown 和纯文本不碰（写作的稿子不该被工具改排版）。\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport { spawnSync } from \"node:child_process\";\nlet j = {};\ntry { j = JSON.parse(fs.readFileSync(0, \"utf8\")); } catch {}\nconst f = String((j.tool_input || {}).file_path || \"\");\nif (!f || !fs.existsSync(f)) process.exit(0);\nconst ext = path.extname(f).toLowerCase();\nconst T = {\n  \".py\": [[\"ruff\", \"format\", \"-q\"], [\"black\", \"-q\"]],\n  \".js\": [[\"prettier\", \"--write\", \"--log-level\", \"warn\"]], \".mjs\": 0, \".cjs\": 0, \".jsx\": 0, \".ts\": 0, \".tsx\": 0,\n  \".json\": 0, \".css\": 0, \".scss\": 0, \".html\": 0, \".vue\": 0, \".yaml\": 0, \".yml\": 0,\n  \".go\": [[\"gofmt\", \"-w\"]], \".rs\": [[\"rustfmt\", \"-q\"]],\n  \".c\": [[\"clang-format\", \"-i\"]], \".h\": 0, \".cc\": 0, \".cpp\": 0, \".hpp\": 0,\n  \".sh\": [[\"shfmt\", \"-w\"]],\n};\nlet list = T[ext];\nif (list === 0) list = [\".c\", \".h\", \".cc\", \".cpp\", \".hpp\"].includes(ext) ? T[\".c\"] : T[\".js\"];\nif (!list) process.exit(0);\nconst has = (b) => (process.env.PATH || \"\").split(\":\").some((d) => { try { fs.accessSync(path.join(d, b), fs.constants.X_OK); return true; } catch { return false; } });\nconst tool = list.find(([b]) => has(b));\nif (tool) spawnSync(tool[0], [...tool.slice(1), f], { stdio: \"ignore\", timeout: 20000 });\n","cc-guard-bash.mjs":"// cccodroid 内置 hook（用工具之前，只管 Bash）：命令里出现这些内容就拦下。\n// 用法：node cc-guard-bash.mjs 'git push --force' '/git\\s+reset\\s+--hard/'\n// 普通写法按字面查找（空白宽松匹配）；写成 /…/ 就当正则。命中退出码 2，并告诉 Claude 原因。\nimport fs from \"node:fs\";\nconst pats = process.argv.slice(2).filter(Boolean);\nlet j = {};\ntry { j = JSON.parse(fs.readFileSync(0, \"utf8\")); } catch {}\nconst cmd = String((j.tool_input || {}).command || \"\");\nif (!cmd) process.exit(0);\nconst flat = cmd.replace(/\\s+/g, \" \");\nconst hit = pats.find((p) => {\n  const m = /^\\/(.+)\\/([a-z]*)$/.exec(p);\n  if (m) { try { return new RegExp(m[1], m[2]).test(cmd); } catch { return false; } }\n  return flat.includes(p.replace(/\\s+/g, \" \"));\n});\nif (hit) {\n  process.stderr.write(`这条命令触发了禁止规则「${hit}」，已拦下：\\n${cmd.slice(0, 300)}\\n换一种更安全的做法；如果确实需要，请让用户自己执行。\\n`);\n  process.exit(2);\n}\n","cc-guard-files.mjs":"// cccodroid 内置 hook（用工具之前）：不许 Claude 改动匹配这些模式的文件。\n// 用法：node cc-guard-files.mjs '.env' '*.pem' 'secrets/**'\n// 模式不带 / 时比对文件名，带 / 时比对完整路径；* 不跨目录，** 跨目录。命中就退出码 2 拦下，并告诉 Claude 原因。\nimport fs from \"node:fs\";\nconst pats = process.argv.slice(2).filter(Boolean);\nlet j = {};\ntry { j = JSON.parse(fs.readFileSync(0, \"utf8\")); } catch {}\nconst i = j.tool_input || {};\nconst f = String(i.file_path || i.notebook_path || \"\");\nif (!f) process.exit(0);\nconst rx = (p) => new RegExp(\"^\" + p.replace(/[.+^${}()|[\\]\\\\]/g, \"\\\\$&\").replace(/\\*\\*/g, \"\\0\").replace(/\\*/g, \"[^/]*\")\n  .replace(/\\?/g, \"[^/]\").replace(/\\0/g, \".*\") + \"$\");\nconst base = f.split(\"/\").pop();\nconst hit = pats.find((p) => rx(p).test(p.includes(\"/\") ? f : base) || (p.includes(\"/\") && rx(\"**/\" + p).test(f)));\nif (hit) {\n  process.stderr.write(`这个文件受保护（规则「${hit}」），不要修改：${f}\\n如果确实需要改，请告诉用户，让用户自己处理。\\n`);\n  process.exit(2);\n}\n"};
+
+function hookSettingsFile(scope, dir) {
+  if (scope === "user") return path.join(CFG.home, ".claude", "settings.json");
+  const d = path.resolve(String(dir || CFG.workspace));
+  let ok = false;
+  try { ok = fs.statSync(d).isDirectory(); } catch {}
+  if (!ok) throw new Error("project dir not found: " + d);
+  return path.join(d, ".claude", scope === "local" ? "settings.local.json" : "settings.json");
+}
+function readSettingsFile(file) {
+  let txt;
+  try { txt = fs.readFileSync(file, "utf8"); } catch (e) { if (e.code === "ENOENT") return { j: {}, exists: false }; return { error: e.message, exists: true }; }
+  if (!txt.trim()) return { j: {}, exists: true };
+  try {
+    const j = JSON.parse(txt);
+    if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("not an object");
+    return { j, exists: true };
+  } catch (e) { return { error: e.message, badJson: true, exists: true }; }
+}
+function listHooks(dir) {
+  const scopes = [];
+  for (const scope of ["user", "project", "local"]) {
+    let file;
+    try { file = hookSettingsFile(scope, dir); } catch (e) { scopes.push({ scope, error: e.message }); continue; }
+    const r = readSettingsFile(file);
+    const h = r.j && r.j.hooks;
+    scopes.push({ scope, file, exists: r.exists, error: r.error, badJson: !!r.badJson,
+      hooks: h && typeof h === "object" && !Array.isArray(h) ? h : {}, disableAll: !!(r.j && r.j.disableAllHooks) });
+  }
+  return { scopes, events: HOOK_EVENTS, workspace: CFG.workspace, dir: path.resolve(String(dir || CFG.workspace)), scriptsDir: HOOK_SCRIPTS_DIR };
+}
+/** 界面送回来的整份 hooks：结构不对就拒绝；空组、空命令剔掉；不认识的字段（prompt / http 类 hook 等）原样留着 */
+function cleanHooks(h) {
+  if (!h || typeof h !== "object" || Array.isArray(h)) throw new Error("hooks must be an object");
+  const out = {};
+  for (const [ev, groups] of Object.entries(h)) {
+    if (!/^[A-Za-z]+$/.test(ev)) throw new Error("bad event name: " + ev);
+    if (!Array.isArray(groups)) throw new Error(ev + " must be an array");
+    const gs = [];
+    for (const g of groups) {
+      if (!g || typeof g !== "object" || !Array.isArray(g.hooks)) throw new Error(ev + ": every entry needs a hooks array");
+      const hs = g.hooks.filter((x) => x && typeof x === "object" && x.type && !(x.type === "command" && !String(x.command || "").trim()));
+      if (!hs.length) continue;
+      const ng = { ...g, hooks: hs };
+      if (ng.matcher === "" || ng.matcher == null) delete ng.matcher;
+      gs.push(ng);
+    }
+    if (gs.length) out[ev] = gs;
+  }
+  return out;
+}
+function saveHooks({ scope, dir, hooks, disableAll }) {
+  if (!["user", "project", "local"].includes(scope)) throw new Error("bad scope");
+  const file = hookSettingsFile(scope, dir);
+  const clean = hooks === undefined ? undefined : cleanHooks(hooks);
+  const job = EXT_LOCK.then(() => {
+    const r = readSettingsFile(file);
+    if (r.error) { const e = new Error(r.error); e.code = r.badJson ? "badjson" : "read"; throw e; }
+    const j = r.j;
+    if (clean !== undefined) { if (Object.keys(clean).length) j.hooks = clean; else delete j.hooks; }
+    if (disableAll !== undefined) { if (disableAll) j.disableAllHooks = true; else delete j.disableAllHooks; }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (r.exists) { try { fs.copyFileSync(file, file + ".bak"); } catch {} }
+    const tmp = file + ".tmp-" + process.pid;
+    fs.writeFileSync(tmp, JSON.stringify(j, null, 2) + "\n");
+    fs.renameSync(tmp, file);
+    log(`hooks 已保存：${file}`);
+    return { ok: true, file };
+  });
+  EXT_LOCK = job.catch(() => {});
+  return job;
+}
+function installHookScripts() {
+  fs.mkdirSync(HOOK_SCRIPTS_DIR, { recursive: true });
+  for (const [name, src] of Object.entries(HOOK_SCRIPTS)) fs.writeFileSync(path.join(HOOK_SCRIPTS_DIR, name), src);
+  return { ok: true, dir: HOOK_SCRIPTS_DIR };
+}
+/** 试运行用的 stdin：照 claude 真实传给 hook 的 JSON 造一份（工具类事件按匹配规则挑个像样的工具） */
+function hookSample(ev, matcher, cwd) {
+  const base = { session_id: "cccodroid-test", transcript_path: "", cwd, permission_mode: "default", hook_event_name: ev };
+  const m = String(matcher || "");
+  const tool = !m || m === "*" || /Bash/.test(m) ? "Bash" : /Write/.test(m) ? "Write" : /Edit/.test(m) ? "Edit" : (m.match(/[A-Za-z_]+/) || ["Bash"])[0];
+  const input = tool === "Bash" ? { command: "echo hello", description: "test" }
+    : tool === "Write" ? { file_path: path.join(cwd, "hook-test.txt"), content: "hello\n" }
+    : tool === "Edit" ? { file_path: path.join(cwd, "hook-test.txt"), old_string: "hello", new_string: "hi" } : {};
+  switch (ev) {
+    case "PreToolUse": case "PermissionRequest": return { ...base, tool_name: tool, tool_input: input };
+    case "PostToolUse": return { ...base, tool_name: tool, tool_input: input, tool_response: tool === "Bash" ? { stdout: "hello", stderr: "", interrupted: false } : { success: true } };
+    case "PostToolUseFailure": return { ...base, tool_name: tool, tool_input: input, error: "test error" };
+    case "UserPromptSubmit": return { ...base, prompt: "这是一条测试消息" };
+    case "Stop": case "SubagentStop": return { ...base, stop_hook_active: false };
+    case "SessionStart": return { ...base, source: m && !/[|*]/.test(m) ? m : "startup" };
+    case "SessionEnd": return { ...base, reason: "other" };
+    case "Notification": return { ...base, message: "Claude needs your permission to use Bash", notification_type: "permission_prompt" };
+    case "PreCompact": case "PostCompact": return { ...base, trigger: "manual", custom_instructions: "" };
+    default: return base;
+  }
+}
+function testHook({ command, event, matcher, dir, input, timeout }) {
+  command = String(command || "");
+  if (!command.trim()) throw new Error("empty command");
+  let cwd = path.resolve(String(dir || CFG.workspace));
+  try { if (!fs.statSync(cwd).isDirectory()) cwd = CFG.home; } catch { cwd = CFG.home; }
+  let stdin = input != null && String(input).trim() ? String(input) : JSON.stringify(hookSample(String(event || ""), matcher, cwd), null, 2);
+  const ms = Math.max(1, Math.min(60, Number(timeout) || 30)) * 1000;
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const child = spawn(ensureShell(), ["-c", command], {
+      cwd, env: { ...termEnv(), CLAUDE_PROJECT_DIR: cwd }, stdio: ["pipe", "pipe", "pipe"], detached: true,
+    });
+    let out = "", err = "", timedOut = false;
+    const cap = (s, d) => (s.length < 64 * 1024 ? s + d : s);
+    child.stdout.on("data", (d) => (out = cap(out, d)));
+    child.stderr.on("data", (d) => (err = cap(err, d)));
+    const tm = setTimeout(() => { timedOut = true; killTree(child); }, ms);
+    child.on("close", (code) => { clearTimeout(tm); resolve({ ok: true, code, stdout: out, stderr: err, ms: Date.now() - t0, timedOut, input: stdin }); });
+    child.on("error", (e) => { clearTimeout(tm); resolve({ ok: true, code: -1, stdout: out, stderr: err + e.message, ms: Date.now() - t0, timedOut, input: stdin }); });
+    child.stdin.on("error", () => {});
+    child.stdin.end(stdin);
+  });
+}
+
 const SKILLS_DIR = path.join(CFG.home, ".claude", "skills");
 // SKILL.md 开头的 YAML：只取顶层的单个键；支持 description: > / | 这类多行块
 function fmField(md, k) {
@@ -4499,6 +4630,13 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "POST" && p === "/api/ext/catalog/skills/install") return sendJson(res, 200, await installCatalogSkill(String(body.dir || "")));
         if (req.method === "GET" && p === "/api/ext/catalog/mcp") return sendJson(res, 200, await listMcpCatalog(u.searchParams.get("q"), u.searchParams.get("cursor")));
         if (req.method === "POST" && p === "/api/ext/skills/delete") return sendJson(res, 200, deleteSkill(String(body.dir || "")));
+        if (req.method === "GET" && p === "/api/ext/hooks") return sendJson(res, 200, listHooks(u.searchParams.get("dir")));
+        if (req.method === "POST" && p === "/api/ext/hooks/save") {
+          try { return sendJson(res, 200, await saveHooks(body)); }
+          catch (e) { return sendJson(res, 200, { ok: false, code: e.code, message: e.message }); }
+        }
+        if (req.method === "POST" && p === "/api/ext/hooks/scripts") return sendJson(res, 200, installHookScripts());
+        if (req.method === "POST" && p === "/api/ext/hooks/test") return sendJson(res, 200, await testHook(body));
         if (req.method === "POST" && p === "/api/ext/skills/import") return sendJson(res, 200, importSkill(await readBodyBuf(req, 64 * 1024 * 1024)));
       } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }
       return sendJson(res, 404, { error: "not found" });

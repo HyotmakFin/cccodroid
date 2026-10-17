@@ -2355,7 +2355,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  function loadExt() { loadComponents(60); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); }
+  function loadExt() { loadComponents(60); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
 
   // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
   // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面
@@ -2570,6 +2570,298 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       || `<div class="tiny">${t("~/.claude/skills 里还没有技能。插件也可能自带技能。")}</div>`;
     renderIdx("skill", [["official", t("官方")], ["comp", t("组件自带")], ["user", t("自己装的")]]);
     if ($("ext-s-catbox").open) loadSkillCat();
+  }
+
+  // ── Hooks（自动规则）：到某个时刻自动跑一条命令。常用规则点一下就加，也能自己写；每条都能先试运行看效果 ──
+  const HK = { data: null, scope: localStorage.getItem("cc.hookScope") || "user", edit: null, recipe: null };
+  const HK_EV = {
+    PreToolUse: ["用工具之前", "Claude 每次调用工具（改文件、跑命令、联网……）之前。退出码 2 会拦下这次调用，stderr 里写的原因会转告 Claude。"],
+    PostToolUse: ["用完工具之后", "工具执行成功之后。适合格式化、记录、检查；动作已经做了，退出码 2 只会把 stderr 反馈给 Claude。"],
+    UserPromptSubmit: ["你发出消息时", "你每发一条消息。命令打印的内容会作为补充说明一起交给 Claude；退出码 2 会拦下这条消息。"],
+    Stop: ["Claude 答完一轮时", "Claude 这一轮回答结束。适合自动存档、提醒；退出码 2 会让它接着干（小心死循环）。"],
+    SessionStart: ["会话开始时", "新开、继续、清空或压缩后的会话开始时。命令打印的内容会作为背景交给 Claude。"],
+    SessionEnd: ["会话结束时", "会话结束时，适合收尾清理。"],
+    Notification: ["Claude 发提醒时", "Claude 要你确认权限、或者闲着等你回复时。"],
+    PermissionRequest: ["要你确认权限时", "弹出权限确认之前。进阶用法：输出 JSON 可以替你自动允许或拒绝。"],
+    PostToolUseFailure: ["工具出错之后", "工具执行失败之后。"],
+    SubagentStart: ["子代理开始时", ""],
+    SubagentStop: ["子代理结束时", "子代理干完活时；退出码 2 会让它接着干。"],
+    PreCompact: ["压缩上下文之前", ""],
+    PostCompact: ["压缩上下文之后", ""],
+  };
+  const hkEvName = (ev) => (HK_EV[ev] ? t(HK_EV[ev][0]) : ev);
+  const HK_TOOL_EV = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"];
+  const HK_MATCH_CHIPS = {
+    tool: ["Bash", "Edit|Write|MultiEdit", "Read", "WebFetch|WebSearch", "mcp__.*"],
+    SessionStart: ["startup", "resume", "clear", "compact"],
+    PreCompact: ["manual", "auto"], PostCompact: ["manual", "auto"],
+    Notification: ["permission_prompt", "idle_prompt"],
+  };
+  const hkChips = (ev) => (HK_TOOL_EV.includes(ev) ? HK_MATCH_CHIPS.tool : HK_MATCH_CHIPS[ev]);
+  const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+  /** 把命令拆成参数（认单引号、双引号、反斜杠），用来从常用规则的命令里取回参数 */
+  function shArgs(cmd) {
+    const out = []; let cur = null, q = "";
+    for (let i = 0; i < cmd.length; i++) {
+      const c = cmd[i];
+      if (q === "'") { if (c === "'") q = ""; else cur += c; continue; }
+      if (q === '"') { if (c === '"') q = ""; else if (c === "\\" && i + 1 < cmd.length) cur += cmd[++i]; else cur += c; continue; }
+      if (/\s/.test(c)) { if (cur != null) out.push(cur); cur = null; continue; }
+      if (cur == null) cur = "";
+      if (c === "'" || c === '"') q = c; else if (c === "\\" && i + 1 < cmd.length) cur += cmd[++i]; else cur += c;
+    }
+    if (cur != null) out.push(cur);
+    return out;
+  }
+  const lines = (s) => String(s || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const hkScript = (name) => `node "$HOME/.claude/hooks/${name}"`;
+  const HK_RECIPES = [
+    { id: "guard-files", title: "保护重要文件", desc: "Claude 想改 .env、密钥、签名文件时直接拦下，并告诉它原因。",
+      event: "PreToolUse", matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "cc-guard-files.mjs",
+      label: "受保护的文件（一行一个；* 是通配符，带 / 就按路径比）", param: ".env\n.env.*\n*.pem\n*.key\n*.keystore\n*.jks\nid_rsa*\nid_ed25519*",
+      cmd: (p) => hkScript("cc-guard-files.mjs") + " " + lines(p).map(shq).join(" "), back: (a) => a.slice(2).join("\n") },
+    { id: "guard-bash", title: "拦下危险命令", desc: "命令里出现强推、硬重置、删根目录这类内容就不让跑，并告诉 Claude 换个做法。",
+      event: "PreToolUse", matcher: "Bash", script: "cc-guard-bash.mjs",
+      label: "禁止的内容（一行一个；写成 /…/ 就是正则）",
+      param: "git push --force\ngit push -f\n/git\\s+reset\\s+--hard/\n/\\brm\\s+-\\w*[rR]\\w*\\s+(\\/|~\\/?|\\$HOME\\/?)(\\s|$)/\nmkfs\n/\\bdd\\s+if=/",
+      cmd: (p) => hkScript("cc-guard-bash.mjs") + " " + lines(p).map(shq).join(" "), back: (a) => a.slice(2).join("\n") },
+    { id: "autosave", title: "每轮自动存档（git）", desc: "Claude 每答完一轮，项目里有改动就自动提交一次，随时能退回任意一步。只提交不推送；不是 git 仓库的项目什么也不做。",
+      event: "Stop", matcher: "", script: "cc-autosave.mjs", single: true, label: "提交说明的开头", param: "自动存档",
+      cmd: (p) => hkScript("cc-autosave.mjs") + " " + shq(String(p).trim() || "自动存档"), back: (a) => a[2] || "" },
+    { id: "prompt-note", title: "每条消息附上固定要求", desc: "你每发一条消息，自动把这段话一起交给 Claude，比如「回答用中文」「改之前先说思路」。",
+      event: "UserPromptSubmit", matcher: "", label: "要附上的话", param: "回答用中文；动手改之前先简单说一下打算怎么做。",
+      cmd: (p) => "printf '%s\\n' " + shq(String(p).trim()), test: (c) => /^printf '%s\\n' /.test(c), back: (a) => a[2] || "" },
+    { id: "session-file", title: "开会话时读入进度文件", desc: "每次开新会话（或压缩上下文后），把项目里的一个文件读给 Claude，比如进度、大纲、人物表。文件不存在就跳过。",
+      event: "SessionStart", matcher: "", single: true, label: "文件（相对项目目录）", param: "进度.md",
+      cmd: (p) => "cat " + shq(String(p).trim()) + " 2>/dev/null || true", test: (c) => /^cat '.*' 2>\/dev\/null \|\| true$/.test(c), back: (a) => a[1] || "" },
+    { id: "bash-log", title: "记下 Claude 跑过的命令", desc: "每条命令连同时间、目录追加到 ~/.claude/bash-history.log，方便事后翻看。",
+      event: "PostToolUse", matcher: "Bash", script: "cc-bash-log.mjs", cmd: () => hkScript("cc-bash-log.mjs") },
+    { id: "format", title: "改完代码自动格式化", desc: "Claude 改完代码文件，用本机已装的工具（ruff / black、prettier、gofmt、clang-format……）整理格式；没装就不动。Markdown 和纯文本不碰。",
+      event: "PostToolUse", matcher: "Edit|Write|MultiEdit", script: "cc-format.mjs", cmd: () => hkScript("cc-format.mjs") },
+  ];
+  const hkRecipeOf = (ev, h) => h && h.type === "command" && HK_RECIPES.find((r) => r.event === ev &&
+    (r.script ? String(h.command).includes(r.script) : r.test(String(h.command))));
+  const hkScopeData = () => HK.data && HK.data.scopes.find((s) => s.scope === HK.scope);
+  const hkFlat = (sc) => {
+    const out = [];
+    for (const [ev, groups] of Object.entries((sc && sc.hooks) || {}))
+      (groups || []).forEach((g, gi) => (g.hooks || []).forEach((h, hi) => out.push({ ev, gi, hi, matcher: g.matcher || "", h })));
+    return out;
+  };
+
+  async function loadExtHooks() {
+    let d;
+    try { d = await api("/api/ext/hooks"); } catch (e) { $("ext-hooks").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    HK.data = d;
+    if (!d.scopes.some((s) => s.scope === HK.scope)) HK.scope = "user";
+    renderHooks();
+  }
+
+  function renderHooks() {
+    const d = HK.data; if (!d) return;
+    const total = d.scopes.reduce((a, s) => a + hkFlat(s).length, 0);
+    $("ext-h-count").textContent = total;
+    const proj = String(d.dir || "").split("/").pop() || d.dir;
+    const SC = { user: t("所有项目"), project: t("本项目（{name}）", { name: proj }), local: t("本项目·只在本机") };
+    $("hook-scope").innerHTML = d.scopes.map((s) =>
+      `<button class="idx-chip${s.scope === HK.scope ? " on" : ""}" data-hscope="${s.scope}">${esc(SC[s.scope])}<span>${hkFlat(s).length}</span></button>`).join("");
+    const sc = hkScopeData();
+    const user = d.scopes.find((s) => s.scope === "user");
+    const SCD = {
+      user: t("写在 ~/.claude/settings.json，所有项目都生效。"),
+      project: t("写在项目的 .claude/settings.json，只在这个项目生效；项目进了 git 的话会跟着仓库走。"),
+      local: t("写在项目的 .claude/settings.local.json，只在这个项目、这台设备上生效。"),
+    };
+    $("hook-bar").innerHTML = `<div class="tiny">${esc(SCD[HK.scope])}
+        ${sc && sc.file ? `<a href="#" data-hk="open-file">${t("打开配置文件")}</a>` : ""}</div>
+      <label class="tiny hk-pause"><input type="checkbox" data-hk="pause"${user && user.disableAll ? " checked" : ""}> ${t("暂停全部 hooks（规则留着，先不跑）")}</label>`;
+    if (!sc || sc.error && !sc.badJson) { $("ext-hooks").innerHTML = `<div class="tiny warn">${esc((sc && sc.error) || "")}</div>`; return; }
+    if (sc.badJson) {
+      $("ext-hooks").innerHTML = `<div class="tiny warn">${esc(t("这个配置文件不是合法的 JSON（{msg}），先打开修好，这里才能改。", { msg: sc.error }))}</div>`;
+      return;
+    }
+    const items = hkFlat(sc);
+    $("ext-hooks").innerHTML = items.map((it, i) => {
+      const r = hkRecipeOf(it.ev, it.h);
+      const title = r ? t(r.title) : hkEvName(it.ev);
+      const meta = [r ? hkEvName(it.ev) : it.ev, it.matcher ? t("匹配：{m}", { m: it.matcher }) : "", it.h.timeout ? t("超时 {n} 秒", { n: it.h.timeout }) : ""].filter(Boolean);
+      const body = it.h.type === "command" ? it.h.command : JSON.stringify(it.h);
+      return `<div class="item hk-item${user && user.disableAll ? " off" : ""}" data-i="${i}">
+        <div class="it-title">${esc(title)}</div>
+        <div class="it-meta">${meta.map((m) => `<span>${esc(m)}</span>`).join("")}</div>
+        <div class="hk-cmd mono">${esc(body)}</div>
+        <div class="it-acts">${it.h.type === "command" ? `<button data-hk="test">${t("试运行")}</button><button data-hk="edit">${t("修改")}</button>` : ""}
+          <button data-hk="del">${t("删除")}</button></div>
+        <div class="hk-out"></div></div>`;
+    }).join("") || `<div class="tiny">${t("这里还没有规则。下面「常用规则」点一下就能加。")}</div>`;
+    $("hook-recipes").innerHTML = HK_RECIPES.map((r) => extItem(esc(t(r.title)), `<span>${esc(hkEvName(r.event))}</span>`,
+      `<button data-hk="recipe" data-id="${r.id}">${t("添加…")}</button>`, `<div class="tiny ext-desc">${esc(t(r.desc))}</div>`)).join("");
+    if (!items.length && !HK.edit && !HK.recipe) $("hook-recipes-box").open = true;
+  }
+
+  /** 表单：新建 / 修改 / 从常用规则添加。常用规则只填参数，命令自动拼好（也能直接改命令） */
+  function hkForm(init) {
+    const box = $("hook-form-box"), f = $("hook-form");
+    box.open = true;
+    const r = HK.recipe;
+    const evs = HK.data.events;
+    const main = Object.keys(HK_EV).filter((e) => evs.includes(e));
+    const more = evs.filter((e) => !main.includes(e));
+    if (init.event && !evs.includes(init.event)) more.push(init.event);
+    f.innerHTML = `
+      ${r ? `<div class="hk-rtitle">${esc(t(r.title))}</div><div class="tiny">${esc(t(r.desc))}</div>` : ""}
+      <label class="tiny">${t("什么时候跑")}</label>
+      <select data-f="event">${main.map((e) => `<option value="${e}">${esc(hkEvName(e))} · ${e}</option>`).join("")}
+        ${more.length ? `<optgroup label="${esc(t("其他（进阶）"))}">${more.map((e) => `<option value="${e}">${e}</option>`).join("")}</optgroup>` : ""}</select>
+      <div class="tiny hk-evdesc"></div>
+      <div class="hk-match"><label class="tiny hk-mlabel"></label>
+        <input data-f="matcher" autocomplete="off" spellcheck="false" placeholder="${esc(t("留空 = 全部"))}">
+        <div class="hk-chips"></div></div>
+      ${r && r.label ? `<label class="tiny">${esc(t(r.label))}</label>
+        ${r.single ? `<input data-f="param" autocomplete="off" spellcheck="false">` : `<textarea data-f="param" rows="5" class="mono" spellcheck="false"></textarea>`}` : ""}
+      <label class="tiny">${t("运行的命令")}${r ? ` <span class="hk-auto">${t("（按上面自动生成，也可以直接改）")}</span>` : ""}</label>
+      <textarea data-f="command" rows="3" class="mono" spellcheck="false" autocapitalize="off" placeholder="${esc(t("例如：echo 你好 >> ~/log.txt"))}"></textarea>
+      <div class="hk-row"><label class="tiny">${t("超时（秒，留空用默认 60）")}</label><input data-f="timeout" type="number" min="1" max="600" inputmode="numeric"></div>
+      <div class="row-actions"><button class="btn sm ghost" data-hk="f-test">${t("试运行")}</button>
+        <button class="btn sm" data-hk="f-save">${HK.edit ? t("保存修改") : t("添加")}</button>
+        <button class="btn sm ghost" data-hk="f-cancel">${t("取消")}</button></div>
+      <div class="hk-out"></div>`;
+    const q = (k) => f.querySelector(`[data-f="${k}"]`);
+    q("event").value = init.event || "PreToolUse";
+    q("matcher").value = init.matcher || "";
+    q("command").value = init.command || "";
+    q("timeout").value = init.timeout || "";
+    if (q("param")) q("param").value = init.param != null ? init.param : t(r.param);
+    const sync = () => {
+      const ev = q("event").value, chips = hkChips(ev);
+      f.querySelector(".hk-evdesc").textContent = HK_EV[ev] ? t(HK_EV[ev][1]) : "";
+      f.querySelector(".hk-match").classList.toggle("hidden", !chips && !q("matcher").value);
+      f.querySelector(".hk-mlabel").textContent = HK_TOOL_EV.includes(ev) ? t("管哪些工具（工具名，可用 | 分隔或写正则；留空 = 全部）") : t("只在这几种情况跑（留空 = 全部）");
+      f.querySelector(".hk-chips").innerHTML = (chips || []).map((c) => `<button type="button" class="idx-chip" data-chip="${esc(c)}">${esc(c)}</button>`).join("");
+    };
+    q("event").addEventListener("change", sync);
+    if (q("param")) q("param").addEventListener("input", () => { q("command").value = r.cmd(q("param").value); });
+    if (r && !init.command) q("command").value = r.cmd(q("param") ? q("param").value : "");
+    sync();
+    box.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  const hkFormVal = () => {
+    const f = $("hook-form"), q = (k) => f.querySelector(`[data-f="${k}"]`);
+    const to = parseInt(q("timeout").value, 10);
+    return { event: q("event").value, matcher: q("matcher").value.trim(), command: q("command").value.trim(), timeout: to > 0 ? to : 0 };
+  };
+  function hkCloseForm() { HK.edit = null; HK.recipe = null; $("hook-form").innerHTML = ""; $("hook-form-box").open = false; }
+
+  async function hkSave(hooks, extra) {
+    const sc = hkScopeData();
+    const r = await api("/api/ext/hooks/save", { method: "POST", body: JSON.stringify({ scope: HK.scope, dir: HK.data.dir, hooks, ...extra }) });
+    if (r.ok === false) {
+      toast(r.code === "badjson" ? t("这个配置文件不是合法的 JSON（{msg}），先打开修好，这里才能改。", { msg: r.message }) : t("保存失败：{msg}", { msg: r.message }), true);
+      return false;
+    }
+    toast(t("已保存，下一条消息生效"));
+    await loadExtHooks();
+    return !!sc;
+  }
+  const hkClone = () => JSON.parse(JSON.stringify((hkScopeData() || {}).hooks || {}));
+
+  /** 试运行结果：按事件和退出码说人话 */
+  function hkShowResult(box, res, ev, cmd, matcher, timeout) {
+    const blockEv = ["PreToolUse", "PermissionRequest", "UserPromptSubmit"].includes(ev);
+    const ctxEv = ["UserPromptSubmit", "SessionStart"].includes(ev);
+    let v, cls = "ok";
+    if (res.timedOut) { v = t("超时了，命令没跑完就被停掉。"); cls = "warn"; }
+    else if (res.code === 0) v = ctxEv && res.stdout.trim() ? t("正常结束：打印的内容会作为补充说明交给 Claude。") : blockEv ? t("放行：Claude 照常继续。") : t("正常结束。");
+    else if (res.code === 2) { v = blockEv ? t("拦下（退出码 2）：Claude 这一步不会执行，stderr 里的话会转告它。") : ev === "Stop" || ev === "SubagentStop" ? t("退出码 2：Claude 会接着干，stderr 里的话会转告它。") : t("退出码 2：stderr 里的话会反馈给 Claude。"); cls = "warn"; }
+    else { v = t("出错了（退出码 {n}）：不会拦下，Claude 照常继续。", { n: res.code }); cls = "err"; }
+    const pre = (label, s) => s.trim() ? `<div class="tiny">${label}</div><pre class="hk-pre">${esc(s.slice(0, 4000))}</pre>` : "";
+    box.innerHTML = `<div class="hk-verdict ${cls}">${esc(v)} <span class="tiny">${res.ms} ms</span></div>
+      ${pre(t("输出（stdout）"), res.stdout)}${pre(t("错误输出（stderr）"), res.stderr)}
+      <details class="ext-more"><summary>${t("模拟的输入（可以改了再试）")}</summary>
+        <textarea class="mono hk-input" rows="8" spellcheck="false">${esc(res.input)}</textarea>
+        <button class="btn sm ghost" data-hk="retest">${t("再试一次")}</button></details>`;
+    box.querySelector('[data-hk="retest"]').onclick = (e) => { e.preventDefault(); hkRunTest(box, ev, cmd, matcher, timeout, box.querySelector(".hk-input").value); };
+  }
+  async function hkRunTest(box, ev, cmd, matcher, timeout, input) {
+    if (!cmd) return toast(t("命令是空的"), true);
+    box.innerHTML = `<div class="tiny">${t("运行中…")}</div>`;
+    if (/\$HOME\/\.claude\/hooks\/cc-/.test(cmd)) await api("/api/ext/hooks/scripts", { method: "POST", body: "{}" }).catch(() => {});
+    try {
+      const res = await api("/api/ext/hooks/test", { method: "POST", body: JSON.stringify({ command: cmd, event: ev, matcher, timeout, input, dir: HK.data.dir }) });
+      if (res.ok === false) throw new Error(res.message);
+      hkShowResult(box, res, ev, cmd, matcher, timeout);
+    } catch (e) { box.innerHTML = `<div class="tiny warn">${esc(e.message)}</div>`; }
+  }
+
+  $("ext-hook-sec").addEventListener("click", async (e) => {
+    const chip = e.target.closest("[data-hscope]");
+    if (chip) { HK.scope = chip.dataset.hscope; localStorage.setItem("cc.hookScope", HK.scope); hkCloseForm(); return renderHooks(); }
+    const mc = e.target.closest("[data-chip]");
+    if (mc) {
+      const inp = $("hook-form").querySelector('[data-f="matcher"]');
+      const cur = inp.value.split("|").filter(Boolean);
+      for (const p of mc.dataset.chip.split("|")) if (!cur.includes(p)) cur.push(p);
+      inp.value = cur.join("|");
+      return;
+    }
+    const b = e.target.closest("[data-hk]");
+    if (!b || b.dataset.hk === "pause") return;
+    e.preventDefault();
+    const a = b.dataset.hk;
+    const items = hkFlat(hkScopeData());
+    const it = b.closest(".hk-item") ? items[+b.closest(".hk-item").dataset.i] : null;
+    if (a === "open-file") { const sc = hkScopeData(); return openViewer(sc.file, "text", 0); }
+    if (a === "test" && it) return hkRunTest(b.closest(".hk-item").querySelector(".hk-out"), it.ev, it.h.command, it.matcher, it.h.timeout);
+    if (a === "del" && it) {
+      if (!confirm(t("删除这条规则？"))) return;
+      const h = hkClone();
+      h[it.ev][it.gi].hooks.splice(it.hi, 1);
+      return hkSave(h);
+    }
+    if (a === "edit" && it) {
+      HK.edit = { ev: it.ev, gi: it.gi, hi: it.hi };
+      HK.recipe = hkRecipeOf(it.ev, it.h) || null;
+      const param = HK.recipe && HK.recipe.back ? HK.recipe.back(shArgs(it.h.command)) : undefined;
+      return hkForm({ event: it.ev, matcher: it.matcher, command: it.h.command, timeout: it.h.timeout, param });
+    }
+    if (a === "recipe") {
+      HK.edit = null;
+      HK.recipe = HK_RECIPES.find((r) => r.id === b.dataset.id);
+      return hkForm({ event: HK.recipe.event, matcher: HK.recipe.matcher });
+    }
+    if (a === "f-cancel") return hkCloseForm();
+    if (a === "f-test") { const v = hkFormVal(); return hkRunTest($("hook-form").querySelector(".hk-out"), v.event, v.command, v.matcher, v.timeout); }
+    if (a === "f-save") {
+      const v = hkFormVal();
+      if (!v.command) return toast(t("命令是空的"), true);
+      if (/\$HOME\/\.claude\/hooks\/cc-/.test(v.command)) await api("/api/ext/hooks/scripts", { method: "POST", body: "{}" }).catch(() => {});
+      const h = hkClone();
+      const entry = { type: "command", command: v.command };
+      if (v.timeout) entry.timeout = v.timeout;
+      if (HK.edit) {
+        const old = h[HK.edit.ev][HK.edit.gi];
+        const keep = old.hooks[HK.edit.hi];
+        // 事件、匹配都没变就原地换；变了就从原组里摘掉，按新的事件 / 匹配放
+        if (HK.edit.ev === v.event && (old.matcher || "") === v.matcher) { const nh = { ...keep, ...entry }; if (!v.timeout) delete nh.timeout; old.hooks[HK.edit.hi] = nh; }
+        else { old.hooks.splice(HK.edit.hi, 1); hkPut(h, v, entry); }
+      } else hkPut(h, v, entry);
+      if (await hkSave(h)) hkCloseForm();
+    }
+  });
+  $("ext-hook-sec").addEventListener("change", async (e) => {
+    if (e.target.dataset.hk !== "pause") return;
+    const on = e.target.checked;
+    const r = await api("/api/ext/hooks/save", { method: "POST", body: JSON.stringify({ scope: "user", disableAll: on }) });
+    if (r.ok === false) { e.target.checked = !on; return toast(t("保存失败：{msg}", { msg: r.message }), true); }
+    toast(on ? t("已暂停全部 hooks") : t("hooks 已恢复"));
+    loadExtHooks();
+  });
+  /** 放进事件下匹配规则相同的那组（没有就新开一组） */
+  function hkPut(h, v, entry) {
+    const groups = h[v.event] || (h[v.event] = []);
+    let g = groups.find((x) => (x.matcher || "") === v.matcher);
+    if (!g) { g = v.matcher ? { matcher: v.matcher, hooks: [] } : { hooks: [] }; groups.push(g); }
+    g.hooks.push(entry);
   }
 
   async function loadExtMcp() {
