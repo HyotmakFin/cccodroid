@@ -66,21 +66,22 @@ priv 'sh /sdcard/cccodroid/脚本.sh'      # 再执行
 
 工具表现异常先跑 `cccodroid-selftest -q`（只列失败项），再据此判断，别凭印象认定"安卓上不行"。
 
-**如果第三方程序只有一行 `SIGSYS: bad system call` 就死**，套一层 `enosys-run`：
+**关于 `SIGSYS: bad system call`**：安卓的 seccomp 会拦一批比 targetSdk 新的系统调用
+（`clone3`、`faccessat2`、`openat2`、`epoll_pwait2`，以及 `mount` / `umount2` / `reboot` / `kcmp` 这类），
+程序一碰就被 SIGSYS 杀掉。cccodroid 已经处理好了，**一般不用你管**：
+
+- 设置里的「静态程序兼容」默认开着：claude 外面套了 `seccomp-enosys-run -f`，**你拉起的整棵进程树**
+  （bash、静态 Go 程序、它们的子进程）碰到这类调用都会拿到 `-ENOSYS`，程序自己退回老接口接着跑。
+  所以在这里看到 `faccessat2 -> -38` 之类的结果，是**被监督器改写过的**，不代表系统本来就返回 ENOSYS ——
+  不开监督器时同一个程序会直接被 SIGSYS 杀掉（退出码 159）。
+- gdb、strace、ltrace、lldb、valgrind、proot 这些自己要 ptrace 的工具，exec 时会被自动放开，照常能用。
+- 只有用户把开关关了（或者程序不是你拉起的，比如用户自己在终端里跑），撞上 SIGSYS 才需要手动套一层：
 
 ```sh
 enosys-run <程序> [参数...]
+enosys-run -f <程序> ...        # 连它拉起的子进程一起罩住
 enosys-run -v <程序> ...        # 打印每次拦截，确认是不是这个原因
 ```
-
-原因是安卓 seccomp 拦了白名单外的系统调用。**只有 `claude` 本体自动挂了垫片**
-（glibc 加载器的 `--preload`），**普通动态链接的程序并没有 —— 它照样会被 SIGSYS 打死**；
-静态二进制（Go CLI 居多：gh / lazygit / kubectl / terraform…）又挂不上 `--preload`。
-所以这两类都套 `enosys-run`（ptrace，**不改动目标程序**）。
-
-被拦的是「比 targetSdk 更新的系统调用」那批，实际会撞上的是
-`clone3`（glibc ≥ 2.34 的 `pthread_create` 首选）、`faccessat2`、`openat2`、`epoll_pwait2`；
-`mount` / `umount2` / `reboot` / `kcmp` 这类也拦。
 
 判断特征：**同一个程序里有的子命令崩、有的正常** —— 比如 `gh api` 一直好使而
 `gh pr create` 必崩（前者不查找可执行文件，后者要找 `git`）。别据此以为"只是个别命令有 bug"。

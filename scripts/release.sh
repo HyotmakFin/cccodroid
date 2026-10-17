@@ -22,6 +22,9 @@ TAG="v$VER"
 DEVKIT=$(sed -n 's|.*/download/\([^/]*\)/.*|\1|p' "$ROOT/devkit-sources.txt" | head -1)
 SHA=$(sha256sum "$APK" | cut -d' ' -f1)
 COMMIT=$(git -C "$ROOT" rev-parse HEAD)
+# 提交得先在 GitHub 上，tag 才建得出来（2026-10-17 推送被网络打断过一次，Release 跟着失败）
+git -C "$ROOT" fetch -q origin main 2>/dev/null || true
+git -C "$ROOT" merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null || { echo "✗ 提交 ${COMMIT%${COMMIT#???????}} 还没推到 origin/main，先 git push"; exit 1; }
 
 [ -n "$NOTES" ] && [ -z "$NOTES_EN" ] && echo "⚠ 只给了中文说明（NOTES），没给英文（NOTES_EN）"
 export TOKEN REPO TAG COMMIT SHA DEVKIT APK NOTES NOTES_EN
