@@ -3351,6 +3351,7 @@ function record(run, ev) {
   const last = run.log[run.log.length - 1];
   if (last && last.type === ev.type && (ev.type === "delta" || ev.type === "thinking_delta")) last.text += ev.text;
   else if (last && last.type === "usage" && ev.type === "usage") run.log[run.log.length - 1] = { ...ev };
+  else if (last && last.type === "phase" && ev.type === "phase") run.log[run.log.length - 1] = { ...ev };
   else run.log.push({ ...ev });
 }
 
@@ -5017,6 +5018,11 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
     case "system":
       if (ev.subtype === "init") onInit(ev);
       else if (ev.subtype === "status" && ev.status === "compacting") sse({ type: "compacting" });
+      // 请求失败、claude 自己在退避重试：界面据此说「连接出错，重试 3/10」，而不是一直转圈让人猜
+      else if (ev.subtype === "api_retry" && !ev.parent_tool_use_id) {
+        sse({ type: "phase", phase: "retry", attempt: ev.attempt || 0, max: ev.max_retries || 0,
+              status: ev.error_status ?? null, error: String(ev.error || "").slice(0, 200), delayMs: ev.retry_delay_ms || 0 });
+      }
       else if (ev.subtype === "compact_boundary") {
         // 压缩（手动 /compact 或自动）完成。以前不认这条：界面显示「无输出」，上下文条要等下一轮才变
         const m = ev.compact_metadata || ev.compactMetadata || {};
@@ -5035,7 +5041,26 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
         const n = promptTokens(e.message.usage);
         if (flags) flags.contextTokens = n;
         sse({ type: "usage", contextTokens: n, outputTokens: e.message.usage.output_tokens || 0 });
+        if (!ev.parent_tool_use_id) sse({ type: "phase", phase: "wait" });   // 请求已被接住，模型还没出第一个字
         break;
+      }
+      // 进行到哪一步（界面回复末尾的小字）：思考块、工具参数、正文各自开始时报一声。
+      // 思考块不管有没有吐原文都会有 content_block_start，所以「思考中」不依赖能不能看到思考内容。
+      // 工具参数（比如 Write 一个大文件）可能流几十秒，只报字数、节流到 0.4 秒一次。子代理的不报。
+      if (!ev.parent_tool_use_id && flags) {
+        if (e?.type === "content_block_start") {
+          const k = e.content_block?.type;
+          if (k === "thinking" || k === "redacted_thinking") sse({ type: "phase", phase: "think" });
+          else if (k === "tool_use" || k === "server_tool_use") {
+            flags.toolName = e.content_block.name || ""; flags.toolChars = 0; flags.toolAt = Date.now();
+            sse({ type: "phase", phase: "tool", name: flags.toolName, chars: 0 });
+          } else if (k === "text") sse({ type: "phase", phase: "text" });
+        } else if (e?.type === "content_block_delta" && e.delta?.type === "input_json_delta") {
+          flags.toolChars = (flags.toolChars || 0) + String(e.delta.partial_json || "").length;
+          const emit = () => { flags.toolTimer = null; flags.toolAt = Date.now(); sse({ type: "phase", phase: "tool", name: flags.toolName || "", chars: flags.toolChars }); };
+          if (Date.now() - (flags.toolAt || 0) >= 400) emit();
+          else if (!flags.toolTimer) flags.toolTimer = setTimeout(emit, 400 - (Date.now() - (flags.toolAt || 0)));   // 节流期间的最后一个数也要报出去
+        } else if (e?.type === "content_block_stop" && flags.toolTimer) { clearTimeout(flags.toolTimer); flags.toolTimer = null; }
       }
       if (e?.type === "content_block_delta" && e.delta?.type === "text_delta" && e.delta.text) {
         if (flags) flags.gotDelta = true;

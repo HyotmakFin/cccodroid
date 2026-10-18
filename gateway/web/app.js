@@ -1072,7 +1072,46 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       liveTail.innerHTML = '<span class="cursor"></span><span class="tail-time"></span>';
       tailTime = liveTail.lastChild;
     }
-    const keepTail = () => { if (liveTail && !ended) bubble.appendChild(liveTail); };
+    // 进行到哪一步：三个点后面（还没出任何内容时）或末尾光标旁边的一行小字。
+    // 连接中 / 已连上等待输出 / 重试 / 思考中 / 正在写工具参数；正文开始、工具开跑、答完就收起
+    let ph = null, phEv = null, phT0 = 0, phIv = 0;
+    const pendTools = new Set();
+    const phText = () => {
+      const ms = Date.now() - phT0, sec = ms >= 3000 ? " · " + fmtDur(ms) : "";
+      switch (phEv.phase) {
+        case "connect": return t("连接中") + sec;
+        case "wait":    return t("已连上，等待输出") + sec;
+        case "retry":   return t("连接出错，第 {a}/{m} 次重试", { a: phEv.attempt || 1, m: phEv.max || "?" });
+        case "think":   return t("思考中") + sec;
+        case "tool":    return t("正在写 {name} 的参数", { name: phEv.name || "?" }) + (phEv.chars ? " · " + fmtChars(phEv.chars) : "");
+      }
+      return "";
+    };
+    const phPaint = () => {
+      if (!ph || !phEv) return;
+      ph.textContent = phText();
+      const slow = (phEv.phase === "connect" || phEv.phase === "wait") && Date.now() - phT0 > 30000;
+      ph.classList.toggle("slow", slow);
+      ph.classList.toggle("bad", phEv.phase === "retry");
+    };
+    const phPlace = () => {
+      if (!ph) return;
+      if (dots) { if (ph.previousSibling !== dots) dots.after(ph); }
+      else if (liveTail && ph.parentNode !== liveTail) liveTail.insertBefore(ph, tailTime);
+    };
+    const phClear = () => { if (phIv) { clearInterval(phIv); phIv = 0; } ph?.remove(); ph = null; phEv = null; };
+    const setPhase = (ev) => {
+      if (!live || ended) return;
+      const k = ev && ev.phase;
+      if (!k || k === "text") return phClear();
+      if (!phEv || phEv.phase !== k || k === "retry" || (k === "tool" && phEv.name !== ev.name)) phT0 = Date.now();
+      phEv = ev;
+      if (!ph) { ph = document.createElement("span"); ph.className = "run-phase"; }
+      ph.title = k === "retry" ? [ev.status, ev.error].filter(Boolean).join(" · ") : "";
+      phPlace(); phPaint();
+      if (!phIv) phIv = setInterval(phPaint, 1000);
+    };
+    const keepTail = () => { if (liveTail && !ended) { bubble.appendChild(liveTail); phPlace(); } };
     const push = (b) => { undot(); blocks.push(b); last = b; any = true; keepTail(); return b; };
     const textB = () => (last && last.kind === "text" ? last : push(TextBlock(bubble, live)));
     // 正在攒的步骤组（工具 + 中间的思考）；一出正文就收口
@@ -1084,11 +1123,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
     return {
       msgEl, bubble, tailTime,
+      phase: setPhase,
+      /** 工具结果回来：这一批工具都有结果了，下一步就是再请求模型 */
+      toolDone(id) { if (pendTools.delete(id) && !pendTools.size) setPhase({ phase: "connect" }); },
       delta(t) { textB().append(t); },
       text(t) { push(TextBlock(bubble, live)).set(t); },
       thinkDelta(t) { thinkB().append(t); },
       thinking(t) { (inGroup() ? groupThink() : push(ThinkBlock(bubble))).set(t); },
       tool(id, name, input) {
+        if (live) { pendTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
         let g = last;
         if (!inGroup()) {
           const prev = last && last.kind === "think" ? last : null;      // 紧挨着的那段思考也收进来
@@ -1116,6 +1159,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       },
       finish(aborted) {
         if (ended) return;
+        phClear();
         ended = true;
         liveTail?.remove();
         for (const b of blocks) { b.finish && b.finish(); if (aborted && b.stop) b.stop(); }
@@ -1455,6 +1499,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
         const timer = RunTimer(ev.startedAt);
         timer.attach(av);
+        av.phase({ phase: "connect" });
         runViews.set(ev.runId, { av, startedAt: ev.startedAt, timer });
         scrollDown(true);
         return;
@@ -1471,6 +1516,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         rv.avDone = false;
         if (rv.idle) { rv.idle = false; rv.timer = RunTimer(Date.now()); }   // 空闲时发来的消息：算新的一轮
         rv.timer?.attach(rv.av);          // 计时算整轮的，跟着最新的气泡走
+        rv.av.phase({ phase: "connect" });
         scrollDown(true);
         return;
       }
@@ -1489,6 +1535,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (rv.avDone) { rv.av = AssistantView(liveEl, true); rv.avDone = false; }
         rv.timer = RunTimer(ev.startedAt);
         rv.timer.attach(rv.av);
+        rv.av.phase({ phase: "connect" });
         scrollDown(true);
         return;
       }
@@ -1518,8 +1565,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "thinking_delta": av.thinkDelta(ev.text); break;
       case "thinking":       av.thinking(ev.text); break;
       case "tool_use":       av.tool(ev.id, ev.name, ev.input); break;
-      case "tool_result":    toolResult(ev.id, ev.ok, ev.text); scrollDown(); break;
-      case "compacting":     av.note(t("正在压缩上下文…")); scrollDown(); break;
+      case "tool_result":    toolResult(ev.id, ev.ok, ev.text); av.toolDone(ev.id); scrollDown(); break;
+      case "phase":          av.phase(ev); break;
+      case "compacting":     av.phase(null); av.note(t("正在压缩上下文…")); scrollDown(); break;
       case "note":           av.noteK(ev.key, ev.text); scrollDown(); break;
       case "compacted":
         av.note(ev.pre != null && ev.post != null

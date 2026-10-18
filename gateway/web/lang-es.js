@@ -1150,4 +1150,9 @@ window.I18N_DICT["es"] = {
   "在会话记录里找不到这一轮，刷新后再试。": "No se encontró este turno en el registro de la sesión. Actualiza e inténtalo de nuevo.",
   "这一轮还在生成，等它答完再分叉。": "Este turno aún se está generando. Bifurca cuando termine.",
   "分叉": "bifurcación",
+  "连接中": "Conectando",
+  "已连上，等待输出": "Conectado, esperando respuesta",
+  "连接出错，第 {a}/{m} 次重试": "Error de conexión, reintento {a}/{m}",
+  "思考中": "Pensando",
+  "正在写 {name} 的参数": "Escribiendo los parámetros de {name}",
 };
