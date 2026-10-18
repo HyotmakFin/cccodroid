@@ -180,6 +180,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const keep = [];
     const hold = (h) => "\u0000" + (keep.push(h) - 1) + "\u0000";
     return esc(s)
+      // 图片：只有调用方给了解析函数（查看器预览按文件所在目录解析相对路径）才渲染；聊天里不认
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, u) =>
+        mdImg ? hold(`<img class="md-img" src="${esc(mdImg(u.replace(/&amp;/g, "&")))}" alt="${alt}" loading="lazy">`) : all)
       .replace(/`([^`\n]+)`/g, (_, c) => {
         const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
         return hold(m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`);
@@ -202,8 +205,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       .replace(/\u0000(\d+)\u0000/g, (_, n) => keep[n]);
   }
 
-  /** 支持标题/列表/表格/代码块/引用/分隔线 */
-  function renderMd(text) {
+  /** 支持标题/列表/表格/代码块/引用/分隔线；img(url) → 图片地址，给了才渲染 ![](…) */
+  let mdImg = null;
+  function renderMd(text, img) {
+    const prev = mdImg; mdImg = img || null;
+    try { return renderMdLines(text); } finally { mdImg = prev; }
+  }
+  function renderMdLines(text) {
     const lines = String(text).split("\n");
     let out = "", inCode = false, codeBuf = [], listType = null, inTable = false, tblRows = [];
 
@@ -5109,7 +5117,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     VW.mode = mode;
     if (mode === "edit" && isMd(VW.path) && !VW.plainMd) { vwRenderActs(); return vwMdEditor(); }
     if (mode === "md") {
-      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text)}</div>`;
+      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text, mdImgSrc)}</div>`;
     } else {
       $("vw-body").innerHTML = `<div class="vw-edwrap"><div class="vw-gut"><div class="vw-gut-in"></div></div><textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>`;
       const ta = $("vw-text");

@@ -755,6 +755,7 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .vw-gpop .btn{width:auto;margin:0}
 
 .vw-md{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;max-width:none;margin:0}
+.vw-md .md-img{display:block;max-width:100%;height:auto;margin:10px auto;border-radius:6px}
 .vw-img{flex:1;min-height:0;overflow:auto;display:flex;background:var(--code-bg);border-radius:9px}
 .vw-img img{margin:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .vw-img.zoom{display:block}
