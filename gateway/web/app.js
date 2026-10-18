@@ -2029,7 +2029,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     autoGrow();
     syncInterject();
     const v = inputEl.value;
-    if (v) { draftLast = v; if (v.trim()) draftChip.classList.add("hidden"); }
+    // 逐字退格时保留删之前最长的那版；改成别的内容才换掉
+    if (v) { if (v.length >= draftLast.length || !draftLast.startsWith(v)) draftLast = v; if (v.trim()) draftChip.classList.add("hidden"); }
     else if (draftLast.trim().length >= 8) { draftOffer(draftLast); draftLast = ""; }
     const caret = inputEl.selectionStart;
     const before = v.slice(0, caret);
