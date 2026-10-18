@@ -1081,6 +1081,9 @@ function claudeEnv() {
   // 而且 /autocompact 也会被卡在 200k。值从 /models 动态取，不写死。
   if (!p.nativeModels) {
     env.CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT = "1";
+    // 模型名不是 Claude 型号时，claude 默认不给清单工具（TaskCreate/TaskUpdate 一个都不挂），得显式打开；
+    // 光打开还不够，第三方模型不会主动用 —— 配合 TASKS_HINT 提醒一句才用（DeepSeek 实测）
+    if (!p.local) env.CLAUDE_CODE_ENABLE_TODO_TOOLS = "1";
     const ctx = Number(info && info.context_window) || 0;
     if (ctx > 0) env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(ctx);
   }
@@ -3873,7 +3876,7 @@ async function startRun(item) {
   // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
   const localHint = !PROVIDER.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
-  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), !PROVIDER.nativeModels && !PROVIDER.local ? TASKS_HINT : "", SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
@@ -5085,6 +5088,8 @@ function envFacts() {
 }
 
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
+// 第三方模型的清单提醒（见 providerEnv 里的 CLAUDE_CODE_ENABLE_TODO_TOOLS）；Claude 型号自己会用，不用提醒
+const TASKS_HINT = "When a request has 3 or more distinct steps, track them with the TaskCreate and TaskUpdate tools: create the tasks first, mark each in_progress when you start it and completed when it is done. The user sees this list as a live progress panel.";
 function toolsHint() {
   if (PREFIX) {
     // 随包的 TOOLS.md 是逐项实测过的工具清单与用法（cccodroid-selftest 验证），优先用它；后面接本机实况
