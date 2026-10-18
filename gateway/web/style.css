@@ -755,6 +755,7 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .vw-gpop .btn{width:auto;margin:0}
 
 .vw-md{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;max-width:none;margin:0}
+.vw-md .md-img{display:block;max-width:100%;height:auto;margin:10px auto;border-radius:6px}
 .vw-img{flex:1;min-height:0;overflow:auto;display:flex;background:var(--code-bg);border-radius:9px}
 .vw-img img{margin:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .vw-img.zoom{display:block}
@@ -883,6 +884,11 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .live-tail{display:flex;align-items:center;gap:8px;margin-top:4px;min-height:18px}
 .live-tail .cursor{vertical-align:0}
 .live-tail .tail-time{font-size:11.5px;color:var(--fg3);font-variant-numeric:tabular-nums}
+.run-phase{font-size:12px;color:var(--fg3);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
+.bubble > .run-phase{display:inline-block;margin-left:10px;vertical-align:middle}
+.bubble > .dots{display:inline-block;vertical-align:middle}
+.run-phase.slow{color:var(--warn)}
+.run-phase.bad{color:var(--err)}
 .bill{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
 .bill-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .bill-big{margin:4px 0 2px}

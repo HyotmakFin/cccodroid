@@ -1,16 +1,16 @@
 {
- "tag": "devkit-2026.10.15.1",
- "base": "https://github.com/greyoak111/cccodroid/releases/download/devkit-2026.10.15.1/",
+ "tag": "devkit-2026.10.18",
+ "base": "https://github.com/greyoak111/cccodroid/releases/download/devkit-2026.10.18/",
  "target": "cc.codroid",
  "compat": 1,
  "gz": {
   "file": "devkit-cc.codroid.tar.gz",
-  "sha256": "f77c89f1a0e735d43514d7523ac9538a9f2047a300925c9401c57cb9b04929d5",
-  "bytes": 680589646
+  "sha256": "f411024482555b389ad13e5a452c8844c1835a1da2e8230dea0c5f9280bf6a38",
+  "bytes": 680567391
  },
  "tar": {
   "file": "devkit-cc.codroid.tar",
-  "sha256": "96d9a86bab01815fdc5daa51764f819c54ecc141d93137b995d0a371cb79c1a7",
-  "bytes": 1875921920
+  "sha256": "b3b8ed64c0f0803454d3dd9c20ad0c30e4a1204a93467c81fc1a2f39a849db69",
+  "bytes": 1875995648
  }
 }

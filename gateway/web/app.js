@@ -15,6 +15,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 界面文字一律过 t()（中文原文即键，见 i18n.js）；i18n.js 没加载时退化成原样返回
   const I18N = window.I18N || { lang: "zh", t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s) };
   const t = I18N.t;
+  const tk = (s) => s;   // 词条键：表格里先登记（扫描器认它），显示时再 t(变量)
 
   // 出错要看得见：脚本一挂界面就是死的，把原因写到顶栏副标题上，
   // 而不是让人对着一个不动的东西猜。
@@ -180,6 +181,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const keep = [];
     const hold = (h) => "\u0000" + (keep.push(h) - 1) + "\u0000";
     return esc(s)
+      // 图片：只有调用方给了解析函数（查看器预览按文件所在目录解析相对路径）才渲染；聊天里不认
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, u) =>
+        mdImg ? hold(`<img class="md-img" src="${esc(mdImg(u.replace(/&amp;/g, "&")))}" alt="${alt}" loading="lazy">`) : all)
       .replace(/`([^`\n]+)`/g, (_, c) => {
         const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
         return hold(m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`);
@@ -202,8 +206,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       .replace(/\u0000(\d+)\u0000/g, (_, n) => keep[n]);
   }
 
-  /** 支持标题/列表/表格/代码块/引用/分隔线 */
-  function renderMd(text) {
+  /** 支持标题/列表/表格/代码块/引用/分隔线；img(url) → 图片地址，给了才渲染 ![](…) */
+  let mdImg = null;
+  function renderMd(text, img) {
+    const prev = mdImg; mdImg = img || null;
+    try { return renderMdLines(text); } finally { mdImg = prev; }
+  }
+  function renderMdLines(text) {
     const lines = String(text).split("\n");
     let out = "", inCode = false, codeBuf = [], listType = null, inTable = false, tblRows = [];
 
@@ -475,10 +484,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     share: '<path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/>',
     resend: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>',
+    fork: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9c0 5-7 4-11.2 8.6"/>',
   };
+  const userTextOf = new WeakMap();   // 用户气泡 → 原文（分叉时拿它在 transcript 里认出是哪一轮）
   const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
   function renderUser(text, parent) {
     const b = mkMsg("user", null, parent);
+    userTextOf.set(b.parentElement, text);
     setHtml(b, renderMd(text));
     const acts = document.createElement("div");
     acts.className = "msg-acts";
@@ -1007,7 +1019,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!getText() || msgEl.querySelector(":scope > .msg-acts")) return;
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = actBtn("copy", t("复制")) + (canShareText() ? actBtn("share", t("转发")) : "");
+    acts.innerHTML = actBtn("copy", t("复制")) + (canShareText() ? actBtn("share", t("转发")) : "") +
+      (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a, text = getText();
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
@@ -1015,8 +1028,31 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (window.CCApp && CCApp.shareText) CCApp.shareText(text);
         else navigator.share({ text }).catch(() => {});
       }
+      if (a === "fork") forkFrom(msgEl);
     });
     msgEl.appendChild(acts);
+  }
+
+  // 分叉：保留到这条回复为止的对话，另起一个会话接着聊；原会话不动。
+  // 告诉网关这一轮的用户消息原文、以及它后面还有几条用户消息，网关据此在 transcript 里定位（见 server.mjs forkSession）
+  async function forkFrom(msgEl) {
+    const sid = view.sessionId;
+    if (!sid) return toast(t("这个会话还没存下来，答完一轮再分叉"), true);
+    const users = [...chatEl.querySelectorAll(".msg.user")].filter((u) => userTextOf.has(u));
+    let prev = null, after = 0;
+    for (const u of users) {
+      if (u.compareDocumentPosition(msgEl) & Node.DOCUMENT_POSITION_FOLLOWING) prev = u; else after++;
+    }
+    if (!prev) return toast(t("这条回复前面没有你的消息，没法从这里分叉"), true);
+    try {
+      const r = await api("/api/session/" + encodeURIComponent(sid) + "/fork", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userText: userTextOf.get(prev), after }),
+      });
+      openSession(r.id);
+      loadSessions();
+      toast(t("已分叉：保留了前 {n} 轮，接着聊就行", { n: r.kept }));
+    } catch (e) { toast(e.message, true); }
   }
 
   /** 一条 Claude 回复：思考 / 正文 / 工具按真实顺序交错排列 */
@@ -1036,7 +1072,46 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       liveTail.innerHTML = '<span class="cursor"></span><span class="tail-time"></span>';
       tailTime = liveTail.lastChild;
     }
-    const keepTail = () => { if (liveTail && !ended) bubble.appendChild(liveTail); };
+    // 进行到哪一步：三个点后面（还没出任何内容时）或末尾光标旁边的一行小字。
+    // 连接中 / 已连上等待输出 / 重试 / 思考中 / 正在写工具参数；正文开始、工具开跑、答完就收起
+    let ph = null, phEv = null, phT0 = 0, phIv = 0;
+    const pendTools = new Set();
+    const phText = () => {
+      const ms = Date.now() - phT0, sec = ms >= 3000 ? " · " + fmtDur(ms) : "";
+      switch (phEv.phase) {
+        case "connect": return t("连接中") + sec;
+        case "wait":    return t("已连上，等待输出") + sec;
+        case "retry":   return t("连接出错，第 {a}/{m} 次重试", { a: phEv.attempt || 1, m: phEv.max || "?" });
+        case "think":   return t("思考中") + sec;
+        case "tool":    return t("正在写 {name} 的参数", { name: phEv.name || "?" }) + (phEv.chars ? " · " + fmtChars(phEv.chars) : "");
+      }
+      return "";
+    };
+    const phPaint = () => {
+      if (!ph || !phEv) return;
+      ph.textContent = phText();
+      const slow = (phEv.phase === "connect" || phEv.phase === "wait") && Date.now() - phT0 > 30000;
+      ph.classList.toggle("slow", slow);
+      ph.classList.toggle("bad", phEv.phase === "retry");
+    };
+    const phPlace = () => {
+      if (!ph) return;
+      if (dots) { if (ph.previousSibling !== dots) dots.after(ph); }
+      else if (liveTail && ph.parentNode !== liveTail) liveTail.insertBefore(ph, tailTime);
+    };
+    const phClear = () => { if (phIv) { clearInterval(phIv); phIv = 0; } ph?.remove(); ph = null; phEv = null; };
+    const setPhase = (ev) => {
+      if (!live || ended) return;
+      const k = ev && ev.phase;
+      if (!k || k === "text") return phClear();
+      if (!phEv || phEv.phase !== k || k === "retry" || (k === "tool" && phEv.name !== ev.name)) phT0 = Date.now();
+      phEv = ev;
+      if (!ph) { ph = document.createElement("span"); ph.className = "run-phase"; }
+      ph.title = k === "retry" ? [ev.status, ev.error].filter(Boolean).join(" · ") : "";
+      phPlace(); phPaint();
+      if (!phIv) phIv = setInterval(phPaint, 1000);
+    };
+    const keepTail = () => { if (liveTail && !ended) { bubble.appendChild(liveTail); phPlace(); } };
     const push = (b) => { undot(); blocks.push(b); last = b; any = true; keepTail(); return b; };
     const textB = () => (last && last.kind === "text" ? last : push(TextBlock(bubble, live)));
     // 正在攒的步骤组（工具 + 中间的思考）；一出正文就收口
@@ -1048,11 +1123,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
     return {
       msgEl, bubble, tailTime,
+      phase: setPhase,
+      /** 工具结果回来：这一批工具都有结果了，下一步就是再请求模型 */
+      toolDone(id) { if (pendTools.delete(id) && !pendTools.size) setPhase({ phase: "connect" }); },
       delta(t) { textB().append(t); },
       text(t) { push(TextBlock(bubble, live)).set(t); },
       thinkDelta(t) { thinkB().append(t); },
       thinking(t) { (inGroup() ? groupThink() : push(ThinkBlock(bubble))).set(t); },
       tool(id, name, input) {
+        if (live) { pendTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
         let g = last;
         if (!inGroup()) {
           const prev = last && last.kind === "think" ? last : null;      // 紧挨着的那段思考也收进来
@@ -1080,6 +1159,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       },
       finish(aborted) {
         if (ended) return;
+        phClear();
         ended = true;
         liveTail?.remove();
         for (const b of blocks) { b.finish && b.finish(); if (aborted && b.stop) b.stop(); }
@@ -1419,6 +1499,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
         const timer = RunTimer(ev.startedAt);
         timer.attach(av);
+        av.phase({ phase: "connect" });
         runViews.set(ev.runId, { av, startedAt: ev.startedAt, timer });
         scrollDown(true);
         return;
@@ -1435,6 +1516,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         rv.avDone = false;
         if (rv.idle) { rv.idle = false; rv.timer = RunTimer(Date.now()); }   // 空闲时发来的消息：算新的一轮
         rv.timer?.attach(rv.av);          // 计时算整轮的，跟着最新的气泡走
+        rv.av.phase({ phase: "connect" });
         scrollDown(true);
         return;
       }
@@ -1453,6 +1535,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (rv.avDone) { rv.av = AssistantView(liveEl, true); rv.avDone = false; }
         rv.timer = RunTimer(ev.startedAt);
         rv.timer.attach(rv.av);
+        rv.av.phase({ phase: "connect" });
         scrollDown(true);
         return;
       }
@@ -1482,8 +1565,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "thinking_delta": av.thinkDelta(ev.text); break;
       case "thinking":       av.thinking(ev.text); break;
       case "tool_use":       av.tool(ev.id, ev.name, ev.input); break;
-      case "tool_result":    toolResult(ev.id, ev.ok, ev.text); scrollDown(); break;
-      case "compacting":     av.note(t("正在压缩上下文…")); scrollDown(); break;
+      case "tool_result":    toolResult(ev.id, ev.ok, ev.text); av.toolDone(ev.id); scrollDown(); break;
+      case "phase":          av.phase(ev); break;
+      case "compacting":     av.phase(null); av.note(t("正在压缩上下文…")); scrollDown(); break;
       case "note":           av.noteK(ev.key, ev.text); scrollDown(); break;
       case "compacted":
         av.note(ev.pre != null && ev.post != null
@@ -2806,19 +2890,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── Hooks（自动规则）：到某个时刻自动跑一条命令。常用规则点一下就加，也能自己写；每条都能先试运行看效果 ──
   const HK = { data: null, scope: localStorage.getItem("cc.hookScope") || "user", edit: null, recipe: null };
   const HK_EV = {
-    PreToolUse: ["用工具之前", "Claude 每次调用工具（改文件、跑命令、联网……）之前。退出码 2 会拦下这次调用，stderr 里写的原因会转告 Claude。"],
-    PostToolUse: ["用完工具之后", "工具执行成功之后。适合格式化、记录、检查；动作已经做了，退出码 2 只会把 stderr 反馈给 Claude。"],
-    UserPromptSubmit: ["你发出消息时", "你每发一条消息。命令打印的内容会作为补充说明一起交给 Claude；退出码 2 会拦下这条消息。"],
-    Stop: ["Claude 答完一轮时", "Claude 这一轮回答结束。适合自动存档、提醒；退出码 2 会让它接着干（小心死循环）。"],
-    SessionStart: ["会话开始时", "新开、继续、清空或压缩后的会话开始时。命令打印的内容会作为背景交给 Claude。"],
-    SessionEnd: ["会话结束时", "会话结束时，适合收尾清理。"],
-    Notification: ["Claude 发提醒时", "Claude 要你确认权限、或者闲着等你回复时。"],
-    PermissionRequest: ["要你确认权限时", "弹出权限确认之前。进阶用法：输出 JSON 可以替你自动允许或拒绝。"],
-    PostToolUseFailure: ["工具出错之后", "工具执行失败之后。"],
-    SubagentStart: ["子代理开始时", ""],
-    SubagentStop: ["子代理结束时", "子代理干完活时；退出码 2 会让它接着干。"],
-    PreCompact: ["压缩上下文之前", ""],
-    PostCompact: ["压缩上下文之后", ""],
+    PreToolUse: [tk("用工具之前"), tk("Claude 每次调用工具（改文件、跑命令、联网……）之前。退出码 2 会拦下这次调用，stderr 里写的原因会转告 Claude。")],
+    PostToolUse: [tk("用完工具之后"), tk("工具执行成功之后。适合格式化、记录、检查；动作已经做了，退出码 2 只会把 stderr 反馈给 Claude。")],
+    UserPromptSubmit: [tk("你发出消息时"), tk("你每发一条消息。命令打印的内容会作为补充说明一起交给 Claude；退出码 2 会拦下这条消息。")],
+    Stop: [tk("Claude 答完一轮时"), tk("Claude 这一轮回答结束。适合自动存档、提醒；退出码 2 会让它接着干（小心死循环）。")],
+    SessionStart: [tk("会话开始时"), tk("新开、继续、清空或压缩后的会话开始时。命令打印的内容会作为背景交给 Claude。")],
+    SessionEnd: [tk("会话结束时"), tk("会话结束时，适合收尾清理。")],
+    Notification: [tk("Claude 发提醒时"), tk("Claude 要你确认权限、或者闲着等你回复时。")],
+    PermissionRequest: [tk("要你确认权限时"), tk("弹出权限确认之前。进阶用法：输出 JSON 可以替你自动允许或拒绝。")],
+    PostToolUseFailure: [tk("工具出错之后"), tk("工具执行失败之后。")],
+    SubagentStart: [tk("子代理开始时"), ""],
+    SubagentStop: [tk("子代理结束时"), tk("子代理干完活时；退出码 2 会让它接着干。")],
+    PreCompact: [tk("压缩上下文之前"), ""],
+    PostCompact: [tk("压缩上下文之后"), ""],
   };
   const hkEvName = (ev) => (HK_EV[ev] ? t(HK_EV[ev][0]) : ev);
   const HK_TOOL_EV = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest"];
@@ -2847,27 +2931,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const lines = (s) => String(s || "").split("\n").map((x) => x.trim()).filter(Boolean);
   const hkScript = (name) => `node "$HOME/.claude/hooks/${name}"`;
   const HK_RECIPES = [
-    { id: "guard-files", title: "保护重要文件", desc: "Claude 想改 .env、密钥、签名文件时直接拦下，并告诉它原因。",
+    { id: "guard-files", title: tk("保护重要文件"), desc: tk("Claude 想改 .env、密钥、签名文件时直接拦下，并告诉它原因。"),
       event: "PreToolUse", matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "cc-guard-files.mjs",
-      label: "受保护的文件（一行一个；* 是通配符，带 / 就按路径比）", param: ".env\n.env.*\n*.pem\n*.key\n*.keystore\n*.jks\nid_rsa*\nid_ed25519*",
+      label: tk("受保护的文件（一行一个；* 是通配符，带 / 就按路径比）"), param: ".env\n.env.*\n*.pem\n*.key\n*.keystore\n*.jks\nid_rsa*\nid_ed25519*",
       cmd: (p) => hkScript("cc-guard-files.mjs") + " " + lines(p).map(shq).join(" "), back: (a) => a.slice(2).join("\n") },
-    { id: "guard-bash", title: "拦下危险命令", desc: "命令里出现强推、硬重置、删根目录这类内容就不让跑，并告诉 Claude 换个做法。",
+    { id: "guard-bash", title: tk("拦下危险命令"), desc: tk("命令里出现强推、硬重置、删根目录这类内容就不让跑，并告诉 Claude 换个做法。"),
       event: "PreToolUse", matcher: "Bash", script: "cc-guard-bash.mjs",
-      label: "禁止的内容（一行一个；写成 /…/ 就是正则）",
+      label: tk("禁止的内容（一行一个；写成 /…/ 就是正则）"),
       param: "git push --force\ngit push -f\n/git\\s+reset\\s+--hard/\n/\\brm\\s+-\\w*[rR]\\w*\\s+(\\/|~\\/?|\\$HOME\\/?)(\\s|$)/\nmkfs\n/\\bdd\\s+if=/",
       cmd: (p) => hkScript("cc-guard-bash.mjs") + " " + lines(p).map(shq).join(" "), back: (a) => a.slice(2).join("\n") },
-    { id: "autosave", title: "每轮自动存档（git）", desc: "Claude 每答完一轮，项目里有改动就自动提交一次，随时能退回任意一步。只提交不推送；不是 git 仓库的项目什么也不做。",
-      event: "Stop", matcher: "", script: "cc-autosave.mjs", single: true, label: "提交说明的开头", param: "自动存档",
-      cmd: (p) => hkScript("cc-autosave.mjs") + " " + shq(String(p).trim() || "自动存档"), back: (a) => a[2] || "" },
-    { id: "prompt-note", title: "每条消息附上固定要求", desc: "你每发一条消息，自动把这段话一起交给 Claude，比如「回答用中文」「改之前先说思路」。",
-      event: "UserPromptSubmit", matcher: "", label: "要附上的话", param: "回答用中文；动手改之前先简单说一下打算怎么做。",
+    { id: "autosave", title: tk("每轮自动存档（git）"), desc: tk("Claude 每答完一轮，项目里有改动就自动提交一次，随时能退回任意一步。只提交不推送；不是 git 仓库的项目什么也不做。"),
+      event: "Stop", matcher: "", script: "cc-autosave.mjs", single: true, label: tk("提交说明的开头"), param: tk("自动存档"),
+      cmd: (p) => hkScript("cc-autosave.mjs") + " " + shq(String(p).trim() || t("自动存档")), back: (a) => a[2] || "" },
+    { id: "prompt-note", title: tk("每条消息附上固定要求"), desc: tk("你每发一条消息，自动把这段话一起交给 Claude，比如「回答用中文」「改之前先说思路」。"),
+      event: "UserPromptSubmit", matcher: "", label: tk("要附上的话"), param: tk("回答用中文；动手改之前先简单说一下打算怎么做。"),
       cmd: (p) => "printf '%s\\n' " + shq(String(p).trim()), test: (c) => /^printf '%s\\n' /.test(c), back: (a) => a[2] || "" },
-    { id: "session-file", title: "开会话时读入进度文件", desc: "每次开新会话（或压缩上下文后），把项目里的一个文件读给 Claude，比如进度、大纲、人物表。文件不存在就跳过。",
-      event: "SessionStart", matcher: "", single: true, label: "文件（相对项目目录）", param: "进度.md",
+    { id: "session-file", title: tk("开会话时读入进度文件"), desc: tk("每次开新会话（或压缩上下文后），把项目里的一个文件读给 Claude，比如进度、大纲、人物表。文件不存在就跳过。"),
+      event: "SessionStart", matcher: "", single: true, label: tk("文件（相对项目目录）"), param: tk("进度.md"),
       cmd: (p) => "cat " + shq(String(p).trim()) + " 2>/dev/null || true", test: (c) => /^cat '.*' 2>\/dev\/null \|\| true$/.test(c), back: (a) => a[1] || "" },
-    { id: "bash-log", title: "记下 Claude 跑过的命令", desc: "每条命令连同时间、目录追加到 ~/.claude/bash-history.log，方便事后翻看。",
+    { id: "bash-log", title: tk("记下 Claude 跑过的命令"), desc: tk("每条命令连同时间、目录追加到 ~/.claude/bash-history.log，方便事后翻看。"),
       event: "PostToolUse", matcher: "Bash", script: "cc-bash-log.mjs", cmd: () => hkScript("cc-bash-log.mjs") },
-    { id: "format", title: "改完代码自动格式化", desc: "Claude 改完代码文件，用本机已装的工具（ruff / black、prettier、gofmt、clang-format……）整理格式；没装就不动。Markdown 和纯文本不碰。",
+    { id: "format", title: tk("改完代码自动格式化"), desc: tk("Claude 改完代码文件，用本机已装的工具（ruff / black、prettier、gofmt、clang-format……）整理格式；没装就不动。Markdown 和纯文本不碰。"),
       event: "PostToolUse", matcher: "Edit|Write|MultiEdit", script: "cc-format.mjs", cmd: () => hkScript("cc-format.mjs") },
   ];
   const hkRecipeOf = (ev, h) => h && h.type === "command" && HK_RECIPES.find((r) => r.event === ev &&
@@ -4097,7 +4181,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!d) return;
     const pick = en.sel >= 0 ? [d.bars[en.sel]] : d.bars;
     const tot = pick.reduce((a, b) => { for (const k of ["c", "f", "s", "d"]) a[k] += b[k] || 0; return a; }, { c: 0, f: 0, s: 0, d: 0 });
-    const head = en.sel >= 0 ? enLabel(d.bars[en.sel], en.view, true) : t({ hour: "近 24 小时", day: "近 14 天", week: "近 12 周" }[en.view]);
+    const head = en.sel >= 0 ? enLabel(d.bars[en.sel], en.view, true) : t({ hour: tk("近 24 小时"), day: tk("近 14 天"), week: tk("近 12 周") }[en.view]);
     const parts = [t("本应用 CPU {d}", { d: fmtDur(tot.c * 1000) })];
     if (d.native) parts.push(t("前台 {d}", { d: fmtDur(tot.f * 1000) }), t("亮屏 {d}", { d: fmtDur(tot.s * 1000) }), t("整机掉电 {p}", { p: enPct(tot.d) }));
     $("en-cap").textContent = head + " · " + parts.join(" · ");
@@ -5109,7 +5193,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     VW.mode = mode;
     if (mode === "edit" && isMd(VW.path) && !VW.plainMd) { vwRenderActs(); return vwMdEditor(); }
     if (mode === "md") {
-      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text)}</div>`;
+      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text, mdImgSrc)}</div>`;
     } else {
       $("vw-body").innerHTML = `<div class="vw-edwrap"><div class="vw-gut"><div class="vw-gut-in"></div></div><textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>`;
       const ta = $("vw-text");
@@ -5129,25 +5213,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const loadMdEdit = () => mdeditP || (mdeditP = import("/mdedit/mdedit.js").catch((e) => { mdeditP = null; throw e; }));
   const MI = (d) => `<svg viewBox="0 0 24 24">${d}</svg>`;
   const MDBAR = [
-    ["undo", "撤销", MI('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')],
-    ["redo", "重做", MI('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>')],
+    ["undo", tk("撤销"), MI('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')],
+    ["redo", tk("重做"), MI('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>')],
     0,
-    ["heading", "标题", "H"],
-    ["bold", "粗体", "<b>B</b>"],
-    ["italic", "斜体", '<i style="font-family:Georgia,serif">I</i>'],
-    ["strike", "删除线", "<s>S</s>"],
+    ["heading", tk("标题"), "H"],
+    ["bold", tk("粗体"), "<b>B</b>"],
+    ["italic", tk("斜体"), '<i style="font-family:Georgia,serif">I</i>'],
+    ["strike", tk("删除线"), "<s>S</s>"],
     0,
-    ["quote", "引用", MI('<path d="M5 5v14M10 7h9M10 12h9M10 17h6"/>')],
-    ["ul", "无序列表", MI('<path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="6" r=".9"/><circle cx="5" cy="12" r=".9"/><circle cx="5" cy="18" r=".9"/>')],
-    ["ol", "有序列表", MI('<path d="M11 6h9M11 12h9M11 18h9M4 4.5h1.5V9M4 9h3M4 14.6c.6-.8 3-.9 3 .6 0 1.1-3 2-3 3.3h3.2"/>')],
-    ["task", "任务列表", MI('<path d="M3.5 4h7v7h-7zM5.3 7.6l1.4 1.4 2.3-2.7M13.5 7.5h7M3.5 14h7v7h-7zM13.5 17.5h7"/>')],
+    ["quote", tk("引用"), MI('<path d="M5 5v14M10 7h9M10 12h9M10 17h6"/>')],
+    ["ul", tk("无序列表"), MI('<path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="6" r=".9"/><circle cx="5" cy="12" r=".9"/><circle cx="5" cy="18" r=".9"/>')],
+    ["ol", tk("有序列表"), MI('<path d="M11 6h9M11 12h9M11 18h9M4 4.5h1.5V9M4 9h3M4 14.6c.6-.8 3-.9 3 .6 0 1.1-3 2-3 3.3h3.2"/>')],
+    ["task", tk("任务列表"), MI('<path d="M3.5 4h7v7h-7zM5.3 7.6l1.4 1.4 2.3-2.7M13.5 7.5h7M3.5 14h7v7h-7zM13.5 17.5h7"/>')],
     0,
-    ["link", "链接", MI('<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>')],
-    ["image", "图片", MI('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>')],
-    ["code", "代码", MI('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>')],
-    ["hr", "分割线", MI('<path d="M3 12h18"/>')],
+    ["link", tk("链接"), MI('<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>')],
+    ["image", tk("图片"), MI('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>')],
+    ["code", tk("代码"), MI('<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>')],
+    ["hr", tk("分割线"), MI('<path d="M3 12h18"/>')],
     0,
-    ["search", "查找替换", MI('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>')],
+    ["search", tk("查找替换"), MI('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>')],
   ];
   /** md 里的图片地址 → 能加载的地址（相对路径按这个文件所在目录算） */
   function mdImgSrc(u) {

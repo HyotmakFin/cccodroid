@@ -1469,6 +1469,63 @@ const TRASH_DIR = path.join(CFG.home, ".ccapp-trash");
 const TRASH_KEEP_DAYS = 30;
 const SID_RE = /^[A-Za-z0-9._-]+$/;
 
+// ── 分叉：从某一轮之后另起一个会话 ──
+// 把 transcript 从头抄到「这一轮的最后一行」（下一条用户消息之前），换个会话号写成新文件。
+// 和 claude 自带的 --fork-session 是一回事，只是能挑从哪一轮分。原会话一个字节都不动。
+// 定位那一轮：前端给出这一轮的用户消息原文 + 它后面还有几条用户消息（after）。
+// 斜杠命令在界面上有气泡、在 transcript 里却是 <command-name> 行，单靠计数会错位，
+// 所以先按原文找候选，再取倒数位置最接近 after 的那条；原文一条都对不上就拒绝，绝不切错地方。
+const forkNorm = (t) => String(t || "").replace(/\[图片\]/g, "").replace(/\s+/g, " ").trim();
+function forkUserText(ev) {
+  if (!ev || ev.type !== "user" || ev.isSidechain || ev.isMeta || ev.isCompactSummary) return null;
+  const c = ev.message?.content;
+  if (typeof c === "string") return c && !c.startsWith("<") ? c : null;
+  if (!Array.isArray(c)) return null;
+  const texts = c.filter((x) => x.type === "text" && x.text && !x.text.startsWith("<")).map((x) => x.text);
+  if (c.some((x) => x.type === "image")) texts.push("[图片]");
+  return texts.length ? texts.join("\n") : null;
+}
+function forkSession(id, userText, after) {
+  const found = findSessionFile(id);
+  if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
+  const lines = fs.readFileSync(found.file, "utf8").split("\n");
+  const users = [];
+  lines.forEach((line, i) => {
+    if (!line.includes('"user"')) return;
+    let ev; try { ev = JSON.parse(line); } catch { return; }
+    const t = forkUserText(ev);
+    if (t != null) users.push({ i, t: forkNorm(t) });
+  });
+  const want = forkNorm(userText), head = want.slice(0, 80);
+  const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
+  let best = -1;
+  users.forEach((u, j) => {
+    if (!same(u.t)) return;
+    const d = Math.abs(users.length - 1 - j - (Number(after) || 0));
+    if (best < 0 || d < Math.abs(users.length - 1 - best - (Number(after) || 0))) best = j;
+  });
+  if (best < 0) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
+  const cut = best + 1 < users.length ? users[best + 1].i : lines.length;
+  if (cut === lines.length && runOfSession(id)) return { ok: false, status: 409, message: tz("这一轮还在生成，等它答完再分叉。") };
+  const nid = crypto.randomUUID();
+  const out = [];
+  for (const line of lines.slice(0, cut)) {
+    if (!line.trim()) continue;
+    if (!line.includes(id)) { out.push(line); continue; }
+    try { const ev = JSON.parse(line); if (ev.sessionId === id) ev.sessionId = nid; out.push(JSON.stringify(ev)); }
+    catch { out.push(line); }
+  }
+  const dir = path.dirname(found.file);
+  fs.writeFileSync(path.join(dir, nid + ".jsonl"), out.join("\n") + "\n");
+  // 同名目录里是子代理记录、超长工具结果：一起抄过去，引用它们的路径照旧有效
+  const side = path.join(dir, id);
+  try { if (fs.statSync(side).isDirectory()) fs.cpSync(side, path.join(dir, nid), { recursive: true }); } catch {}
+  const title = (NAMES[id] || peekSession(found.file).title || "").slice(0, 100);
+  NAMES[nid] = title + " · " + tr(LAST_LANG, tz("分叉")); saveNames();
+  log(`会话分叉 ${id.slice(0, 8)} → ${nid.slice(0, 8)}（保留 ${best + 1}/${users.length} 轮）`);
+  return { ok: true, id: nid, title: NAMES[nid], kept: best + 1, total: users.length };
+}
+
 function trashSession(id) {
   const found = findSessionFile(id);
   if (!found) return { ok: false, error: "not found" };
@@ -3294,6 +3351,7 @@ function record(run, ev) {
   const last = run.log[run.log.length - 1];
   if (last && last.type === ev.type && (ev.type === "delta" || ev.type === "thinking_delta")) last.text += ev.text;
   else if (last && last.type === "usage" && ev.type === "usage") run.log[run.log.length - 1] = { ...ev };
+  else if (last && last.type === "phase" && ev.type === "phase") run.log[run.log.length - 1] = { ...ev };
   else run.log.push({ ...ev });
 }
 
@@ -4960,6 +5018,11 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
     case "system":
       if (ev.subtype === "init") onInit(ev);
       else if (ev.subtype === "status" && ev.status === "compacting") sse({ type: "compacting" });
+      // 请求失败、claude 自己在退避重试：界面据此说「连接出错，重试 3/10」，而不是一直转圈让人猜
+      else if (ev.subtype === "api_retry" && !ev.parent_tool_use_id) {
+        sse({ type: "phase", phase: "retry", attempt: ev.attempt || 0, max: ev.max_retries || 0,
+              status: ev.error_status ?? null, error: String(ev.error || "").slice(0, 200), delayMs: ev.retry_delay_ms || 0 });
+      }
       else if (ev.subtype === "compact_boundary") {
         // 压缩（手动 /compact 或自动）完成。以前不认这条：界面显示「无输出」，上下文条要等下一轮才变
         const m = ev.compact_metadata || ev.compactMetadata || {};
@@ -4978,7 +5041,26 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
         const n = promptTokens(e.message.usage);
         if (flags) flags.contextTokens = n;
         sse({ type: "usage", contextTokens: n, outputTokens: e.message.usage.output_tokens || 0 });
+        if (!ev.parent_tool_use_id) sse({ type: "phase", phase: "wait" });   // 请求已被接住，模型还没出第一个字
         break;
+      }
+      // 进行到哪一步（界面回复末尾的小字）：思考块、工具参数、正文各自开始时报一声。
+      // 思考块不管有没有吐原文都会有 content_block_start，所以「思考中」不依赖能不能看到思考内容。
+      // 工具参数（比如 Write 一个大文件）可能流几十秒，只报字数、节流到 0.4 秒一次。子代理的不报。
+      if (!ev.parent_tool_use_id && flags) {
+        if (e?.type === "content_block_start") {
+          const k = e.content_block?.type;
+          if (k === "thinking" || k === "redacted_thinking") sse({ type: "phase", phase: "think" });
+          else if (k === "tool_use" || k === "server_tool_use") {
+            flags.toolName = e.content_block.name || ""; flags.toolChars = 0; flags.toolAt = Date.now();
+            sse({ type: "phase", phase: "tool", name: flags.toolName, chars: 0 });
+          } else if (k === "text") sse({ type: "phase", phase: "text" });
+        } else if (e?.type === "content_block_delta" && e.delta?.type === "input_json_delta") {
+          flags.toolChars = (flags.toolChars || 0) + String(e.delta.partial_json || "").length;
+          const emit = () => { flags.toolTimer = null; flags.toolAt = Date.now(); sse({ type: "phase", phase: "tool", name: flags.toolName || "", chars: flags.toolChars }); };
+          if (Date.now() - (flags.toolAt || 0) >= 400) emit();
+          else if (!flags.toolTimer) flags.toolTimer = setTimeout(emit, 400 - (Date.now() - (flags.toolAt || 0)));   // 节流期间的最后一个数也要报出去
+        } else if (e?.type === "content_block_stop" && flags.toolTimer) { clearTimeout(flags.toolTimer); flags.toolTimer = null; }
       }
       if (e?.type === "content_block_delta" && e.delta?.type === "text_delta" && e.delta.text) {
         if (flags) flags.gotDelta = true;
@@ -5847,6 +5929,14 @@ const server = http.createServer(async (req, res) => {
         if (!name) return sendJson(res, 400, { error: "empty" });
         NAMES[id] = name; saveNames();
         return sendJson(res, 200, { ok: true, title: name });
+      }
+
+      if (req.method === "POST" && action === "fork") {
+        const b = JSON.parse((await readBody(req)) || "{}");
+        let r;
+        try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0); }
+        catch (e) { r = { ok: false, status: 500, message: e.message }; }
+        return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: "fork", message: tr(LAST_LANG, r.message) });
       }
 
       if (req.method === "POST" && action === "pin") {
