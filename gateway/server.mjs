@@ -1469,6 +1469,63 @@ const TRASH_DIR = path.join(CFG.home, ".ccapp-trash");
 const TRASH_KEEP_DAYS = 30;
 const SID_RE = /^[A-Za-z0-9._-]+$/;
 
+// ── 分叉：从某一轮之后另起一个会话 ──
+// 把 transcript 从头抄到「这一轮的最后一行」（下一条用户消息之前），换个会话号写成新文件。
+// 和 claude 自带的 --fork-session 是一回事，只是能挑从哪一轮分。原会话一个字节都不动。
+// 定位那一轮：前端给出这一轮的用户消息原文 + 它后面还有几条用户消息（after）。
+// 斜杠命令在界面上有气泡、在 transcript 里却是 <command-name> 行，单靠计数会错位，
+// 所以先按原文找候选，再取倒数位置最接近 after 的那条；原文一条都对不上就拒绝，绝不切错地方。
+const forkNorm = (t) => String(t || "").replace(/\[图片\]/g, "").replace(/\s+/g, " ").trim();
+function forkUserText(ev) {
+  if (!ev || ev.type !== "user" || ev.isSidechain || ev.isMeta || ev.isCompactSummary) return null;
+  const c = ev.message?.content;
+  if (typeof c === "string") return c && !c.startsWith("<") ? c : null;
+  if (!Array.isArray(c)) return null;
+  const texts = c.filter((x) => x.type === "text" && x.text && !x.text.startsWith("<")).map((x) => x.text);
+  if (c.some((x) => x.type === "image")) texts.push("[图片]");
+  return texts.length ? texts.join("\n") : null;
+}
+function forkSession(id, userText, after) {
+  const found = findSessionFile(id);
+  if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
+  const lines = fs.readFileSync(found.file, "utf8").split("\n");
+  const users = [];
+  lines.forEach((line, i) => {
+    if (!line.includes('"user"')) return;
+    let ev; try { ev = JSON.parse(line); } catch { return; }
+    const t = forkUserText(ev);
+    if (t != null) users.push({ i, t: forkNorm(t) });
+  });
+  const want = forkNorm(userText), head = want.slice(0, 80);
+  const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
+  let best = -1;
+  users.forEach((u, j) => {
+    if (!same(u.t)) return;
+    const d = Math.abs(users.length - 1 - j - (Number(after) || 0));
+    if (best < 0 || d < Math.abs(users.length - 1 - best - (Number(after) || 0))) best = j;
+  });
+  if (best < 0) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
+  const cut = best + 1 < users.length ? users[best + 1].i : lines.length;
+  if (cut === lines.length && runOfSession(id)) return { ok: false, status: 409, message: tz("这一轮还在生成，等它答完再分叉。") };
+  const nid = crypto.randomUUID();
+  const out = [];
+  for (const line of lines.slice(0, cut)) {
+    if (!line.trim()) continue;
+    if (!line.includes(id)) { out.push(line); continue; }
+    try { const ev = JSON.parse(line); if (ev.sessionId === id) ev.sessionId = nid; out.push(JSON.stringify(ev)); }
+    catch { out.push(line); }
+  }
+  const dir = path.dirname(found.file);
+  fs.writeFileSync(path.join(dir, nid + ".jsonl"), out.join("\n") + "\n");
+  // 同名目录里是子代理记录、超长工具结果：一起抄过去，引用它们的路径照旧有效
+  const side = path.join(dir, id);
+  try { if (fs.statSync(side).isDirectory()) fs.cpSync(side, path.join(dir, nid), { recursive: true }); } catch {}
+  const title = (NAMES[id] || peekSession(found.file).title || "").slice(0, 100);
+  NAMES[nid] = title + " · " + tr(LAST_LANG, tz("分叉")); saveNames();
+  log(`会话分叉 ${id.slice(0, 8)} → ${nid.slice(0, 8)}（保留 ${best + 1}/${users.length} 轮）`);
+  return { ok: true, id: nid, title: NAMES[nid], kept: best + 1, total: users.length };
+}
+
 function trashSession(id) {
   const found = findSessionFile(id);
   if (!found) return { ok: false, error: "not found" };
@@ -5847,6 +5904,14 @@ const server = http.createServer(async (req, res) => {
         if (!name) return sendJson(res, 400, { error: "empty" });
         NAMES[id] = name; saveNames();
         return sendJson(res, 200, { ok: true, title: name });
+      }
+
+      if (req.method === "POST" && action === "fork") {
+        const b = JSON.parse((await readBody(req)) || "{}");
+        let r;
+        try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0); }
+        catch (e) { r = { ok: false, status: 500, message: e.message }; }
+        return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: "fork", message: tr(LAST_LANG, r.message) });
       }
 
       if (req.method === "POST" && action === "pin") {
