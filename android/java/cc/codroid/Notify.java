@@ -197,7 +197,8 @@ final class Notify {
         syncAsks();
         if (!doneRuns.add(runId)) return;
         if (doneRuns.size() > 200) doneRuns.clear();
-        if (ev.optBoolean("aborted") || MainActivity.visible || !doneOn()) return;
+        // 网关自己发起的空闲压缩（auto=idle）不是用户等着的那一轮，不通知
+        if (ev.optBoolean("aborted") || !ev.optString("auto").isEmpty() || MainActivity.visible || !doneOn()) return;
         boolean failed = ev.has("error") && !ev.isNull("error");
         String sid = sidOf(ev);
         // 每个会话各留最新一条：并行时几个会话先后跑完，不互相顶掉

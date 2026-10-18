@@ -583,6 +583,8 @@ const SETTINGS = {
   // 静态程序兼容：claude 外面套 seccomp-enosys-run -f，它拉起的整棵进程树里撞 seccomp 的静态二进制
   // （CGO_ENABLED=0 的 Go 程序之类）拿到 ENOSYS 而不是被 SIGSYS 打死。出问题时可关，回到不套的老样子
   staticCompat: true,
+  // 空闲压缩：长会话闲置快一小时、1 小时提示缓存快过期时先压缩，下一条消息不用把整段历史重算一遍（见 idleArm）
+  idleCompaction: true,
   // 端侧小模型：chat = 纯聊天（不给工具，提示只有几十 token）；custom = 用户自己的 ~/.cccodroid/local-mode.json
   localMode: "chat",
 };
@@ -714,7 +716,8 @@ function isLoginMode(p = PROVIDER) { return !!(p && p.login && !API_KEY); }
 const LOGIN_MODELS = [
   ["opus", "Opus（最新）"], ["sonnet", "Sonnet（最新）"], ["haiku", "Haiku（最新）"], ["fable", "Fable（最新）"],
   ["claude-opus-5-5", "Opus 5.5"], ["claude-fable-5-1", "Fable 5.1"],
-  ["claude-sonnet-5-5", "Sonnet 5.5"], ["claude-sonnet-5", "Sonnet 5"], ["claude-haiku-4-5-20251001", "Haiku 4.5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"], ["claude-sonnet-5", "Sonnet 5"],
+  ["claude-haiku-5-5", "Haiku 5.5"], ["claude-haiku-4-5-20251001", "Haiku 4.5"],
 ].map(([id, name]) => ({ id, name, context_window: 0, max_output_tokens: 0, input_modalities: ["text", "image"] }));
 
 // claude --effort 认的全部档位（claude --help 原文：low, medium, high, xhigh, max）。
@@ -1485,6 +1488,54 @@ function forkUserText(ev) {
   if (c.some((x) => x.type === "image")) texts.push("[图片]");
   return texts.length ? texts.join("\n") : null;
 }
+// ── /goal 目标（上游 2.1.x：设一个完成条件，Claude 跨轮一直干到满足为止）──
+// -p 模式下目标状态不进事件流，只记在会话记录里：attachment.type === "goal_status"
+//   设定 → {met:false, sentinel:true, condition}；没达成 → {met:false, condition, reason}；
+//   达成 → {met:true, iterations, durationMs, tokens}；做不到 → {failed:true, reason}
+// 「/goal clear」（stop/off/reset/none/cancel 同义）只留一条命令记录，没有 goal_status，要自己认。
+const GOAL_CLEAR = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
+function goalStateOf(file) {
+  let txt = "";
+  try {
+    const st = fs.statSync(file), n = Math.min(st.size, 512 * 1024), fd = fs.openSync(file, "r");
+    try { const b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, st.size - n); txt = b.toString("utf8"); } finally { fs.closeSync(fd); }
+  } catch { return null; }
+  const lines = txt.split("\n");
+  let last = null, lastAt = 0, setAt = null, checks = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (!l.includes("goal")) continue;
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    if (!last && e.type === "user" && typeof e.message?.content === "string") {
+      const m = e.message.content.match(/<command-name>\/goal<\/command-name>[\s\S]*?<command-args>([\s\S]*?)<\/command-args>/);
+      if (m && GOAL_CLEAR.has(m[1].trim().toLowerCase())) return null;   // 最近一次是清除
+    }
+    const a = e.type === "attachment" && e.attachment?.type === "goal_status" ? e.attachment : null;
+    if (!a) continue;
+    if (!last) { last = a; lastAt = Date.parse(e.timestamp) || 0; if (a.met || a.failed) break; }
+    if (a.condition !== last.condition) break;
+    if (a.sentinel) { setAt = Date.parse(e.timestamp) || null; break; }
+    if (!a.met) checks++;
+  }
+  if (!last) return null;
+  const base = { condition: String(last.condition || "").slice(0, 600), at: lastAt };
+  if (last.met || last.failed) return { ...base, done: true, met: !!last.met, failed: !!last.failed, reason: String(last.reason || "").slice(0, 600),
+    iterations: last.iterations ?? null, durationMs: last.durationMs ?? null, tokens: last.tokens ?? null };
+  return { ...base, active: true, setAt, checks, reason: last.sentinel ? "" : String(last.reason || "").slice(0, 600) };
+}
+// 跑着的时候每 4 秒看一眼（只看有会话号的轮），变了才推；每轮结束再补看一次（见 endRun），最后那次达成不会漏
+const GOAL_SEEN = new Map();   // 会话号 → 上次推出去的 JSON
+function goalCheck(sid) {
+  const f = sid && findSessionFile(sid);
+  if (!f) return;
+  const g = goalStateOf(f.file), j = JSON.stringify(g);
+  if (GOAL_SEEN.get(sid) === j) return;
+  GOAL_SEEN.set(sid, j);
+  if (GOAL_SEEN.size > 200) GOAL_SEEN.delete(GOAL_SEEN.keys().next().value);
+  publish({ type: "goal", sessionId: sid, goal: g });
+}
+setInterval(() => { for (const r of RUNS.values()) goalCheck(r.sessionId); }, 4000).unref?.();
+
 function forkSession(id, userText, after) {
   const found = findSessionFile(id);
   if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
@@ -3252,7 +3303,7 @@ const newRunId = () => `r${BOOT}${(++RUN_N).toString(36)}`;
 const runInfo = (r) => r && {
   id: r.id, cid: r.cid, text: r.text.slice(0, 2000), sessionId: r.sessionId, follow: r.follow, startedAt: r.startedAt,
   perms: r.perms ? [...r.perms.values()] : [],
-  idle: !!r.idle, bg: r.bgTasks || 0,
+  idle: !!r.idle, bg: r.bgTasks || 0, bgList: r.bgList || [], auto: r.auto || null,
 };
 
 /** 改权限模式：存进设置（下一轮沿用），正在跑的那一轮当场切（set_permission_mode） */
@@ -3361,7 +3412,8 @@ function endRun(run, fields = {}) {
   run.ended = true;
   RUNS.delete(run.id);
   if (!RUNS.size) runFlag(false);
-  publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...fields });
+  publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...(run.auto ? { auto: run.auto } : {}), ...fields });
+  goalCheck(run.sessionId);
   run.log = [];
   publishState();
   setImmediate(pump);
@@ -3376,6 +3428,47 @@ function abortRun(run) {
   for (const q of QUEUE) if (sameLane(q, run)) { q.held = true; q.intr = false; }
   if (run.child) killTree(run.child);
   return true;
+}
+
+// ── 空闲压缩（上游 2.1.299 起只在终端交互模式里有；网关每轮起一个进程，用不上，照它的条件自己做）──
+// 上游的条件：自动压缩开着、没关空闲压缩、1 小时缓存、缓存还热、上下文 ≥ 20 万、之后没有新请求、额度没逼近上限。
+// 1 小时缓存从接口返回的 cache_creation.ephemeral_1h_input_tokens 看出来（订阅账户就是这种）；
+// 第三方厂商的缓存规则各不相同，不做。计时从这一轮结束算起，54 分钟时缓存还剩约 6 分钟。
+// 两个环境变量只给测试用（缩短等待、降低门槛）
+const IDLE_MS = Number(process.env.CCAPP_IDLE_MS) || 54 * 60 * 1000, IDLE_MIN_TOKENS = Number(process.env.CCAPP_IDLE_MIN) || 200000;
+const IDLE = new Map();   // 会话号 → { timer, ctx, at, size }
+function idleDisarm(sid) { const x = IDLE.get(sid); if (x) { clearTimeout(x.timer); IDLE.delete(sid); } }
+function idleDisarmAll() { for (const sid of [...IDLE.keys()]) idleDisarm(sid); }
+function autoCompactOff() {
+  if (/^(1|true)$/i.test(process.env.DISABLE_COMPACT || "") || /^(1|true)$/i.test(process.env.DISABLE_AUTO_COMPACT || "")) return true;
+  try { return JSON.parse(fs.readFileSync(path.join(CFG.home, ".claude", "settings.json"), "utf8")).autoCompactEnabled === false; } catch { return false; }
+}
+function idleArm(sid, flags) {
+  idleDisarm(sid);
+  const ctx = flags.mainCtx || 0;
+  if (SETTINGS.idleCompaction === false || !PROVIDER.nativeModels || PROVIDER.local) return;
+  if (!flags.cache1h || flags.cache5m || ctx < IDLE_MIN_TOKENS || autoCompactOff()) return;
+  let size = -1; try { size = fs.statSync(findSessionFile(sid).file).size; } catch { return; }
+  const timer = setTimeout(() => idleFire(sid), IDLE_MS);
+  timer.unref?.();
+  IDLE.set(sid, { timer, ctx, at: Date.now(), size });
+  log(`⏲ 空闲压缩已挂上：会话 ${sid.slice(0, 8)} 上下文 ${ctx}，${IDLE_MS / 60000} 分钟后没动静就压缩`);
+}
+function idleFire(sid) {
+  const x = IDLE.get(sid);
+  IDLE.delete(sid);
+  if (!x || SETTINGS.idleCompaction === false || !PROVIDER.nativeModels) return;
+  const why = (() => {
+    if (laneRun("s:" + sid)) return "正在跑";
+    if (QUEUE.some((q) => sidOfLane(laneOfItem(q)) === sid)) return "有排队的消息";
+    try { if (fs.statSync(findSessionFile(sid).file).size !== x.size) return "会话有新内容"; } catch { return "会话文件不见了"; }
+    const rl = RATE_LIMITS;
+    if (rl && isLoginMode() && Math.max(rl.fiveHour?.used || 0, rl.sevenDay?.used || 0) >= 90) return "额度逼近上限";
+    return null;
+  })();
+  if (why) { log(`⏲ 空闲压缩跳过（${why}）：会话 ${sid.slice(0, 8)}`); return; }
+  log(`⏲ 空闲压缩：会话 ${sid.slice(0, 8)} 闲置 ${Math.round((Date.now() - x.at) / 60000)} 分钟，上下文 ${x.ctx}`);
+  enqueue({ message: "/compact", sessionId: sid, auto: "idle" });
 }
 
 /** 有空位就从队列里挑能跑的：车道空闲、且是这条车道上排在最前的（同一会话不许插队、不许同时跑两轮） */
@@ -3410,6 +3503,7 @@ function enqueue(body) {
     permissionMode: body.permissionMode || null,
     addDirs: Array.isArray(body.addDirs) ? body.addDirs : [],
     at: Date.now(),
+    ...(body.auto ? { auto: body.auto } : {}),
   };
   // 插话（"inject"，旧前端叫 "interrupt"）：不打断。消息直接写进正在跑的 claude 的 stdin，
   // claude 会在当前这一步（比如一次工具调用）结束后把它并进对话，同一轮里接着干 —— 和终端里边干边打字一样。
@@ -3665,6 +3759,7 @@ async function startRun(item) {
     sessionId: item.sessionId || (item.follow && RUN_SESSIONS.get(item.follow)) || null,
     follow: item.follow,
     cid: item.cid,
+    auto: item.auto || null,           // "idle" = 网关自己发起的空闲压缩（界面画成系统提示，不发通知）
     startedAt: Date.now(),
     child: null, aborted: false, ended: false,
     provider: PROVIDER.id,             // 记 token 用：开跑时的厂商（跑着的时候不许切）
@@ -3677,9 +3772,9 @@ async function startRun(item) {
   runFlag(true);
   // 在被中断的那个会话里又跑起来了（点了「继续」或者直接接着聊）：中断提示就不用再挂着了
   if (INTERRUPTED && (INTERRUPTED.sessionId ? INTERRUPTED.sessionId === run.sessionId : !run.sessionId)) setInterrupted(null);
-  if (run.sessionId) RUN_SESSIONS.set(run.id, run.sessionId);
+  if (run.sessionId) { RUN_SESSIONS.set(run.id, run.sessionId); idleDisarm(run.sessionId); }
   const emit = (ev) => runEmit(run, ev);
-  emit({ type: "run_start", text: run.text, sessionId: run.sessionId, follow: run.follow, cid: run.cid, startedAt: run.startedAt });
+  emit({ type: "run_start", text: run.text, sessionId: run.sessionId, follow: run.follow, cid: run.cid, startedAt: run.startedAt, ...(run.auto ? { auto: run.auto } : {}) });
   publishState();
 
   const message = run.text;
@@ -3781,6 +3876,7 @@ async function startRun(item) {
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
+  run.bgList = [];             // 后台任务明细：{ id, type, desc }（shell / 子代理 / monitor / 工作流），界面列出来、可单独停
   run.replays = 0;
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
@@ -3797,6 +3893,9 @@ async function startRun(item) {
   const writeCtl = (o) => { try { child.stdin.write(JSON.stringify(o) + "\n"); return true; } catch { return false; } };
   let ctlN = 0;
   run.setMode = (mode) => run.inputOpen && writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "set_permission_mode", mode } });
+  // 停掉一个后台任务（stop_task 控制请求；claude 停完会再报一次 background_tasks_changed）
+  run.stopTask = (taskId) => run.inputOpen && run.bgList.some((t) => t.id === taskId) &&
+    writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "stop_task", task_id: taskId } });
   run.answerPerm = (id, a) => {
     const p = run.perms.get(id);
     if (!p || run.ended || run.aborted) return false;
@@ -3900,9 +3999,17 @@ async function startRun(item) {
     }
     // 后台任务（run_in_background 的命令、后台子代理）：result 之后它们跑完，claude 会在同一进程里接着再跑一轮。
     // 那时 stdin 要还开着，否则这一轮里所有授权请求都报「Tool permission request failed: AbortError: Stream closed」。
+    // claude 有任何别的动静（开始请求、回显通知…）就不替它收尾了：之后的 result 会正常关 stdin
+    if (run.idleClose && !(ev.type === "system" && ev.subtype === "background_tasks_changed")) { clearTimeout(run.idleClose); run.idleClose = null; }
     if (ev.type === "system" && ev.subtype === "background_tasks_changed" && Array.isArray(ev.tasks)) {
       run.bgTasks = ev.tasks.length;
-      if (run.idle && run.bgTasks) { emit({ type: "run_idle", bg: run.bgTasks }); publishState(); }
+      run.bgList = ev.tasks.slice(0, 30).map((t) => ({ id: String(t.task_id || ""), type: String(t.task_type || ""), desc: String(t.description || "").slice(0, 200) }));
+      if (run.idle && run.bgTasks) emit({ type: "run_idle", bg: run.bgTasks });
+      publishState();                    // 明细跟着状态走（runInfo.bgList），断线重连也补得上
+      // 空闲中后台任务全没了：任务自己跑完时 claude 会接着起一轮（之后的 result 会关 stdin）；
+      // 被 stop_task 停掉的只排进它的队列、不起新一轮，这一轮就永远挂着。等 6 秒没动静就收尾
+      clearTimeout(run.idleClose);
+      if (run.idle && !run.bgTasks) run.idleClose = setTimeout(() => { if (run.idle && !run.bgTasks && !run.ended) closeInput(); }, 6000);
     }
     // 空闲中 claude 又动起来了（后台任务回报、或用户发来的新消息）：重新算「生成中」
     if (run.idle && (ev.type === "assistant" || ev.type === "stream_event" || (ev.type === "system" && ev.subtype === "init"))) {
@@ -3951,6 +4058,7 @@ async function startRun(item) {
           `$${Number(lastResult.total_cost_usd || 0).toFixed(5)}${localCmd ? "  [" + localCmd + "]" : ""}`);
       noteTokens(run.provider, lastResult.usage);
       billAfterRun(run.provider);
+      if (!isCmd && !lastResult.is_error && run.sessionId) idleArm(run.sessionId, flags);
       return endRun(run, {
         durationMs: ms,
         // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报
@@ -5040,6 +5148,12 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
       if (e?.type === "message_start" && e.message?.usage) {
         const n = promptTokens(e.message.usage);
         if (flags) flags.contextTokens = n;
+        if (flags && !ev.parent_tool_use_id) {
+          flags.mainCtx = n;
+          const cc = e.message.usage.cache_creation;
+          if (cc && cc.ephemeral_1h_input_tokens > 0) flags.cache1h = true;
+          if (cc && cc.ephemeral_5m_input_tokens > 0) flags.cache5m = true;
+        }
         sse({ type: "usage", contextTokens: n, outputTokens: e.message.usage.output_tokens || 0 });
         if (!ev.parent_tool_use_id) sse({ type: "phase", phase: "wait" });   // 请求已被接住，模型还没出第一个字
         break;
@@ -5744,6 +5858,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         if ("staticCompat" in b) SETTINGS.staticCompat = !!b.staticCompat;   // 下一轮生效
+        if ("idleCompaction" in b) { SETTINGS.idleCompaction = !!b.idleCompaction; if (!SETTINGS.idleCompaction) idleDisarmAll(); }
 
         if ("maxParallel" in b) {
           const n = Math.round(Number(b.maxParallel));
@@ -5910,6 +6025,7 @@ const server = http.createServer(async (req, res) => {
           size: page.size,
           contextTokens: page.contextTokens,
           liveRunId: live ? live.id : null,
+          goal: u.searchParams.has("before") ? undefined : goalStateOf(found.file),
         });
       }
 
@@ -6329,6 +6445,14 @@ const server = http.createServer(async (req, res) => {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (!setPermMode(String(b.mode || ""))) return sendJson(res, 400, { error: "bad mode" });
       return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: RUNS.size > 0 });
+    }
+
+    if (req.method === "POST" && p === "/api/task/stop") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const run = RUNS.get(String(b.runId || ""));
+      if (!run || !run.stopTask || !run.stopTask(String(b.taskId || ""))) return sendJson(res, 409, { error: "gone", message: tz("这个后台任务已经结束了") });
+      log(`■ 停后台任务 ${String(b.taskId).slice(0, 12)}`);
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === "POST" && p === "/api/interrupted/dismiss") {

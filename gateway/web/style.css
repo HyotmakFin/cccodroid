@@ -247,10 +247,25 @@ td{color:var(--fg2)}
 /* ── 权限确认 ── */
 #perm-bar{max-width:900px;margin:0 auto 6px;display:flex;flex-direction:column;gap:4px}
 #perm-bar.hidden{display:none !important}
+#run-strip{max-width:900px;margin:0 auto 6px;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+#run-strip.hidden{display:none !important}
+#run-strip .rs-goal,#run-strip .rs-bgs{border:1px solid var(--line);border-radius:10px;background:var(--bg2);padding:6px 10px;display:flex;flex-direction:column;gap:3px}
+#run-strip .rs-goal{border-color:var(--accent)}
+#run-strip .rs-goal.ok{border-color:var(--ok, var(--line))}
+#run-strip .rs-goal.bad{border-color:var(--err)}
+#run-strip .rs-row{display:flex;align-items:center;gap:8px;min-width:0}
+#run-strip .rs-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#run-strip .rs-meta,#run-strip .rs-head,#run-strip .rs-sub{color:var(--fg3);font-size:11.5px}
+#run-strip .rs-meta{flex:0 0 auto;font-variant-numeric:tabular-nums}
+#run-strip .rs-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#run-strip .rs-kind{flex:0 0 auto;font-size:11px;color:var(--fg2);background:var(--bg3);border-radius:6px;padding:1px 6px}
+#run-strip button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:3px 10px;font-size:12px;flex:0 0 auto}
+#run-strip .rs-x{border:none;background:none;color:var(--fg3);padding:2px 6px}
 #perm-bar .pb-main,#perm-bar .pb-note{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--warn);border-radius:10px;background:var(--bg2);font-size:12.5px}
 #perm-bar .pb-note{border-color:var(--line);color:var(--fg2)}
 #perm-bar .pb-txt,#perm-bar .pb-note span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #perm-bar .pb-note span{white-space:normal}
+#perm-bar .pb-n{flex:0 0 auto;font-size:11px;color:var(--warn);font-variant-numeric:tabular-nums}
 #perm-bar .mono{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
 #perm-bar .pb-more{font-size:11.5px;color:var(--fg3);padding:0 10px;display:flex;gap:8px;align-items:center}
 #perm-bar button,.perm-acts button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 11px;font-size:12.5px;flex:0 0 auto}
@@ -290,6 +305,8 @@ td{color:var(--fg2)}
 #perm-menu button.cur{background:var(--bg3)}
 #perm-menu button.danger b{color:var(--err)}
 #stat-chip:empty{display:none}
+#draft-chip{color:var(--accent);cursor:pointer}
+#draft-chip.hidden{display:none}
 
 /* ── 补全浮层 ── */
 #popup{

@@ -46,6 +46,9 @@ The thin bar under it shows **context usage**: how much of the model's window th
 - **Paths in replies are links**: an absolute path (or `file.js:12`) opens in the viewer; a directory opens the file browser. Web links open in the in-app browser.
 - Under each reply: **Copy** (the raw Markdown text) and **Share** (system share sheet). Your own messages have **Copy** and **Resend** (back into the input box).
 - When you scroll up, a ↓ button appears at the bottom right; it takes you back to the latest message and lights a dot when new output arrives.
+- **Goals (`/goal`)**: type `/goal <condition>` and Claude keeps working, round after round, until the condition is met. Above the input you see the goal, how many times it has been checked and how long it has run; once met, how many rounds, how long and how many tokens it took. "Give up" stops the current round and clears the goal.
+- **Background tasks**: commands, subagents and workflows Claude starts in the background are listed above the input, each with its own "Stop".
+- **Undo a cleared draft**: if text in the input box gets deleted (not sent), "Restore what you just cleared" appears under it for 20 seconds; with a hardware keyboard, ↑ in the empty box does the same.
 
 ## Permissions and safety
 
@@ -61,6 +64,7 @@ Before Claude edits files, runs commands or goes online, the **permission mode**
 
 - **Approval cards** appear under the tool card they belong to, and a bar above the input box stays visible even if you scroll away. Choose Allow, Always allow (only the rules Claude itself suggests) or Deny (optionally with a reason, or deny and stop).
 - **Plan approval**: "Approve, ask each time" or "Approve, accept edits" also sets the permission mode from then on; or ask for changes.
+- When several permission requests are waiting, the bar shows "1 of 3".
 - **Nothing is lost in the background**: you get a notification (no pop-up banner) when a turn ends or Claude is waiting for you. The notification only offers Deny and Open; to allow something you must come back and see the full command.
 
 ## Sessions
@@ -109,6 +113,7 @@ The layout follows the **window width**, not the orientation:
 - **Appearance**: light / dark / follow the system. The launch screen, setup screen and in-app browser follow this too.
 - **Provider**: pick a provider, enter a key, test the connection; account sign-in lives here as well.
 - **Model**, **thinking effort** (`--effort`, higher thinks longer), **output style**, **auto-compact window** (summarize history when the conversation nears this many tokens).
+- **Idle compaction** (on by default): with a Claude account or an Anthropic API key, a conversation over 200K tokens that has been idle for about 54 minutes is compacted once before its 1-hour prompt cache expires, so picking it back up doesn't reprocess the whole history at full price.
 - **Extra directories** (`--add-dir`): let Claude read and write outside the workspace, for example `/sdcard/SomeFolder`. They also become shortcuts in the file browser.
 - **On-device model**: with the llama-cpp component installed you can chat with a small model offline (download Qwen2.5 0.5B / 1.5B / 3B from the llama-cpp component on the Extensions page). Phone hardware is limited, so only chat is built in. To tinker, write `~/.cccodroid/local-mode.json` for a custom mode — the card has a ready-made sentence you can copy to a cloud model so it sets one up for you.
 - **Notifications**: whether to notify when a task ends or Claude is waiting for you.

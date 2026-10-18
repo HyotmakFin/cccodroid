@@ -450,6 +450,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     cids: new Set(),     // 本窗口发出的消息号
     lastRunId: null,
     title: "",
+    goal: null,          // 本会话的 /goal 状态（网关从会话记录里推出来的，见 goalStateOf）
+    goalHide: 0,         // 点 ✕ 收起的那条达成 / 失败记录的时间戳
   };
   // run / queue 只算当前视图的（本会话正在跑的那一轮、本会话排着的）；runs / queueAll 是网关上的全部
   const srv = { run: null, queue: [], runs: [], queueAll: [], max: 3, connected: false };
@@ -927,6 +929,59 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function pendingPerms() {
     return [...PERMS.values()].filter((it) => !it.done && runViews.has(it.runId));
   }
+  // ── 输入框上方的状态带：/goal 目标进度 + 后台任务 ──
+  const runStrip = $("run-strip");
+  let goalTick = null;
+  const BG_KIND = (k) => /agent/i.test(k) ? t("子代理") : /workflow/i.test(k) ? t("工作流") : /monitor/i.test(k) ? t("监视") : /bash|shell/i.test(k) ? t("命令") : k || "?";
+  function renderRunStrip() {
+    const g = view.goal && !(view.goal.done && view.goal.at <= view.goalHide) ? view.goal : null;
+    const bg = (srv.run && srv.run.bgList) || [];
+    let html = "";
+    if (g && g.active) {
+      const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
+      html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">🎯</span>
+        <span class="rs-txt">${t("目标")} · ${esc(g.condition)}</span>
+        <span class="rs-meta">${[g.checks ? t("已检查 {n} 次", { n: g.checks }) : "", el ? t("已用 {d}", { d: el }) : ""].filter(Boolean).join(" · ")}</span>
+        <button class="rs-goal-stop">${t("放弃")}</button></div>
+        ${g.reason ? `<div class="rs-sub">${t("还差：")}${esc(g.reason)}</div>` : ""}</div>`;
+    } else if (g && g.done) {
+      const bits = [g.iterations != null ? t("{n} 轮", { n: g.iterations }) : "", g.durationMs != null ? fmtDur(g.durationMs) : "", g.tokens != null ? g.tokens.toLocaleString() + " tokens" : ""].filter(Boolean).join(" · ");
+      html += `<div class="rs-goal ${g.met ? "ok" : "bad"}"><div class="rs-row"><span class="rs-ico">${g.met ? "✓" : "✗"}</span>
+        <span class="rs-txt">${g.met ? t("目标达成") : t("目标无法达成")} · ${esc(g.condition)}</span>
+        <span class="rs-meta">${g.met ? bits : ""}</span><button class="rs-x" aria-label="${t("关闭")}">✕</button></div>
+        ${!g.met && g.reason ? `<div class="rs-sub">${esc(g.reason)}</div>` : ""}</div>`;
+    }
+    if (bg.length) {
+      const rows = bg.slice(0, 4).map((x) => `<div class="rs-row rs-bg"><span class="rs-kind">${esc(BG_KIND(x.type))}</span>
+        <span class="rs-txt">${esc(x.desc || x.id)}</span><button class="rs-stop" data-task="${esc(x.id)}">${t("停止")}</button></div>`).join("");
+      html += `<div class="rs-bgs"><div class="rs-head">⏳ ${t("后台在跑 {n} 个", { n: bg.length })}${bg.length > 4 ? " · " + t("还有 {n} 个", { n: bg.length - 4 }) : ""}</div>${rows}</div>`;
+    }
+    runStrip.innerHTML = html;
+    runStrip.classList.toggle("hidden", !html);
+    // 目标进行中：每秒刷新「已用」；别的情况停掉
+    if (g && g.active && g.setAt) { if (!goalTick) goalTick = setInterval(renderRunStrip, 1000); }
+    else if (goalTick) { clearInterval(goalTick); goalTick = null; }
+  }
+  runStrip.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.classList.contains("rs-x")) { view.goalHide = view.goal?.at || Date.now(); renderRunStrip(); return; }
+    if (b.classList.contains("rs-goal-stop")) {
+      // 目标进行中那一轮会一直跑下去，排队的 /goal clear 轮不到：先停这一轮，收尾后再发（见 onRunEnd）
+      if (srv.run && !srv.run.idle && isBusy()) {
+        view.goalClearAfter = srv.run.id;
+        b.disabled = true;
+        api("/api/abort", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: srv.run.id }) }).catch(() => {});
+      } else send("/goal clear");
+      return;
+    }
+    if (b.classList.contains("rs-stop") && srv.run) {
+      b.disabled = true;
+      api("/api/task/stop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ runId: srv.run.id, taskId: b.dataset.task }) })
+        .catch((err) => { b.disabled = false; toast(err.message, true); });
+    }
+  });
+
   function renderPermBar() {
     const list = pendingPerms();
     permBar.classList.toggle("hidden", !list.length && !state.settings.permNotice);
@@ -942,6 +997,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const what = f.tool === "Bash" ? f.input.command : (f.input.file_path || f.input.url || f.input.query || "");
     permBar.innerHTML = `
       <div class="pb-main">
+        ${list.length > 1 ? `<span class="pb-n">${t("第 {i}/{n} 个", { i: 1, n: list.length })}</span>` : ""}
         <span class="pb-txt">⏸ ${f.tool === "ExitPlanMode" ? t("计划待批准") : f.tool === "AskUserQuestion" ? t("Claude 想问你") : t("Claude 在等你确认") + " · "}${simple(list[0]) ? `<b>${esc(f.tool)}</b> <span class="mono">${esc(String(what || "").slice(0, 80))}</span>` : ""}</span>
         ${simple(list[0]) ? `<button class="pb-allow primary">${t("允许")}</button>` : ""}
         <button class="pb-view">${t("查看")}</button>
@@ -1272,6 +1328,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.cids = new Set();
     view.lastRunId = null;
     view.title = "";
+    view.goal = null;
+    view.goalHide = 0;
+    renderRunStrip();
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
     for (const rv of runViews.values()) rv.timer?.stop();
@@ -1336,6 +1395,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.loading = false;
     view.cursor = r.cursor;
     view.title = r.title || "";
+    if (initial && "goal" in r) { view.goal = r.goal || null; renderRunStrip(); }
     const page = renderItems(r.items || []);
     if (initial) {
       histEl.innerHTML = "";
@@ -1487,6 +1547,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function onBus(ev) {
     switch (ev.type) {
       case "hello": return onHello(ev);
+      case "goal":
+        if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; renderRunStrip(); }
+        return;
       case "state": return applyState(ev);
       case "sync": return;
       case "run_start": {
@@ -1494,9 +1557,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         view.runIds.add(ev.runId);
         view.lastRunId = ev.runId;
         if (runViews.has(ev.runId)) return;
-        renderUser(ev.text, liveEl);
+        if (ev.auto !== "idle") renderUser(ev.text, liveEl);
         const av = AssistantView(liveEl, true);
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
+        if (ev.auto === "idle") av.note(t("会话闲置快一小时，提示缓存快过期了，先自动压缩上下文，下一条消息就不用把整段历史重算一遍。不需要可以在设置里关掉。"), true);
         const timer = RunTimer(ev.startedAt);
         timer.attach(av);
         av.phase({ phase: "connect" });
@@ -1616,6 +1680,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   function onRunEnd(ev) {
+    if (view.goalClearAfter && view.goalClearAfter === ev.runId) { view.goalClearAfter = null; setTimeout(() => send("/goal clear"), 300); }
     const rv = runViews.get(ev.runId);
     if (!rv) { if (belongs(ev)) loadSessions(); return; }
     const av = rv.av;
@@ -1676,6 +1741,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (live !== srv.liveKey) { srv.liveKey = live; renderSessions(); }
     renderPermBar();                 // 放最后：有待确认项时状态栏要显示「等你确认」
     renderInterrupted(s.interrupted);
+    renderRunStrip();
   }
 
   /** 上一轮被系统结束（App 连同网关被杀）：在那个会话底部挂一张卡，给「继续」 */
@@ -1769,6 +1835,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const fromInput = forcedText == null;
     const text = (fromInput ? inputEl.value : forcedText).trim();
     if (!text) return;
+    if (fromInput) draftLast = "";      // 发出去的不算「误删」：有的输入法清空后还会补一个空的 input 事件
     hidePopup();
 
     // 纯界面命令：不惊动 claude
@@ -1938,10 +2005,32 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     autoGrow();
   }
 
+  // ── 草稿找回（上游 2.1.288：Ctrl+C 清掉的输入，空输入框按 ↑ 找回）──
+  // 手机上更常见的是误删、全选后删空：一段 8 个字以上的内容被删空（不是发出去的），输入框下面亮一个「恢复」，20 秒后消失
+  const draftChip = $("draft-chip");
+  let draftLast = "", draftStash = "", draftT = null;
+  function draftOffer(text) {
+    draftStash = text;
+    draftChip.classList.remove("hidden");
+    clearTimeout(draftT);
+    draftT = setTimeout(() => draftChip.classList.add("hidden"), 20000);
+  }
+  function draftRestore() {
+    if (!draftStash || inputEl.value) return false;
+    inputEl.value = draftStash;
+    draftStash = ""; draftLast = inputEl.value;
+    draftChip.classList.add("hidden");
+    autoGrow(); syncInterject(); inputEl.focus();
+    return true;
+  }
+  draftChip.addEventListener("click", draftRestore);
+
   inputEl.addEventListener("input", () => {
     autoGrow();
     syncInterject();
     const v = inputEl.value;
+    if (v) { draftLast = v; if (v.trim()) draftChip.classList.add("hidden"); }
+    else if (draftLast.trim().length >= 8) { draftOffer(draftLast); draftLast = ""; }
     const caret = inputEl.selectionStart;
     const before = v.slice(0, caret);
 
@@ -1961,6 +2050,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       }
       if (e.key === "Escape") { hidePopup(); return; }
     }
+    if (e.key === "ArrowUp" && !inputEl.value && draftStash) { e.preventDefault(); draftRestore(); return; }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
 
@@ -4378,6 +4468,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const pe = $("set-parallel");
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
       $("set-static").checked = state.settings.staticCompat !== false;
+      $("set-idlecompact").checked = state.settings.idleCompaction !== false;
     } catch {}
   }
 
@@ -4424,6 +4515,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
 
   $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
+  $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));
     if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
