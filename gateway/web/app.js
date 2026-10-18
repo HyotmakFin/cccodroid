@@ -489,6 +489,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     share: '<path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/>',
     resend: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>',
     fork: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9c0 5-7 4-11.2 8.6"/>',
+    rewind: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
   };
   const userTextOf = new WeakMap();   // 用户气泡 → 原文（分叉时拿它在 transcript 里认出是哪一轮）
   const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
@@ -498,11 +499,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     setHtml(b, renderMd(text));
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发"));
+    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里"));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a;
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
+      if (a === "rewind") rewindTo(b.parentElement);
     });
     b.parentElement.appendChild(acts);
     return b;
@@ -647,6 +649,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     parent.appendChild(card);
     const st = card.querySelector(".tool-state"), bodyEl = card.querySelector(".tool-body");
     let result = null, built = false;
+    // 子代理（Agent / 旧名 Task）：卡片下面挂一块「子代理过程」，它的每一步是嵌套的工具卡，默认收起
+    const isAgent = name === "Agent" || name === "Task";
+    let sub = null;
+    const subArea = () => {
+      if (sub) return sub;
+      const box = document.createElement("div");
+      box.className = "tool-sub";
+      box.innerHTML = `<button class="ts-head" type="button"><span class="chev">▶</span><span class="ts-label"></span><span class="tool-arg ts-now"></span></button><div class="ts-list"></div>`;
+      card.insertBefore(box, bodyEl);
+      sub = { box, list: box.lastChild, label: box.querySelector(".ts-label"), now: box.querySelector(".ts-now"), n: 0, textEl: null, lazy: null };
+      box.firstChild.addEventListener("click", (e) => {
+        e.stopPropagation();
+        box.classList.toggle("open");
+        if (box.classList.contains("open") && sub.lazy) { const f = sub.lazy; sub.lazy = null; f(); }
+      });
+      subLabel();
+      return sub;
+    };
+    const subLabel = () => { sub.label.textContent = t("子代理过程") + (sub.n ? " · " + t("{n} 个步骤", { n: sub.n }) : ""); };
     const build = () => {           // 点开才把参数、结果铺进 DOM
       if (built) return;
       built = true;
@@ -670,6 +691,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         api.state = ok ? "ok" : "err";
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : t("失败");
+        // 后台子代理：工具结果只是「已启动」，真正跑完靠 sub_done
+        if (isAgent && ok && /^Async agent launched/.test(result.text) && !(sub && sub.done)) { st.className = "tool-state run"; st.textContent = t("后台运行"); }
         if (built) { built = false; build(); }
         if (!ok && live) { card.classList.add("open"); build(); }
         // 工具产出的图片（渲染结果、截图）直接露出来，不用点开
@@ -687,6 +710,46 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       },
       stop() { if (!result) { api.state = "err"; st.className = "tool-state err"; st.textContent = t("中断"); api.onChange && api.onChange(); } },
       finish() { if (!result && !live) { st.textContent = "—"; } },
+      isAgent,
+      // 子代理的一步：嵌套工具卡（注册进 TOOL_CARDS，结果和权限卡照常按 id 找到它）
+      sub(sid, sname, sinput) {
+        const s = subArea();
+        s.n++; subLabel();
+        const b = ToolBlock(s.list, sid, sname, sinput, live);
+        s.now.textContent = sname + (b.summary ? " " + b.summary : "");
+        if (s.textEl) s.list.appendChild(s.textEl);       // 汇报总在最后
+        return b;
+      },
+      subText(text) {
+        const s = subArea();
+        if (!s.textEl) { s.textEl = document.createElement("div"); s.textEl.className = "ts-text md"; }
+        s.list.appendChild(s.textEl);
+        setHtml(s.textEl, renderMd(String(text || "")));
+      },
+      subProgress(desc) { if (desc) subArea().now.textContent = desc; },
+      subDone(status) {
+        const s = subArea();
+        s.done = true; s.now.textContent = "";
+        const ok = status === "completed";
+        st.className = "tool-state " + (ok ? "ok" : "err");
+        st.textContent = ok ? t("完成") : status === "failed" ? t("失败") : t("已停止");
+      },
+      // 历史里的子代理：点开「过程」时才去取
+      subLazy(load) {
+        const s = subArea();
+        s.lazy = async () => {
+          s.now.textContent = t("加载中…");
+          try {
+            const items = await load();
+            for (const m of items) {
+              if (m.role === "tool_use") api.sub(m.id, m.name, m.input);
+              else if (m.role === "tool_result") toolResult(m.id, m.ok, m.text);
+              else if (m.role === "assistant") api.subText(m.text);
+            }
+            s.now.textContent = items.length ? "" : t("没有记录");
+          } catch (e) { s.now.textContent = e.message; s.lazy = null; }
+        };
+      },
     };
     if (id) {
       TOOL_CARDS.set(id, api);
@@ -1138,6 +1201,63 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch (e) { toast(e.message, true); }
   }
 
+  // 回退到某条用户消息之前：先试算会撤销哪些文件，再选「只撤代码」或「代码 + 对话」。
+  // 对话那半边和分叉一样另起一个会话（截到这条之前，原文放回输入框），原会话不动
+  async function rewindTo(msgEl) {
+    const sid = view.sessionId;
+    if (!sid) return toast(t("这个会话还没存下来，答完一轮再回退"), true);
+    if (isBusy()) return toast(t("正在生成，等它答完再回退"), true);
+    const users = [...chatEl.querySelectorAll(".msg.user")].filter((u) => userTextOf.has(u));
+    const idx = users.indexOf(msgEl);
+    if (idx < 0) return;
+    const userText = userTextOf.get(msgEl), after = users.length - 1 - idx;
+    const post = (extra) => api("/api/session/" + encodeURIComponent(sid) + "/rewind", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userText, after, ...extra }),
+    });
+    toast(t("正在查这之后改过哪些文件…"));
+    let d;
+    try { d = await post({ dryRun: true }); } catch (e) { return toast(e.message, true); }
+    const choice = await rewindDialog(d);
+    if (!choice) return;
+    try {
+      const r = await post({ conversation: choice === "both" });
+      const n = r.files && r.files.canRewind && r.files.files ? r.files.files.length : 0;
+      if (choice === "both") {
+        if (r.fork && r.fork.fresh) newConversation(); else { openSession(r.fork.id); loadSessions(); }
+        setTimeout(() => { inputEl.value = userText; autoGrow(); inputEl.focus(); }, 300);
+        toast(n ? t("已撤销 {n} 个文件的修改，对话回到了这条消息之前", { n }) : t("对话回到了这条消息之前，原会话还在"));
+      } else toast(t("已撤销 {n} 个文件的修改", { n }));
+    } catch (e) { toast(e.message, true); }
+  }
+  function rewindDialog(d) {
+    return new Promise((resolve) => {
+      const files = d.canRewind && d.files ? d.files : [];
+      const ov = document.createElement("div");
+      ov.className = "rw-ov";
+      const list = files.slice(0, 8).map((f) => `<li title="${esc(f)}"><span class="mono">${esc(f.split("/").pop())}</span> <span class="rw-dir">${esc(f.replace(/\/[^/]*$/, ""))}</span></li>`).join("") +
+        (files.length > 8 ? `<li>${esc(t("还有 {n} 个", { n: files.length - 8 }))}</li>` : "");
+      const what = files.length
+        ? `<p>${esc(t("会撤销 Claude 在这之后对 {n} 个文件的修改", { n: files.length }))} <span class="rw-stat">+${d.insertions || 0} −${d.deletions || 0}</span></p><ul class="rw-files">${list}</ul>`
+        : `<p>${esc(d.canRewind ? t("这之后 Claude 没有用编辑工具改过文件。") : t("这之后的文件改动没有留底（这个版本之前的消息不支持），只能回退对话。"))}</p>`;
+      ov.innerHTML = `<div class="rw-dlg" role="dialog" aria-modal="true">
+        <h3>${esc(t("回退到这条消息之前"))}</h3>${what}
+        <p class="rw-note">${esc(t("只撤销编辑工具（Edit / Write）做的修改；用命令改的文件、装的包不会还原。"))}</p>
+        <div class="rw-acts">
+          <button data-c="both" class="primary">${esc(files.length ? t("撤销代码，并回到这里重新提问") : t("回到这里重新提问"))}</button>
+          ${files.length ? `<button data-c="code">${esc(t("只撤销代码"))}</button>` : ""}
+          <button data-c="">${esc(t("取消"))}</button>
+        </div>
+        <p class="rw-note">${esc(t("回到这里会另开一个会话，原会话保留。"))}</p></div>`;
+      const close = (c) => { ov.remove(); resolve(c || null); };
+      ov.addEventListener("click", (e) => {
+        if (e.target === ov) return close(null);
+        const b = e.target.closest("button[data-c]");
+        if (b) close(b.dataset.c);
+      });
+      document.body.appendChild(ov);
+    });
+  }
+
   /** 一条 Claude 回复：思考 / 正文 / 工具按真实顺序交错排列 */
   function AssistantView(parent, live) {
     const bubble = mkMsg("bot", null, parent);
@@ -1296,7 +1416,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (!av) { av = AssistantView(page, false); avs.push(av); }
       if (m.role === "assistant") av.text(m.text);
       else if (m.role === "thinking") av.thinking(m.text);
-      else if (m.role === "tool_use") av.tool(m.id, m.name, m.input);
+      else if (m.role === "tool_use") {
+        av.tool(m.id, m.name, m.input);
+        const c = m.sub && view.sessionId && TOOL_CARDS.get(m.id), sid = view.sessionId;
+        if (c && c.isAgent) c.subLazy(async () => (await api(`/api/session/${encodeURIComponent(sid)}/agent?tool=${encodeURIComponent(m.id)}`)).items || []);
+      }
     }
     for (const a of avs) a.finish();
     return page;
@@ -1661,7 +1785,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "assistant_text": av.text(ev.text); break;
       case "thinking_delta": av.thinkDelta(ev.text); break;
       case "thinking":       av.thinking(ev.text); break;
-      case "tool_use":       av.tool(ev.id, ev.name, ev.input); break;
+      case "tool_use": {
+        const pc = ev.parent && TOOL_CARDS.get(ev.parent);
+        if (pc && pc.isAgent) { pc.sub(ev.id, ev.name, ev.input); break; }
+        av.tool(ev.id, ev.name, ev.input); break;
+      }
+      case "sub_text":       TOOL_CARDS.get(ev.parent)?.subText?.(ev.text); break;
+      case "sub_progress":   TOOL_CARDS.get(ev.parent)?.subProgress?.(ev.desc); break;
+      case "sub_done":       TOOL_CARDS.get(ev.parent)?.subDone?.(ev.status); break;
       case "tool_result":    toolResult(ev.id, ev.ok, ev.text); av.toolDone(ev.id); scrollDown(); break;
       case "phase":          av.phase(ev); break;
       case "compacting":     av.phase(null); av.note(t("正在压缩上下文…")); scrollDown(); break;

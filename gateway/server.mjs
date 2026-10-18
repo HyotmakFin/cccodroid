@@ -996,6 +996,8 @@ function claudeEnv() {
     // 太脆；这里自己钉死，claude 及其所有工具子进程就都有可写临时目录了。
     // cccodroid：用 $PREFIX/tmp —— 等长改写后，二进制里写死的默认临时目录正好就是它
     TMPDIR: PREFIX ? (fs.mkdirSync(path.join(PREFIX, "tmp"), { recursive: true }), path.join(PREFIX, "tmp")) : CFG.home,
+    // 文件检查点：-p 模式默认不记，打开后每条用户消息前给 Edit/Write 要动的文件留底，「回退到这里」靠它（见 rewindFiles）
+    CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: "1",
     // 同理：把 ncurses 的 terminal database 指到我们自己的 prefix。
     // 死引用原本指向不存在的 Termux share/terminfo，TUI 程序（hx、gdb -tui…）拿不到
     // 终端能力；我们 prefix 里那份是齐的（221K），指过去就活了。
@@ -1569,7 +1571,7 @@ function tasksCheck(sid) {
   publish({ type: "tasks", sessionId: sid, tasks: t });
 }
 
-function forkSession(id, userText, after) {
+function locateUserTurn(id, userText, after) {
   const found = findSessionFile(id);
   if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
   const lines = fs.readFileSync(found.file, "utf8").split("\n");
@@ -1578,7 +1580,7 @@ function forkSession(id, userText, after) {
     if (!line.includes('"user"')) return;
     let ev; try { ev = JSON.parse(line); } catch { return; }
     const t = forkUserText(ev);
-    if (t != null) users.push({ i, t: forkNorm(t) });
+    if (t != null) users.push({ i, t: forkNorm(t), uuid: ev.uuid || null });
   });
   const want = forkNorm(userText), head = want.slice(0, 80);
   const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
@@ -1589,6 +1591,14 @@ function forkSession(id, userText, after) {
     if (best < 0 || d < Math.abs(users.length - 1 - best - (Number(after) || 0))) best = j;
   });
   if (best < 0) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
+  return { ok: true, found, lines, users, best };
+}
+
+function forkSession(id, userText, after, { before = false } = {}) {
+  const loc = locateUserTurn(id, userText, after);
+  if (!loc.ok) return loc;
+  const { found, lines, users } = loc;
+  const best = before ? loc.best - 1 : loc.best;      // 回退：只留这条之前的
   const cut = best + 1 < users.length ? users[best + 1].i : lines.length;
   if (cut === lines.length && runOfSession(id)) return { ok: false, status: 409, message: tz("这一轮还在生成，等它答完再分叉。") };
   const nid = crypto.randomUUID();
@@ -1605,9 +1615,85 @@ function forkSession(id, userText, after) {
   const side = path.join(dir, id);
   try { if (fs.statSync(side).isDirectory()) fs.cpSync(side, path.join(dir, nid), { recursive: true }); } catch {}
   const title = (NAMES[id] || peekSession(found.file).title || "").slice(0, 100);
-  NAMES[nid] = title + " · " + tr(LAST_LANG, tz("分叉")); saveNames();
+  NAMES[nid] = title + " · " + tr(LAST_LANG, before ? tz("回退") : tz("分叉")); saveNames();
   log(`会话分叉 ${id.slice(0, 8)} → ${nid.slice(0, 8)}（保留 ${best + 1}/${users.length} 轮）`);
   return { ok: true, id: nid, title: NAMES[nid], kept: best + 1, total: users.length };
+}
+
+/** 把 Claude 改过的文件退回到某条用户消息之前（claude 的文件检查点，只覆盖 Edit / Write / NotebookEdit，命令改的不算）。
+ *  每轮一个进程也没关系：检查点记在会话记录里，--resume 起来就能用（2026-10-19 实测）。dryRun 只算会动哪些文件。 */
+function rewindFiles(sid, userUuid, dryRun) {
+  return new Promise((resolve) => {
+    const [cmd0, args0] = claudeCmd(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--resume", sid]);
+    const child = spawn(cmd0, args0, { cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home, env: claudeEnv(), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    let buf = "", done = false, err = "", exited = false;
+    const finish = (r) => { if (done) return; done = true; clearTimeout(t); try { child.stdin.end(); } catch {} setTimeout(() => { if (!exited) killTree(child); }, 3000); resolve(r); };
+    const t = setTimeout(() => finish({ ok: false, error: tz("回退超时") }), 60000);
+    child.stdout.on("data", (d) => {
+      buf += d; let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const l = buf.slice(0, i); buf = buf.slice(i + 1);
+        let ev; try { ev = JSON.parse(l); } catch { continue; }
+        if (ev.type !== "control_response") continue;
+        const r = ev.response || {};
+        if (r.subtype === "error") finish({ ok: false, error: String(r.error || "rewind failed") });
+        else finish({ ok: true, ...(r.response || {}) });
+      }
+    });
+    child.stderr.on("data", (d) => { err += d; });
+    child.stdin.on("error", () => {});
+    child.on("close", () => { exited = true; finish({ ok: false, error: err.trim().slice(-300) || "claude exited" }); });
+    child.stdin.write(JSON.stringify({ type: "control_request", request_id: "rw-" + Date.now(), request: { subtype: "rewind_files", user_message_id: userUuid, dry_run: !!dryRun } }) + "\n");
+  });
+}
+
+/** claude 自己的回退跨文件系统时会悄悄失败：备份在应用私有目录，工作区在 /sdcard（FUSE），
+ *  改过的文件写不回去（新建的文件删得掉），响应照样说成功（2026-10-19 实测）。
+ *  这里按会话记录里的快照逐个核对 files（试算给的清单），不对的自己从备份拷回去 / 删掉。
+ *  目标状态：这条消息的快照里有 → 用它的备份（备份名为 null 表示那时文件不存在）；
+ *  没有（之后才第一次改到）→ 用之后最早一份快照里的备份，那就是第一次改之前的样子。 */
+function rewindFixup(sessionFile, sid, uuid, files) {
+  const snaps = [];   // [{ id, backups }]，同一条消息的快照更新合并进去
+  try {
+    for (const l of fs.readFileSync(sessionFile, "utf8").split("\n")) {
+      // 两种记录：每条用户消息一份快照（file-history-snapshot）；轮次中途第一次改到某个文件时补一条 file-history-delta，挂到它所属的快照上
+      const snap = l.includes('"file-history-snapshot"'), delta = l.includes('"file-history-delta"');
+      if (!snap && !delta) continue;
+      let ev; try { ev = JSON.parse(l); } catch { continue; }
+      const sn = ev.snapshot || {}, id = delta ? ev.snapshotMessageId : (ev.messageId || sn.messageId);
+      if (!id) continue;
+      let cur = snaps.find((x) => x.id === id);
+      if (!cur) snaps.push(cur = { id, backups: {} });
+      if (delta) { if (ev.trackingPath && ev.backup) cur.backups[ev.trackingPath] = ev.backup; }
+      else Object.assign(cur.backups, sn.trackedFileBackups || {});
+    }
+  } catch { return { fixed: 0, failed: 0 }; }
+  const at = snaps.findIndex((x) => x.id === uuid);
+  if (at < 0) return { fixed: 0, failed: 0 };
+  const absOf = (k, b) => b && b.realParentDir ? path.join(b.realParentDir, path.basename(k)) : path.resolve(CFG.workspace, k);
+  const hist = path.join(CFG.home, ".claude", "file-history", sid);
+  let fixed = 0, failed = 0;
+  for (const want of files || []) {
+    let entry;
+    for (let i = at; i < snaps.length && entry === undefined; i++) {
+      for (const [k, b] of Object.entries(snaps[i].backups)) if (absOf(k, b) === want) { entry = b; break; }
+    }
+    if (entry === undefined) continue;                 // 快照里查不到：不碰
+    try {
+      if (!entry.backupFileName) {                     // 那时还不存在
+        if (fs.existsSync(want)) { fs.unlinkSync(want); fixed++; }
+        continue;
+      }
+      const src = path.join(hist, entry.backupFileName);
+      const data = fs.readFileSync(src);
+      let curr = null; try { curr = fs.readFileSync(want); } catch {}
+      if (curr && curr.equals(data)) continue;
+      fs.mkdirSync(path.dirname(want), { recursive: true });
+      fs.writeFileSync(want, data);
+      fixed++;
+    } catch (e) { failed++; log(`回退补救失败 ${want}: ${e.message}`); }
+  }
+  return { fixed, failed };
 }
 
 function trashSession(id) {
@@ -1821,6 +1907,21 @@ function clipInput(v, depth = 0) {
   const o = {};
   for (const k of Object.keys(v)) o[k] = clipInput(v[k], depth + 1);
   return o;
+}
+
+/** 会话的子代理记录：<会话>/subagents/agent-*.meta.json 里的 toolUseId → 对应 agent-*.jsonl */
+function agentFilesOf(sessionFile) {
+  const dir = path.join(sessionFile.replace(/\.jsonl$/, ""), "subagents"), m = new Map();
+  let names; try { names = fs.readdirSync(dir); } catch { return m; }
+  for (const n of names) {
+    if (!n.endsWith(".meta.json")) continue;
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(dir, n), "utf8"));
+      const f = path.join(dir, n.replace(/\.meta\.json$/, ".jsonl"));
+      if (j.toolUseId && fs.existsSync(f)) m.set(String(j.toolUseId), f);
+    } catch {}
+  }
+  return m;
 }
 
 /** transcript 的一行 → 0..n 条可渲染的消息 */
@@ -5169,6 +5270,15 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
         sse({ type: "phase", phase: "retry", attempt: ev.attempt || 0, max: ev.max_retries || 0,
               status: ev.error_status ?? null, error: String(ev.error || "").slice(0, 200), delayMs: ev.retry_delay_ms || 0 });
       }
+      // 子代理进度：在干什么（Reading a.txt）、用了多少 token / 几次工具；跑完（含后台子代理）报一次结果
+      else if (ev.subtype === "task_progress" && ev.tool_use_id) {
+        const u = ev.usage || {};
+        sse({ type: "sub_progress", parent: ev.tool_use_id, desc: String(ev.description || "").slice(0, 200),
+              tokens: u.total_tokens || 0, tools: u.tool_uses || 0 });
+      }
+      else if (ev.subtype === "task_notification" && ev.tool_use_id) {
+        sse({ type: "sub_done", parent: ev.tool_use_id, status: String(ev.status || "") });
+      }
       else if (ev.subtype === "compact_boundary") {
         // 压缩（手动 /compact 或自动）完成。以前不认这条：界面显示「无输出」，上下文条要等下一轮才变
         const m = ev.compact_metadata || ev.compactMetadata || {};
@@ -5225,6 +5335,15 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
     }
 
     case "assistant": {
+      // 子代理的消息（parent_tool_use_id = 主流程里那张 Agent 卡的 id）：工具调用和最后的汇报挂到那张卡下面，
+      // 不混进主流程；子代理没有逐字增量，思考不转
+      if (ev.parent_tool_use_id) {
+        for (const c of ev.message?.content || []) {
+          if (c.type === "tool_use") sse({ type: "tool_use", id: c.id, name: c.name, input: c.input, parent: ev.parent_tool_use_id });
+          else if (c.type === "text" && c.text) sse({ type: "sub_text", parent: ev.parent_tool_use_id, text: String(c.text).slice(0, 20000) });
+        }
+        break;
+      }
       // 逐字增量已发过就别重复整段文本
       const content = ev.message?.content || [];
       for (const c of content) {
@@ -5253,7 +5372,7 @@ function translate(ev, { sse, onInit, onResult, onReplay, flags }) {
           else if (Array.isArray(c.content)) {
             txt = c.content.map((x) => (x.type === "text" ? x.text : `[${x.type}]`)).join("\n");
           }
-          sse({ type: "tool_result", id: c.tool_use_id, ok: !c.is_error, text: String(txt).slice(0, 20000) });
+          sse({ type: "tool_result", id: c.tool_use_id, ok: !c.is_error, text: String(txt).slice(0, 20000), ...(ev.parent_tool_use_id ? { parent: ev.parent_tool_use_id } : {}) });
         }
       }
       break;
@@ -6054,6 +6173,9 @@ const server = http.createServer(async (req, res) => {
           // 正在生成的那一轮走事件总线，这里不重复给
           excludeFrom: Number(u.searchParams.get("exclude")) || (live ? live.startedAt : 0),
         });
+        // 有子代理记录的 Agent 卡打个标，前端据此给「查看过程」
+        const subs = agentFilesOf(found.file);
+        if (subs.size) for (const it of page.items) if (it.role === "tool_use" && subs.has(it.id)) it.sub = true;
         return sendJson(res, 200, {
           id,
           title: NAMES[id] || meta.title,
@@ -6066,6 +6188,24 @@ const server = http.createServer(async (req, res) => {
           goal: u.searchParams.has("before") ? undefined : goalStateOf(found.file),
           tasks: u.searchParams.has("before") ? undefined : tasksOf(id),
         });
+      }
+
+      // 子代理的过程（按需取：点开 Agent 卡的「过程」才读）
+      if (req.method === "GET" && action === "agent") {
+        if (!found) return sendJson(res, 404, { error: "not found" });
+        const f = agentFilesOf(found.file).get(String(u.searchParams.get("tool") || ""));
+        if (!f) return sendJson(res, 200, { items: [] });
+        const items = [];
+        try {
+          for (const l of fs.readFileSync(f, "utf8").split("\n")) {
+            if (!l) continue;
+            let ev; try { ev = JSON.parse(l); } catch { continue; }
+            if (ev.type === "user" && typeof ev.message?.content === "string") continue;   // 第一条是主代理给它的提示，Agent 卡参数里已有
+            for (const it of transcriptItems({ ...ev, isSidechain: false })) if (it.role !== "thinking" && it.role !== "user") items.push(it);
+            if (items.length > 400) break;
+          }
+        } catch {}
+        return sendJson(res, 200, { items });
       }
 
       if (req.method === "DELETE" && !action) {
@@ -6084,6 +6224,39 @@ const server = http.createServer(async (req, res) => {
         if (!name) return sendJson(res, 400, { error: "empty" });
         NAMES[id] = name; saveNames();
         return sendJson(res, 200, { ok: true, title: name });
+      }
+
+      // 回退到某条用户消息之前：文件（claude 检查点）+ 可选连对话一起（截到这条之前另起一个会话，原会话不动）
+      if (req.method === "POST" && action === "rewind") {
+        const b = JSON.parse((await readBody(req)) || "{}");
+        if (runOfSession(id)) return sendJson(res, 409, { error: "busy", message: tz("这个会话正在生成中，等它答完再回退。") });
+        const loc = locateUserTurn(id, String(b.userText || ""), b.after);
+        if (!loc.ok) return sendJson(res, loc.status || 400, { error: "locate", message: loc.message });
+        const uuid = loc.users[loc.best].uuid;
+        // 真回退也先试算一次：要拿到会动哪些文件，回退后逐个核对（见 rewindFixup）
+        const dry = uuid ? await rewindFiles(id, uuid, true) : { ok: false, error: "no uuid" };
+        let files = dry;
+        if (!b.dryRun && dry.ok && dry.canRewind !== false && (dry.filesChanged || []).length) {
+          files = await rewindFiles(id, uuid, false);
+          const fx2 = rewindFixup(loc.found.file, id, uuid, dry.filesChanged);
+          if (fx2.fixed || fx2.failed) log(`回退补救：补写 ${fx2.fixed} 个，失败 ${fx2.failed} 个`);
+          if (fx2.failed) files = { ok: false, error: tz("有 {n} 个文件没能还原", { n: fx2.failed }) };
+          else files = { ...files, ok: true, canRewind: true, filesChanged: dry.filesChanged, insertions: dry.insertions, deletions: dry.deletions };
+        }
+        // 早于检查点的消息（或这一轮之后根本没改文件）claude 会说不能回退：代码这块就当「没有可撤销的」
+        const fx = files.ok && files.canRewind !== false
+          ? { canRewind: true, files: files.filesChanged || null, insertions: files.insertions || 0, deletions: files.deletions || 0 }
+          : { canRewind: false, reason: String(files.error || "").slice(0, 300) };
+        if (b.dryRun) return sendJson(res, 200, { ok: true, ...fx });
+        if (!fx.canRewind && !b.conversation) return sendJson(res, 409, { error: "cannot", message: tz("这条消息之后的文件改动没有留底，没法撤销。") + (fx.reason ? "（" + fx.reason + "）" : "") });
+        log(`回退 ${id.slice(0, 8)}：文件${fx.canRewind ? "已撤销" : "未动"}${b.conversation ? "，对话截到这条之前" : ""}`);
+        let fork = null;
+        if (b.conversation && loc.best === 0) fork = { ok: true, fresh: true };   // 退到第一条之前 = 空会话，前端直接开新会话
+        else if (b.conversation) {
+          fork = forkSession(id, String(b.userText || ""), b.after, { before: true });
+          if (!fork.ok) return sendJson(res, fork.status || 400, { error: "fork", message: fork.message, files: fx });
+        }
+        return sendJson(res, 200, { ok: true, files: fx, fork });
       }
 
       if (req.method === "POST" && action === "fork") {

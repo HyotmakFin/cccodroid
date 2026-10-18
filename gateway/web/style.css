@@ -175,6 +175,15 @@ td{color:var(--fg2)}
 .tool-body{display:none;border-top:1px solid var(--tool-sep);padding:8px 10px;background:var(--code-bg)}
 .tool.open .tool-body{display:block}
 .tool-body pre{margin:0;background:transparent;border:0;padding:0;max-height:340px;overflow:auto}
+.tool-sub{border-top:1px solid var(--tool-sep)}
+.ts-head{display:flex;align-items:center;gap:8px;width:100%;padding:5px 10px 5px 18px;background:none;border:0;color:var(--fg2);font-size:12px;text-align:left;cursor:pointer}
+.ts-head .chev{color:var(--fg3);font-size:9px;transition:transform .15s}
+.ts-label{flex:0 0 auto}
+.ts-list{display:none;padding:0 8px 6px 18px}
+.tool-sub.open .ts-list,.tool-sub:has(.perm:not(.done)) .ts-list{display:block}
+.tool-sub.open .ts-head .chev,.tool-sub:has(.perm:not(.done)) .ts-head .chev{transform:rotate(90deg)}
+.ts-list .tool{margin:4px 0}
+.ts-text{font-size:13px;border-left:2px solid var(--tool-line);padding:2px 0 2px 10px;margin:6px 0 2px;color:var(--fg2);max-height:320px;overflow:auto}
 .tool-body .lbl{font-size:10.5px;color:var(--fg3);margin:6px 0 3px;letter-spacing:.4px}
 
 /* 系统/命令结果 */
@@ -1146,3 +1155,16 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .llm-url { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 .llm-url-row { display: flex; gap: 6px; margin-top: 4px; }
 .llm-url-row input { flex: 1; min-width: 0; }
+/* 回退弹窗 */
+.rw-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.rw-dlg{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:14px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:16px 18px;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.rw-dlg h3{margin:0 0 10px;font-size:16px}
+.rw-dlg p{margin:8px 0}
+.rw-stat{font-family:var(--mono);font-size:12px;color:var(--fg3)}
+.rw-files{margin:6px 0;padding-left:18px;font-size:13px}
+.rw-files li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rw-dir{color:var(--fg3);font-size:11.5px}
+.rw-note{color:var(--fg3);font-size:12px}
+.rw-acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.rw-acts button{padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:14px}
+.rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
