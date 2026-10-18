@@ -39,7 +39,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - 界面 9 种语言：简体中文、繁體中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
 - **可选组件**（扩展 → 可选组件）：体积大的工具不随应用安装，用得上再下载。每个组件包都对应特定版本的工具包，装之前先核对 SHA-256 和逐文件清单，卸载干净。
   - **浏览器组件（无头 Chromium 155）**：下载约 254 MB，装好后约 750 MB。让 Claude 在后台打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页。附带一个技能，告诉 Claude 怎么用。
-  - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前 14 个：GitHub CLI（gh）、Blender（无头建模 / 渲染）、Godot（无头运行 / 导出 APK）、LibreOffice（无头文档转换）、llama.cpp（本地大模型推理）、OpenSCAD、ngspice / gnucap（电路仿真）、Icarus Verilog / Yosys（数字电路）、骁龙 GPU 驱动（Vulkan / OpenGL / OpenCL）与 GPU 跑分，见[完整列表](https://github.com/greyoak111/cccodroid-components/blob/main/README.zh-CN.md#组件列表)。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
+  - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前 17 个：GitHub CLI（gh）、Cloudflare（wrangler）、Blender（无头合成 / 渲染，3D 走 GPU）、Godot（无头运行 / 导出 APK）、LibreOffice（无头文档转换）、LilyPond（乐谱排版）、音乐制作工具链（MIDI 转音频、合成、母带）、llama.cpp（本地大模型推理）、OpenSCAD、ngspice / gnucap（电路仿真）、Icarus Verilog / Yosys（数字电路）、骁龙 GPU 驱动（Vulkan / OpenGL / OpenCL）与 GPU 跑分，见[完整列表](https://github.com/greyoak111/cccodroid-components/blob/main/README.zh-CN.md#组件列表)。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
 - **多种接入方式**：
   - Claude 账户登录：应用内完成，浏览器授权后自动回到应用。账户卡片显示 5 小时额度与每周额度的占用和重置时间（取自 Claude Code 每轮自己回报的数据，应用不拿你的凭据去查任何东西）。
   - Claude API Key。
