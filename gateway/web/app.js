@@ -452,6 +452,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     title: "",
     goal: null,          // 本会话的 /goal 状态（网关从会话记录里推出来的，见 goalStateOf）
     goalHide: 0,         // 点 ✕ 收起的那条达成 / 失败记录的时间戳
+    tasks: null,         // 本会话的任务清单（TaskCreate / TaskUpdate，网关读 ~/.claude/tasks 推过来）
+    tasksHide: "",       // 全部完成后点 ✕ 收起时的清单指纹；清单一变就重新露出来
   };
   // run / queue 只算当前视图的（本会话正在跑的那一轮、本会话排着的）；runs / queueAll 是网关上的全部
   const srv = { run: null, queue: [], runs: [], queueAll: [], max: 3, connected: false };
@@ -933,10 +935,33 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const runStrip = $("run-strip");
   let goalTick = null;
   const BG_KIND = (k) => /agent/i.test(k) ? t("子代理") : /workflow/i.test(k) ? t("工作流") : /monitor/i.test(k) ? t("监视") : /bash|shell/i.test(k) ? t("命令") : k || "?";
+  // 任务清单：折叠时一行（进度 + 正在做的那项），点开看全部；全部完成可 ✕ 收起
+  let tasksOpen = localStorage.getItem("cc.tasksOpen") === "1";
+  const tasksSig = (l) => l.map((x) => x.id + ":" + x.status).join(",");
+  const taskLabel = (x) => esc(x.status === "in_progress" && x.active ? x.active : x.subject);
+  function tasksHtml() {
+    const l = view.tasks;
+    if (!l || !l.length) return "";
+    const done = l.filter((x) => x.status === "completed").length, all = done === l.length;
+    if (all && view.tasksHide === tasksSig(l)) return "";
+    const cur = l.find((x) => x.status === "in_progress") || l.find((x) => x.status !== "completed");
+    const pct = Math.round(done / l.length * 100);
+    const head = `<div class="rs-row rs-thead" role="button" tabindex="0" aria-expanded="${tasksOpen}">
+      <span class="rs-ico">${all ? "✓" : "☑"}</span>
+      <span class="rs-tcount">${all ? t("清单完成") : t("清单")} ${done}/${l.length}</span>
+      <span class="rs-tbar"><i style="width:${pct}%"></i></span>
+      <span class="rs-txt">${!tasksOpen && cur ? taskLabel(cur) : ""}</span>
+      ${all ? `<button class="rs-tx" aria-label="${t("关闭")}">✕</button>` : `<span class="rs-chev">${tasksOpen ? "▴" : "▾"}</span>`}</div>`;
+    const rows = !tasksOpen ? "" : `<div class="rs-tlist">${l.map((x) => `<div class="rs-trow ${esc(x.status)}">
+      <span class="rs-tico">${x.status === "completed" ? "✓" : x.status === "in_progress" ? "◐" : "○"}</span>
+      <span class="rs-ttxt">${taskLabel(x)}</span>
+      ${x.blocked && x.status !== "completed" ? `<span class="rs-meta">${t("等 {ids}", { ids: x.blocked.map((b) => "#" + esc(b)).join(" ") })}</span>` : ""}</div>`).join("")}</div>`;
+    return `<div class="rs-tasks${all ? " ok" : ""}">${head}${rows}</div>`;
+  }
   function renderRunStrip() {
     const g = view.goal && !(view.goal.done && view.goal.at <= view.goalHide) ? view.goal : null;
     const bg = (srv.run && srv.run.bgList) || [];
-    let html = "";
+    let html = tasksHtml();
     if (g && g.active) {
       const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
       html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">🎯</span>
@@ -964,6 +989,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   runStrip.addEventListener("click", (e) => {
     const b = e.target.closest("button");
+    if (b && b.classList.contains("rs-tx")) { view.tasksHide = tasksSig(view.tasks || []); renderRunStrip(); return; }
+    if (!b && e.target.closest(".rs-thead")) { tasksOpen = !tasksOpen; localStorage.setItem("cc.tasksOpen", tasksOpen ? "1" : "0"); renderRunStrip(); return; }
     if (!b) return;
     if (b.classList.contains("rs-x")) { view.goalHide = view.goal?.at || Date.now(); renderRunStrip(); return; }
     if (b.classList.contains("rs-goal-stop")) {
@@ -1330,6 +1357,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.title = "";
     view.goal = null;
     view.goalHide = 0;
+    view.tasks = null;
+    view.tasksHide = "";
     renderRunStrip();
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
@@ -1396,6 +1425,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.cursor = r.cursor;
     view.title = r.title || "";
     if (initial && "goal" in r) { view.goal = r.goal || null; renderRunStrip(); }
+    if (initial && "tasks" in r) { view.tasks = r.tasks || null; renderRunStrip(); }
     const page = renderItems(r.items || []);
     if (initial) {
       histEl.innerHTML = "";
@@ -1547,6 +1577,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function onBus(ev) {
     switch (ev.type) {
       case "hello": return onHello(ev);
+      case "tasks":
+        if (view.sessionId && ev.sessionId === view.sessionId) { view.tasks = ev.tasks || null; renderRunStrip(); }
+        break;
       case "goal":
         if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; renderRunStrip(); }
         return;

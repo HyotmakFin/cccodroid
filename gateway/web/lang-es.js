@@ -1175,4 +1175,7 @@ window.I18N_DICT["es"] = {
   "空闲压缩": "Compactación en reposo",
   "长会话闲置快一小时时先压缩": "Compactar conversaciones largas inactivas casi una hora",
   "只对 Claude 账户和 Anthropic API Key 生效。上下文超过 20 万 token 的会话闲置约 54 分钟、1 小时提示缓存快过期时，先压缩一次；回来接着聊就不用把整段历史按全价重新处理，订阅账户少占额度，API Key 少花钱。电脑上的 Claude Code 也是这么做的。": "Solo se aplica a una cuenta de Claude o a una clave de API de Anthropic. Cuando una conversación de más de 200K tokens lleva unos 54 minutos inactiva y su caché de prompt de 1 hora está por caducar, se compacta una vez; al retomarla no se reprocesa todo el historial a precio completo: gastas menos uso de tu suscripción o menos dinero con la clave de API. Claude Code en el escritorio hace lo mismo.",
+  "清单": "Tareas",
+  "清单完成": "Tareas hechas",
+  "等 {ids}": "espera {ids}",
 };

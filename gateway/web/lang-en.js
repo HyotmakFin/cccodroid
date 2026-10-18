@@ -1204,4 +1204,7 @@ window.I18N_DICT.en = {
   "空闲压缩": "Idle compaction",
   "长会话闲置快一小时时先压缩": "Compact long conversations idle for almost an hour",
   "只对 Claude 账户和 Anthropic API Key 生效。上下文超过 20 万 token 的会话闲置约 54 分钟、1 小时提示缓存快过期时，先压缩一次；回来接着聊就不用把整段历史按全价重新处理，订阅账户少占额度，API Key 少花钱。电脑上的 Claude Code 也是这么做的。": "Only applies to a Claude account or an Anthropic API key. When a conversation over 200K tokens has been idle for about 54 minutes and its 1-hour prompt cache is about to expire, it is compacted once, so picking it back up doesn't reprocess the whole history at full price: less of your subscription usage, less spend on an API key. Claude Code on the desktop does the same.",
+  "清单": "Tasks",
+  "清单完成": "Tasks done",
+  "等 {ids}": "waiting on {ids}",
 };

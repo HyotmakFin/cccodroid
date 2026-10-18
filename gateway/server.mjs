@@ -1534,7 +1534,37 @@ function goalCheck(sid) {
   if (GOAL_SEEN.size > 200) GOAL_SEEN.delete(GOAL_SEEN.keys().next().value);
   publish({ type: "goal", sessionId: sid, goal: g });
 }
-setInterval(() => { for (const r of RUNS.values()) goalCheck(r.sessionId); }, 4000).unref?.();
+setInterval(() => { for (const r of RUNS.values()) { goalCheck(r.sessionId); tasksCheck(r.sessionId); } }, 4000).unref?.();
+
+// 任务清单（TaskCreate / TaskUpdate）：claude 存在 ~/.claude/tasks/<会话号>/<编号>.json，--resume 沿用同一会话号，所以每轮换进程也接得上
+const TASKS_DIR = path.join(CFG.home, ".claude", "tasks");
+function tasksOf(sid) {
+  if (!sid || !/^[0-9a-f-]{36}$/.test(sid)) return null;
+  const d = path.join(TASKS_DIR, sid);
+  let names; try { names = fs.readdirSync(d).filter((n) => /^\d+\.json$/.test(n)); } catch { return null; }
+  const list = [];
+  for (const n of names) {
+    try {
+      const t = JSON.parse(fs.readFileSync(path.join(d, n), "utf8"));
+      if (!t || t.status === "deleted") continue;
+      list.push({ id: String(t.id || n.replace(".json", "")), subject: String(t.subject || "").slice(0, 200),
+        status: t.status || "pending", active: t.activeForm ? String(t.activeForm).slice(0, 200) : "",
+        blocked: Array.isArray(t.blockedBy) && t.blockedBy.length ? t.blockedBy.map(String) : undefined });
+    } catch {}
+  }
+  if (!list.length) return null;
+  list.sort((x, y) => (Number(x.id) || 0) - (Number(y.id) || 0));
+  return list.slice(0, 60);
+}
+const TASKS_SEEN = new Map();
+function tasksCheck(sid) {
+  if (!sid) return;
+  const t = tasksOf(sid), j = JSON.stringify(t);
+  if ((TASKS_SEEN.get(sid) ?? "null") === j) return;
+  TASKS_SEEN.set(sid, j);
+  if (TASKS_SEEN.size > 200) TASKS_SEEN.delete(TASKS_SEEN.keys().next().value);
+  publish({ type: "tasks", sessionId: sid, tasks: t });
+}
 
 function forkSession(id, userText, after) {
   const found = findSessionFile(id);
@@ -3414,6 +3444,7 @@ function endRun(run, fields = {}) {
   if (!RUNS.size) runFlag(false);
   publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...(run.auto ? { auto: run.auto } : {}), ...fields });
   goalCheck(run.sessionId);
+  tasksCheck(run.sessionId);
   run.log = [];
   publishState();
   setImmediate(pump);
@@ -3992,6 +4023,8 @@ async function startRun(item) {
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
     if (ev.type === "control_request") return onControl(ev);
+    // 清单工具一出结果就推，不等 4 秒轮询
+    if (ev.type === "user" && ev.tool_use_result && (ev.tool_use_result.task || ev.tool_use_result.statusChange || ev.tool_use_result.updatedFields)) setImmediate(() => tasksCheck(run.sessionId));
     if (ev.type === "control_response") return;          // 我们发的 set_permission_mode 的回执
     if (ev.type === "control_cancel_request") {           // claude 自己撤回了（比如被中断）
       if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
@@ -6026,6 +6059,7 @@ const server = http.createServer(async (req, res) => {
           contextTokens: page.contextTokens,
           liveRunId: live ? live.id : null,
           goal: u.searchParams.has("before") ? undefined : goalStateOf(found.file),
+          tasks: u.searchParams.has("before") ? undefined : tasksOf(id),
         });
       }
 

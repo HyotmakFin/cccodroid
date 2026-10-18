@@ -48,6 +48,7 @@ The thin bar under it shows **context usage**: how much of the model's window th
 - When you scroll up, a ↓ button appears at the bottom right; it takes you back to the latest message and lights a dot when new output arrives.
 - **Goals (`/goal`)**: type `/goal <condition>` and Claude keeps working, round after round, until the condition is met. Above the input you see the goal, how many times it has been checked and how long it has run; once met, how many rounds, how long and how many tokens it took. "Give up" stops the current round and clears the goal.
 - **Background tasks**: commands, subagents and workflows Claude starts in the background are listed above the input, each with its own "Stop".
+- **Task list**: on longer jobs Claude keeps a task list (TaskCreate). Above the input you see how many items are done and which one is in progress; tap to expand the whole list, and tap ✕ to dismiss it once everything is done. The list belongs to the conversation and is still there next time you open it.
 - **Undo a cleared draft**: if text in the input box gets deleted (not sent), "Restore what you just cleared" appears under it for 20 seconds; with a hardware keyboard, ↑ in the empty box does the same.
 
 ## Permissions and safety
