@@ -1205,4 +1205,10 @@ window.I18N_DICT["es"] = {
   "索引签名不对，已拒绝": "La firma del índice no es válida; rechazado",
   "索引没有签名，已拒绝": "El índice no está firmado; rechazado",
   "{cmd} 退出码 {code}：{err}": "{cmd} salió con el código {code}: {err}",
+  "到 GitHub 反馈": "Informar en GitHub",
+  "「到 GitHub 反馈」会打开一个新建 Issue 的页面，机型、系统版本、自检结果都已经填好，你只要写遇到了什么。需要 GitHub 账号；不放日志和对话。": "«Informar en GitHub» abre una nueva incidencia con tu dispositivo, la versión de Android y el resultado del autodiagnóstico ya rellenados; solo tienes que describir qué pasó. Requiere cuenta de GitHub. No incluye registros ni conversaciones.",
+  "将打开 GitHub 的新建 Issue 页面，下面这些会预先填好，提交前还能改：": "Se abrirá una nueva incidencia en GitHub con lo siguiente ya rellenado. Puedes editarlo antes de enviarla:",
+  "遇到了什么": "Qué pasó",
+  "做了什么、想要什么结果、实际怎样。截图可以直接拖进来。": "Qué hiciste, qué esperabas y qué pasó en realidad. Puedes arrastrar capturas aquí.",
+  "怎么复现": "Pasos para reproducirlo",
 };

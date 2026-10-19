@@ -2,7 +2,7 @@
 
 [中文](known-issues.zh-CN.md)
 
-These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, please open an issue with the zip from **I'm stuck · bundle diagnostics** and a note on what you were doing.
+These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, tap **Settings → Troubleshooting → Report on GitHub** in the app (device, Android version and self-test results are filled in) and say what you were doing; attach the zip from **I'm stuck · bundle diagnostics** if logs are needed. Problems tied to a particular phone or vendor system are covered in section 5 below.
 
 ## 1. The keyboard stops typing into the message box
 
@@ -35,6 +35,53 @@ The wide layout does not avoid the hinge precisely, because the build chain lack
 ## 4. A brief grey scrim when not launched from the home screen
 
 When the app is cold-started without the launcher icon animation (adb, a notification, another app), Android 12+ first draws a system splash screen. Since 0.2.0-rc1 it uses the setup screen colour and no icon, but on a Red Magic 9 Pro a translucent grey scrim still covers the page for about half a second as the window opens. It is probably the ROM's own window animation; not confirmed. Launching from the home screen icon does not show it.
+
+## 5. Phone makers and chips (only two devices tested)
+
+Only two devices have been tested by hand: a **Lenovo TB320FC** (ZUXOS, Android 15, Snapdragon 8+ Gen 1) and a **RedMagic NX769J** (ZTE-based system, Android 14, Snapdragon). The settings paths for other brands below come from public sources and common practice and have **not been verified**; menu names vary between system versions. [dontkillmyapp.com](https://dontkillmyapp.com) has more detailed steps per brand.
+
+If something breaks on your device, go to **Settings → Troubleshooting → Report on GitHub**. Your device, Android version and self-test results are filled in for you; you only describe what went wrong. No GitHub account? Use **I'm stuck · bundle diagnostics** next to it.
+
+### On every device
+
+- **Android version**: the minimum is Android 8.0; only 14 and 15 have actually been tested.
+- **Background**: the app keeps a foreground service running (the notification), which is enough for stock Android's background limits. **It does not stop vendors' own freezers and cleaners.** While frozen, the gateway and any running task stop completely and resume when you come back. If the app notices it was frozen, Settings shows a notice with the steps for your brand.
+- **GPU components are Snapdragon-only**: both GPU drivers, GPU benchmarks and clvk need Qualcomm Adreno's `/dev/kgsl-3d0`. On MediaTek Dimensity, Samsung Exynos, Google Tensor and Huawei Kirin devices the extensions page marks them "Snapdragon only" and they can't be installed. Components that can use the GPU, like Blender and llama.cpp, still install there and fall back to the CPU, just slower. Support for other GPUs is being looked into; reports from people with those devices help a lot.
+
+### Lenovo (ZUI / ZUXOS) · tested
+
+The main development device; every feature has been tested on it. No vendor freezing seen.
+
+### RedMagic / Nubia / ZTE · tested
+
+- **The system freezes the whole app after about 90 seconds in the background**, regardless of the foreground service or the battery whitelist. Fix: App info → App battery usage → Battery optimization → **Background running: Allow**.
+- Set **Auto-launch** on the same page to Allow as well. When it is "Automatic", the system blocks recovery after updates and starting Shizuku at boot.
+- From Android 12 on, system settings pages hide third-party overlays, so the Shizuku wireless pairing code is entered from the notification.
+- A half-second grey overlay sometimes appears on cold start when not launched from the home screen; see item 4.
+
+### Xiaomi / Redmi (HyperOS / MIUI) · not tested
+
+Known for aggressive background killing. App info → **Battery saver: No restrictions**, turn **Autostart** on, and lock the cccodroid card in the recents screen so "clear all" doesn't kill it.
+
+### OPPO / OnePlus / realme (ColorOS / OxygenOS / realme UI) · not tested
+
+App info → Battery usage → **Allow background activity** and **Allow auto launch**. Locking the recents card is a good idea here too.
+
+### vivo / iQOO (OriginOS / Funtouch OS) · not tested
+
+Settings → Battery → Background power consumption management → cccodroid: **Allow high background power consumption**. Allow **Autostart** in i Manager.
+
+### Huawei / Honor (HarmonyOS / MagicOS) · not tested
+
+Settings → App launch → cccodroid: turn off "Manage automatically" and allow **Auto-launch**, **Secondary launch** and **Run in background** by hand. HarmonyOS NEXT can't install Android apps at all.
+
+### Samsung (One UI) · not tested
+
+App info → Battery → **Unrestricted**, and in Settings → Battery → Background usage limits, add cccodroid to "Never sleeping apps". Models sold in the US and China are mostly Snapdragon; many others use Exynos, which can't use the GPU components.
+
+### Google Pixel and near-stock systems · not tested
+
+Background rules follow stock Android, so the foreground service is enough. Tensor chips use a Mali GPU, so the GPU components don't work.
 
 ## For developers: tests can create fake bugs
 

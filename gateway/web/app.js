@@ -3664,6 +3664,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const r = await post("/api/app/share_logs").catch((e) => ({ ok: false, message: e.message }));
     if (!r.ok) toast(t("没分享成：{msg}", { msg: r.message || "" }), true);
   });
+  // 到 GitHub 反馈：网关拼好链接（设备、ROM、自检、组件），先给用户看要填进去的内容，再用外部浏览器打开
+  $("btn-issue").addEventListener("click", async () => {
+    let r;
+    try { r = await api("/api/issue-draft"); } catch (e) { return toast(e.message, true); }
+    const dev = r.body.slice(r.body.indexOf("### Device"), r.body.indexOf("<sub>")).trim();
+    if (!confirm(t("将打开 GitHub 的新建 Issue 页面，下面这些会预先填好，提交前还能改：") + "\n\n" + (dev.length > 1500 ? dev.slice(0, 1500) + "…" : dev))) return;
+    openExternal(r.url);
+  });
   const LEDGER_KIND = () => ({ verify: t("校验"), repair: t("修复"), install: t("安装"), recover: t("恢复"), "safe-mode": t("安全模式"), logs: t("日志") });
   $("btn-ledger").addEventListener("click", async () => {
     const box = $("ledger-list");
@@ -6343,6 +6351,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       paintSafeMode(s.safeMode);
       // 日志分享靠安卓壳（cccodroid）打包、弹分享面板；旧版应用没有
       $("btn-share-logs").classList.toggle("hidden", s.product !== "cccodroid");
+      $("btn-issue").classList.toggle("hidden", s.product !== "cccodroid"); $("issue-hint").classList.toggle("hidden", s.product !== "cccodroid");
       $("share-logs-hint").classList.toggle("hidden", s.product !== "cccodroid");
       $("btn-ledger").classList.toggle("hidden", !s.hasLedger);
       modelEl.textContent = s.model || "—";

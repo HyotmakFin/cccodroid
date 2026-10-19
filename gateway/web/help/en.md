@@ -175,6 +175,7 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 
 - **Safe mode**: if a hook, plugin, MCP server or CLAUDE.md breaks things, turn it on. Claude Code starts with `--safe-mode` and loads no customizations; sign-in, keys, sessions and model stay as they are. Turning it off restores everything.
 - **I'm stuck · bundle diagnostics**: diagnostics, the app log, the gateway log and the repair ledger, packed into a zip for the share sheet. You see the contents first; keys, tokens, email addresses and your messages are scrubbed, and transcripts are not included.
+- **Report on GitHub**: opens a new GitHub issue with your device, Android and vendor system version, self-test results and installed components already filled in; you just describe what happened. No logs or conversations are included. Needs a GitHub account. Per-brand background settings and chip limits are on the website's Known issues page.
 - **Nothing scrolls (unfreeze)**: now and then nothing scrolls by touch, while buttons still work. This is a fault in the system WebView, not something you did, and we cannot fix it at the root yet. The app detects it and recovers in about a second; a reply in progress is not affected, and unsent text is put back. If it does not recover on its own, tap ❄ in the top bar. Details are in item 2 of "Known issues".
 - **Run doctor**: at the bottom of Settings; runs Claude Code's own self-check.
 - **Common situations**:
