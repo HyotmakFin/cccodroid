@@ -800,6 +800,8 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .vw-img img{margin:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
 .vw-img.zoom{display:block}
 .vw-img.zoom img{max-width:none;max-height:none;cursor:zoom-out;margin:0}
+/* HTML 预览：网页自己决定背景，这里铺白底（多数网页默认就是白的） */
+.vw-html{flex:1;min-height:0;width:100%;border:1px solid var(--line);border-radius:9px;background:#fff}
 .vw-media{margin:auto;width:100%;display:flex;justify-content:center}
 .vw-media video{max-width:100%;max-height:80vh;border-radius:9px}
 .vw-media audio{width:100%}

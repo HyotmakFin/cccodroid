@@ -5183,17 +5183,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   };
   const VW_EDIT_MAX = 2 * 1024 * 1024;
   const isMd = (p) => /\.(md|markdown|mdx)$/i.test(p);
+  const isHtml = (p) => /\.html?$/i.test(p);
 
   async function openViewer(path, kind, size) {
     if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
     if (VW.dirty) draftClear();
     closeViewerPdf();
     vwDropEd();
+    vwHtmlStop();
     Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "", wb: null, sheets: null });
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
     viewerEl.classList.remove("hidden");
+    if (VW.kind === "text" && isHtml(path) && localStorage.getItem("cc.vw.htmlmode") !== "edit") return vwHtml();
     if (VW.kind === "text") return vwLoadText(isMd(path) ? (localStorage.getItem("cc.vw.mdmode") === "edit" ? "edit" : "md") : "edit");
     if (VW.kind === "image") return vwImage();
     if (VW.kind === "pdf") return vwPdf();
@@ -5233,7 +5236,23 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "download") { location.href = fileUrl(VW.path, true); return; }
     if (a === "save") return vwSave(false);
     if (a === "md") { VW.text = vwText(); if (isMd(VW.path)) localStorage.setItem("cc.vw.mdmode", "md"); return vwRenderText("md"); }
+    if (a === "edit" && VW.mode === "html") {
+      // 从预览切回源码：预览期间文件可能被 Claude 改过，重新读
+      localStorage.setItem("cc.vw.htmlmode", "edit");
+      vwHtmlStop();
+      return vwLoadText("edit");
+    }
     if (a === "edit") { if (isMd(VW.path) && VW.mode === "md") localStorage.setItem("cc.vw.mdmode", "edit"); return vwRenderText("edit"); }
+    if (a === "html") {
+      if (VW.dirty) {
+        if (!confirm(t("预览显示的是磁盘上的文件。先保存你的修改再预览？"))) return;
+        return vwSave(false).then(() => { if (!VW.dirty) { localStorage.setItem("cc.vw.htmlmode", "html"); vwHtml(); } });
+      }
+      localStorage.setItem("cc.vw.htmlmode", "html");
+      return vwHtml();
+    }
+    if (a === "reload") return vwHtmlReload();
+    if (a === "openweb") { if (VW.pv) openWeb(VW.pv.url); return; }
     if (a === "gitdiff") return vwShowDiff();
     if (a === "aspdf") return vwOffice();
     if (a === "native") { closeViewerPdf(); return VW.kind === "docx" ? vwDocx() : vwSheet(); }
@@ -5313,6 +5332,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function vwRenderActs() {
     const acts = [];
     if (isMd(VW.path)) acts.push(VW.mode === "md" ? [t("编辑"), "edit"] : [t("预览"), "md"]);
+    if (isHtml(VW.path)) {
+      if (VW.mode === "html") { vwActs([[t("源码"), "edit"], [t("刷新"), "reload"], [t("在浏览器打开"), "openweb"]]); return; }
+      acts.push([t("预览"), "html"]);
+    }
     if (VW.mode === "edit") {
       if (!isMd(VW.path)) acts.push([t("换行"), "wrap", VW.wrap]);
       acts.push([VW.dirty ? t("保存") + " •" : t("保存"), "save", VW.dirty]);
@@ -5454,6 +5477,34 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("vw-body").querySelector(".vw-diff").innerHTML = (VW.dirty ? `<div class="tiny">${t("还有没保存的修改；这里对比的是磁盘上的版本和上次提交。")}</div>` : "") + diffHtml(r.diff);
     } catch (e) { $("vw-body").querySelector(".vw-diff").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; }
   }
+
+  // ── HTML 预览：网关另起的只读小服务里渲染（和界面不同站点，网页脚本碰不到网关），文件一改自动刷新 ──
+  async function vwHtml() {
+    vwDropEd();
+    vwHtmlStop();
+    VW.mode = "html";
+    vwRenderActs();
+    const p = VW.path;
+    $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    let r;
+    try { r = await post("/api/preview", { path: p }); }
+    catch (e) { if (p === VW.path) $("vw-body").innerHTML = `<div class="vw-empty">${t("预览打不开")}: ${esc(e.message)}</div>`; return; }
+    if (p !== VW.path || VW.mode !== "html") return;
+    VW.pv = { url: r.url, mtime: r.mtime };
+    $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(r.url)}" allow="autoplay; fullscreen; clipboard-write" referrerpolicy="same-origin"></iframe>`;
+    // Claude 一边改、你一边看：每 1.5 秒看一眼修改时间，变了就重新载入
+    VW.pvTimer = setInterval(async () => {
+      if (viewerEl.classList.contains("hidden") || VW.mode !== "html" || VW.path !== p) return vwHtmlStop();
+      if (document.hidden) return;
+      let s; try { s = await api("/api/file/stat?path=" + encodeURIComponent(p)); } catch { return; }
+      if (VW.pv && s && s.mtime && s.mtime !== VW.pv.mtime) { VW.pv.mtime = s.mtime; VW.size = s.size; $("vw-info").textContent = fmtSize(s.size); vwHtmlReload(); }
+    }, 1500);
+  }
+  function vwHtmlReload() {
+    const f = $("vw-body").querySelector(".vw-html");
+    if (f && VW.pv) f.src = VW.pv.url + (VW.pv.url.includes("?") ? "&" : "?") + "_r=" + Date.now();
+  }
+  function vwHtmlStop() { clearInterval(VW.pvTimer); VW.pvTimer = 0; VW.pv = null; }
 
   function vwRenderText(mode) {
     vwDropEd();
@@ -5929,6 +5980,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     VW.dirty = false;
     closeViewerPdf();
     vwDropEd();
+    vwHtmlStop();
     $("vw-body").innerHTML = "";
     viewerEl.classList.add("hidden");
     // 文件面板开着就刷新一下：大小 / 修改时间可能变了

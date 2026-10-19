@@ -791,6 +791,11 @@ public class MainActivity extends Activity {
         // 本机网关之外的地址一律交给系统浏览器：登录授权页、"去官网创建 Key" 之类。
         // 在 WebView 里打开登录页会被 Google 等拒绝，而且 OAuth 回调要回到浏览器才能跳 localhost。
         web.setWebViewClient(new WebViewClient() {
+            // 只管整页跳转：查看器里 HTML 预览的 iframe 在里面点链接，留在预览里，别当外链甩出去
+            @Override public boolean shouldOverrideUrlLoading(WebView v, android.webkit.WebResourceRequest req) {
+                if (!req.isForMainFrame()) return false;
+                return shouldOverrideUrlLoading(v, req.getUrl().toString());
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 if (url != null && url.startsWith("http://127.0.0.1:" + Env.PORT)) return false;
                 openExternal(url);

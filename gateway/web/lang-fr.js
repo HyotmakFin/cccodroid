@@ -1211,4 +1211,8 @@ window.I18N_DICT["fr"] = {
   "遇到了什么": "Ce qui s’est passé",
   "做了什么、想要什么结果、实际怎样。截图可以直接拖进来。": "Ce que vous avez fait, ce que vous attendiez, ce qui s’est réellement passé. Vous pouvez glisser des captures ici.",
   "怎么复现": "Étapes pour reproduire",
+  "源码": "Source",
+  "在浏览器打开": "Ouvrir dans le navigateur",
+  "预览打不开": "Impossible d’ouvrir l’aperçu",
+  "预览显示的是磁盘上的文件。先保存你的修改再预览？": "L’aperçu affiche le fichier tel qu’il est enregistré. Enregistrer d’abord vos modifications ?",
 };

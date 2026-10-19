@@ -1240,4 +1240,8 @@ window.I18N_DICT.en = {
   "遇到了什么": "What happened",
   "做了什么、想要什么结果、实际怎样。截图可以直接拖进来。": "What you did, what you expected, what actually happened. You can drag screenshots in here.",
   "怎么复现": "Steps to reproduce",
+  "源码": "Source",
+  "在浏览器打开": "Open in browser",
+  "预览打不开": "Can’t open the preview",
+  "预览显示的是磁盘上的文件。先保存你的修改再预览？": "The preview shows the file as saved on disk. Save your changes first?",
 };

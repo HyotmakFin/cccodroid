@@ -2129,6 +2129,9 @@ const MIME = {
   ".yaml": "text/yaml; charset=utf-8", ".yml": "text/yaml; charset=utf-8",
   ".apk": "application/vnd.android.package-archive", ".zip": "application/zip",
   ".wasm": "application/wasm",
+  // HTML 预览里网页会引用的
+  ".htm": "text/html; charset=utf-8", ".xml": "application/xml; charset=utf-8", ".map": "application/json; charset=utf-8",
+  ".ttf": "font/ttf", ".otf": "font/otf", ".gltf": "model/gltf+json", ".glb": "model/gltf-binary",
 };
 
 const EXT_KIND = {
@@ -2139,7 +2142,7 @@ const EXT_KIND = {
   docx:  [".docx", ".docm", ".dotx"],
   sheet: [".xlsx", ".xlsm", ".xlsb", ".xls", ".ods"],
   office: [".pptx", ".ppt", ".ppsx", ".pps", ".potx", ".odp", ".doc", ".dot", ".odt", ".rtf", ".wps", ".dps", ".et", ".key", ".pages", ".numbers"],
-  text:  [".txt", ".md", ".log", ".csv", ".json", ".yaml", ".yml", ".xml", ".html", ".js", ".mjs",
+  text:  [".txt", ".md", ".log", ".csv", ".json", ".yaml", ".yml", ".xml", ".html", ".htm", ".js", ".mjs",
           ".css", ".c", ".h", ".cpp", ".py", ".sh", ".java", ".kt", ".rs", ".go", ".ts", ".sql",
           ".toml", ".ini", ".conf", ".cfg", ".properties", ".gradle", ".kts", ".tsx", ".jsx", ".cjs",
           ".vue", ".svelte", ".scss", ".less", ".hpp", ".cc", ".cxx", ".rb", ".php", ".lua", ".pl",
@@ -2215,6 +2218,74 @@ function safeWritePath(p) {
   const name = path.basename(full);
   if (SECRET_NAMES.has(name) || SECRET_RE.test(path.join(dir, name))) return { error: "forbidden", status: 403 };
   return { file: path.join(dir, name), size: 0, mtime: 0, fresh: true };
+}
+
+// ── HTML 预览 ─────────────────────────────────────────────────────────
+// 查看器里渲染 HTML：另起一个只读的小服务（随机端口，地址用 localhost），和界面（127.0.0.1:端口）不同站点——
+// 预览页里的脚本拿不到界面的 Cookie，也过不了 /api 的 Origin 校验，Claude 写的网页随便跑也碰不到网关。
+// 每次预览发一张随机凭证，只能读那个 HTML 所在目录里的东西；路径照样过 safeFilePath（密钥、私有目录照旧拦）。
+// 网址形如 http://localhost:<端口>/<凭证>/index.html，相对路径自然解析；"/assets/x.js" 这种站点绝对路径按 Referer 里的凭证找回来
+const PREVIEW = { server: null, port: 0, starting: null, caps: new Map() };
+function previewStart() {
+  if (PREVIEW.port) return Promise.resolve(PREVIEW.port);
+  if (PREVIEW.starting) return PREVIEW.starting;
+  PREVIEW.starting = new Promise((resolve, reject) => {
+    const srv = http.createServer(previewServe);
+    srv.on("error", (e) => { PREVIEW.starting = null; reject(e); });
+    srv.listen(0, "127.0.0.1", () => { PREVIEW.server = srv; PREVIEW.port = srv.address().port; resolve(PREVIEW.port); });
+  });
+  return PREVIEW.starting;
+}
+async function previewGrant(p) {
+  const r = safeFilePath(p);
+  if (r.error) return r;
+  const port = await previewStart();
+  const now = Date.now();
+  for (const [k, v] of PREVIEW.caps) if (v.exp < now) PREVIEW.caps.delete(k);
+  const root = path.dirname(r.file);
+  let cap = [...PREVIEW.caps].find(([, v]) => v.root === root)?.[0];   // 同一目录复用，刷新不换网址
+  if (!cap) { cap = crypto.randomBytes(12).toString("hex"); if (PREVIEW.caps.size >= 200) PREVIEW.caps.delete(PREVIEW.caps.keys().next().value); }
+  PREVIEW.caps.set(cap, { root, exp: now + 12 * 3600e3 });
+  return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime };
+}
+function previewServe(req, res) {
+  const fail = (code, msg) => { res.writeHead(code, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }); res.end(msg); };
+  if (req.method !== "GET" && req.method !== "HEAD") return fail(405, "read only");
+  const host = String(req.headers.host || "").toLowerCase();
+  if (host !== `localhost:${PREVIEW.port}` && host !== `127.0.0.1:${PREVIEW.port}`) return fail(421, "bad host");
+  let pathname;
+  try { pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { return fail(400, "bad path"); }
+  const segs = pathname.split("/").filter(Boolean);
+  let cap = segs[0], rel = segs.slice(1);
+  if (!PREVIEW.caps.has(cap)) {
+    // 站点绝对路径（/assets/x.js）：从引用它的页面找回凭证
+    let ref = ""; try { ref = new URL(String(req.headers.referer || "")).pathname.split("/")[1] || ""; } catch {}
+    if (!PREVIEW.caps.has(ref)) return fail(404, "preview expired — reopen the file");
+    cap = ref; rel = segs;
+  }
+  const g = PREVIEW.caps.get(cap);
+  if (g.exp < Date.now()) { PREVIEW.caps.delete(cap); return fail(404, "preview expired — reopen the file"); }
+  let full = path.resolve(g.root, ...rel);
+  if (full !== g.root && !full.startsWith(g.root + path.sep)) return fail(403, "outside preview folder");
+  try { if (fs.statSync(full).isDirectory()) full = path.join(full, "index.html"); } catch {}
+  const r = safeFilePath(full);
+  if (r.error) return fail(r.status || 404, r.error);
+  const head = { "content-type": MIME[path.extname(r.file).toLowerCase()] || "application/octet-stream",
+    "cache-control": "no-store", "x-content-type-options": "nosniff", "accept-ranges": "bytes" };
+  // 音视频要 Range 才能拖进度
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ""));
+  let start = 0, end = r.size - 1, code = 200;
+  if (m && r.size) {
+    start = m[1] ? +m[1] : Math.max(0, r.size - +m[2]); end = m[1] && m[2] ? Math.min(+m[2], r.size - 1) : r.size - 1;
+    if (start > end || start >= r.size) { res.writeHead(416, { "content-range": `bytes */${r.size}` }); return res.end(); }
+    code = 206; head["content-range"] = `bytes ${start}-${end}/${r.size}`;
+  }
+  head["content-length"] = r.size ? end - start + 1 : 0;
+  res.writeHead(code, head);
+  if (req.method === "HEAD" || !r.size) return res.end();
+  const st = fs.createReadStream(r.file, { start, end });
+  st.on("error", () => { try { res.destroy(); } catch {} });
+  st.pipe(res);
 }
 
 /** 二进制安全的体读取（readBody 走 utf8，会把图片读坏） */
@@ -3977,7 +4048,7 @@ async function startRun(item) {
   // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
   const localHint = !PROVIDER.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
-  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), !PROVIDER.nativeModels && !PROVIDER.local ? TASKS_HINT : "", SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), !PROVIDER.nativeModels && !PROVIDER.local ? TASKS_HINT : "", PROVIDER.local ? "" : PREVIEW_HINT, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
@@ -5273,6 +5344,8 @@ async function issueDraft(lang) {
 
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
 // 第三方模型的清单提醒（见 providerEnv 里的 CLAUDE_CODE_ENABLE_TODO_TOOLS）；Claude 型号自己会用，不用提醒
+// 查看器能直接预览 HTML：告诉 Claude 静态网页写好给路径就行，别动不动起 http.server（还得用户自己找端口）
+const PREVIEW_HINT = "In this app, file paths you mention in a reply are tappable and open in a file viewer, where .html files render as a live preview (relative CSS, JS and images load, and it reloads when the file changes). For a static web page or browser game, write the file and give the user its full path instead of starting a local web server; start a server only when the page needs a backend.";
 const TASKS_HINT = "When a request has 3 or more distinct steps, track them with the TaskCreate and TaskUpdate tools: create the tasks first, mark each in_progress when you start it and completed when it is done. The user sees this list as a live progress panel.";
 function toolsHint() {
   if (PREFIX) {
@@ -6480,6 +6553,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── 回复里的路径被点了：先问一下是什么（文件 / 目录 / 不存在），前端再决定开查看器还是文件面板 ──
+    if (req.method === "POST" && p === "/api/preview") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      const r = await previewGrant(b.path);
+      return sendJson(res, r.error ? r.status || 404 : 200, r);
+    }
     if (req.method === "GET" && p === "/api/file/stat") {
       let q = String(u.searchParams.get("path") || "").trim();
       if (!path.isAbsolute(q)) return sendJson(res, 400, { error: "absolute path required" });

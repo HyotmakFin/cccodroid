@@ -88,6 +88,7 @@ Sidebar → Sessions:
 
 - Edit and save text and code directly. If the file changed on disk after you opened it (say Claude edited it), you are asked before anything is overwritten.
 - Markdown is rendered, with an edit toggle. Images fit the screen; tap for 1:1. PDFs render page by page as you scroll (CJK text and password-protected files work).
+- HTML files open as a live web page (CSS, JS and images next to it load too) and reload when the file changes; switch to the source or open it in the browser. The page runs in its own sandbox and can't touch the app or your sessions.
 - Office files: Word (docx) shows text, headings, tables and images directly; Excel (xlsx / xls / ods) shows as a grid with sheet tabs at the bottom — tap a cell to see its full content and formula. PowerPoint, legacy doc files and the “Original layout” button use LibreOffice in the background to convert to PDF (install it with one tap the first time, about a 190 MB download; results are cached, so reopening is instant).
 
 **Terminal** (>_):
