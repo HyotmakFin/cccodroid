@@ -1201,4 +1201,8 @@ window.I18N_DICT["es"] = {
   "回退超时": "Se agotó el tiempo del rebobinado",
   "这个会话正在生成中，等它答完再回退。": "Esta conversación todavía está generando; rebobina cuando termine.",
   "这条消息之后的文件改动没有留底，没法撤销。": "No hay instantáneas de archivos después de este mensaje, así que los cambios no se pueden revertir.",
+  "命令：": "Comandos:",
+  "索引签名不对，已拒绝": "La firma del índice no es válida; rechazado",
+  "索引没有签名，已拒绝": "El índice no está firmado; rechazado",
+  "{cmd} 退出码 {code}：{err}": "{cmd} salió con el código {code}: {err}",
 };

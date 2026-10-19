@@ -1230,4 +1230,8 @@ window.I18N_DICT.en = {
   "回退超时": "Rewind timed out",
   "这个会话正在生成中，等它答完再回退。": "This conversation is still generating; rewind once it finishes.",
   "这条消息之后的文件改动没有留底，没法撤销。": "There are no file snapshots after this message, so the changes can't be reverted.",
+  "命令：": "Commands:",
+  "索引签名不对，已拒绝": "Index signature is invalid; rejected",
+  "索引没有签名，已拒绝": "Index is unsigned; rejected",
+  "{cmd} 退出码 {code}：{err}": "{cmd} exited with code {code}: {err}",
 };

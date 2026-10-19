@@ -1201,4 +1201,8 @@ window.I18N_DICT["fr"] = {
   "回退超时": "Délai dépassé pour le retour",
   "这个会话正在生成中，等它答完再回退。": "Cette conversation est en cours de génération ; revenez en arrière quand elle sera finie.",
   "这条消息之后的文件改动没有留底，没法撤销。": "Aucun instantané de fichiers après ce message : impossible d'annuler les modifications.",
+  "命令：": "Commandes :",
+  "索引签名不对，已拒绝": "Signature de l'index invalide ; rejeté",
+  "索引没有签名，已拒绝": "Index non signé ; rejeté",
+  "{cmd} 退出码 {code}：{err}": "{cmd} a quitté avec le code {code} : {err}",
 };

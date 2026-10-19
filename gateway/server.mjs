@@ -2806,7 +2806,7 @@ async function compFetchIndex(src, mirror) {
   let sig = null;
   try { sig = Buffer.from(String(await compFetch(src + ".sig")).trim(), "base64"); } catch {}
   const ok = sig && sig.length === 64 && crypto.verify(null, body, COMP_INDEX_PUBKEY, sig);
-  if (!ok && !fs.existsSync(path.join(COMP_DIR, "allow-unsigned"))) throw new Error(sig ? "索引签名不对，已拒绝" : "索引没有签名，已拒绝");
+  if (!ok && !fs.existsSync(path.join(COMP_DIR, "allow-unsigned"))) throw new Error(sig ? tz("索引签名不对，已拒绝") : tz("索引没有签名，已拒绝"));
   return { ...JSON.parse(String(body)), signed: !!ok };
 }
 
@@ -2924,7 +2924,7 @@ function compRun(job, cmd, args, opts = {}) {
     child.stdout.on("data", () => {});
     child.stderr.on("data", (d) => { err = (err + d).slice(-2000); });
     child.on("error", reject);
-    child.on("exit", (code) => { job.child = null; job.cancelled ? reject(new Error("cancelled")) : code === 0 ? resolve() : reject(new Error(`${path.basename(cmd)} 退出码 ${code}：${err.trim().split("\n").filter((l) => l.trim() && !/Exiting with failure status|Error is not recoverable/.test(l)).slice(-3).join(" · ") || err.trim().split("\n").pop() || ""}`)); });
+    child.on("exit", (code) => { job.child = null; job.cancelled ? reject(new Error("cancelled")) : code === 0 ? resolve() : reject(new Error(tz("{cmd} 退出码 {code}：{err}", { cmd: path.basename(cmd), code, err: `${err.trim().split("\n").filter((l) => l.trim() && !/Exiting with failure status|Error is not recoverable/.test(l)).slice(-3).join(" · ") || err.trim().split("\n").pop() || ""}` }))); });
   });
 }
 
@@ -4629,6 +4629,20 @@ const LOCAL_CATALOG = [
   { fam: "SmolLM2", params: 1.7, repo: "bartowski/SmolLM2-1.7B-Instruct-GGUF", file: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf", bytes: 1055609824,
     sha256: "77665ea4815999596525c636fbeb56ba8b080b46ae85efef4f0d986a139834d7" },
 ].map((e) => ({ ...e, id: e.file.replace(/\.gguf$/i, "") }));
+// 模型目录：优先用组件签名索引里 llama-cpp 带的 models（组件市场 recipes/llama-cpp/models.json，改目录不用发 App）；
+// 索引没取到、没这个字段或有一条不合格，就用上面内置的这份。repo / file 拿来拼下载地址，规则和市场的 tools/lib.mjs 一致
+const MODEL_OK = (m) => m && typeof m === "object" && typeof m.fam === "string" && /^[\w .+-]{1,40}$/.test(m.fam) &&
+  typeof m.params === "number" && m.params > 0 && m.params < 1000 &&
+  typeof m.repo === "string" && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(m.repo) &&
+  typeof m.file === "string" && /^[A-Za-z0-9_.-]+\.gguf$/i.test(m.file) &&
+  Number.isInteger(m.bytes) && m.bytes > 0 && typeof m.sha256 === "string" && /^[0-9a-f]{64}$/.test(m.sha256) &&
+  (m.tag === undefined || m.tag === "think" || m.tag === "code") && (m.ms === undefined || m.ms === 1);
+function modelCatalog() {
+  const list = compIndexCache.data && compIndexCache.data.components["llama-cpp"] && compIndexCache.data.components["llama-cpp"].models;
+  if (Array.isArray(list) && list.length && list.length <= 100 && list.every(MODEL_OK))
+    return list.map((m) => ({ fam: m.fam, params: m.params, repo: m.repo, file: m.file, bytes: m.bytes, sha256: m.sha256, tag: m.tag, ms: m.ms, id: m.file.replace(/\.gguf$/i, "") }));
+  return LOCAL_CATALOG;
+}
 const modelUrls = (e) => [
   ...(e.ms ? [`https://modelscope.cn/models/${e.repo}/resolve/master/${e.file}`] : []),
   `https://huggingface.co/${e.repo}/resolve/main/${e.file}`,
@@ -4647,7 +4661,7 @@ function localCatalog() {
   const have = new Map(localModels().map((m) => [m.id, m]));
   const inUse = (h) => !!(h && LL.child && LL.file === h.file);
   const jobView = (j) => j ? { phase: j.phase, done: j.done, total: j.total, err: j.err || "" } : null;
-  const items = LOCAL_CATALOG.map((e) => {
+  const items = modelCatalog().map((e) => {
     const h = have.get(e.id);
     return { id: e.id, fam: e.fam, params: e.params, tag: e.tag || "", bytes: e.bytes, repo: e.repo,
       have: !!h, inUse: inUse(h), job: jobView(MDL.get(e.id)) };
@@ -4704,7 +4718,7 @@ function modelFetch(e, urls) {
   })();
 }
 function modelDownload(id) {
-  const e = LOCAL_CATALOG.find((x) => x.id === id);
+  const e = modelCatalog().find((x) => x.id === id);
   if (e) return modelFetch(e, modelUrls(e));
   const j = MDL.get(id);
   if (j && j.url) return modelFetch({ id, url: j.url }, [j.url]);     // 贴链接下载的重试
@@ -5712,7 +5726,9 @@ function listSkills() {
   try { for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) { const r = compRecord(f.slice(0, -5)); if (r && r.skill) fromComp.set(r.skill, f.slice(0, -5)); } } catch {}
   return ents.filter((d) => d.isDirectory() || d.isSymbolicLink()).map((d) => {
     const m = skillMeta(path.join(SKILLS_DIR, d.name));
-    return m ? { dir: d.name, name: m.name || d.name, description: m.description, component: fromComp.get(d.name) || "", official: (skillSource(d.name) || {}).repo === SKILL_REPO } : null;
+    // 组件技能的 SKILL.md 是中文写的（给 Claude 看的触发说明）：非中文界面显示组件索引里的英文简介
+    const cid = fromComp.get(d.name) || "", ce = cid && compIndexCache.data && compIndexCache.data.components[cid];
+    return m ? { dir: d.name, name: m.name || d.name, description: m.description, descEn: (ce && ce.desc && ce.desc.en) || "", component: cid, official: (skillSource(d.name) || {}).repo === SKILL_REPO } : null;
   }).filter(Boolean);
 }
 function deleteSkill(dir) {
@@ -6094,7 +6110,10 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "GET" && p === "/api/ext/mcp") return sendJson(res, 200, { items: await listMcp() });
         if (req.method === "POST" && p === "/api/ext/mcp/add") return sendJson(res, 200, await addMcp(body));
         if (req.method === "POST" && p === "/api/ext/mcp/remove") return sendJson(res, 200, await removeMcp(body.name));
-        if (req.method === "GET" && p === "/api/ext/skills") return sendJson(res, 200, { items: listSkills(), dir: SKILLS_DIR });
+        if (req.method === "GET" && p === "/api/ext/skills") {
+          if (PREFIX) await compIndex(false).catch(() => {});   // 组件技能的英文简介来自索引（有缓存，一般不联网）
+          return sendJson(res, 200, { items: listSkills(), dir: SKILLS_DIR });
+        }
         if (req.method === "GET" && p === "/api/ext/catalog/skills") return sendJson(res, 200, await listSkillCatalog(u.searchParams.get("refresh") === "1"));
         if (req.method === "POST" && p === "/api/ext/catalog/skills/install") return sendJson(res, 200, await installCatalogSkill(String(body.dir || "")));
         if (req.method === "GET" && p === "/api/ext/catalog/mcp") return sendJson(res, 200, await listMcpCatalog(u.searchParams.get("q"), u.searchParams.get("cursor")));
@@ -6318,7 +6337,18 @@ const server = http.createServer(async (req, res) => {
       if (b.stop) llamaStop("用户停止");
       return sendJson(res, 200, llamaInfo());
     }
-    if (req.method === "GET" && p === "/api/local/catalog") return sendJson(res, 200, PREFIX ? localCatalog() : { ram: 0, items: [] });
+    // 前端滚动冻结脱困前报一声：写进网关日志，事后对时间线（前端自己只在 localStorage 留最近 5 次）
+    if (req.method === "POST" && p === "/api/freeze") {
+      let j = {};
+      try { j = JSON.parse(await readBody(req)); } catch {}
+      const touch = Array.isArray(j.touch) ? j.touch.slice(-40).map((x) => String(x).slice(0, 80)).join(" | ") : "";
+      log(`滚动冻结脱困（${j.why === "auto" ? "自动" : "手动"}）${touch ? "，触摸：" + touch : ""}`);
+      return sendJson(res, 200, { ok: true });
+    }
+    if (req.method === "GET" && p === "/api/local/catalog") {
+      if (PREFIX) await compIndex(false).catch(() => {});   // 目录在组件索引里（有缓存）
+      return sendJson(res, 200, PREFIX ? localCatalog() : { ram: 0, items: [] });
+    }
     if (req.method === "POST" && p === "/api/local/model") {
       if (!PREFIX) return sendJson(res, 400, { ok: false, message: "unsupported" });
       const b = JSON.parse((await readBody(req)) || "{}");

@@ -13,6 +13,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 (() => {
   "use strict";
   // 界面文字一律过 t()（中文原文即键，见 i18n.js）；i18n.js 没加载时退化成原样返回
+  const isZh = () => /^zh/.test((window.I18N && I18N.lang) || "zh");
   const I18N = window.I18N || { lang: "zh", t: (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s) };
   const t = I18N.t;
   const tk = (s) => s;   // 词条键：表格里先登记（扫描器认它），显示时再 t(变量)
@@ -2880,7 +2881,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 可选组件（浏览器组件 = 无头 Chromium）：下载 → 校验 → 换进工具包，进度靠轮询 ──
   let compTimer = 0;
-  const pickLang = (o) => (o && typeof o === "object" ? o[(window.I18N && I18N.lang) || "zh"] || o.en || o.zh || "" : o || "");
+  // 只有 zh / en 两份：中文界面（简繁都算）用 zh，其它语言一律用 en
+  const pickLang = (o) => (o && typeof o === "object" ? (isZh() ? o.zh || o.en : o.en || o.zh) || "" : o || "");
   const MB = (n) => Math.max(1, Math.round((n || 0) / 1048576)) + " MB";
   // 「A、B 和 C」这种并列按当前语言的习惯拼
   const listOf = (a) => { try { return new Intl.ListFormat((window.I18N && I18N.lang) || "zh", { type: "conjunction" }).format(a); } catch { return a.join(", "); } };
@@ -2928,7 +2930,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
       if (miss.length && c.state !== "ok") desc += '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>";
       if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
-      if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令") + "：" + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
+      if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令：") + " " + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
       if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
       if (c.id === "llama-cpp" && c.state === "ok") desc += '<details class="llm-dl" id="llm-dl"' + (llmDl.open ? " open" : "") + "><summary>" + t("下载模型") + '</summary><div id="llm-dl-body">' + llmDl.html + "</div></details>";
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
@@ -3136,7 +3138,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("ext-s-count").textContent = (r.items || []).length;
     $("ext-skills").innerHTML = (r.items || []).map((s) => extItem(esc(s.name), "",
       `<button data-x="skill-rm" data-id="${esc(s.dir)}">${t("删除")}</button>`,
-      `<div class="tiny ext-desc">${esc(s.description)}</div>`, [s.component ? "comp" : s.official ? "official" : "user"])).join("")
+      `<div class="tiny ext-desc">${esc(!isZh() && s.descEn ? s.descEn : s.description)}</div>`, [s.component ? "comp" : s.official ? "official" : "user"])).join("")
       || `<div class="tiny">${t("~/.claude/skills 里还没有技能。插件也可能自带技能。")}</div>`;
     renderIdx("skill", [["official", t("官方")], ["comp", t("组件自带")], ["user", t("自己装的")]]);
     if ($("ext-s-catbox").open) loadSkillCat();
@@ -6401,6 +6403,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         localStorage.setItem(FZ_LOG, JSON.stringify(log.slice(-5)));
         if (inputEl.value) sessionStorage.setItem(FZ_DRAFT, inputEl.value);
         sessionStorage.setItem(FZ_AT, String(Date.now()));
+        // keepalive：紧接着就跳走了，普通请求会被掐掉
+        fetch("/api/freeze", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ why, touch: log[log.length - 1].touch }) }).catch(() => {});
       } catch {}
       if (window.CCApp && window.CCApp.unfreeze) { toast(t("正在重新挂载界面…")); window.CCApp.unfreeze(); }
       else toast(t("这个版本的应用还不能脱困，请更新应用；临时办法是重启网关"), true);
@@ -6434,7 +6439,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const p = e.changedTouches[0], dx = p.clientX - s.x, dy = p.clientY - s.y;
       if (Math.abs(dy) < 60 || Math.abs(dy) < 2 * Math.abs(dx) || performance.now() - s.t > 2000) return;
       const max = s.el.scrollHeight - s.el.clientHeight;
-      if (dy > 0 ? s.top < 4 : s.top > max - 4) return;          // 已经到头了，本来就滚不动
+      if ((dy > 0 ? s.top : max - s.top) < 40) return;           // 到头了或只剩一点能滚（内容刚好比屏幕长一丁点），滚不动不算冻住
       if (String(getSelection() || "").length) return;            // 在拖选文字
       setTimeout(() => {
         if (!s.el.isConnected) return;
