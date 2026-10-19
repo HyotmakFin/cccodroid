@@ -841,6 +841,9 @@ public class MainActivity extends Activity {
                 ui.post(() -> { pickWait = null; try { startActivityForResult(devkitPickIntent(), REQ_DEVKIT); } catch (Exception ignored) {} });
             }
             @android.webkit.JavascriptInterface public void unfreeze() { ui.post(() -> bounce()); }
+            /** 更新说明（见 WhatsNew）：页面启动时来取，显示出来后调 whatsNewSeen */
+            @android.webkit.JavascriptInterface public String whatsNew(String lang) { return WhatsNew.pending(MainActivity.this, lang); }
+            @android.webkit.JavascriptInterface public void whatsNewSeen() { WhatsNew.seen(MainActivity.this); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */

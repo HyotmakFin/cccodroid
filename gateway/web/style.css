@@ -1170,3 +1170,27 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .rw-acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .rw-acts button{padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:14px}
 .rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+/* 更新说明：更新后第一次打开时主窗口正中的卡片；内容长时卡片内部滚动 */
+#whatsnew{position:fixed;inset:0;z-index:210;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
+.wn-card{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);width:100%;max-width:560px;max-height:min(80vh,100%);display:flex;flex-direction:column;box-shadow:0 12px 40px var(--shadow);overflow:hidden}
+.wn-head{padding:14px 18px 10px;font-size:17px;font-weight:600;border-bottom:1px solid var(--line)}
+.wn-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 18px 8px}
+.wn-body section+section{border-top:1px solid var(--line);margin-top:6px}
+.wn-ver{margin:12px 0 2px;font-family:var(--mono);font-size:13px;color:var(--accent)}
+.wn-md{background:none;border:0;padding:0;margin:0;max-width:none;font-size:14.5px}
+.wn-md h1,.wn-md h2,.wn-md h3{font-size:15px;margin:10px 0 4px}
+.wn-foot{padding:10px 18px 14px;display:flex;justify-content:flex-end;border-top:1px solid var(--line)}
+.wn-foot .btn{min-width:96px}
+
+/* 自定义组件：导入向导 */
+.cu-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.cu-row input:not([type]) , .cu-row input[type="text"] { flex: 1; min-width: 8em; }
+#custom-path { flex: 1; min-width: 10em; }
+.cu-wiz { border: 1px solid var(--line, #8884); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.cu-prog { padding: 6px 0; border-top: 1px dashed var(--line, #8884); }
+.cu-prog.dim { opacity: .6; }
+.cu-prog code { word-break: break-all; }
+.cu-cmd { width: 10em; flex: 0 1 auto !important; }
+.cu-cmds .btn { margin-left: 2px; }
+.cu-out { max-height: 14em; overflow: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; padding: 6px 8px; border-radius: 6px; background: var(--code-bg, #8881); }
+.cu-out.err { color: var(--err, #c33); }

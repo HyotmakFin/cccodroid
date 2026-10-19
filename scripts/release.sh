@@ -5,7 +5,7 @@
 #  APK 在构建机上签名（发布钥匙不进 CI），所以 Release 也从这里建。
 #  token：fine-grained，只对本仓库有 Contents 读写，放在构建机私有目录（TOKEN），绝不进仓库。
 #  用法:  sh scripts/release.sh            先跑 build.sh；版本取自 AndroidManifest 的 versionName
-#         NOTES=说明.md NOTES_EN=notes.en.md sh scripts/release.sh
+#         NOTES=说明.md NOTES_EN=notes.en.md sh scripts/release.sh   （缺省用 android/assets/whatsnew/v<版本>.*.md）
 #  说明是中英双语：中文在前，--- 之后是 ## English。NOTES_EN 缺省时英文部分只有安装与校验
 #  正式版直接发；tag 带后缀（v0.2.0-beta1）的标成预发布，App 内更新检查只认正式版
 # ─────────────────────────────────────────────────────────────────────
@@ -26,6 +26,11 @@ COMMIT=$(git -C "$ROOT" rev-parse HEAD)
 git -C "$ROOT" fetch -q origin main 2>/dev/null || true
 git -C "$ROOT" merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null || { echo "✗ 提交 ${COMMIT%${COMMIT#???????}} 还没推到 origin/main，先 git push"; exit 1; }
 
+# 说明缺省用 APK 自带的更新说明（android/assets/whatsnew/v<版本>.zh/en.md）—— App 里弹的和 Release 正文是同一份
+W="$ROOT/android/assets/whatsnew"
+[ -z "$NOTES" ] && [ -s "$W/$TAG.zh.md" ] && NOTES="$W/$TAG.zh.md"
+[ -z "$NOTES_EN" ] && [ -s "$W/$TAG.en.md" ] && NOTES_EN="$W/$TAG.en.md"
+[ -z "$NOTES" ] && echo "⚠ 没有更新说明：$W/$TAG.zh.md（App 里也不会弹）"
 [ -n "$NOTES" ] && [ -z "$NOTES_EN" ] && echo "⚠ 只给了中文说明（NOTES），没给英文（NOTES_EN）"
 export TOKEN REPO TAG COMMIT SHA DEVKIT APK NOTES NOTES_EN
 node --input-type=module -e '

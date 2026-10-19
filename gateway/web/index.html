@@ -401,6 +401,13 @@
         <div class="ext-idx" id="comp-idx"></div>
         <div id="comp-list" class="list"></div>
       </details>
+      <details class="field ext-sec hidden" id="custom-field" data-sec="custom" open><summary><span data-i18n>自定义组件</span> <span id="custom-count" class="pill"></span></summary>
+        <div class="tiny" data-i18n>市场里没有的，可以自己导入 Linux arm64 程序：单个程序，或 .tar.gz / .zip 压缩包。会自动补缺的库、生成命令，Claude 和终端里都能直接用。</div>
+        <div class="it-acts"><button class="btn sm" id="custom-pick" data-i18n>导入程序…</button><input type="file" id="custom-file" class="hidden"></div>
+        <div class="cu-row"><input id="custom-path" data-i18n-attr="placeholder" placeholder="或者填本机路径，如 /sdcard/Download/foo.tar.gz" spellcheck="false" autocapitalize="off"><button class="btn ghost sm" id="custom-path-go" data-i18n>分析</button></div>
+        <div id="custom-wiz"></div>
+        <div id="custom-list" class="list"></div>
+      </details>
       <div class="field hidden" id="gh-field"><label><span>GitHub</span></label>
         <div id="gh-field-box" class="list"></div>
       </div>

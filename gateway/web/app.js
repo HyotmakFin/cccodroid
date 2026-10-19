@@ -2844,7 +2844,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  function loadExt() { loadComponents(60); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
+  function loadExt() { loadComponents(60); loadCustom(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
 
   // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
   // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面
@@ -2955,6 +2955,112 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
       compTimer = setTimeout(loadComponents, 1000);
   }
+
+  // ── 自定义组件：用户自己导入 Linux arm64 程序。选文件 → 网关分析（ELF 类型、缺的库）→ 勾要用的命令 → 安装（补库、写入口和技能）──
+  const cust = { rep: null, busy: false };
+  const cpost = (p, body) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+  const KIND = () => ({ glibc: t("Linux 程序（glibc）"), bionic: t("安卓原生程序"), static: t("静态程序"), script: t("脚本"),
+    musl: "musl", unsupported: t("跑不了") });
+  async function loadCustom() {
+    const r = await api("/api/custom").catch(() => ({ supported: false }));
+    $("custom-field").classList.toggle("hidden", !r.supported);
+    if (!r.supported) return;
+    $("custom-count").textContent = (r.items || []).length || "";
+    $("custom-list").innerHTML = (r.items || []).map((c) => {
+      const cmds = c.entries.map((e) => "<code>" + esc(e.cmd) + "</code>" + (e.ok ? "" : ' <span class="warn">' + t("入口丢了") + "</span>") +
+        ' <button class="btn ghost sm" data-cu="try" data-id="' + esc(c.id) + '" data-cmd="' + esc(e.cmd) + '">' + t("试运行") + "</button>").join(" ");
+      const meta = "<span>" + esc(c.source) + "</span><span>" + MB(c.bytes) + "</span>" +
+        (c.deps ? "<span>" + t("补了 {n} 个库", { n: c.deps }) + "</span>" : "") +
+        [...new Set(c.entries.map((e) => KIND()[e.kind] || e.kind))].map((k) => "<span>" + esc(k) + "</span>").join("");
+      let desc = (c.desc ? '<div class="tiny ext-desc">' + esc(c.desc) + "</div>" : "") + '<div class="tiny cu-cmds">' + t("命令：") + " " + cmds + "</div>";
+      if (c.unresolved.length) desc += '<div class="tiny warn">' + t("还缺这些库，可能跑不起来：{libs}", { libs: esc(c.unresolved.join(", ")) }) + "</div>";
+      desc += '<pre class="cu-out hidden" id="cu-out-' + esc(c.id) + '"></pre>';
+      return extItem(esc(c.name), meta, '<button data-cu="remove" data-id="' + esc(c.id) + '">' + t("卸载") + "</button>", desc);
+    }).join("");
+  }
+  async function customAnalyze(file, pathStr) {
+    if (cust.busy) return;
+    cust.busy = true;
+    const wiz = $("custom-wiz");
+    wiz.innerHTML = '<div class="tiny">' + (file ? t("正在上传并分析 {name}…", { name: esc(file.name) }) : t("正在分析…")) + "</div>";
+    try {
+      const r = file
+        ? await fetch("/api/custom/upload?name=" + encodeURIComponent(file.name || "program"), { method: "POST", body: file }).then((x) => x.json())
+        : await cpost("/api/custom/analyze", { path: pathStr });
+      if (!r.ok) { wiz.innerHTML = '<div class="tiny err">' + esc(r.message || "") + "</div>"; return; }
+      cust.rep = r; renderCustomWiz();
+    } catch (e) { wiz.innerHTML = '<div class="tiny err">' + esc(e.message) + "</div>"; }
+    finally { cust.busy = false; }
+  }
+  function renderCustomWiz() {
+    const r = cust.rep, wiz = $("custom-wiz");
+    if (!r) { wiz.innerHTML = ""; return; }
+    const ok = new Set(["glibc", "bionic", "static", "script"]);
+    const rows = r.programs.map((p, i) => {
+      const can = ok.has(p.kind);
+      const clash = p.clash === "toolkit" ? t("工具包里已有同名命令，换个名字") : p.clash === "custom" ? t("别的自定义组件占了这个名字") : p.clash === "bad" ? t("改个名字（只能用字母、数字和 ._+-）") : "";
+      return '<div class="cu-prog' + (can ? "" : " dim") + '" data-i="' + i + '">' +
+        '<label class="cu-row"><input type="checkbox" class="cu-on"' + (can ? "" : " disabled") + (can && p.suggest && !p.clash ? " checked" : "") + "> <code>" + esc(p.rel) + "</code>" +
+        ' <span class="tiny">' + esc(KIND()[p.kind] || p.kind) + "</span></label>" +
+        (can ? '<div class="cu-row tiny">' + t("命令名") + ' <input class="cu-cmd" value="' + esc(p.cmd) + '" spellcheck="false" autocapitalize="off">' +
+          (p.kind === "glibc" && r.gpu ? ' <label><input type="checkbox" class="cu-gpu"> ' + t("用 GPU") + "</label>" : "") +
+          (p.kind === "glibc" ? ' <label title="' + esc(t("直接改程序的解释器，不经加载器启动。程序按自身位置找数据文件时用")) + '"><input type="checkbox" class="cu-pe"> patchelf</label>' : "") + "</div>" : "") +
+        (clash && can ? '<div class="tiny warn">' + clash + "</div>" : "") +
+        (p.why ? '<div class="tiny warn">' + esc(p.why) + "</div>" : "") +
+        (p.missing.length ? '<div class="tiny dim">' + t("缺：{libs}", { libs: esc(p.missing.join(", ")) }) + "</div>" : "") + "</div>";
+    }).join("");
+    const fix = r.fixable.length ? '<div class="tiny">' + t("会从 Termux glibc 仓库补这些库（约 {size}）：{libs}", { size: MB(r.fixable.reduce((a, f) => a + f.size, 0)), libs: esc([...new Set(r.fixable.map((f) => f.soname))].join(", ")) }) + "</div>" : "";
+    const unres = r.unresolved.length ? '<div class="tiny warn">' + t("这些库找不到来源，用到它们的程序可能跑不起来：{libs}", { libs: esc(r.unresolved.join(", ")) }) + "</div>" : "";
+    wiz.innerHTML = '<div class="cu-wiz">' +
+      '<div class="tiny">' + t("{src}：{n} 个文件，{size}", { src: esc(r.source), n: r.files, size: MB(r.bytes) }) + "</div>" +
+      '<div class="cu-row"><span class="tiny">' + t("名称") + '</span> <input id="cu-name" value="' + esc(r.name) + '"></div>' +
+      '<div class="cu-row"><span class="tiny">ID</span> <input id="cu-id" value="' + esc(r.id) + '" spellcheck="false" autocapitalize="off"></div>' +
+      '<div class="cu-row"><span class="tiny">' + t("说明") + '</span> <input id="cu-desc" placeholder="' + esc(t("可选：它是干什么的，Claude 会看到")) + '"></div>' +
+      '<div class="tiny">' + t("要用哪些命令") + "</div>" + rows + fix + unres +
+      r.warnings.map((w) => '<div class="tiny warn">' + esc(w) + "</div>").join("") +
+      '<div class="tiny dim">' + t("程序来源由你负责：它能读写本应用里的所有文件。") + "</div>" +
+      '<div class="it-acts"><button class="btn sm" data-cu="install">' + t("安装") + '</button><button class="btn ghost sm" data-cu="discard">' + t("取消") + "</button></div></div>";
+  }
+  $("custom-pick").addEventListener("click", () => $("custom-file").click());
+  $("custom-file").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) customAnalyze(f); });
+  $("custom-path-go").addEventListener("click", () => { const p = $("custom-path").value.trim(); if (p) customAnalyze(null, p); });
+  $("custom-field").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-cu]"); if (!b || b.disabled) return;
+    const a = b.dataset.cu;
+    if (a === "discard") { if (cust.rep) cpost("/api/custom/discard", { stage: cust.rep.stage }).catch(() => {}); cust.rep = null; return renderCustomWiz(); }
+    if (a === "install") {
+      const r = cust.rep, entries = [];
+      for (const d of document.querySelectorAll("#custom-wiz .cu-prog")) {
+        if (!d.querySelector(".cu-on")?.checked) continue;
+        const p = r.programs[+d.dataset.i];
+        entries.push({ rel: p.rel, cmd: d.querySelector(".cu-cmd").value.trim(), gpu: !!d.querySelector(".cu-gpu")?.checked, patchelf: !!d.querySelector(".cu-pe")?.checked });
+      }
+      if (!entries.length) return toast(t("至少选一个要用的命令"), true);
+      b.disabled = true; b.textContent = r.fixable.length ? t("正在补库并安装…") : t("正在安装…");
+      const x = await cpost("/api/custom/install", { stage: r.stage, id: $("cu-id").value.trim(), name: $("cu-name").value.trim(), desc: $("cu-desc").value.trim(), entries })
+        .catch((err) => ({ ok: false, message: err.message }));
+      if (!x.ok) { b.disabled = false; b.textContent = t("安装"); return toast(t("失败：{msg}", { msg: x.message || "" }), true); }
+      cust.rep = null; renderCustomWiz();
+      toast(x.unresolved && x.unresolved.length ? t("已安装，但还缺 {n} 个库", { n: x.unresolved.length }) : t("已安装，Claude 和终端里都能用了"), !!(x.unresolved && x.unresolved.length));
+      return loadCustom();
+    }
+    if (a === "remove") {
+      const nm = (b.closest(".item")?.querySelector(".it-title")?.textContent || b.dataset.id).trim();
+      if (!confirm(t("卸载自定义组件 {name}？会删掉导入的程序、补进来的库和它的命令。", { name: nm }))) return;
+      b.disabled = true;
+      const x = await cpost("/api/custom/remove", { id: b.dataset.id }).catch((err) => ({ ok: false, message: err.message }));
+      toast(x.ok ? t("已卸载") : t("失败：{msg}", { msg: x.message || "" }), !x.ok);
+      return loadCustom();
+    }
+    if (a === "try") {
+      const out = $("cu-out-" + b.dataset.id); b.disabled = true;
+      out.classList.remove("hidden"); out.textContent = "$ " + b.dataset.cmd + " --version\n…";
+      const x = await cpost("/api/custom/try", { id: b.dataset.id, cmd: b.dataset.cmd }).catch((err) => ({ ok: false, output: err.message }));
+      out.textContent = "$ " + b.dataset.cmd + "\n" + (x.output || t("（没有输出，退出码 {c}）", { c: x.code }));
+      out.classList.toggle("err", !x.ok);
+      b.disabled = false;
+    }
+  });
 
   // ── llama-cpp 组件下的「下载模型」子卡：内置目录按家族折叠（网关里固定 sha256），一键下载 / 取消 / 删除；也能贴 .gguf 直链 ──
   const llmDl = { open: false, html: "", timer: 0, fam: new Set(), items: new Map(), big: 6, url: "" };
@@ -6570,5 +6676,30 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
     setInterval(refreshStatus, 45000);
+    showWhatsNew();
   })();
+
+  /** 更新说明：更新后第一次打开时，主窗口正中弹一张卡片（外壳决定显示哪几版，见 WhatsNew.java；
+   *  全新安装、开发端外壳没有这个接口时什么都不做）。显示出来就记为看过 */
+  function showWhatsNew() {
+    const A = window.CCApp;
+    if (!A || typeof A.whatsNew !== "function") return;
+    let list = [];
+    try { list = JSON.parse(A.whatsNew(isZh() ? "zh" : ((window.I18N && I18N.lang) || "en")) || "[]"); } catch { return; }
+    if (!Array.isArray(list) || !list.length) return;
+    const el = document.createElement("div");
+    el.id = "whatsnew";
+    el.innerHTML = `<div class="wn-card" role="dialog" aria-modal="true" aria-labelledby="wn-title">
+      <div class="wn-head" id="wn-title">${esc(t("更新说明"))}</div>
+      <div class="wn-body">${list.map((x) => `<section><div class="wn-ver">v${esc(x.v)}</div><div class="bubble wn-md">${renderMd(x.md)}</div></section>`).join("")}</div>
+      <div class="wn-foot"><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
+    const close = () => el.remove();
+    el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-act=ok]")) close(); });
+    el.querySelectorAll(".wn-md a[href]").forEach((a) => a.addEventListener("click", (e) => {
+      const u = a.getAttribute("href") || "";
+      if (/^https?:\/\//.test(u) && A.openUrl) { e.preventDefault(); A.openUrl(u); }
+    }));
+    document.body.appendChild(el);
+    try { A.whatsNewSeen(); } catch {}
+  }
 })();
