@@ -375,7 +375,10 @@ function relocator(target) {
   const pathOf = (name) => {
     const n = name.replace(/^\.\//, "");
     const pre = TERMUX.slice(1) + "files/";
-    return n.startsWith(pre) ? n.slice(pre.length) : null;   // 前缀之外的条目（极少）丢弃
+    // 文件名中间也可能嵌着前缀：gdb 的 auto-load 脚本按库的绝对路径存放
+    // （share/gdb/auto-load/data/data/com.termux/files/usr/lib/libarrow.so.N-gdb.py），同样等长换掉，
+    // gdb 按库的真实路径去找时才对得上；不换的话 .list / MANIFEST 里残留旧前缀，组件审计判 ❌
+    return n.startsWith(pre) ? n.slice(pre.length).split(TERMUX.slice(1)).join(to.slice(1)) : null;   // 前缀之外的条目（极少）丢弃
   };
   return { swap, pathOf, to };
 }
