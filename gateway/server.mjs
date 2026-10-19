@@ -5642,6 +5642,26 @@ if (!PREFIX) {
   setInterval(tick, 30 * 60_000);
 }
 
+// cccodroid：Claude Code 若是官方清单拿不到时靠 npm 签名装上的（版本目录里有 .npm-only），
+// 连得上官方清单时补核一次 sha256（install-claude.mjs --recheck）。启动 2 分钟后、之后每 6 小时看一眼
+if (PREFIX && process.env.CCAPP_BIN) {
+  const dest = path.join(CFG.home, ".local", "share", "cccodroid", "claude");
+  const script = path.join(process.env.CCAPP_BIN, "..", "scripts", "install-claude.mjs");
+  const recheck = () => {
+    let pending = false;
+    try { pending = fs.readdirSync(dest).some((d) => fs.existsSync(path.join(dest, d, ".npm-only"))); } catch {}
+    if (!pending || !fs.existsSync(script)) return;
+    execFile(path.join(PREFIX, "bin", "node"), [script, "--recheck"], { env: termEnv(), timeout: 600000 }, (e, out) => {
+      const msg = String(out || "").trim();
+      if (msg) log("[claude 补核] " + msg.replace(/\n/g, "；"));
+      if (e && e.code === 3) ledger("verify", false, "Claude Code 与官方清单不符（npm 来源）", msg);
+      else if (/^✓/m.test(msg)) ledger("verify", true, "Claude Code 已按官方清单补核", msg);
+    });
+  };
+  setTimeout(recheck, 120_000);
+  setInterval(recheck, 6 * 3600_000);
+}
+
 /** 开发端的 priv 状态：真跑一次 priv 'id -u'（rish → Shizuku），拿到 2000/0 才算就绪 */
 function devPrivStatus() {
   return new Promise((ok) => {

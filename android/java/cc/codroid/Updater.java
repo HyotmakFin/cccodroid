@@ -346,8 +346,21 @@ final class Updater {
     }
 
     private void checkClaude() throws Exception {
-        String v = new String(Installer.httpGetSmall("https://downloads.claude.ai/claude-code-releases/" + channel()), StandardCharsets.UTF_8).trim();
-        if (!v.matches("\\d+\\.\\d+\\.\\d+.*")) throw new IOException(Tr.t("版本号不对：") + v);
+        // 版本号：官方 → cccodroid.net 镜像 → npm 镜像的 dist-tags（Anthropic 在 npm 上用同名的 stable / latest 标签）。
+        // 这里只是「有没有新版」；真正下载时 install-claude.mjs 会按官方清单的 sha256 或 npm 签名校验
+        String v = null, why = "";
+        String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + channel(), "https://cccodroid.net/claude-code/" + channel(),
+            "https://registry.npmmirror.com/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags",
+            "https://registry.npmjs.org/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags" };
+        for (String u : urls) {
+            try {
+                String t = new String(Installer.httpGetSmall(u), StandardCharsets.UTF_8).trim();
+                if (t.startsWith("{")) t = new JSONObject(t).optString(channel(), "");
+                if (t.matches("\\d+\\.\\d+\\.\\d+.*")) { v = t; break; }
+                why = Tr.t("版本号不对：") + t;
+            } catch (Exception ex) { if (why.isEmpty()) why = ex.getMessage(); }
+        }
+        if (v == null) throw new IOException(why);
         claude.latest = v;
         // 已装的版本要和所选渠道的版本「一致」，而不只是「不比它旧」：
         // 从 latest 切回 stable 时，stable 的版本号更小，以前这里判成「已是最新」，结果一直停在 latest 的版本上
