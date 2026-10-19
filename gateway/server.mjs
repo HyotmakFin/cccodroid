@@ -3065,11 +3065,19 @@ function compRemoveFiles(id, rec) {
     }
   } catch {}
   const dirs = new Set();
+  // Python 运行时在旁边的 __pycache__ 里生成 .pyc（不在组件清单里）：删 .py 时一并删掉，不然卸载后留下几十 MB
+  const pyc = new Map();
+  const pycOf = (d) => { if (!pyc.has(d)) { let l = []; try { l = fs.readdirSync(path.join(PREFIX, d)); } catch {} pyc.set(d, l); } return pyc.get(d); };
   for (const r of rec.files || []) {
     const keeper = others.find((o) => o.needs.has(r));
     if (keeper) { keeper.gained.push(r); continue; }
     try { fs.unlinkSync(path.join(PREFIX, r)); } catch {}
     for (let d = path.dirname(r); d && d !== "."; d = path.dirname(d)) dirs.add(d);
+    if (r.endsWith(".py")) {
+      const pc = path.join(path.dirname(r), "__pycache__"), stem = path.basename(r, ".py") + ".";
+      for (const f of pycOf(pc)) if (f.startsWith(stem) && f.endsWith(".pyc")) try { fs.unlinkSync(path.join(PREFIX, pc, f)); } catch {}
+      dirs.add(pc);
+    }
   }
   for (const o of others) {
     if (!o.gained.length) continue;

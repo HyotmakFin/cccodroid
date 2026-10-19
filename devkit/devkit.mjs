@@ -494,9 +494,39 @@ function rewriteZip(buf, swap) {
   return [Buffer.concat([buf.subarray(0, base), ...locals, cdBuf, eocdOut, buf.subarray(eocd + 22)]), hits];
 }
 
+/** 读 zip（wheel 用）：[{ name, data }]，只认 stored / deflate，zip64 与结构异常直接抛错 */
+function unzip(buf) {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65535; i--)
+    if (buf.readUInt32LE(i) === SIG_EOCD) { eocd = i; break; }
+  if (eocd < 0) throw new Error("不是 zip");
+  const nent = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  if (nent === 0xffff || p === 0xffffffff) throw new Error("zip64 不支持");
+  const out = [];
+  for (let i = 0; i < nent; i++) {
+    if (buf.readUInt32LE(p) !== SIG_CEN) throw new Error("zip 中央目录坏了");
+    const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20), usize = buf.readUInt32LE(p + 24);
+    const nlen = buf.readUInt16LE(p + 28), elen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
+    const ext = buf.readUInt32LE(p + 38) >>> 16, lo = buf.readUInt32LE(p + 42);
+    const name = buf.subarray(p + 46, p + 46 + nlen).toString();
+    p += 46 + nlen + elen + clen;
+    if (buf.readUInt32LE(lo) !== SIG_LOC) throw new Error("zip 本地头坏了: " + name);
+    const d0 = lo + 30 + buf.readUInt16LE(lo + 26) + buf.readUInt16LE(lo + 28);
+    const raw = buf.subarray(d0, d0 + csize);
+    const data = method === 0 ? Buffer.from(raw) : method === 8 ? zlib.inflateRawSync(raw) : null;
+    if (!data || data.length !== usize) throw new Error("zip 条目解不开: " + name);
+    if (name.endsWith("/")) continue;
+    out.push({ name, data, exec: (ext & 0o111) !== 0 });
+  }
+  return out;
+}
+
 // ── 主流程 ───────────────────────────────────────────────────────────
 // 组件：底座仓库之外还可以用别的仓库（如 termux-x11），只在打组件时加载，不影响工具包本身的闭包
 // 组件定义两个来源：devkit.json 的 components（预置组件，如 chromium），或 --recipe 指向的外部配方目录
+// pip 的 wheel 只收 PyPI 官方文件服务器上的纯 Python 包
+const PIP_URL = /^https:\/\/files\.pythonhosted\.org\/packages\/[0-9a-f/]+\/[A-Za-z0-9_.]+-[A-Za-z0-9_.+!]+-(?:py3|py2\.py3)-none-any\.whl$/;
 const RECIPE_DIR = cmd === "component" && opt("recipe") ? path.resolve(opt("recipe")) : null;
 const COMP = RECIPE_DIR ? loadRecipe(RECIPE_DIR) : cmd === "component" ? (MAN.components || {})[args[1]] : null;
 const COMP_ID = COMP ? (RECIPE_DIR ? COMP.id : args[1]) : null;
@@ -526,6 +556,14 @@ function loadRecipe(dir) {
     if (!/^[0-9a-f]{64}$/.test(f.sha256 || "")) throw new Error("fetch 的 sha256 要写全: " + p);
     if (!f.why) throw new Error("fetch 要写 why: " + p);
     if (f.mode !== undefined && !/^[0-7]{3,4}$/.test(String(f.mode))) throw new Error("fetch 的 mode 是八进制三位/四位: " + p);
+  }
+  // pip（Termux 仓库没有的纯 Python 依赖）：只收 PyPI 官方文件服务器上的 *-none-any.whl，钉 sha256
+  if (r.pip !== undefined) {
+    if (!r.pip || !r.pip.why || !Array.isArray(r.pip.wheels) || !r.pip.wheels.length) throw new Error("pip 要写成 { why, wheels: [{ url, sha256 }] }");
+    for (const w of r.pip.wheels) {
+      if (!PIP_URL.test(w.url || "")) throw new Error("pip 的 wheel 只能是 files.pythonhosted.org 上的纯 Python 包（*-none-any.whl）: " + w.url);
+      if (!/^[0-9a-f]{64}$/.test(w.sha256 || "")) throw new Error("pip 的 sha256 要写全: " + w.url);
+    }
   }
   // npm（Termux 仓库没有、只在 npm 上发布的 Node 程序）：配方目录里要有 package.json + package-lock.json
   if (r.npm !== undefined) {
@@ -681,6 +719,64 @@ if (cmd === "build" || cmd === "component") {
     tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: b });
     lock.push({ name: path.basename(p), version: f.version || path.basename(p).split("-")[1], source: f.source || "pypi", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why });
     fetchedBytes += b.length;
+  }
+  // pip：纯 Python 的 wheel 照 pip 的布局解进 site-packages（dist-info 一起，INSTALLER 记成 devkit）。
+  // 典型用途：matplotlib 的 postinst 会现场 `pip install matplotlib` 去 PyPI 拉 cycler / six 这些 ——
+  // 不钉版本、离线就装坏、拉下来的文件也不进组件记录（卸载删不掉）。打进组件后 pip 判定已满足，不再联网。
+  // console_scripts 照 pip 的样子生成入口脚本；.data/ 下只认 purelib / platlib / scripts / data。
+  if (COMP && COMP.pip) {
+    const pyv = (BASE.packages.find((p) => p.name === "python") || {}).version;
+    if (!pyv) throw new Error("pip：底座里没有 python");
+    const sp = `usr/lib/python${pyv.match(/^\d+\.\d+/)[0]}/site-packages`;
+    const py = R.to + "files/usr/bin/python3";
+    const dir = (p) => { const parts = p.split("/"); for (let i = 2; i < parts.length; i++) { const d = parts.slice(0, i).join("/"); if (!seenDirs.has(d)) { seenDirs.add(d); tw.add({ name: d + "/", type: "5", mode: 0o755, mtime: 0 }); } } };
+    const put = (name, data, mode) => {
+      if (manifest.has(name.slice(4))) throw new Error("pip：wheel 里的文件和 Termux 包的撞了: " + name);
+      dir(name); tw.add({ name, type: "0", mode, mtime: 0, data }); fetchedBytes += data.length;
+    };
+    fs.mkdirSync(CACHE, { recursive: true });
+    for (const w of COMP.pip.wheels) {
+      const file = decodeURIComponent(w.url.split("/").pop());
+      const dest = path.join(CACHE, file);
+      let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+      if (!b || sha256(b) !== w.sha256) {
+        b = execFileSync("curl", ["-fsSL", "--max-time", "600", w.url], { maxBuffer: 2 ** 30 });
+        if (sha256(b) !== w.sha256) throw new Error(`${file}: 哈希不符`);
+        fs.writeFileSync(dest, b);
+      }
+      const [dist, ver] = file.split("-");
+      const ents = unzip(b);
+      const di = ents.find((e) => /^[^/]+\.dist-info\/METADATA$/.test(e.name));
+      if (!di) throw new Error(file + ": 没有 dist-info/METADATA");
+      const diDir = di.name.split("/")[0], dataDir = diDir.replace(/\.dist-info$/, ".data");
+      let n = 0;
+      for (const e of ents) {
+        if (e.name.includes("..") || e.name.startsWith("/")) throw new Error(file + ": 条目路径不安全: " + e.name);
+        if (e.name === diDir + "/INSTALLER") continue;
+        if (e.name.startsWith(dataDir + "/")) {
+          const [, kind, ...rest] = e.name.split("/");
+          if (kind === "purelib" || kind === "platlib") put(`${sp}/${rest.join("/")}`, e.data, 0o644);
+          else if (kind === "scripts") put(`usr/bin/${rest.join("/")}`, Buffer.from(e.data.toString().replace(/^#!python[^\n]*/, "#!" + py)), 0o755);
+          else if (kind === "data") put(`usr/${rest.join("/")}`, e.data, 0o644);       // 相对 $PREFIX，如 share/man/man1/ttx.1
+          else throw new Error(`${file}: .data/${kind} 不支持`);
+        } else put(`${sp}/${e.name}`, e.data, 0o644);
+        n++;
+      }
+      put(`${sp}/${diDir}/INSTALLER`, Buffer.from("cccodroid-devkit\n"), 0o644);
+      // console_scripts → 入口脚本（与 pip 生成的等价）
+      const ep = ents.find((e) => e.name === diDir + "/entry_points.txt");
+      let sec = "";
+      for (const line of ep ? ep.data.toString().split("\n") : []) {
+        const t = line.trim();
+        if (/^\[.*\]$/.test(t)) { sec = t.slice(1, -1); continue; }
+        const m = sec === "console_scripts" && t.match(/^([A-Za-z0-9_.-]+)\s*=\s*([A-Za-z0-9_.]+):([A-Za-z0-9_.]+)/);
+        if (!m) continue;
+        const top = m[3].split(".")[0];
+        put(`usr/bin/${m[1]}`, Buffer.from(`#!${py}\nimport re\nimport sys\nfrom ${m[2]} import ${top}\nif __name__ == "__main__":\n    sys.argv[0] = re.sub(r"(-script\\.pyw|\\.exe)?$", "", sys.argv[0])\n    sys.exit(${m[3]}())\n`), 0o755);
+      }
+      lock.push({ name: dist.replace(/_/g, "-").toLowerCase(), version: ver, source: "pypi", homepage: `https://pypi.org/project/${dist}/`, recipe: "-", file: w.url, sha256: w.sha256, size: b.length, why: COMP.pip.why });
+      console.log(`  pip：${file}  ${n} 个文件`);
+    }
   }
   // npm：按配方提交的 package-lock.json 用 npm ci 装 —— 每个包的 sha512 由 npm 逐个核对、不跑安装脚本、
   // 可选依赖只取 android/arm64 的（esbuild 这类按平台分包的）。整棵 node_modules 原样放进 npm.dir。
