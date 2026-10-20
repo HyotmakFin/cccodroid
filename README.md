@@ -135,7 +135,11 @@ sh scripts/build.sh          # javac → d8 → aapt2 → sign, produces dist/cc
 node devkit/devkit.mjs build --target cc.codroid   # build the toolchain (CI can do this too)
 ```
 
-`build.sh` currently runs on the author's Android device and relies on the JDK, d8, aapt2, GCC and signing tools there. Paths are at the top of the script; adjust them to build elsewhere.
+**No setup needed**: GitHub Actions builds an APK for every pull request and every push to main; download it from that run's Artifacts (see [.github/workflows/apk.yml](.github/workflows/apk.yml)). Builds from main are signed with the release key and install over the released app. Pull requests from forks are signed with a throwaway test key, so you have to uninstall the released app first; a spare device is best.
+
+To build on your own machine, install JDK 17, Node.js, the Android SDK (build-tools and a platform) and the NDK, then set the environment variables described at the top of `build.sh`. `apk.yml` is a working example. The script's default tool paths point at the author's Android tablet.
+
+Release signing certificate SHA-256: `B7:03:61:59:5D:D3:D8:D7:04:DD:21:0E:D5:96:FC:57:70:14:CE:22:72:88:4F:B6:98:0B:F6:96:23:33:8F:E0`.
 
 The toolchain is built and published by GitHub Actions: push a tag like `devkit-YYYY.MM.DD` (see [.github/workflows/devkit.yml](.github/workflows/devkit.yml)).
 Which toolchain version the app downloads is set in [devkit-sources.txt](devkit-sources.txt). The size and SHA-256 of that version live in [devkit-pin.json](devkit-pin.json), which ships inside the APK: the first install (from GitHub, the cccodroid.net mirror, or a local file) and the check on local files both trust it rather than the download source. When you switch versions, edit the former, run `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`, and commit both; `build.sh` checks that they match.
@@ -145,7 +149,8 @@ Layout:
 | Directory | Contents |
 |---|---|
 | `android/` | Java shell, Manifest, resources, terminal helpers (`assets/bin/`), native libraries (`native/`) |
-| `gateway/` | Gateway and UI (currently sourced from the author's other repository and synced by `scripts/sync-shared.sh`) |
+| `gateway/` | Gateway (`server.mjs`, Node.js) and UI (`web/`, plain JS, no build step) |
+| `i18n/` | UI translations: one txt per language plus the generate and check scripts, see [i18n/README.md](i18n/README.md) |
 | `devkit/` | Toolchain build script and manifests |
 | `docs/design-philosophy.md` | Why the project exists and the principles behind it |
 | `docs/large-screen.md` | Large-screen layout (tablets, foldables) and where its code lives |

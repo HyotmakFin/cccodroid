@@ -1,0 +1,1324 @@
+1	Sessions
+2	Réglages
+3	Capacités
+4	à l'instant
+5	il y a {n} min
+6	@(v) => `il y a ${v.n} heure${v.n > 1 ? "s" : ""}`
+7	@(v) => `il y a ${v.n} jour${v.n > 1 ? "s" : ""}`
+8	Erreur du script d'interface : {msg}
+9	Lecture impossible : {path}
+10	Copié
+11	Copier
+12	Vous
+13	Commande
+14	Renvoyer
+15	Partager
+16	Aide
+17	Retour au sommaire
+18	{n} étapes
+19	Échecs
+20	{n} caractères
+21	{n}k caractères
+22	Afficher la suite ({left} restants)
+23	… ({left} non affichés)
+24	Terminé
+25	Échec
+26	Interrompu
+27	(aucune sortie)
+28	Entrée
+29	Résultat
+30	En cours
+31	Réflexion
+32	Contexte {used} / seuil de compactage {line} · {pct} %
+33	Contexte {used} / {total} · {pct} %
+34	Nouvelle session
+35	Chargement…
+36	Charger les messages précédents
+37	Lecture de l'historique impossible : {msg}
+38	Session : {title}
+39	Prêt
+40	<p>Bonjour, je suis le <strong>Claude Code CLI</strong> qui tourne sur cet appareil.</p>
+41	Déconnecté de la passerelle, reconnexion… (les tâches en cours ne sont pas affectées)
+42	L'interface a été mise à jour, rechargement…
+43	Connecté
+44	Interrompu
+45	Génération
+46	Génération · Entrée = file d'attente · ⚡ = intervention (sans interrompre)
+47	Écrivez à Claude, / pour les commandes, @ pour référencer un fichier…
+48	Génération…
+49	Contexte effacé, nouvelle session
+50	{n} en attente · envoyés à la fin de ce tour
+51	Tout effacer
+52	Intervention : s'insère dans le tour en cours sans l'interrompre
+53	Retirer celui-ci
+54	Démarrage de la connexion…
+55	Impossible de démarrer la connexion
+56	Aucune session pour l'instant
+57	Renommée
+58	Intervention envoyée : Claude la verra à la fin de l'étape en cours
+59	Ce tour se termine, impossible d'intervenir — placé en tête de file à la place
+60	En file d'attente ; envoi à la fin de ce tour
+61	Échec de l'envoi
+62	Aucun résultat
+63	Commandes slash
+64	 · correspondant à « {q} »
+65	Référencer le fichier · {path}
+66	Impossible de joindre « {name} » : {msg}
+67	@(v) => `${v.n} fichier${v.n > 1 ? "s" : ""} joint${v.n > 1 ? "s" : ""}`
+68	{name} joint
+69	Contenu partagé inséré
+70	Impossible d'ouvrir le dossier : {msg}
+71	Retirer
+72	Dossier
+73	Fichier
+74	@(v) => `${v.n} élément${v.n > 1 ? "s" : ""}`
+75	@(v) => `${v.n} élément${v.n > 1 ? "s" : ""} · ${v.path}`
+76	(dossier vide)
+77	Lecture…
+78	… (tronqué)
+79	Lecture impossible
+80	pas d'aperçu intégré
+81	Insérer le @chemin
+82	Télécharger
+83	Chemin du dossier inséré
+84	Chemin du fichier inséré
+85	Aucune session passée.
+86	Projet actuel
+87	Renommée
+88	Basculer vers cette session
+89	Renommer
+90	Supprimer
+91	Nouveau nom de session
+92	Supprimé
+93	Actualiser la liste
+94	Déconnecter la session
+95	Tiers (ajoutez une clé et c'est parti)
+96	Points d'accès personnalisés
+97	 · sans clé
+98	@(v) => String(v.n)
+99	Actif : <b>{name}</b> <code>{url}</code>
+100	Impossible de lire la liste des points d'accès : {msg}
+101	Ajoutez une clé puis enregistrez
+102	Basculé vers {name} (effectif au prochain message)
+103	Échec de la requête : {msg}
+104	✓ Connecté : <b>{email}</b>
+105	✓ Connecté
+106	En attente de l'autorisation dans le navigateur…
+107	Non connecté
+108	Démarrage impossible
+109	Échec de la connexion : {msg}
+110	✓ Connecté : {email}
+111	, touchez « Utiliser ce point d'accès » pour basculer
+112	La connexion ne s'est pas terminée
+113	Se déconnecter du compte Claude sur cet appareil ?
+114	Déconnecté
+115	Échec de la déconnexion : {msg}
+116	Effacer la clé de {name} ?
+117	Effacée
+118	Enregistré
+119	Test en cours…
+120	Itinéraire
+121	Point d'accès
+122	Modèle par défaut
+123	Créer une clé sur le site du fournisseur ↗
+124	La clé n'est conservée que dans le répertoire privé de l'application et lue à la demande par l'apiKeyHelper de claude (jamais placée dans une variable d'environnement) ; elle sert à appeler directement le point d'accès compatible Anthropic du fournisseur.
+125	Coller la clé d'API
+126	Enregistrée (…{tail}) ; laisser vide pour conserver
+127	Enregistrer
+128	Tester
+129	Effacer la clé
+130	● Utilisé
+131	Utiliser ce point d'accès
+132	Lecture…
+133	Vérification de l'état de connexion…
+134	Se connecter avec un autre compte
+135	Se connecter à Claude
+136	Utiliser un compte Console
+137	Se déconnecter
+138	Annuler la connexion
+139	La page d'autorisation est ouverte dans votre navigateur. Après validation, le navigateur revient sur cet appareil et la connexion se termine automatiquement.
+140	Pas ouvert automatiquement ?
+141	Ouvrir ici
+142	Ajouter un point d'accès personnalisé
+143	Nom (ex. : passerelle du bureau)
+144	Authentification : Authorization: Bearer (la plupart des tiers)
+145	Authentification : x-api-key (style Anthropic)
+146	Nom du modèle par défaut (requis — claude ne connaît pas les modèles tiers)
+147	Nom du modèle rapide (facultatif, utilisé par les sous-agents ; vide = identique ci-dessus)
+148	URL de la liste des modèles (facultatif, un /models au format OpenAI)
+149	URL du point d'accès, par ex.
+150	Ajouter
+151	Le point d'accès doit parler le protocole <b>Anthropic Messages</b> (l'URL que les fournisseurs documentent comme « intégration Claude Code »).
+152	N'ajoutez pas <code>/v1</code> à la fin — claude ajoute <code>/v1/messages</code> lui-même.
+153	Supprimer le point d'accès « {name} » ?
+154	Le nom du modèle par défaut est requis
+155	Ajouté
+156	Shizuku n'est pas installé
+157	Shizuku est installé mais son service ne tourne pas (relancez-le dans l'application Shizuku après un redémarrage)
+158	Shizuku tourne mais n'est pas autorisé pour cccodroid
+159	Impossible de joindre le service d'arrière-plan de l'application
+160	RedMagic / Nubia : Infos de l'appli → Consommation de la batterie → Optimisation de la batterie → <b>Exécution en arrière-plan : autoriser</b> (autorisez aussi le <b>démarrage automatique</b> : c'est ce qui réactive Shizuku au démarrage et restaure tout après une mise à jour)
+161	ZTE : Infos de l'appli → Consommation de la batterie → Optimisation de la batterie → <b>Exécution en arrière-plan : autoriser</b>, <b>démarrage automatique : autoriser</b>
+162	Xiaomi / Redmi : Infos de l'appli → <b>Économiseur de batterie : aucune restriction</b>, activez le <b>démarrage automatique</b> (chemin courant ; peut varier selon la version du système)
+163	OPPO / OnePlus / Realme : Infos de l'appli → Économie d'énergie → <b>Autoriser l'activité en arrière-plan</b>, <b>Autoriser le démarrage automatique</b> (chemin courant)
+164	vivo / iQOO : Réglages → Batterie → Gestion de la consommation en arrière-plan → autorisez la <b>consommation élevée en arrière-plan</b> pour cccodroid ; dans iManager, autorisez le <b>démarrage automatique</b> (chemin courant)
+165	Huawei / Honor : Réglages → Lancement des applications → désactivez « Gérer automatiquement » pour cccodroid, puis autorisez manuellement le <b>démarrage automatique</b> et l'<b>activité en arrière-plan</b> (chemin courant)
+166	cccodroid a été gelé en arrière-plan {n} fois (la dernière fois pendant environ {sec} s, {at}).
+167	Pendant le gel, la passerelle et les tâches en cours s'arrêtent net et ne reprennent qu'au retour au premier plan. Un service de premier plan n'empêche pas ce type de gel imposé par le constructeur.
+168	Dans les réglages système, autorisez l'exécution en arrière-plan, désactivez l'optimisation de la batterie et autorisez le démarrage automatique pour cccodroid (les libellés varient selon le constructeur).
+169	✓ Prêt · commandes exécutées en tant que {who}
+170	État inconnu
+171	 (la dernière demande a été refusée)
+172	L'appairage en débogage sans fil pour cccodroid a été révoqué : cela fonctionne encore, mais après un redémarrage la réactivation automatique ne sera plus possible.
+173	Shizuku n'a pas été démarré par cccodroid, donc cccodroid ne peut pas le réactiver après un redémarrage. Un appairage suffit.
+174	Le système n'a pas notifié cccodroid au démarrage (bloqué par la gestion du démarrage automatique) : l'activation automatique n'a donc pas eu lieu. Ouvrir cccodroid rattrapera le retard.
+175	Pour activer au démarrage : autorisez le démarrage automatique / en arrière-plan pour cccodroid dans les détails de l'application. Effectif au prochain démarrage.
+176	Démarrez le service dans l'application Shizuku (activez « Démarrer au boot (débogage sans fil) ») et vérifiez que cette application est autorisée.
+177	Demandé
+178	Le code d'appairage comporte 6 chiffres
+179	Code d'appairage à 6 chiffres
+180	Port (facultatif)
+181	Appairer
+182	Réappairer
+183	Installer et activer
+184	Activer (débogage sans fil)
+185	Ouvrir Shizuku
+186	Autoriser cccodroid
+187	Télécharger manuellement
+188	Autoriser le démarrage auto
+189	Actualiser
+190	Exécution en arrière-plan
+191	Ouvrir les réglages système
+192	C'est fait, masquer cet avis
+193	Shizuku (privilèges de débogage)
+194	Réactivation automatique après un redémarrage (nécessite le Wi-Fi ; démarre le service d'arrière-plan de cccodroid au boot)
+195	Renfort de maintien en vie : relève la limite de « processus fantômes » d'Android (pour que les sous-processus des compilations parallèles ne soient pas tués), ajoute à la liste blanche de batterie, autorise l'exécution en arrière-plan
+196	Une fois activé, <code>priv 'commande'</code> s'exécute dans le terminal en tant qu'utilisateur shell (pm / am / settings / dumpsys / logcat / screencap…) et Claude peut aussi s'en servir. Sans Shizuku, les fonctions de développement de base restent disponibles — seules ces capacités de débogage manquent.
+197	À jour
+198	Mise à jour disponible
+199	Téléchargement
+200	Téléchargé, prêt à installer
+201	Installation
+202	Erreur
+203	Non vérifié
+204	Mettre à jour
+205	Télécharger et installer
+206	Installer
+207	Réessayer
+208	Vérification…
+209	Dernière vérification : {at}
+210	Jamais vérifié
+211	Rechercher des mises à jour
+212	CLI : stable
+213	CLI : latest
+214	Mettre à jour le kit de développement ?\n\nEnviron 600 Mo à télécharger (reprise possible) ; l'installation met le service en pause 1 à 2 minutes.\nCe que vous avez installé dans le kit avec pip / npm -g est conservé.
+215	Démarré
+216	Mise à jour automatique (activée par défaut) : Claude Code se met à jour en silence ; une nouvelle version de l'application est téléchargée puis proposée à l'installation (installée automatiquement au repos si Shizuku est disponible) ; le kit de développement n'est pré-téléchargé qu'en Wi-Fi et installé à la prochaine ouverture de l'application
+217	Activer le renfort de maintien en vie ?\n\nCela modifie quelques réglages système : la limite des processus fantômes (toutes les applications), la liste blanche de batterie et les limites d'exécution en arrière-plan de cette application. Désactiver l'interrupteur restaure les deux premiers.
+218	Application…
+219	Restauration…
+220	✓ Appliqué
+221	 (limite de processus fantômes {n})
+222	✓ Restauré
+223	(par défaut : {model})
+224	(par défaut — claude décide)
+225	(par défaut — claude décide selon le modèle)
+226	(ce fournisseur ne propose pas de liste de modèles)
+227	Contexte {n} · sortie max {out} · entrée {mods}
+228	 | ou tapez directement <code>/model &lt;id&gt;</code>
+229	Aucun modèle sélectionné → <b>claude décide</b> (le compte officiel utilise actuellement <code>{model}</code> par défaut).
+230	le modèle par défaut intégré de claude
+231	<br>La liste ci-dessus correspond à tout ce que le compte peut utiliser ; choisissez-en un pour le fixer.
+232	Ce fournisseur laisse claude choisir le modèle et ne propose aucune liste. Pour en imposer un, définissez <code>defaultModel</code> dans <code>ccapp-providers.json</code>.
+233	Impossible de récupérer la liste des modèles : {msg}
+234	Plus le niveau est élevé, plus la réflexion est longue. Vous pouvez aussi taper <code>/effort &lt;level&gt;</code> dans le champ de saisie
+235	(par défaut)
+236	Par défaut
+237	(aucun dossier supplémentaire)
+238	Échec de l'enregistrement
+239	Exécution de claude doctor…
+240	(aucune sortie)
+241	Échec : {msg}
+242	Autre
+243	(pas encore de données — envoyez un message et elles seront récupérées depuis le CLI)
+244	Claude Code {ver} · modèle {model} · permissions {perm} · style de sortie {style}
+245	Pas encore de liste de capacités depuis le CLI — elle se remplit après votre premier message.
+246	Interrogation…
+247	(aucun serveur MCP)
+248	Actualisé
+249	Déconnecté ; le prochain message ouvrira une nouvelle session
+250	Nouvelle session démarrée
+251	Connecté à la passerelle
+252	Runtime manquant
+253	Clé d'API requise
+254	Impossible de joindre la passerelle : {msg}
+255	Passerelle hors ligne
+256	Connexion à la passerelle…
+257	Modèle
+258	Récupéré en direct depuis <code>/models</code> du fournisseur ; vous pouvez aussi taper <code>/model &lt;id&gt;</code> dans le champ de saisie.
+259	Mode de permission
+260	acceptEdits · accepter les modifications automatiquement
+261	auto · décider automatiquement
+262	plan · plan seulement, sans exécution
+263	Dossiers supplémentaires (--add-dir)
+264	/sdcard/un/dossier
+265	Permet à claude de lire et écrire des dossiers hors de l'espace de travail. Ils apparaissent aussi comme raccourcis dans l'explorateur de fichiers.
+266	Style de sortie
+267	Intensité de réflexion (--effort)
+268	Les niveaux varient selon le modèle. Vous pouvez aussi taper <code>/effort &lt;level&gt;</code> dans le champ de saisie.
+269	Seuil de compactage automatique (tokens)
+270	Vide = laisser claude décider d'après la fenêtre de contexte
+271	L'historique est résumé automatiquement quand l'usage approche de cette valeur. Vide signifie aucune intervention ; vous pouvez aussi taper <code>/autocompact &lt;n&gt;k</code> dans le champ de saisie.
+272	État d'exécution
+273	Lancer doctor
+274	Outils
+275	Compétences
+276	Sous-agents
+277	Serveurs MCP
+278	Interroger MCP
+279	Plugins
+280	Sessions et réglages
+281	Connexion…
+282	Explorateur de fichiers
+283	Palette de commandes
+284	Plus
+285	Joindre des images ou des fichiers
+286	Intervenir
+287	Envoyer
+288	Fermer
+289	Point d'accès
+290	Dossier parent
+291	Filtrer ce dossier…
+292	Éléments cachés
+293	Choisir un fichier…
+294	Insérer dans le champ
+295	Joindre image / fichier
+296	Parcourir les fichiers…
+297	Nouvelle session
+298	Changer de modèle /model
+299	Intensité de réflexion /effort
+300	Voir l'usage du contexte /context
+301	Voir le coût /cost
+302	Compacter le contexte /compact
+303	Voir la configuration /config
+304	Usage /usage
+305	Serveurs MCP /mcp
+306	Sous-agents /agents
+307	Ouvrir le panneau des capacités
+308	Relâchez pour joindre
+309	＋ Ajouter un point d'accès personnalisé…
+310	Passerelle
+311	Runtime
+312	manquant
+313	Fournisseur
+314	Amont
+315	Identifiant
+316	connexion officielle
+317	clé configurée
+318	non configuré
+319	Pont DNS
+320	non démarré
+321	(claude décide)
+322	Génération
+323	en cours
+324	inactif
+325	 · {n} en attente
+326	Espace de travail
+327	Compactage du contexte…
+328	Contexte compacté : {pre} → {post} jetons
+329	Contexte compacté
+330	Arrêté — {n} en attente, pas d'envoi automatique · touchez ⚡ pour envoyer
+331	Envoyer celui-ci
+332	En file
+333	En pause
+334	Envoyer maintenant
+335	Annuler
+336	Apparence
+337	Système
+338	Clair
+339	Sombre
+340	Durée {d}
+341	Vérification
+342	Endommagé
+343	Réparer
+344	Vérifier
+345	Réparer le kit de développement ?\n\nLa version actuelle sera retéléchargée (environ 600 Mo, avec reprise) puis réinstallée ; le service est suspendu 1 à 2 minutes pendant l'installation.\nCe que vous avez installé avec pip / npm -g est conservé.
+346	Annuler la sélection
+347	Sélectionner
+348	Retour aux sessions
+349	Corbeille
+350	Tout désélectionner
+351	Tout sélectionner
+352	{n} sélectionnée(s)
+353	Exporter la sélection
+354	Supprimer la sélection
+355	Les sessions supprimées restent ici {n} jours, puis sont effacées automatiquement.
+356	Vider la corbeille
+357	La corbeille est vide.
+358	Supprimée {time}
+359	Restaurer
+360	Supprimer définitivement
+361	Importation…
+362	{n} session(s) importée(s), {m} déjà présente(s) ignorée(s)
+363	{n} session(s) importée(s)
+364	Échec de l'importation : {msg}
+365	Les transcriptions peuvent contenir des clés, jetons ou contenus de fichiers que vous avez collés. N'envoyez l'archive exportée qu'à un endroit de confiance. Continuer ?
+366	Échec de l'exportation : {msg}
+367	{n} session(s) exportée(s) : {file}
+368	Mettre les {n} sessions sélectionnées à la corbeille ? Restaurables pendant {d} jours.
+369	{n} supprimée(s), {m} en cours de génération non supprimée(s)
+370	Mise à la corbeille
+371	Supprimer définitivement les {n} sessions de la corbeille ? Action irréversible.
+372	Échec de la restauration : {msg}
+373	Une session avec le même identifiant existe déjà
+374	Restaurée
+375	Supprimer définitivement cette session ? Action irréversible.
+376	Mise à la corbeille (restaurable pendant {d} jours)
+377	Désactivé
+378	Désactiver
+379	Activer
+380	Désinstaller
+381	Aucun plugin installé. Cherchez-en ci-dessous.
+382	Récupération du répertoire de plugins…
+383	{n} trouvé(s)
+384	Afficher 40 de plus
+385	Installation…
+386	L'installation de ce plugin exécute la commande suivante sur cet appareil. Ne continuez que si vous faites confiance à la source :\n\n{cmd}
+387	Annulé
+388	{name} installé ; effectif au prochain message
+389	Échec de l'installation : {msg}
+390	Seul le répertoire officiel intégré. Vous pouvez ajouter d'autres places de marché (dépôt GitHub ou URL).
+391	Aucune compétence dans ~/.claude/skills. Les plugins peuvent aussi apporter les leurs.
+392	Connecteur du compte
+393	Aucun serveur MCP.
+394	Compétence {name} installée
+395	Ajout de la place de marché…
+396	Échec de l'ajout : {msg}
+397	{name} ajouté
+398	Désinstaller le plugin {name} ?
+399	Supprimer la compétence {name} ? Tout son dossier sera effacé.
+400	Retirer le serveur MCP {name} ?
+401	Retirer la place de marché {name} ? Les plugins installés depuis celle-ci seront aussi désinstallés.
+402	Mode sans échec : les personnalisations (CLAUDE.md, compétences, plugins, hooks, MCP) ne sont pas chargées
+403	Quitter le mode sans échec
+404	Mode sans échec activé ; effectif au prochain message
+405	Mode sans échec désactivé ; effectif au prochain message
+406	Préparation des journaux…
+407	Partage impossible : {msg}
+408	Mode sans échec
+409	Journaux
+410	Cette version n'a pas de journal de réparation.
+411	Aucune entrée. Installations, vérifications, réparations et récupérations au démarrage sont toutes consignées ici.
+412	Quota : affiché après l'envoi d'un message (5 heures / hebdomadaire)
+413	réinitialisation {time}
+414	5 heures
+415	Hebdomadaire
+416	Quota mis à jour à l'instant
+417	Quota mis à jour il y a {n} min (actualisé après chaque tour)
+418	Extensions
+419	Importer
+420	Dépannage
+421	Mode sans échec : lance claude avec son option --safe-mode intégrée — CLAUDE.md, compétences, plugins, hooks, MCP, commandes personnalisées et styles de sortie ne sont pas chargés. Connexion, clé, sessions et modèle restent inchangés ; aucun fichier n'est modifié, et le désactiver rétablit tout
+422	Journal de réparation
+423	Les changements s'appliquent au prochain message. Plugins et MCP sont installés et retirés par les commandes de claude — cette page les tape pour vous.
+424	Rechercher des plugins (répertoire officiel et places de marché ajoutées)
+425	Rechercher
+426	Places de marché de plugins
+427	Dépôt GitHub (owner/repo) ou URL
+428	Ajouter une place de marché
+429	Installer une compétence depuis un zip
+430	Vérification… (chaque serveur est testé, quelques secondes)
+431	Ajouter un serveur MCP
+432	Nom (lettres, chiffres, - _ .)
+433	Commande (stdio) ou URL (http / sse)
+434	Variables d'env. / en-têtes, facultatif, séparés par des virgules (CLÉ=valeur ou Header: valeur)
+435	Ouvrir / modifier
+436	Ouvrir
+437	Abandonner les modifications non enregistrées ?
+438	Pas d’aperçu intégré pour ce type de fichier.
+439	Ouvrir comme texte
+440	Fichier trop volumineux ({size}) ; téléchargez-le pour le voir.
+441	Modifier
+442	Aperçu
+443	Retour à la ligne
+444	Échec de l’enregistrement : {msg}
+445	Le fichier a changé depuis son ouverture (sans doute par Claude).\nOK : écraser avec votre version\nAnnuler : abandonner vos modifications et recharger
+446	Mot de passe incorrect, réessayez :
+447	Ce PDF est protégé par un mot de passe :
+448	Impossible d’ouvrir le PDF : {msg}
+449	Échec du chargement du terminal : {msg}
+450	Impossible d’ouvrir le terminal : {msg}
+451	Aucun assistant de pseudo-terminal trouvé (ptyhost / python3)
+452	Impossible d’ouvrir un nouveau terminal : {msg}
+453	Fermer ce terminal ? Tout ce qui s’y exécute sera arrêté.
+454	[processus terminé, code {code}]
+455	[déconnecté de la passerelle]
+456	Coller dans le terminal :
+457	Sélection copiée
+458	Tout copié
+459	Aller au plus récent
+460	Terminal
+461	Afficher en texte (sélectionner et copier)
+462	Nouveau terminal
+463	Appui long pour sélectionner du texte
+464	Ouvrir dans la visionneuse
+465	Cet emplacement est protégé et ne peut pas être ouvert ici : {p}
+466	Fichier introuvable : {p}
+467	Impossible d'ouvrir : {msg}
+468	Environ {a} à télécharger, {b} une fois installé
+469	Non installé
+470	Pas encore de version pour votre boîte à outils actuelle
+471	Installation dans la boîte à outils…
+472	Installé
+473	La boîte à outils a été mise à jour — réinstallation nécessaire
+474	Installation incomplète — réinstallation nécessaire
+475	Échec de l'installation
+476	Télécharger et installer
+477	Annuler
+478	Réinstaller
+479	Impossible de charger la liste des composants : {msg}
+480	Aucun composant disponible pour l'instant.
+481	Désinstaller le composant {name} ? Ses fichiers dans la boîte à outils seront supprimés ; vos propres fichiers ne sont pas touchés.
+482	Désinstallé
+483	Navigateur
+484	Composants optionnels
+485	Les outils volumineux ne sont pas fournis avec l'app : téléchargez-les ici au besoin. La désinstallation ne supprime que les fichiers du composant.
+486	Communauté
+487	Non vérifié sur un appareil
+488	Certaines listes de composants n'ont pas pu être chargées : {msg}
+489	Personne n'a encore vérifié {name} sur un vrai appareil. L'installation peut échouer ou le composant ne pas fonctionner. Installer quand même ?
+490	Réservé aux appareils Snapdragon (GPU Adreno) — non pris en charge sur cet appareil
+491	Snapdragon uniquement
+492	À installer d'abord : {names}
+493	Requis par {names} — désinstallez d'abord ces composants
+494	Connecté à GitHub ; git push est configuré
+495	Connecté à GitHub, mais les identifiants git n'ont pas été configurés. Lancez gh auth setup-git dans le terminal
+496	Demande d'un code à usage unique à GitHub…
+497	Saisissez ce code à usage unique dans le navigateur. Tout se termine automatiquement après votre autorisation :
+498	Copier et ouvrir le navigateur
+499	Actuel
+500	Connexion expirée
+501	Basculer vers ce compte
+502	Se déconnecter
+503	Pas connecté à GitHub. Connectez-vous pour utiliser gh et git push.
+504	Le code à usage unique a expiré. Reconnectez-vous
+505	Connecter un autre compte
+506	Se connecter à GitHub
+507	Code copié — collez-le dans la page qui s'ouvre
+508	Se déconnecter du compte GitHub {name} ? gh supprimera son jeton enregistré.
+509	Demander à chaque fois
+510	Accepter les modifications
+511	Plan uniquement
+512	Automatique
+513	Ne pas demander
+514	Tout autoriser
+515	… ({n} lignes au total)
+516	Ou écrivez votre propre réponse…
+517	Chemin concerné : {p}
+518	Raison : {r}
+519	Approuver, confirmer chaque étape
+520	Approuver, accepter les modifications
+521	Retravailler ▾
+522	Envoyer la réponse
+523	Ne pas répondre ▾
+524	Autoriser
+525	Toujours autoriser
+526	Autoriser, et ne plus demander pour les modifications
+527	Refuser ▾
+528	Plan en attente d’approbation
+529	Claude a une question
+530	Confirmation requise
+531	Dites ce qu’il faut changer (envoyé à Claude)
+532	Facultatif : dites à Claude pourquoi / quoi faire à la place
+533	Envoyer l’avis
+534	Refuser
+535	Refuser et arrêter
+536	Choisissez une option ou écrivez votre réponse
+537	✓ Plan approuvé
+538	✓ Répondu
+539	✓ Autorisé (toujours)
+540	✓ Autorisé
+541	✗ Refusé et arrêté
+542	✗ Refusé
+543	Retiré
+544	Arrêté (le tour est terminé)
+545	Expiré
+546	Le mode d’autorisation est désormais « Demander à chaque fois », comme par défaut dans la version officielle : Claude demande avant de modifier des fichiers ou d’exécuter des commandes. Pour tout autoriser à nouveau, touchez l’étiquette d’autorisation ci-dessous.
+547	Claude attend votre accord
+548	Voir
+549	{n} de plus
+550	Tout autoriser
+551	En attente de votre accord…
+552	Lit librement ; demande avant de modifier des fichiers, d’exécuter des commandes ou d’aller en ligne
+553	Modifie sans demander ; demande encore avant d’exécuter des commandes
+554	Lecture et planification ; agit après votre approbation
+555	Le classifieur de Claude décide quoi demander (expérimental)
+556	Ne demande jamais. Claude peut supprimer des fichiers et exécuter n’importe quelle commande sans votre accord
+557	Passer à « Tout autoriser » ?\n\nClaude ne demandera plus rien et pourra modifier ou supprimer des fichiers, exécuter n’importe quelle commande et accéder au réseau. À n’utiliser que si vous faites confiance à la tâche et pouvez en assumer les conséquences.
+558	Passé à « {m} » — appliqué tout de suite à ce tour
+559	Passé à « {m} »
+560	Changer le mode d’autorisation
+561	default · demander à chaque fois (par défaut)
+562	dontAsk · ne pas demander (refuser tout ce qui demande confirmation)
+563	bypassPermissions · tout autoriser
+564	Par défaut, Claude demande à chaque fois, comme la version officielle : il vous demande dans la conversation avant de modifier des fichiers ou d’exécuter des commandes. « Tout autoriser » signifie que Claude peut supprimer des fichiers et exécuter n’importe quelle commande sans demander. Vous pouvez aussi changer à tout moment via l’étiquette d’autorisation sous la zone de saisie.
+565	↩ Renvoyé pour révision
+566	Ouvrez le lien ci-dessous dans le navigateur pour autoriser. Ensuite le navigateur revient sur cet appareil et la connexion se termine automatiquement :
+567	Si le navigateur ne peut pas revenir (par ex. autorisation sur un autre appareil) : ouvrez un terminal, lancez {cmd} et collez le code affiché sur la page directement dans claude.
+568	Le navigateur n’est pas revenu (ou autorisation sur un autre appareil) ? Connectez-vous depuis un terminal : vous collez le code directement dans claude ; cette app ne le manipule jamais.
+569	Se connecter depuis un terminal
+570	Outils de développement
+571	Documents et bureautique
+572	Image, audio et vidéo
+573	Calcul scientifique
+574	Conception électronique
+575	3D et modélisation
+576	Inférence IA
+577	GPU et pilotes
+578	Réseau
+579	Tout
+580	Installés
+581	À mettre à jour
+582	Activés
+583	Officiels
+584	Fournis par des composants
+585	Installés par vous
+586	Injoignables
+587	Locaux
+588	Distants
+589	Récupération du catalogue officiel de skills…
+590	Source et licence
+591	Le catalogue officiel est vide.
+592	Recherche dans le registre…
+593	Aussi proposé en {kinds}, inutilisable sur cet appareil
+594	Nécessite npx (fourni avec la boîte à outils cccodroid)
+595	Impossible à installer sur cet appareil
+596	Rien trouvé. Essayez d'autres mots-clés (l'anglais donne plus de résultats).
+597	Afficher 30 de plus
+598	Ajouter
+599	À remplir d'abord : {names}
+600	Ce serveur MCP va exécuter le paquet npm ci-dessous sur cet appareil (n'importe qui peut publier dans le registre ; rien n'est vérifié). Ne continuez que si vous faites confiance à la source :\n\n{cmd}
+601	Skills officiels (anthropics/skills)
+602	Le dépôt officiel de skills d'Anthropic, installés dans ~/.claude/skills ; supprimez-les depuis la liste ci-dessus. Les licences varient selon le skill : suivez le lien pour vérifier avant d'installer.
+603	Registre MCP officiel
+604	registry.modelcontextprotocol.io : n'importe qui peut publier, rien n'est vérifié. Cet appareil peut installer des serveurs distants et des paquets npm ; les paquets npm s'exécutent en local, vérifiez la commande et la source avant.
+605	Rechercher des serveurs MCP (nom ou usage)
+606	Notifications
+607	Notifier quand une tâche se termine (seulement si l'app est en arrière-plan)
+608	Notifier quand Claude a besoin de vous (commandes, plans, questions ; depuis la notification on peut seulement refuser — pour autoriser, ouvrez l'app et lisez la demande en entier)
+609	Ouvrir les réglages de notification du système
+610	Les notifications de cette app sont désactivées dans les réglages du système : ces interrupteurs n'ont aucun effet.
+611	Un type de notification (« Besoin de vous » ou « Tâche terminée ») est désactivé dans les réglages du système.
+612	Ce tour n'est pas allé au bout : le système a fermé l'app en arrière-plan (commencé le {when}).
+613	Tout ce qui a été fait est dans la conversation. Touchez « Continuer » pour que Claude reprenne là où il s'est arrêté.
+614	La conversation n'avait pas encore été créée : Claude n'a pas reçu ce message. Touchez « Renvoyer » pour le remettre dans la zone de saisie.
+615	Continuer
+616	Ignorer
+617	Le tour précédent a été interrompu par le système. Reprends là où tu t'es arrêté et termine-le.
+618	Le tour précédent a été interrompu par le système ; {n} message(s) en file sont en attente et ne partiront pas seuls · touchez ⚡ pour envoyer
+619	Enregistré : {name}
+620	Fichier introuvable
+621	Aucun sélecteur de fichiers disponible sur ce système
+622	{n} sessions exportées
+623	Enregistrer dans…
+624	Partager…
+625	Échec du partage
+626	Joindre des images ou des fichiers — vous pouvez aussi les coller ou les glisser
+627	Tapez / pour les commandes, @ pour citer un chemin de fichier
+628	Barre du haut : explorateur de fichiers, terminal, palette de commandes
+629	En haut à gauche : sessions passées, réglages, capacités, extensions
+630	L'étiquette de permission sous la zone de saisie : Claude doit-il vous demander avant de modifier des fichiers ou de lancer des commandes — touchez pour changer
+631	Continuez à écrire pendant qu'il travaille : Entrée met en file, ⚡ intervient (sans interrompre, rejoint le tour en cours)
+632	Montre-moi les outils de développement installés sur cet appareil et fais une démo de trois d'entre eux
+633	Avec Python, compte les fichiers du dossier de travail par type et taille totale, et présente-le en tableau
+634	Écris un jeu du serpent en une seule page web, puis ouvre-le dans le navigateur
+635	Vous ne savez pas par où commencer ? Touchez-en un (il remplit seulement la zone de saisie, rien n'est envoyé) :
+636	Avant de commencer, connectez un modèle (choisissez l'une des deux voies) :
+637	Se connecter avec un compte Claude
+638	Vous avez un abonnement Claude Pro / Max ou un compte Anthropic Console : autorisez une fois dans le navigateur, sans clé.
+639	Se connecter
+640	Saisir une clé API
+641	Clé Anthropic, ou clé d'une API compatible comme DeepSeek, Zhipu GLM, Qwen ou Kimi ; paiement à l'usage.
+642	Choisir une API et saisir une clé
+643	Les deux sont dans ☰ → Réglages → API, modifiables à tout moment.
+644	Créer un paquet de diagnostic et l'envoyer via le partage du système.\n\nInclus :\n· Version et appareil : cccodroid / version d'Android, modèle, puce, espace libre\n· Kit de développement : version installée, état des mises à jour et de l'autotest\n· Journaux récents : journal système de l'app, fin du journal de la passerelle\n· Registre de réparation : installations, vérifications, réparations et leur résultat\n\nRetiré :\n· Clés, jetons, identifiants de connexion, adresses e-mail\n· Le contenu de vos messages à Claude\n· Les conversations elles-mêmes ne sont pas incluses\n\nContinuer ?
+645	Je suis bloqué · paquet de diagnostic
+646	Installation impossible, rien ne fonctionne ou erreur incompréhensible : créez un paquet de diagnostic et partagez-le avec la personne qui vous aide (ou joignez-le à une issue GitHub). Son contenu s'affiche avant la création ; clés, jetons, e-mails et contenu de vos messages sont retirés d'abord.
+647	Faites glisser pour redimensionner, double-touchez pour réinitialiser
+648	Nouveau fichier
+649	Nouveau dossier
+650	Un élément portant ce nom existe déjà
+651	Échec : {msg}
+652	Nom du dossier
+653	Nom du fichier (changez l'extension pour un autre type)
+654	Nouveau texte
+655	Le nom ne peut pas contenir /
+656	Renommer en
+657	Débloquer (si le défilement se fige)
+658	Remontage de l’interface…
+659	Cette version de l’app ne sait pas encore débloquer. Mettez l’app à jour ; en attendant, redémarrez la passerelle
+660	Le défilement semble figé. Touchez le flocon dans la barre du haut pour débloquer
+661	Gestionnaire de mémoire
+662	Activé : autoriser l’arrêt des applis en arrière-plan absentes de la liste blanche (Shizuku requis)
+663	Jamais arrêtés : ce que vous regardez, les applis en écran partagé, celles qui affichent une notification de premier plan (proxy, musique), le lanceur, le clavier, les services d’accessibilité, le VPN, Shizuku, les composants dont ils dépendent, ainsi que la liste blanche ci-dessous. Dans le terminal, lancez les tâches lourdes avec <code>cc-mem run -- commande</code> : il fait place nette avant, puis arrête tout ce qui revient pendant l’exécution.
+664	Liste blanche : un nom de paquet par ligne, par ex. com.tencent.mm
+665	Enregistrer la liste blanche
+666	Voir la mémoire
+667	Nettoyer maintenant
+668	Activer le gestionnaire de mémoire ?\n\nLe nettoyage arrêtera les applis en arrière-plan absentes de la liste blanche. Elles restent arrêtées jusqu’à ce que vous les rouvriez ou que le système les réveille : vous risquez de manquer leurs messages entre-temps. Ajoutez à la liste blanche les applis dont vous voulez toujours recevoir les messages (messageries, par exemple).
+669	✓ Activé
+670	✓ Désactivé
+671	Nom de paquet invalide : {list}
+672	✓ Liste blanche enregistrée ({n})
+673	Mesure en cours…
+674	{avail} disponibles sur {total}. Applis en arrière-plan pouvant être arrêtées : {n}, environ {sum} : {list}
+675	Activez d’abord l’interrupteur ci-dessus
+676	Nettoyage…
+677	✓ Arrêtées : {n}. Mémoire disponible {a} → {b}
+678	Aucune appli en arrière-plan à arrêter
+679	Si la page ne défile plus et semble figée, touchez le flocon dans la barre du haut pour la débloquer, sans redémarrer l'app
+680	{name} conserve encore {size} de données d'exécution ({path} : cache de téléchargement, environnement décompressé, etc.). Les supprimer aussi ? Une réinstallation devra tout retélécharger.
+681	Données d'exécution supprimées
+682	(actuel — absent de la liste du fournisseur)
+683	Un point de terminaison personnalisé nécessite au moins une URL
+684	L'URL doit commencer par http:// ou https://
+685	Fournisseur inconnu
+686	La connexion par compte n'a pas de clé à tester : regardez plutôt l'état de connexion
+687	Aucune clé saisie
+688	Clé valide ({how}, {n} modèles)
+689	Clé valide ({how})
+690	Connexion impossible : {err}
+691	Ce n'est pas un fichier zip
+692	Le répertoire du zip est corrompu
+693	Méthode de compression non prise en charge : {name}
+694	Aucune session à exporter
+695	manifest.json manquant : ce n'est pas une archive de sessions
+696	Ce n'est pas une archive de sessions cccodroid
+697	(La conversation précédente a été condensée en résumé)
+698	Le kit de développement n'est pas complètement installé (ou vient d'un fichier local sans identité de version) : impossible d'installer des composants
+699	Composant inconnu
+700	Ce composant ne fonctionne que sur les appareils Qualcomm Snapdragon (GPU Adreno) ; il est inutilisable ici
+701	Ce composant n'a pas encore de version pour votre kit de développement actuel. Mettez le kit à jour ou réessayez plus tard
+702	Espace de stockage insuffisant : environ {n} Mo nécessaires
+703	Le fichier téléchargé n'a pas passé la vérification (supprimé ; réessayer le retéléchargera)
+704	Fichier manquant dans le paquet du composant : {file}
+705	Un fichier du paquet du composant n'a pas passé la vérification : {file}
+706	Copie dans le kit de développement en cours : cette étape ne peut pas être interrompue
+707	gh n'est pas installé
+708	gh s'est terminé avec le code {code}
+709	Erreur interne : {err}
+710	Aucune URL de connexion reçue
+711	Aucune clé API configurée. Saisissez votre clé {name} dans les réglages.
+712	Le pont DNS local n'a pas démarré : l'API est injoignable.
+713	Impossible de lancer claude : {err}
+714	cc-mem introuvable
+715	Dans la version de développement, Shizuku est géré par l'app Shizuku elle-même (priv passe par rish)
+716	Délai dépassé
+717	Numéro de version inattendu : {v}
+718	Impossible de joindre downloads.claude.ai : {err}
+719	Le manifeste ne contient pas de version linux-arm64
+720	sha256 différent (attendu {want}…, obtenu {got}…)
+721	La nouvelle version a échoué à l'essai (--version a renvoyé « {v} »)
+722	La version de développement ne met à jour que Claude Code (vous compilez et installez l'app vous-même sur cet appareil)
+723	Aucune nouvelle version à installer : recherchez d'abord les mises à jour
+724	Mise à jour de Claude Code lancée
+725	Non pris en charge dans la version de développement : {op}
+726	Le nom ne peut contenir que des lettres, chiffres, points, tirets bas et tirets
+727	Commande ou URL manquante
+728	Impossible de récupérer le catalogue officiel de skills : {err}
+729	Ce skill n'est pas dans le catalogue officiel
+730	Un skill du même nom existe déjà : supprimez-le d'abord
+731	Trop volumineux (plus de 50 Mo)
+732	Impossible de récupérer le registre MCP : {err}
+733	L'archive ne contient pas de SKILL.md
+734	Nom de skill invalide
+735	Un skill nommé « {name} » existe déjà : supprimez d'abord l'ancien
+736	Ce fournisseur est en cours d'utilisation : attendez la fin de ce tour pour le supprimer.
+737	Ce tour est encore en cours de génération. Changez de fournisseur une fois terminé (le changement remplace la clé et le modèle utilisés).
+738	Cette session est en cours de génération.
+739	Aucune clé saisie pour « {name} ». Ajoutez-la dans Réglages → Point de terminaison et enregistrez, ou changez de point de terminaison.
+740	Trop de messages en file d'attente.
+741	Opération inconnue
+742	Ce tour est encore en cours de génération. Déconnectez-vous une fois terminé.
+743	Ce tour est déjà terminé
+744	Il a déjà été répondu à cette demande
+745	C'est fait, revoir au prochain démarrage
+746	D'accord, nouvelle vérification après le prochain démarrage.
+747	Autres conversations en cours : {n}
+748	Une autre conversation attend votre réponse · ouvrez la liste des conversations
+749	Limite de conversations simultanées atteinte ({max}) ; envoi dès qu'une place se libère · en attente : {n}
+750	Limite de conversations simultanées atteinte. Mis en file ; envoi dès qu'une place se libère
+751	À confirmer
+752	Conversations simultanées au maximum
+753	Plusieurs conversations peuvent travailler en même temps ; dans une même conversation, les messages passent toujours l'un après l'autre. Chacune en plus utilise quelques centaines de Mo de mémoire : baissez la valeur si le téléphone manque de mémoire. 1 = une à la fois.
+754	Vérification du solde…
+755	Impossible de vérifier le solde : {msg}
+756	Offert
+757	Rechargé
+758	Bons
+759	Espèces
+760	Solde
+761	Indisponible
+762	Utilisé
+763	Cette clé n'a pas de plafond, aucun solde à afficher
+764	Mensuel
+765	Quota Coding Plan (Zhipu n'a pas d'API de solde publique ; les clés à l'usage ne peuvent pas être vérifiées)
+766	Cette clé n'a pas de quota Coding Plan. Zhipu n'a pas d'API publique de solde à l'usage ; consultez la console
+767	Le solde de Model Studio est rattaché au compte principal Alibaba Cloud et n'est pas lisible avec une clé API ; consultez la console Model Studio. Ci-dessous, l'utilisation de tokens enregistrée sur cet appareil.
+768	Cette plateforme ne propose pas d'API de solde. Ci-dessous, l'utilisation de tokens enregistrée sur cet appareil.
+769	Dépensé aujourd'hui
+770	Dépensé au total
+771	Calculé à partir des variations du solde depuis le {date} ; les recharges ne comptent pas. L'utilisation de la même clé ailleurs est incluse.
+772	Entrée {i} · Sortie {o} · Cache {c}
+773	Tokens aujourd'hui
+774	Tokens au total
+775	L'enregistrement commence après le premier échange avec ce fournisseur
+776	Converti à 1 USD ≈ {r} CNY ({src}, {time})
+777	Solde et dépenses
+778	Modifié
+779	Nouveau fichier
+780	Renommé
+781	Conflit
+782	Binaire
+783	Ce dossier n'est pas encore un dépôt git.
+784	Une fois le dépôt créé, vous verrez quelles lignes ont changé à chaque fois et pourrez revenir à une version antérieure quand vous voulez.
+785	Créer un dépôt ici
+786	Dépôt créé
+787	Modifications dans {n} fichier(s)
+788	Aucune modification
+789	Arbre de travail propre : rien n'a changé depuis le dernier commit.
+790	Touchez un fichier pour voir les lignes modifiées
+791	Remettre ce fichier dans l'état du dernier commit
+792	Message de commit : ce qui a changé (obligatoire)
+793	Valider {n} fichier(s) sélectionné(s)
+794	Laisser Claude écrire le message et valider
+795	{f} est un nouveau fichier : annuler revient à le supprimer. Continuer ?
+796	Remettre {f} dans l'état du dernier commit ? Ses modifications non validées seront perdues.
+797	Annulé
+798	Regarde les modifications de ces fichiers dans {root}, écris un message de commit concis, puis valide uniquement ceux-ci : {files}
+799	(toutes les modifications)
+800	Écrivez un message de commit
+801	Validé
+802	Avant votre premier commit, indiquez à git votre nom et votre e-mail (inscrits dans l'historique, stockés sur cet appareil).
+803	Nom
+804	E-mail
+805	Enregistrer et valider
+806	Aucune différence
+807	Fichier binaire : comparaison ligne par ligne impossible
+808	← Retour à ce commit
+809	← Retour aux modifications
+810	Historique de ce fichier
+811	Trop de modifications : seule la première partie est affichée
+812	Aucun commit pour l'instant.
+813	Historique de {f} uniquement
+814	Tout afficher
+815	Charger plus
+816	← Retour à l'historique
+817	Voir le diff complet du commit
+818	Diff
+819	Historique
+820	Identique au dernier commit
+821	Des modifications ne sont pas enregistrées ; ceci compare la version sur le disque au dernier commit.
+822	Le chemin n'existe pas
+823	Git n'a pas encore votre nom et votre e-mail (pour signer les commits).
+824	Validé {hash}
+825	Indiquez le nom et l'e-mail
+826	Versions (git)
+827	Modifications
+828	Versions
+829	Vérifié à {time}. Les frais s'affichent avec quelques minutes de retard ; nouvelle vérification automatique après chaque exécution
+830	{n} sélectionnés
+831	Commencez à écrire…
+832	Gras
+833	Italique
+834	Barré
+835	Code
+836	texte du lien
+837	description de l'image
+838	chemin de l'image
+839	Rétablir
+840	Titre
+841	Citation
+842	Liste à puces
+843	Liste numérotée
+844	Liste de tâches
+845	Lien
+846	Image
+847	Séparateur
+848	Rechercher et remplacer
+849	Rechercher
+850	Remplacer
+851	Suivant
+852	Précédent
+853	Respecter la casse
+854	Regex
+855	Mot entier
+856	Tout remplacer
+857	Des modifications non enregistrées de la dernière fois ({time}) existent. Les restaurer ?\nOK : restaurer\nAnnuler : supprimer le brouillon
+858	Échec du chargement de l'éditeur, texte brut utilisé : {msg}
+859	Tous les projets
+860	Ce projet ({name})
+861	Ce projet · cet appareil seulement
+862	Enregistré dans ~/.claude/settings.json, s'applique à tous les projets.
+863	Enregistré dans .claude/settings.json du projet, ne s'applique qu'ici ; si le projet est sous git, il suit le dépôt.
+864	Enregistré dans .claude/settings.local.json du projet, uniquement pour ce projet sur cet appareil.
+865	Ouvrir le fichier de configuration
+866	Suspendre tous les hooks (les règles restent, mais ne s'exécutent pas)
+867	Ce fichier n'est pas un JSON valide ({msg}). Ouvrez-le et corrigez-le d'abord.
+868	Filtre : {m}
+869	Délai {n} s
+870	Tester
+871	Modifier
+872	Aucune règle ici. Ajoutez-en une depuis « Règles courantes » ci-dessous.
+873	Ajouter…
+874	Quand l'exécuter
+875	Autres (avancé)
+876	Vide = tout
+877	Commande à exécuter
+878	(générée à partir des champs ci-dessus ; modifiable directement)
+879	ex. : echo bonjour >> ~/log.txt
+880	Délai (secondes ; vide = 60 par défaut)
+881	Enregistrer
+882	Quels outils (noms séparés par | ou regex ; vide = tous)
+883	Seulement dans ces cas (vide = tous)
+884	Enregistré. Effectif dès le prochain message.
+885	Délai dépassé : la commande a été arrêtée avant la fin.
+886	Terminé : ce qui a été affiché sera transmis à Claude comme contexte.
+887	Autorisé : Claude continue normalement.
+888	Terminé normalement.
+889	Bloqué (code 2) : Claude n'exécutera pas cette étape ; le texte de stderr lui est transmis.
+890	Code 2 : Claude continue ; le texte de stderr lui est transmis.
+891	Code 2 : le texte de stderr est renvoyé à Claude.
+892	Erreur (code {n}) : rien n'est bloqué, Claude continue.
+893	Sortie (stdout)
+894	Sortie d'erreur (stderr)
+895	Entrée simulée (modifiez-la et réessayez)
+896	Réessayer
+897	La commande est vide
+898	Exécution…
+899	Supprimer cette règle ?
+900	Tous les hooks sont suspendus
+901	Hooks réactivés
+902	Avant un outil
+903	Avant chaque appel d'outil (modifier un fichier, lancer une commande, aller sur le web…). Le code 2 bloque l'appel ; la raison écrite dans stderr est transmise à Claude.
+904	Après un outil
+905	Après la réussite d'un outil. Idéal pour formater, journaliser, vérifier ; l'action est faite, le code 2 renvoie seulement stderr à Claude.
+906	Quand vous envoyez un message
+907	À chaque message envoyé. Ce que la commande affiche est transmis à Claude comme contexte ; le code 2 bloque le message.
+908	Quand Claude termine un tour
+909	À la fin de la réponse de Claude. Idéal pour sauvegarder ou rappeler ; le code 2 le fait continuer (attention aux boucles infinies).
+910	Au début d'une session
+911	Au démarrage d'une session : nouvelle, reprise, vidée ou après compaction. Ce que la commande affiche est donné à Claude comme contexte.
+912	À la fin d'une session
+913	À la fin d'une session. Idéal pour faire le ménage.
+914	Quand Claude envoie une notification
+915	Quand Claude attend une autorisation, ou attend votre réponse.
+916	Lors d'une demande d'autorisation
+917	Avant l'affichage d'une demande d'autorisation. Avancé : afficher du JSON peut autoriser ou refuser automatiquement.
+918	Après l'échec d'un outil
+919	Après l'échec d'un appel d'outil.
+920	Au démarrage d'un sous-agent
+921	À la fin d'un sous-agent
+922	Quand un sous-agent termine ; le code 2 le fait continuer.
+923	Avant la compaction du contexte
+924	Après la compaction du contexte
+925	Protéger les fichiers importants
+926	Empêche Claude de modifier .env, clés et fichiers de signature, et lui explique pourquoi.
+927	Fichiers protégés (un par ligne ; * est un joker ; avec / on compare le chemin complet)
+928	Bloquer les commandes dangereuses
+929	Refuse les commandes comme force-push, reset --hard ou suppression de la racine, et demande à Claude une autre approche.
+930	Texte interdit (un par ligne ; /…/ = regex)
+931	Sauvegarde auto à chaque tour (git)
+932	À chaque fin de tour, les modifications du projet sont committées : vous pouvez revenir à n'importe quelle étape. Commit seulement, jamais de push ; les projets hors git ne sont pas touchés.
+933	Début du message de commit
+934	Sauvegarde auto
+935	Ajouter des consignes fixes à chaque message
+936	Chaque message inclut automatiquement ce texte pour Claude, par ex. « réponds en français » ou « explique ton plan avant de modifier ».
+937	Texte à ajouter
+938	Réponds en français ; avant de modifier quoi que ce soit, explique brièvement ce que tu comptes faire.
+939	Lire un fichier de suivi au début de la session
+940	À chaque nouvelle session (ou après compaction), un fichier du projet est lu à Claude : suivi, plan, liste des personnages… Ignoré s'il n'existe pas.
+941	Fichier (relatif au dossier du projet)
+942	suivi.md
+943	Journaliser les commandes de Claude
+944	Ajoute chaque commande, avec l'heure et le dossier, à ~/.claude/bash-history.log pour la relire plus tard.
+945	Formater le code après modification
+946	Après une modification, le fichier de code est formaté avec l'outil installé (ruff / black, prettier, gofmt, clang-format…) ; rien sinon. Markdown et texte brut ne sont jamais touchés.
+947	Hooks (règles automatiques)
+948	Un hook, c'est « à tel moment, lancer telle commande » : avant ou après un outil, quand vous envoyez un message, quand Claude termine un tour… La commande peut bloquer une action, donner du contexte ou faire des tâches (sauvegarde, journal, formatage).
+949	Règles courantes (touchez Ajouter puis ajustez)
+950	Écrire la vôtre
+951	Comment fonctionnent les hooks
+952	La commande s'exécute avec bash dans le dossier du projet. Claude lui transmet le contexte (quel outil, quels arguments, ce que vous avez dit…) en JSON sur l'entrée standard.<br>Le code de sortie décide : <b>0</b> laisse passer ; <b>2</b> bloque l'étape (pour « Avant un outil » et « Quand vous envoyez un message ») et la raison écrite dans stderr est transmise à Claude ; tout autre code est une erreur, rien n'est bloqué.<br>Pour « Quand vous envoyez un message » et « Au début d'une session », ce que la commande affiche est donné à Claude comme contexte.<br>Les changements s'appliquent dès le prochain message. Les règles sont de simples commandes shell, aussi puissantes qu'un terminal : n'ajoutez pas de commandes douteuses.
+953	Batterie
+954	Heure
+955	Jour
+956	Semaine
+957	Estimation du système (Shizuku requis)
+958	Dernières 24 heures
+959	14 derniers jours
+960	12 dernières semaines
+961	CPU de l'app {d}
+962	Premier plan {d}
+963	Écran allumé {d}
+964	Batterie consommée {p}
+965	Niveau de batterie
+966	Charge
+967	Consommation de l'appareil
+968	Temps CPU de l'app
+969	Temps écran allumé
+970	Écran allumé
+971	App au premier plan
+972	L'enregistrement vient de commencer (un relevé toutes les 5 minutes). Revenez un peu plus tard.
+973	Cette version n'a pas de couche native : seul le temps CPU est enregistré (niveau de batterie, écran et premier plan nécessitent cccodroid).
+974	Batterie {p}
+975	En charge
+976	Sur batterie
+977	Estimation du système (depuis la dernière charge complète, {ago}) : cette app a utilisé environ {mah} mAh, soit {pct} des {used} mAh consommés par l'appareil, dont {scr} mAh pour l'écran. Rang {rank} sur {n} apps.
+978	Estimation du système (depuis la dernière charge complète, {ago}) : l'appareil a consommé {used} mAh ; rien d'enregistré pour cette app.
+979	Android attribue la consommation de l'écran à l'app au premier plan : plus une app reste ouverte, plus elle monte au classement. La part CPU est ce que l'app a réellement consommé. Vérifié {time}.
+980	Interrogation du système…
+981	Impossible d'obtenir les données : {msg} (configurez d'abord Shizuku ci-dessus)
+982	Aucune donnée reçue
+983	Aujourd’hui
+984	7 derniers jours
+985	30 derniers jours
+986	Épingler
+987	Désépingler
+988	Rechercher dans les conversations…
+989	Recherche dans les conversations…
+990	Aucune conversation ne contient « {q} ».
+991	{n} occurrences
+992	Modifiée {time}
+993	Créée {time}
+994	Compatibilité des binaires statiques
+995	Couvrir tous les programmes lancés par claude
+996	Les programmes statiques téléchargés (surtout des outils en ligne de commande et des serveurs MCP écrits en Go) utilisent des appels système récents interdits par Android, et le système les tue aussitôt. Avec cette option, ces appels renvoient « non pris en charge » et le programme se rabat sur l’ancienne méthode. Chaque lancement de sous-programme coûte un tout petit peu plus ; en cas de souci étrange, essayez de la désactiver. Prend effet au prochain message.
+997	Changer ou créer une branche
+998	Pas encore de branche distante associée
+999	Vérifier s’il y a de nouveaux commits distants (ne modifie pas vos fichiers)
+1000	Récupérer
+1001	Récupérer les nouveaux commits distants (avance rapide uniquement)
+1002	Tirer
+1003	Envoyer vos nouveaux commits locaux
+1004	Pousser
+1005	Premier envoi de {b} : une branche du même nom sera créée sur le dépôt distant et associée. Continuer ?
+1006	Demander à Claude d’intégrer les commits distants ?
+1007	La branche actuelle de {root} a divergé du dépôt distant. Lance d’abord git fetch, explique quels commits chaque côté possède, puis intègre les commits distants (rebase si possible ; en cas de conflit, arrête-toi et demande-moi), et dis-moi le résultat. Ne pousse pas.
+1008	Supprimée à distance
+1009	Extraire
+1010	Changer
+1011	Nom de la nouvelle branche, ex. fix/login
+1012	Créer et basculer
+1013	La nouvelle branche part du commit actuel ; les modifications non validées suivent.
+1014	Branches locales
+1015	Pas encore de commit, donc pas encore de branche.
+1016	Branches uniquement distantes
+1017	Ce dépôt n’a pas encore de dépôt distant (remote) : envoi et récupération indisponibles.
+1018	Branche changée
+1019	Saisissez un nom de branche
+1020	{n} lignes supprimées ici
+1021	La ligne {n} est nouvelle (absente du dernier commit)
+1022	{n} lignes supprimées ici :
+1023	Modifiée ; dans le dernier commit c’était :
+1024	Voir le diff complet du fichier
+1025	Pas de connexion après trois minutes ; le réseau est peut-être coupé.
+1026	Le dépôt distant demande une connexion. Pour GitHub : connectez-vous une fois dans Extensions → GitHub (cela configure aussi l’envoi https de git) ; pour les autres sites, configurez les identifiants dans le terminal.
+1027	Clé SSH refusée. Ajoutez la clé publique de cet appareil à votre compte distant, ou passez l’adresse distante en https et connectez-vous avec GitHub.
+1028	Impossible de joindre le dépôt distant. Vérifiez le réseau ou le proxy.
+1029	Le dépôt distant a des commits que vous n’avez pas en local. Tirez d’abord, puis poussez.
+1030	Le local et le distant ont chacun de nouveaux commits (ils ont divergé) : avance rapide impossible. Vous pouvez demander à Claude de fusionner ou de rebaser.
+1031	Des modifications non validées seraient écrasées. Validez ou annulez ces fichiers, puis réessayez.
+1032	Ce dépôt n’a pas encore de dépôt distant (remote).
+1033	La branche actuelle n’a pas de branche distante associée. Poussez une fois pour l’associer.
+1034	Il reste des conflits non résolus. Réglez-les avant de tirer.
+1035	Vous n’êtes sur aucune branche. Basculez sur une branche avant de pousser.
+1036	Récupéré : {n} nouveaux commits distants
+1037	Récupéré : aucun nouveau commit
+1038	Déjà à jour
+1039	Récupération terminée
+1040	Rien à pousser
+1041	Envoyé
+1042	Nom de branche invalide
+1043	Il reste des conflits non résolus. Réglez-les avant de changer de branche.
+1044	Passé sur {b} ({n} modifications non validées ont suivi)
+1045	Passé sur {b}
+1046	Branches
+1047	« {q} » introuvable dans les messages chargés
+1048	Installer depuis un fichier de boîte à outils déjà téléchargé
+1049	Fichier local…
+1050	Installer la boîte à outils depuis un fichier local ?\n\nChoisissez un devkit-cc.codroid.tar.gz (ou .tar), téléchargeable depuis la page des versions GitHub ou cccodroid.net. Il est comparé aux versions publiées avant l’installation ; le service est suspendu 1 à 2 minutes pendant l’installation.\nCe que vous avez installé avec pip / npm -g est conservé.
+1051	Journal des commandes privilégiées
+1052	Aucune commande n’a encore été exécutée via priv
+1053	{n} dernières entrées (les plus récentes d’abord). Conservées sur cet appareil uniquement, jamais envoyées.
+1054	Capture dans {n} s : passez à l’app à capturer
+1055	Capture jointe
+1056	Échec de la capture (Shizuku est-il disponible ? Réglages → Shizuku)
+1057	Capture faite
+1058	Capture pour Claude
+1059	Capture dans 5 s (passez d’abord à l’app)
+1060	Échec du chargement : {src}
+1061	Convertir en PDF avec LibreOffice
+1062	Mise en page d’origine
+1063	Impossible de lire ce document : {msg}
+1064	(Le document est vide)
+1065	Impossible de lire ce classeur : {msg}
+1066	(Cette feuille est vide)
+1067	La feuille est trop grande : seules les {r} premières lignes et {c} premières colonnes sont affichées. Utilisez « Mise en page d’origine » ou téléchargez-la pour tout voir.
+1068	Mise en page web
+1069	Conversion en PDF avec LibreOffice…
+1070	La première ouverture prend un peu de temps ; le résultat est mis en cache
+1071	Échec de la conversion
+1072	Ce type de fichier doit être converti avec LibreOffice pour être affiché, et LibreOffice n’est pas disponible ici.
+1073	Pour afficher ce type de fichier, installez d’abord LibreOffice (environ 190 Mo à télécharger, 830 Mo une fois installé). Une seule installation, et les fichiers PowerPoint, Word et Excel s’ouvriront directement.
+1074	Installer LibreOffice
+1075	Installation de LibreOffice… Vous pouvez faire autre chose en attendant et revenir une fois terminé.
+1076	LibreOffice est installé
+1077	LibreOffice n’a pas pu être installé : {msg}
+1078	LibreOffice n’a pas pu le convertir
+1079	Sur l’appareil
+1080	{name} chargé (déchargé après {min} min d’inactivité)
+1081	Chargement de {name}…
+1082	Échec du dernier démarrage : {msg}
+1083	Arrêté (chargé automatiquement à l’envoi d’un message)
+1084	llama.cpp installé
+1085	llama.cpp n’est pas installé : installez le composant llama-cpp dans la page Extensions
+1086	Inférence GPU (Vulkan)
+1087	Inférence CPU uniquement (le composant pilote GPU la rend plusieurs fois plus rapide)
+1088	Mémoire {total}, {avail} libre ; contexte {ctx} jetons, {n} threads
+1089	Modèles ({dir})
+1090	Mode
+1091	Discussion
+1092	chargé en {s} s
+1093	Décharger le modèle
+1094	Changé (prend effet au prochain message)
+1095	Aucun modèle local : placez un fichier .gguf dans {dir}
+1096	Chargement du modèle local {name} ({how})…
+1097	Le modèle local lit l’invite : {pct} %
+1098	Le modèle local n’a pas démarré
+1099	Modèle local chargé ({s} s)
+1100	Délai dépassé lors du chargement du modèle local
+1101	Télécharger des modèles
+1102	Téléchargé
+1103	En cours d’utilisation
+1104	Échec du téléchargement : {msg}
+1105	Supprimer le modèle {name} ?
+1106	Lis {skill} et aide-moi à configurer un mode personnalisé pour le modèle local.
+1107	Aucun modèle pour l’instant. Téléchargez-en un via « Télécharger des modèles » dans le composant llama-cpp (onglet Extensions), ou placez un fichier .gguf dans le dossier ci-dessus.
+1108	Sans outils ; invite la plus courte, réponses les plus rapides
+1109	Personnalisé
+1110	Outils : {tools}
+1111	Sans outils
+1112	Pas encore configuré
+1113	Le fichier de configuration contient une erreur ; mode discussion utilisé : {msg}
+1114	Un téléphone n’a pas la puissance pour qu’un petit modèle travaille vraiment : seul le mode discussion est intégré. Pour expérimenter, écrivez {file} afin d’activer un mode personnalisé (outils, invite système, options de llama-server). Le plus simple : passez à un modèle cloud et envoyez-lui ceci :
+1115	Le niveau supérieur doit être un objet
+1116	{k} doit être un texte de {n} caractères au plus
+1117	llamaArgs doit être un tableau de chaînes (40 au plus)
+1118	ctx doit être un entier entre 512 et 262144
+1119	llamaArgs ne peut pas définir {k} (géré par la passerelle)
+1120	llama-server s’est arrêté de façon inattendue (rc={code})
+1121	Impossible d’écrire dans le dossier des modèles
+1122	Ce modèle n’est pas dans le catalogue
+1123	Modèle introuvable
+1124	Pas dans le dossier des modèles
+1125	Réfléchit d’abord
+1126	Orienté code
+1127	Volumineux
+1128	Les modèles vont dans /sdcard/cccodroid/models ; utilisez-les via Réglages → Service de modèle → Modèle local. Mémoire de l’appareil : {ram} Go. Tous en quantification Q4_K_M ; 1 à 4B est raisonnable sur téléphone, au-delà de 6B c’est très lent.
+1129	{n} téléchargé(s)
+1130	Absent de la liste ? Collez le lien de téléchargement d’un fichier .gguf (HuggingFace, ModelScope…). Aucune somme de contrôle n’est vérifiée, seulement l’en-tête du fichier.
+1131	{name} compte environ {p}B paramètres ({size}). Ce sera très lent sur un téléphone et la mémoire risque de ne pas suffire. Télécharger quand même ?
+1132	Collez d’abord un lien
+1133	Un modèle portant ce nom existe déjà
+1134	Le fichier téléchargé n’est pas un modèle GGUF (supprimé)
+1135	Lien invalide
+1136	Seuls les liens https sont acceptés
+1137	Le lien doit pointer vers un fichier .gguf
+1138	Les modèles en plusieurs parties (…-00001-of-0000N.gguf) ne sont pas pris en charge ; cherchez une version en un seul fichier
+1139	mmproj est un fichier de projection multimodale, inutilisable seul pour discuter
+1140	Prêt · {n} tâche(s) en arrière-plan
+1141	Tâches en arrière-plan
+1142	Bifurquer ici
+1143	Cette session n’est pas encore enregistrée ; bifurquez une fois une réponse terminée
+1144	Aucun message de votre part avant cette réponse : impossible de bifurquer ici
+1145	Bifurcation faite : {n} premier(s) tour(s) conservé(s). Continuez ici
+1146	Session introuvable.
+1147	Ce tour est introuvable dans l’historique de la session. Actualisez et réessayez.
+1148	Ce tour est encore en cours. Bifurquez une fois terminé.
+1149	bifurcation
+1150	Connexion
+1151	Connecté, en attente de sortie
+1152	Erreur de connexion, tentative {a}/{m}
+1153	Réflexion
+1154	Rédaction des paramètres de {name}
+1155	Workflow
+1156	Surveillance
+1157	Objectif
+1158	vérifié {n} fois
+1159	{d} écoulé
+1160	Abandonner
+1161	Il manque : 
+1162	{n} tours
+1163	Objectif atteint
+1164	Objectif impossible à atteindre
+1165	Arrêter
+1166	{n} en arrière-plan
+1167	{n} de plus
+1168	{i} sur {n}
+1169	La conversation est inactive depuis près d'une heure et son cache de prompt va expirer : le contexte a été compacté automatiquement, votre prochain message n'aura pas à retraiter tout l'historique. Vous pouvez désactiver cela dans les Réglages.
+1170	Cette tâche d'arrière-plan est déjà terminée
+1171	↩ Restaurer ce que vous venez d'effacer
+1172	Compactage au repos
+1173	Compacter les longues conversations inactives depuis près d'une heure
+1174	Ne s'applique qu'à un compte Claude ou à une clé d'API Anthropic. Quand une conversation de plus de 200K tokens est inactive depuis environ 54 minutes et que son cache de prompt d'une heure va expirer, elle est compactée une fois : en la reprenant, tout l'historique n'est pas retraité au plein tarif, ce qui consomme moins de votre abonnement ou coûte moins avec une clé d'API. Claude Code sur ordinateur fait de même.
+1175	Tâches
+1176	Tâches terminées
+1177	attend {ids}
+1178	Étapes du sous-agent
+1179	Arrêté
+1180	Aucun enregistrement
+1181	Revenir ici
+1182	Cette conversation n'est pas encore enregistrée ; revenez en arrière après la première réponse
+1183	Génération en cours ; revenez en arrière quand elle sera finie
+1184	Recherche des fichiers modifiés après ce message…
+1185	Modifications de {n} fichiers annulées ; la conversation revient avant ce message
+1186	La conversation revient avant ce message ; l'originale est conservée
+1187	Modifications de {n} fichiers annulées
+1188	Annule les modifications de Claude sur {n} fichiers faites après ce point
+1189	Depuis, Claude n'a modifié aucun fichier avec ses outils d'édition.
+1190	Aucun instantané de fichiers après ce point (les messages antérieurs à cette version ne sont pas pris en charge) ; seule la conversation peut être rembobinée.
+1191	Revenir avant ce message
+1192	Seules les modifications faites avec les outils d'édition (Edit / Write) sont annulées ; les fichiers modifiés par des commandes et les paquets installés ne sont pas restaurés.
+1193	Annuler le code et reposer la question d'ici
+1194	Reposer la question d'ici
+1195	Annuler seulement le code
+1196	Reposer la question ouvre une nouvelle conversation ; l'originale est conservée.
+1197	retour
+1198	Délai dépassé pour le retour
+1199	Cette conversation est en cours de génération ; revenez en arrière quand elle sera finie.
+1200	Aucun instantané de fichiers après ce message : impossible d'annuler les modifications.
+1201	Commandes :
+1202	Signature de l'index invalide ; rejeté
+1203	Index non signé ; rejeté
+1204	{cmd} a quitté avec le code {code} : {err}
+1205	Signaler sur GitHub
+1206	« Signaler sur GitHub » ouvre un nouveau ticket où l’appareil, la version d’Android et le résultat de l’autotest sont déjà remplis ; il ne reste qu’à décrire le problème. Compte GitHub requis. Aucun journal ni conversation n’est inclus.
+1207	Un nouveau ticket GitHub va s’ouvrir avec ceci déjà rempli. Vous pourrez le modifier avant de l’envoyer :
+1208	Ce qui s’est passé
+1209	Ce que vous avez fait, ce que vous attendiez, ce qui s’est réellement passé. Vous pouvez glisser des captures ici.
+1210	Étapes pour reproduire
+1211	Source
+1212	Ouvrir dans le navigateur
+1213	Impossible d’ouvrir l’aperçu
+1214	L’aperçu affiche le fichier tel qu’il est enregistré. Enregistrer d’abord vos modifications ?
+1215	Nouveautés
+1216	Compris
+1217	Impossible de récupérer l’index du dépôt glibc : {msg}
+1218	Aucun fichier indiqué
+1219	Fichier introuvable : {p}
+1220	Choisissez un fichier (le programme lui-même ou une archive)
+1221	Échec de l’extraction : {msg}
+1222	Les paquets .{ext} ne sont pas encore pris en charge : utilisez le programme lui-même ou une archive .tar.gz / .zip
+1223	Fichier non reconnu : ni programme (ELF), ni script, ni archive prise en charge
+1224	Lien symbolique pointant hors du paquet supprimé : {p}
+1225	C’est vide
+1226	{p} nécessite GLIBC_{need}, cet appareil a {have} : il risque de ne pas démarrer
+1227	C’est un programme {arch} : il ne peut pas tourner sur cet appareil (arm64)
+1228	Interpréteur {i} non reconnu
+1229	Les programmes musl ne sont pas encore pris en charge : cherchez une version statique ou glibc du même programme
+1230	Aucun programme exécutable trouvé (ELF arm64 ou script)
+1231	Téléchargement de {pkg} ({mb} Mo)
+1232	Échec du téléchargement de {pkg} : {msg}
+1233	La somme de contrôle de {pkg} ne correspond pas
+1234	{pkg} a une structure de paquet inattendue
+1235	Échec du dépaquetage de {pkg} : {msg}
+1236	L’analyse a expiré : importez à nouveau
+1237	L’ID ne peut contenir que des minuscules, des chiffres et -
+1238	Un composant personnalisé nommé {id} existe déjà : choisissez un autre ID ou désinstallez-le d’abord
+1239	Nom de commande invalide : {c}
+1240	Nom de commande en double : {c}
+1241	La boîte à outils a déjà une commande {c} : choisissez un autre nom
+1242	La commande {c} est prise par un autre composant personnalisé
+1243	Choisissez au moins une commande
+1244	patchelf a échoué sur {p} : {msg}
+1245	Programme Linux (glibc)
+1246	Programme Android natif
+1247	Programme statique
+1248	Script
+1249	Ne peut pas tourner
+1250	lanceur manquant
+1251	{n} bibliothèques ajoutées
+1252	Ces bibliothèques manquent encore, il risque de ne pas tourner : {libs}
+1253	Envoi et analyse de {name}…
+1254	Analyse…
+1255	La boîte à outils a déjà une commande de ce nom : renommez-la
+1256	Un autre composant personnalisé utilise ce nom
+1257	Renommez-la (lettres, chiffres et ._+- uniquement)
+1258	Commande
+1259	Utiliser le GPU
+1260	Réécrit l’interpréteur du programme au lieu de le lancer via le chargeur. À utiliser si le programme cherche ses données à partir de son propre emplacement
+1261	Manquant : {libs}
+1262	Ces bibliothèques seront récupérées du dépôt glibc de Termux (environ {size}) : {libs}
+1263	Aucune source pour ces bibliothèques ; les programmes qui en ont besoin risquent de ne pas tourner : {libs}
+1264	{src} : {n} fichiers, {size}
+1265	Nom
+1266	Description
+1267	Facultatif : à quoi il sert (Claude le verra)
+1268	Commandes à ajouter
+1269	La provenance du programme relève de votre responsabilité : il peut lire et écrire tous les fichiers de cette appli.
+1270	Récupération des bibliothèques et installation…
+1271	Installation…
+1272	Installé, mais {n} bibliothèques manquent encore
+1273	Installé. Claude et le terminal peuvent l’utiliser
+1274	Désinstaller le composant personnalisé {name} ? Le programme importé, les bibliothèques ajoutées et ses commandes seront supprimés.
+1275	(aucune sortie, code de sortie {c})
+1276	Composants personnalisés
+1277	Absent du marché ? Importez vous-même un programme Linux arm64 : un programme seul ou une archive .tar.gz / .zip. Les bibliothèques manquantes sont récupérées et les commandes créées, prêtes pour Claude et le terminal.
+1278	Importer un programme…
+1279	Analyser
+1280	Ou saisissez un chemin sur l’appareil, ex. /sdcard/Download/foo.tar.gz
+1281	depuis {src}
+1282	Statistiques d’utilisation
+1283	Bilan du mois
+1284	conversations
+1285	Un mois avec Claude
+1286	{p} par rapport au mois dernier
+1287	Jours actifs
+1288	{n} / {d} jours
+1289	Plus longue série
+1290	{n} jours
+1291	Jour le plus actif · {n}
+1292	Jour le plus actif
+1293	Appels d’outils
+1294	{n}
+1295	Claude a écrit
+1296	Par jour
+1297	Heure de la journée
+1298	Surtout vers {h} h
+1299	Modèles les plus utilisés
+1300	{t} réponses · {i} tokens lus
+1301	Hier
+1302	Cette semaine
+1303	La semaine dernière
+1304	Ce mois-ci
+1305	Le mois dernier
+1306	{p} : {n}
+1307	L’enregistrement est en pause.
+1308	Enregistré en direct depuis le {d}.
+1309	Les données antérieures ont été recalculées depuis les anciennes sessions (les sessions supprimées sont perdues).
+1310	Seuls les comptes et l’usage sont conservés, jamais le contenu ; les données restent sur l’appareil.
+1311	Recalcul depuis les anciennes sessions…
+1312	Terminé : {f} fichiers de session, {n} messages.
+1313	Recalculer les statistiques avant le {d} à partir des sessions restantes ? Les sessions supprimées ne comptent plus, les chiffres peuvent baisser.
+1314	Effacer les statistiques de {m} ?
+1315	Effacer toutes les statistiques ? L’enregistrement repart de zéro.
+1316	Mois précédent
+1317	Mois suivant
+1318	Enregistrer l’image
+1319	Partager
+1320	Gérer les données
+1321	Enregistrer les statistiques
+1322	Recalculer depuis les sessions
+1323	Effacer ce mois
+1324	Tout effacer

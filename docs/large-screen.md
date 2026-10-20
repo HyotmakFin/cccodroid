@@ -18,7 +18,7 @@ When the window narrows (split screen, folding the device) the panes fall back t
 
 ## Where the code lives
 
-Everything is in one file: `gateway/web/layout.js` (upstream: `claude-apk/src/web/layout.js`). The rest of the UI only hides and shows elements as before. `layout.js` watches those changes and sets classes on `<html>` (`data-lay`, `dock-l`, `has-right`, `ws-multi`, `short`) plus the CSS variables `--lw` and `--rw`. The matching styles are the last block of `style.css`.
+Everything is in one file: `gateway/web/layout.js`. The rest of the UI only hides and shows elements as before. `layout.js` watches those changes and sets classes on `<html>` (`data-lay`, `dock-l`, `has-right`, `ws-multi`, `short`) plus the CSS variables `--lw` and `--rw`. The matching styles are the last block of `style.css`.
 
 ## Foldable hinge: help wanted
 

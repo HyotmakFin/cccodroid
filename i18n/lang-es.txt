@@ -1,0 +1,1324 @@
+1	Sesiones
+2	Ajustes
+3	Capacidades
+4	ahora mismo
+5	hace {n} min
+6	@(v) => `hace ${v.n} hora${v.n > 1 ? "s" : ""}`
+7	@(v) => `hace ${v.n} día${v.n > 1 ? "s" : ""}`
+8	Error del script de la interfaz: {msg}
+9	No se puede leer: {path}
+10	Copiado
+11	Copiar
+12	Tú
+13	Comando
+14	Reenviar
+15	Compartir
+16	Ayuda
+17	Volver al índice
+18	{n} pasos
+19	Con errores
+20	{n} caracteres
+21	{n}k caracteres
+22	Mostrar más ({left} restantes)
+23	… ({left} sin mostrar)
+24	Hecho
+25	Falló
+26	Interrumpido
+27	(sin salida)
+28	Entrada
+29	Resultado
+30	En ejecución
+31	Razonamiento
+32	Contexto {used} / umbral de compactado {line} · {pct} %
+33	Contexto {used} / {total} · {pct} %
+34	Sesión nueva
+35	Cargando…
+36	Cargar mensajes anteriores
+37	No se pudo leer el historial: {msg}
+38	Sesión: {title}
+39	Listo
+40	<p>Hola, soy el <strong>Claude Code CLI</strong> que se ejecuta en este dispositivo.</p>
+41	Sin conexión con la pasarela, reconectando… (las tareas en curso no se ven afectadas)
+42	La interfaz se actualizó, recargando…
+43	Conectado
+44	Interrumpido
+45	Generando
+46	Generando · Intro = en cola · ⚡ = intervenir (sin interrumpir)
+47	Escríbele a Claude, / para comandos, @ para referenciar archivos…
+48	Generando…
+49	Contexto borrado, empezando una sesión nueva
+50	{n} en cola · se envían al terminar este turno
+51	Borrar todo
+52	Intervenir: se añade al turno en curso sin interrumpirlo
+53	Quitar este
+54	Iniciando sesión…
+55	No se pudo iniciar la sesión
+56	Aún no hay sesión
+57	Renombrada
+58	Intervención enviada: Claude la verá al terminar el paso actual
+59	Este turno está terminando, no se puede intervenir — se puso al principio de la cola
+60	En cola; se enviará al terminar este turno
+61	No se pudo enviar
+62	Sin coincidencias
+63	Comandos de barra
+64	 · coincide con «{q}»
+65	Referenciar archivo · {path}
+66	No se pudo adjuntar «{name}»: {msg}
+67	@(v) => `${v.n} archivo${v.n > 1 ? "s" : ""} adjunto${v.n > 1 ? "s" : ""}`
+68	{name} adjunto
+69	Contenido compartido insertado
+70	No se pudo abrir la carpeta: {msg}
+71	Quitar
+72	Carpeta
+73	Archivo
+74	@(v) => `${v.n} elemento${v.n > 1 ? "s" : ""}`
+75	@(v) => `${v.n} elemento${v.n > 1 ? "s" : ""} · ${v.path}`
+76	(carpeta vacía)
+77	Leyendo…
+78	… (truncado)
+79	No se pudo leer
+80	sin vista previa integrada
+81	Insertar @ruta
+82	Descargar
+83	Ruta de carpeta insertada
+84	Ruta de archivo insertada
+85	Aún no hay sesiones anteriores.
+86	Proyecto actual
+87	Renombrada
+88	Cambiar a esta sesión
+89	Renombrar
+90	Eliminar
+91	Nombre de la sesión nueva
+92	Eliminada
+93	Actualizar lista
+94	Desconectar la actual
+95	Terceros (añade una clave y listo)
+96	Endpoints personalizados
+97	 · sin clave
+98	@(v) => String(v.n)
+99	En uso: <b>{name}</b> <code>{url}</code>
+100	No se pudo leer la lista de endpoints: {msg}
+101	Añade una clave y guarda primero
+102	Cambiado a {name} (se aplica en el próximo mensaje)
+103	Falló la consulta: {msg}
+104	✓ Sesión iniciada: <b>{email}</b>
+105	✓ Sesión iniciada
+106	Esperando la autorización en el navegador…
+107	Sin sesión
+108	No se pudo iniciar
+109	Falló el inicio de sesión: {msg}
+110	✓ Sesión iniciada: {email}
+111	, toca «Usar este endpoint» para cambiar
+112	El inicio de sesión no terminó
+113	¿Cerrar la sesión de Claude en este dispositivo?
+114	Sesión cerrada
+115	No se pudo cerrar la sesión: {msg}
+116	¿Borrar la clave de {name}?
+117	Borrada
+118	Guardado
+119	Probando…
+120	Ruta
+121	Endpoint
+122	Modelo por defecto
+123	Crea una clave en el sitio del proveedor ↗
+124	La clave solo se guarda en el directorio privado de la aplicación y la lee bajo demanda el apiKeyHelper de claude (nunca se pone en variables de entorno); sirve para llamar directamente al endpoint compatible con Anthropic del proveedor.
+125	Pegar clave de API
+126	Guardada (…{tail}); déjala vacía para conservarla
+127	Guardar
+128	Probar
+129	Borrar clave
+130	● En uso
+131	Usar este endpoint
+132	Leyendo…
+133	Consultando el estado de la sesión…
+134	Iniciar sesión con otra cuenta
+135	Iniciar sesión en Claude
+136	Usar una cuenta de Console
+137	Cerrar sesión
+138	Cancelar el inicio de sesión
+139	La página de autorización está abierta en tu navegador. Tras aprobarla, el navegador vuelve a este dispositivo y el inicio de sesión se completa solo.
+140	¿No se abrió?
+141	Ábrela aquí
+142	Añadir un endpoint personalizado
+143	Nombre (p. ej.: pasarela del trabajo)
+144	Autenticación: Authorization: Bearer (la mayoría de terceros)
+145	Autenticación: x-api-key (estilo Anthropic)
+146	Nombre del modelo por defecto (obligatorio — claude no conoce modelos de terceros)
+147	Nombre del modelo rápido (opcional, lo usan los subagentes; vacío = igual que arriba)
+148	URL de la lista de modelos (opcional, un /models con forma de OpenAI)
+149	URL del endpoint, p. ej.
+150	Añadir
+151	El endpoint debe hablar el protocolo <b>Anthropic Messages</b> (la URL que los proveedores documentan como «integración con Claude Code»).
+152	No añadas <code>/v1</code> al final — claude añade <code>/v1/messages</code> por su cuenta.
+153	¿Eliminar el endpoint «{name}»?
+154	El nombre del modelo por defecto es obligatorio
+155	Añadido
+156	Shizuku no está instalado
+157	Shizuku está instalado pero su servicio no se está ejecutando (vuelve a iniciarlo en la aplicación Shizuku tras reiniciar)
+158	Shizuku se está ejecutando pero no está autorizado para cccodroid
+159	No se puede contactar con el servicio en segundo plano de la aplicación
+160	RedMagic / Nubia: Información de la app → Consumo de batería → Optimización de batería → <b>Ejecución en segundo plano: permitir</b> (permite también el <b>inicio automático</b>: es lo que reactiva Shizuku al arrancar y lo restaura todo tras una actualización)
+161	ZTE: Información de la app → Consumo de batería → Optimización de batería → <b>Ejecución en segundo plano: permitir</b>, <b>inicio automático: permitir</b>
+162	Xiaomi / Redmi: Información de la app → <b>Ahorro de batería: sin restricciones</b>, activa el <b>inicio automático</b> (ruta habitual; puede variar según la versión)
+163	OPPO / OnePlus / Realme: Información de la app → Ahorro de energía → <b>Permitir actividad en segundo plano</b>, <b>Permitir inicio automático</b> (ruta habitual)
+164	vivo / iQOO: Ajustes → Batería → Gestión de consumo en segundo plano → permite <b>alto consumo en segundo plano</b> para cccodroid; en iManager permite el <b>inicio automático</b> (ruta habitual)
+165	Huawei / Honor: Ajustes → Gestión de inicio de apps → desactiva «Gestionar automáticamente» para cccodroid y permite manualmente el <b>inicio automático</b> y la <b>actividad en segundo plano</b> (ruta habitual)
+166	cccodroid se ha congelado en segundo plano {n} veces (la última durante unos {sec} s, {at}).
+167	Mientras está congelado, la pasarela y las tareas en curso se detienen por completo y solo siguen al volver al primer plano. Un servicio en primer plano no detiene este tipo de congelador del fabricante.
+168	En los ajustes del sistema, permite la ejecución en segundo plano, desactiva la optimización de batería y permite el inicio automático para cccodroid (los nombres varían según el fabricante).
+169	✓ Listo · ejecutando comandos como {who}
+170	Estado desconocido
+171	 (la última petición fue denegada)
+172	El emparejamiento de depuración inalámbrica de cccodroid se revocó: ahora sigue funcionando, pero tras reiniciar no podrá reactivarse automáticamente.
+173	Shizuku no lo inició cccodroid, así que cccodroid no puede reactivarlo tras reiniciar. Basta con emparejarlo una vez.
+174	El sistema no avisó a cccodroid al arrancar (bloqueado por la gestión de inicio automático), así que no se pudo activar automáticamente; abrir cccodroid lo pondrá al día.
+175	Para activarlo al arrancar: permite el inicio automático / en segundo plano para cccodroid en los detalles de la aplicación. Se aplica a partir del próximo arranque.
+176	Inicia el servicio en la aplicación Shizuku (activa «Iniciar al arrancar (depuración inalámbrica)») y comprueba que esta aplicación está autorizada.
+177	Solicitado
+178	El código de emparejamiento tiene 6 dígitos
+179	Código de emparejamiento de 6 dígitos
+180	Puerto (opcional)
+181	Emparejar
+182	Volver a emparejar
+183	Instalar y activar
+184	Activar (depuración inalámbrica)
+185	Abrir Shizuku
+186	Autorizar cccodroid
+187	Descargar manualmente
+188	Permitir inicio automático
+189	Actualizar
+190	Ejecución en segundo plano
+191	Abrir ajustes del sistema
+192	Hecho, ocultar este aviso
+193	Shizuku (privilegios de depuración)
+194	Reactivar automáticamente tras reiniciar (necesita Wi-Fi; inicia el servicio en segundo plano de cccodroid al arrancar)
+195	Refuerzo de keep-alive: sube el límite de «procesos fantasma» de Android (para que las compilaciones en paralelo no pierdan sus subprocesos), añade a la lista blanca de batería y permite la ejecución en segundo plano
+196	Una vez activado, <code>priv 'comando'</code> se ejecuta en el terminal como usuario shell (pm / am / settings / dumpsys / logcat / screencap…) y Claude también puede usarlo. Sin Shizuku, las funciones básicas de desarrollo siguen funcionando — solo faltan estas capacidades de depuración.
+197	Al día
+198	Hay actualización
+199	Descargando
+200	Descargado, listo para instalar
+201	Instalando
+202	Error
+203	Sin comprobar
+204	Actualizar
+205	Descargar e instalar
+206	Instalar
+207	Reintentar
+208	Comprobando…
+209	Última comprobación: {at}
+210	Nunca se ha comprobado
+211	Buscar actualizaciones
+212	CLI: stable
+213	CLI: latest
+214	¿Actualizar el kit de desarrollo?\n\nUnos 600 MB de descarga (se puede reanudar); al instalar, el servicio se pausa 1–2 minutos.\nLo que hayas instalado en el kit con pip / npm -g se conserva.
+215	Iniciado
+216	Actualización automática (activada por defecto): Claude Code se actualiza en silencio; la nueva versión de la aplicación se descarga y luego te avisa para instalarla (se instala sola cuando está inactiva si hay Shizuku); el kit de desarrollo solo se predescarga con Wi-Fi y se instala la próxima vez que abras la aplicación
+217	¿Activar el refuerzo de keep-alive?\n\nCambia algunos ajustes del sistema: el límite de procesos fantasma (afecta a todas las aplicaciones), la lista blanca de batería y los límites de ejecución en segundo plano de esta aplicación. Apagar el interruptor restaura los dos primeros.
+218	Aplicando…
+219	Restaurando…
+220	✓ Aplicado
+221	 (límite de procesos fantasma {n})
+222	✓ Restaurado
+223	(por defecto: {model})
+224	(por defecto — decide claude)
+225	(por defecto — claude decide según el modelo)
+226	(este proveedor no ofrece lista de modelos)
+227	Contexto {n} · salida máx. {out} · entrada {mods}
+228	 | o escribe directamente <code>/model &lt;id&gt;</code>
+229	Ningún modelo seleccionado → <b>decide claude</b> (la cuenta oficial usa <code>{model}</code> por defecto ahora mismo).
+230	el modelo por defecto integrado de claude
+231	<br>La lista de arriba es todo lo que puede usar la cuenta; elige uno para fijarlo.
+232	Este proveedor deja que claude elija el modelo y no ofrece lista. Para fijar uno, define <code>defaultModel</code> en <code>ccapp-providers.json</code>.
+233	No se pudo obtener la lista de modelos: {msg}
+234	Cuanto más alto el nivel, más razona. También puedes escribir <code>/effort &lt;level&gt;</code> en el cuadro de texto
+235	(por defecto)
+236	Por defecto
+237	(sin carpetas adicionales)
+238	No se pudo guardar
+239	Ejecutando claude doctor…
+240	(sin salida)
+241	Falló: {msg}
+242	Otros
+243	(aún no hay datos — envía un mensaje y se obtendrán del CLI)
+244	Claude Code {ver} · modelo {model} · permisos {perm} · estilo de salida {style}
+245	Aún no hay lista de capacidades del CLI — se rellena tras tu primer mensaje.
+246	Consultando…
+247	(sin servidores MCP)
+248	Actualizado
+249	Desconectado; el próximo mensaje abrirá una sesión nueva
+250	Sesión nueva iniciada
+251	Conectado a la pasarela
+252	Falta el runtime
+253	Hace falta una clave de API
+254	No se puede contactar con la pasarela: {msg}
+255	Pasarela desconectada
+256	Conectando con la pasarela…
+257	Modelo
+258	Se obtiene en vivo de <code>/models</code> del proveedor; también puedes escribir <code>/model &lt;id&gt;</code> en el cuadro de texto.
+259	Modo de permisos
+260	acceptEdits · aceptar ediciones automáticamente
+261	auto · decidir automáticamente
+262	plan · solo plan, sin ejecutar
+263	Carpetas adicionales (--add-dir)
+264	/sdcard/alguna/carpeta
+265	Deja que claude lea y escriba carpetas fuera del espacio de trabajo. También aparecen como accesos directos en el explorador de archivos.
+266	Estilo de salida
+267	Intensidad de razonamiento (--effort)
+268	Los niveles varían según el modelo. También puedes escribir <code>/effort &lt;level&gt;</code> en el cuadro de texto.
+269	Umbral de compactado automático (tokens)
+270	Vacío = deja que claude decida según la ventana de contexto
+271	El historial se resume automáticamente cuando el uso se acerca a este valor. Vacío significa no intervenir; también puedes escribir <code>/autocompact &lt;n&gt;k</code> en el cuadro de texto.
+272	Estado de ejecución
+273	Ejecutar doctor
+274	Herramientas
+275	Habilidades
+276	Subagentes
+277	Servidores MCP
+278	Consultar MCP
+279	Plugins
+280	Sesiones y ajustes
+281	Conectando…
+282	Explorador de archivos
+283	Paleta de comandos
+284	Más
+285	Adjuntar imágenes o archivos
+286	Intervenir
+287	Enviar
+288	Cerrar
+289	Endpoint
+290	Carpeta superior
+291	Filtrar esta carpeta…
+292	Elementos ocultos
+293	Elegir un archivo…
+294	Insertar en el cuadro
+295	Adjuntar imagen / archivo
+296	Explorar archivos…
+297	Sesión nueva
+298	Cambiar de modelo /model
+299	Intensidad de razonamiento /effort
+300	Ver uso del contexto /context
+301	Ver coste /cost
+302	Compactar el contexto /compact
+303	Ver configuración /config
+304	Uso /usage
+305	Servidores MCP /mcp
+306	Subagentes /agents
+307	Abrir el panel de capacidades
+308	Suelta para adjuntar
+309	＋ Añadir un endpoint personalizado…
+310	Pasarela
+311	Runtime
+312	ausente
+313	Proveedor
+314	Origen
+315	Credencial
+316	sesión oficial
+317	clave configurada
+318	sin configurar
+319	Puente DNS
+320	sin iniciar
+321	(decide claude)
+322	Generando
+323	en curso
+324	inactivo
+325	 · {n} en cola
+326	Espacio de trabajo
+327	Compactando el contexto…
+328	Contexto compactado: {pre} → {post} tokens
+329	Contexto compactado
+330	Detenido — {n} retenidos, no se enviarán solos · toca ⚡ para enviar
+331	Enviar este
+332	En cola
+333	En pausa
+334	Enviar ahora
+335	Cancelar
+336	Apariencia
+337	Sistema
+338	Claro
+339	Oscuro
+340	Tardó {d}
+341	Verificando
+342	Dañado
+343	Reparar
+344	Verificar
+345	¿Reparar el kit de desarrollo?\n\nSe volverá a descargar la versión actual (unos 600 MB, reanudable) y se reinstalará; el servicio se pausa 1–2 minutos durante la instalación.\nLo que instalaste con pip / npm -g se conserva.
+346	Cancelar selección
+347	Seleccionar
+348	Volver a las sesiones
+349	Papelera
+350	No seleccionar ninguno
+351	Seleccionar todo
+352	{n} seleccionadas
+353	Exportar selección
+354	Eliminar selección
+355	Las sesiones eliminadas se conservan aquí {n} días y luego se borran automáticamente.
+356	Vaciar papelera
+357	La papelera está vacía.
+358	Eliminada {time}
+359	Restaurar
+360	Eliminar definitivamente
+361	Importando…
+362	Se importaron {n} sesiones; se omitieron {m} que ya existían
+363	Se importaron {n} sesiones
+364	Error al importar: {msg}
+365	Las transcripciones pueden contener claves, tokens o contenido de archivos que pegaste. Envía el archivo exportado solo a lugares de confianza. ¿Continuar?
+366	Error al exportar: {msg}
+367	Se exportaron {n} sesiones: {file}
+368	¿Mover las {n} sesiones seleccionadas a la papelera? Se pueden restaurar durante {d} días.
+369	{n} eliminadas; {m} siguen generando y no se eliminaron
+370	Movido a la papelera
+371	¿Eliminar definitivamente las {n} sesiones de la papelera? No se puede deshacer.
+372	Error al restaurar: {msg}
+373	Ya existe una sesión con el mismo ID
+374	Restaurada
+375	¿Eliminar definitivamente esta sesión? No se puede deshacer.
+376	Movida a la papelera (restaurable durante {d} días)
+377	Desactivado
+378	Desactivar
+379	Activar
+380	Desinstalar
+381	Aún no hay plugins instalados. Busca abajo los que puedes instalar.
+382	Obteniendo el directorio de plugins…
+383	{n} encontrados
+384	Mostrar 40 más
+385	Instalando…
+386	Instalar este plugin ejecuta el siguiente comando en este dispositivo. Continúa solo si confías en el origen:\n\n{cmd}
+387	Cancelado
+388	{name} instalado; se aplica a partir del próximo mensaje
+389	Error al instalar: {msg}
+390	Solo el directorio oficial integrado. Puedes añadir otros mercados de plugins (repositorio de GitHub o URL).
+391	Aún no hay skills en ~/.claude/skills. Los plugins también pueden traer las suyas.
+392	Conector de la cuenta
+393	Aún no hay servidores MCP.
+394	Skill {name} instalada
+395	Añadiendo mercado…
+396	Error al añadir: {msg}
+397	{name} añadido
+398	¿Desinstalar el plugin {name}?
+399	¿Eliminar la skill {name}? Se borrará toda su carpeta.
+400	¿Quitar el servidor MCP {name}?
+401	¿Quitar el mercado {name}? Los plugins instalados desde él también se desinstalarán.
+402	Modo seguro: las personalizaciones (CLAUDE.md, skills, plugins, hooks, MCP) no se cargan
+403	Salir del modo seguro
+404	Modo seguro activado; se aplica a partir del próximo mensaje
+405	Modo seguro desactivado; se aplica a partir del próximo mensaje
+406	Empaquetando registros…
+407	No se pudo compartir: {msg}
+408	Modo seguro
+409	Registros
+410	Esta versión no tiene registro de reparaciones.
+411	Aún no hay entradas. Aquí se registran instalaciones, verificaciones, reparaciones y recuperaciones al iniciar.
+412	Uso: se muestra tras enviar un mensaje (5 horas / semanal)
+413	se restablece {time}
+414	5 horas
+415	Semanal
+416	Uso actualizado ahora mismo
+417	Uso actualizado hace {n} min (se renueva tras cada turno)
+418	Extensiones
+419	Importar
+420	Solución de problemas
+421	Modo seguro: inicia claude con su --safe-mode integrado; no se cargan CLAUDE.md, skills, plugins, hooks, MCP, comandos personalizados ni estilos de salida. El inicio de sesión, la clave, las sesiones y el modelo siguen igual; no se modifica ningún archivo y al desactivarlo todo vuelve
+422	Registro de reparaciones
+423	Los cambios se aplican con el próximo mensaje. Los plugins y MCP se instalan y quitan con los propios comandos de claude; esta página solo los escribe por ti.
+424	Buscar plugins (directorio oficial y mercados añadidos)
+425	Buscar
+426	Mercados de plugins
+427	Repositorio de GitHub (owner/repo) o URL
+428	Añadir mercado
+429	Instalar skill desde zip
+430	Consultando… (se prueba cada servidor, tarda unos segundos)
+431	Añadir servidor MCP
+432	Nombre (letras, dígitos, - _ .)
+433	Comando (stdio) o URL (http / sse)
+434	Variables de entorno / cabeceras, opcional, separadas por comas (CLAVE=valor o Header: valor)
+435	Abrir / editar
+436	Abrir
+437	¿Descartar los cambios sin guardar?
+438	No hay vista previa integrada para este tipo de archivo.
+439	Abrir como texto
+440	Archivo demasiado grande ({size}); descárgalo para verlo.
+441	Editar
+442	Vista previa
+443	Ajustar
+444	Error al guardar: {msg}
+445	El archivo cambió después de abrirlo (probablemente Claude).\nAceptar: sobrescribir con tu versión\nCancelar: descartar tus cambios y recargar
+446	Contraseña incorrecta, inténtalo de nuevo:
+447	Este PDF está protegido con contraseña:
+448	No se puede abrir el PDF: {msg}
+449	No se pudo cargar la terminal: {msg}
+450	No se puede abrir la terminal: {msg}
+451	No se encontró el asistente de pseudoterminal (ptyhost / python3)
+452	No se pudo abrir una terminal nueva: {msg}
+453	¿Cerrar esta terminal? Se detendrá lo que esté en ejecución.
+454	[el proceso terminó, código {code}]
+455	[desconectado de la pasarela]
+456	Pegar en la terminal:
+457	Selección copiada
+458	Todo copiado
+459	Ir a lo más reciente
+460	Terminal
+461	Ver como texto (seleccionar y copiar)
+462	Nueva terminal
+463	Mantén pulsado para seleccionar texto
+464	Abrir en el visor
+465	Esta ubicación está protegida y no se puede abrir aquí: {p}
+466	No se encontró el archivo: {p}
+467	No se pudo abrir: {msg}
+468	Unos {a} de descarga, {b} instalado
+469	No instalado
+470	Aún no hay versión para tu kit de herramientas actual
+471	Instalando en el kit de herramientas…
+472	Instalado
+473	El kit de herramientas se actualizó: hay que reinstalar
+474	Instalación incompleta: hay que reinstalar
+475	Error de instalación
+476	Descargar e instalar
+477	Cancelar
+478	Reinstalar
+479	No se pudo cargar la lista de componentes: {msg}
+480	Por ahora no hay componentes disponibles.
+481	¿Desinstalar el componente {name}? Se borran sus archivos del kit de herramientas; tus archivos no se tocan.
+482	Desinstalado
+483	Navegador
+484	Componentes opcionales
+485	Las herramientas grandes no vienen con la app: descárgalas aquí cuando las necesites. Desinstalar solo borra los archivos del componente.
+486	Comunidad
+487	No verificado en un dispositivo
+488	No se pudieron cargar algunas listas de componentes: {msg}
+489	Nadie ha verificado {name} en un dispositivo real todavía. Puede que no se instale o no funcione. ¿Instalar de todos modos?
+490	Solo para dispositivos Snapdragon (GPU Adreno): no es compatible con este dispositivo
+491	Solo Snapdragon
+492	Instala primero: {names}
+493	Lo requiere {names}: desinstala primero esos componentes
+494	Sesión iniciada en GitHub; git push está configurado
+495	Sesión iniciada en GitHub, pero no se configuraron las credenciales de git. Ejecuta gh auth setup-git en la terminal
+496	Solicitando un código de un solo uso a GitHub…
+497	Introduce este código de un solo uso en el navegador. Se completará automáticamente cuando autorices:
+498	Copiar y abrir el navegador
+499	Actual
+500	La sesión caducó
+501	Cambiar a esta
+502	Cerrar sesión
+503	No has iniciado sesión en GitHub. Inicia sesión para usar gh y git push.
+504	El código de un solo uso caducó. Vuelve a iniciar sesión
+505	Iniciar sesión con otra cuenta
+506	Iniciar sesión en GitHub
+507	Código copiado: pégalo en la página que se abre
+508	¿Cerrar sesión de la cuenta de GitHub {name}? gh borrará su token guardado.
+509	Preguntar cada vez
+510	Aceptar ediciones
+511	Solo planificar
+512	Automático
+513	No preguntar
+514	Permitir todo
+515	… ({n} líneas en total)
+516	O escribe tu propia respuesta…
+517	Ruta afectada: {p}
+518	Motivo: {r}
+519	Aprobar y confirmar cada paso
+520	Aprobar y aceptar ediciones
+521	Revisar ▾
+522	Enviar respuesta
+523	No responder ▾
+524	Permitir
+525	Permitir siempre
+526	Permitir y no volver a preguntar por ediciones
+527	Denegar ▾
+528	Plan pendiente de aprobación
+529	Claude tiene una pregunta
+530	Requiere confirmación
+531	Di qué cambiar (se envía a Claude)
+532	Opcional: dile a Claude por qué / qué hacer en su lugar
+533	Enviar comentario
+534	Denegar
+535	Denegar y detener
+536	Elige una opción o escribe tu respuesta
+537	✓ Plan aprobado
+538	✓ Respondido
+539	✓ Permitido (siempre)
+540	✓ Permitido
+541	✗ Denegado y detenido
+542	✗ Denegado
+543	Retirado
+544	Detenido (el turno terminó)
+545	Caducado
+546	El modo de permisos ahora es «Preguntar cada vez», igual que en la versión oficial: Claude pregunta antes de editar archivos o ejecutar comandos. Para volver a permitir todo, toca la etiqueta de permisos de abajo.
+547	Claude espera tu confirmación
+548	Ver
+549	{n} más
+550	Permitir todo
+551	Esperando tu confirmación…
+552	Lee sin preguntar; pregunta antes de editar archivos, ejecutar comandos o conectarse
+553	Edita sin preguntar; aún pregunta antes de ejecutar comandos
+554	Solo lectura y planificación; actúa cuando apruebas el plan
+555	El clasificador de Claude decide qué preguntar (experimental)
+556	Nunca pregunta. Claude puede borrar archivos y ejecutar cualquier comando sin tu permiso
+557	¿Cambiar a «Permitir todo»?\n\nClaude dejará de preguntar y podrá editar o borrar archivos, ejecutar cualquier comando y acceder a la red. Úsalo solo si confías en la tarea y puedes asumir las consecuencias.
+558	Cambiado a «{m}»: se aplica a este turno de inmediato
+559	Cambiado a «{m}»
+560	Cambiar modo de permisos
+561	default · preguntar cada vez (predeterminado)
+562	dontAsk · no preguntar (denegar todo lo que requiera confirmación)
+563	bypassPermissions · permitir todo
+564	Por defecto pregunta cada vez, como la versión oficial: Claude te pregunta en la conversación antes de editar archivos o ejecutar comandos. «Permitir todo» significa que Claude puede borrar archivos y ejecutar cualquier comando sin preguntar. También puedes cambiarlo cuando quieras con la etiqueta de permisos bajo el cuadro de texto.
+565	↩ Devuelto para revisión
+566	Abre el enlace de abajo en el navegador para autorizar. Después el navegador vuelve a este dispositivo y el inicio de sesión se completa solo:
+567	Si el navegador no puede volver (p. ej. autorizaste en otro dispositivo): abre una terminal, ejecuta {cmd} y pega el código de la página directamente en claude.
+568	¿El navegador no volvió (o autorizaste en otro dispositivo)? Inicia sesión desde una terminal: pegas el código directamente en claude; esta app nunca lo maneja.
+569	Iniciar sesión desde una terminal
+570	Herramientas de desarrollo
+571	Documentos y ofimática
+572	Imagen, audio y vídeo
+573	Cálculo científico
+574	Diseño electrónico
+575	3D y modelado
+576	Inferencia de IA
+577	GPU y controladores
+578	Redes
+579	Todo
+580	Instalados
+581	Por actualizar
+582	Activados
+583	Oficiales
+584	De componentes
+585	Instalados por ti
+586	Inaccesibles
+587	Locales
+588	Remotos
+589	Obteniendo el catálogo oficial de skills…
+590	Código fuente y licencia
+591	El catálogo oficial está vacío.
+592	Buscando en el registro…
+593	También disponible como {kinds}, que este dispositivo no puede usar
+594	Necesita npx (incluido en el kit de herramientas de cccodroid)
+595	No se puede instalar en este dispositivo
+596	No se encontró nada. Prueba con otras palabras (en inglés hay más resultados).
+597	Mostrar 30 más
+598	Añadir
+599	Rellena primero: {names}
+600	Este servidor MCP ejecutará en este dispositivo el paquete npm de abajo (cualquiera puede publicar en el registro; nada se revisa). Continúa solo si confías en la fuente:\n\n{cmd}
+601	Skills oficiales (anthropics/skills)
+602	El repositorio oficial de skills de Anthropic, se instalan en ~/.claude/skills; se eliminan desde la lista de arriba. Cada skill tiene su propia licencia: abre el enlace para revisarla antes de instalar.
+603	Registro oficial de MCP
+604	registry.modelcontextprotocol.io: cualquiera puede publicar y nada se revisa. Este dispositivo puede instalar servidores remotos y paquetes npm; los paquetes npm se ejecutan en local, revisa el comando y la fuente antes.
+605	Buscar servidores MCP (nombre o uso)
+606	Notificaciones
+607	Avisar cuando termine una tarea (solo con la app en segundo plano)
+608	Avisar cuando Claude te necesite (comandos, planes, preguntas; desde la notificación solo se puede rechazar — para permitir, abre la app y lee la petición completa)
+609	Abrir ajustes de notificaciones del sistema
+610	Las notificaciones de esta app están desactivadas en los ajustes del sistema, así que estos interruptores no tienen efecto.
+611	Un tipo de notificación («Te necesita» o «Tarea terminada») está desactivado en los ajustes del sistema.
+612	Este turno no terminó: el sistema cerró la app en segundo plano (empezó el {when}).
+613	Todo lo hecho hasta ahora está en la conversación. Toca «Continuar» para que Claude siga donde se quedó.
+614	La conversación aún no se había creado, así que Claude no recibió este mensaje. Toca «Reenviar» para devolverlo al cuadro de texto.
+615	Continuar
+616	Descartar
+617	El turno anterior fue interrumpido por el sistema. Continúa desde donde te quedaste y termínalo.
+618	El turno anterior fue interrumpido por el sistema; {n} mensaje(s) en cola están en espera y no se enviarán solos · toca ⚡ para enviar
+619	Guardado: {name}
+620	El archivo no existe
+621	No hay un selector de archivos disponible en el sistema
+622	{n} sesiones exportadas
+623	Guardar en…
+624	Compartir…
+625	No se pudo compartir
+626	Adjunta imágenes o archivos; también puedes pegarlos o arrastrarlos
+627	Escribe / para comandos, @ para citar una ruta de archivo
+628	Barra superior: explorador de archivos, terminal, paleta de comandos
+629	Arriba a la izquierda: sesiones anteriores, ajustes, capacidades, extensiones
+630	La etiqueta de permisos bajo el cuadro de texto: si Claude te pregunta antes de editar archivos o ejecutar comandos; tócala para cambiarla
+631	Sigue escribiendo mientras trabaja: Intro pone en cola, ⚡ interviene (sin interrumpir, se suma al turno actual)
+632	Muéstrame qué herramientas de desarrollo hay en este dispositivo y haz una demo de tres
+633	Con Python, cuenta los archivos del espacio de trabajo por tipo y tamaño total, y ponlo en una tabla
+634	Escribe un juego de la serpiente en una sola página web y ábrelo en el navegador
+635	¿No sabes por dónde empezar? Toca uno para probar (solo rellena el cuadro de texto, no se envía nada):
+636	Antes de empezar, conecta un modelo (elige una de dos formas):
+637	Iniciar sesión con una cuenta de Claude
+638	Con suscripción Claude Pro / Max o cuenta de Anthropic Console: autoriza una vez en el navegador, sin clave.
+639	Iniciar sesión
+640	Introducir una clave API
+641	Usa una clave de Anthropic o de una API compatible como DeepSeek, Zhipu GLM, Qwen o Kimi; pago por uso.
+642	Elegir API e introducir clave
+643	Ambas están en ☰ → Ajustes → API y puedes cambiar cuando quieras.
+644	Crear un paquete de diagnóstico y enviarlo con el menú de compartir del sistema.\n\nIncluye:\n· Versión y dispositivo: cccodroid / versión de Android, modelo, chip, espacio libre\n· Kit de desarrollo: qué versión está instalada, estado de actualizaciones y autocomprobación\n· Registros recientes: registro del sistema de la app, final del registro de la pasarela\n· Registro de reparaciones: instalaciones, comprobaciones y reparaciones, y si funcionaron\n\nEliminado:\n· Claves, tokens, credenciales de inicio de sesión, correos\n· El contenido de tus mensajes a Claude\n· Las conversaciones no se incluyen\n\n¿Continuar?
+645	Estoy atascado · paquete de diagnóstico
+646	¿No se instala, nada funciona o un error que no entiendes? Crea un paquete de diagnóstico y compártelo con quien te ayude (o adjúntalo a una issue de GitHub). Verás su contenido antes de crearlo; claves, tokens, correos y el contenido de tus mensajes se eliminan primero.
+647	Arrastra para cambiar el ancho; toca dos veces para restablecer
+648	Nuevo archivo
+649	Nueva carpeta
+650	Ya existe algo con ese nombre
+651	Error: {msg}
+652	Nombre de la carpeta
+653	Nombre del archivo (cambia la extensión para otro tipo)
+654	Nuevo texto
+655	El nombre no puede contener /
+656	Renombrar a
+657	Desbloquear (tócalo si el desplazamiento se atasca)
+658	Volviendo a montar la interfaz…
+659	Esta versión de la app aún no puede desbloquear. Actualiza la app; mientras tanto, reinicia la pasarela
+660	El desplazamiento parece atascado. Toca el copo de nieve de la barra superior para desbloquearlo
+661	Gestor de memoria
+662	Activado: permitir detener apps en segundo plano que no estén en la lista blanca (requiere Shizuku)
+663	Nunca se detienen: lo que estás viendo, las apps en pantalla dividida, las que muestran una notificación en primer plano (proxy, música), el launcher, el teclado, los servicios de accesibilidad, la VPN, Shizuku, los componentes de los que dependen y la lista blanca de abajo. En el terminal, ejecuta tareas pesadas con <code>cc-mem run -- comando</code>: despeja el terreno antes de empezar y vuelve a detener lo que reviva durante la ejecución.
+664	Lista blanca: un nombre de paquete por línea, p. ej. com.tencent.mm
+665	Guardar lista blanca
+666	Ver memoria
+667	Limpiar ahora
+668	¿Activar el gestor de memoria?\n\nAl limpiar se detendrán las apps en segundo plano que no estén en la lista blanca. Seguirán detenidas hasta que las vuelvas a abrir o el sistema las despierte, así que mientras tanto podrías no recibir sus mensajes. Añade a la lista blanca las apps de las que siempre quieras recibir mensajes (como las de chat).
+669	✓ Activado
+670	✓ Desactivado
+671	Nombre de paquete no válido: {list}
+672	✓ Lista blanca guardada ({n})
+673	Midiendo…
+674	{avail} disponibles de {total}. Apps en segundo plano que se pueden detener: {n}, unos {sum}: {list}
+675	Activa primero el interruptor de arriba
+676	Limpiando…
+677	✓ Detenidas: {n}. Memoria disponible {a} → {b}
+678	No hay apps en segundo plano que detener
+679	Si la página deja de desplazarse y parece atascada, toca el copo de nieve de la barra superior para recuperarla, sin reiniciar la app
+680	{name} todavía guarda {size} de datos de ejecución ({path}: caché de descargas, entorno descomprimido, etc.). ¿Eliminarlos también? Si lo reinstalas, tendrá que volver a descargarlos.
+681	Datos de ejecución eliminados
+682	(actual: no está en la lista del proveedor)
+683	Un endpoint personalizado necesita al menos una URL base
+684	La URL debe empezar por http:// o https://
+685	No existe ese proveedor
+686	El inicio de sesión con cuenta no tiene clave que probar: revisa el estado de la sesión
+687	Aún no has introducido una clave
+688	Clave válida ({how}, {n} modelos)
+689	Clave válida ({how})
+690	No se puede conectar: {err}
+691	No es un archivo zip
+692	El directorio del zip está dañado
+693	Método de compresión no compatible: {name}
+694	No hay sesiones para exportar
+695	Falta manifest.json: no es un paquete de sesiones
+696	No es un paquete de sesiones de cccodroid
+697	(La conversación anterior se compactó en un resumen)
+698	El kit de desarrollo no está instalado del todo (o se instaló desde un archivo local sin versión identificable), así que no se pueden instalar componentes
+699	No existe ese componente
+700	Este componente solo funciona en dispositivos Qualcomm Snapdragon (GPU Adreno), así que aquí no se puede usar
+701	Este componente aún no tiene versión para tu kit de desarrollo actual. Actualiza el kit o vuelve a intentarlo más tarde
+702	No hay espacio suficiente: se necesitan unos {n} MB
+703	El archivo descargado no superó la verificación (se eliminó; al reintentar se descargará de nuevo)
+704	Falta un archivo en el paquete del componente: {file}
+705	Un archivo del paquete del componente no superó la verificación: {file}
+706	Copiando al kit de desarrollo: este paso no se puede interrumpir
+707	gh no está instalado
+708	gh terminó con el código {code}
+709	Error interno: {err}
+710	No se obtuvo la URL de inicio de sesión
+711	No hay ninguna clave de API configurada. Introduce tu clave de {name} en Ajustes.
+712	No se pudo iniciar el puente DNS local, así que no se puede acceder a la API.
+713	No se pudo iniciar claude: {err}
+714	No se encuentra cc-mem
+715	En la versión de desarrollo, Shizuku lo gestiona la propia app Shizuku (priv pasa por rish)
+716	Tiempo agotado
+717	Número de versión inesperado: {v}
+718	No se puede acceder a downloads.claude.ai: {err}
+719	El manifiesto no incluye linux-arm64
+720	sha256 no coincide (se esperaba {want}…, se obtuvo {got}…)
+721	La nueva versión falló la prueba (--version devolvió «{v}»)
+722	La versión de desarrollo solo actualiza Claude Code (la app la compilas e instalas tú en este dispositivo)
+723	No hay ninguna versión nueva para instalar: busca actualizaciones primero
+724	Actualizando Claude Code
+725	No compatible con la versión de desarrollo: {op}
+726	El nombre solo puede tener letras, números, puntos, guiones bajos y guiones
+727	Falta el comando o la URL
+728	No se pudo obtener el catálogo oficial de skills: {err}
+729	Esa skill no está en el catálogo oficial
+730	Ya existe una skill con ese nombre: elimínala primero
+731	Demasiado grande (más de 50 MB)
+732	No se pudo obtener el registro de MCP: {err}
+733	El archivo comprimido no contiene SKILL.md
+734	Nombre de skill no válido
+735	Ya existe una skill llamada «{name}»: elimina primero la anterior
+736	Este proveedor está en uso: espera a que termine este turno para eliminarlo.
+737	Este turno aún se está generando. Cambia de proveedor cuando termine (el cambio sustituye la clave y el modelo en uso).
+738	Esta sesión se está generando.
+739	Aún no hay clave para «{name}». Añádela en Ajustes → Endpoint y guarda, o cambia de endpoint.
+740	Hay demasiados mensajes en cola.
+741	Operación desconocida
+742	Este turno aún se está generando. Cierra la sesión cuando termine.
+743	Este turno ya terminó
+744	Esto ya se respondió
+745	Hecho, revisar en el próximo arranque
+746	De acuerdo, se volverá a comprobar tras el próximo arranque.
+747	Otras conversaciones en curso: {n}
+748	Otra conversación espera tu confirmación · abre la lista de conversaciones
+749	Se alcanzó el límite de conversaciones simultáneas ({max}); se enviará cuando haya hueco · en espera: {n}
+750	Se alcanzó el límite de conversaciones simultáneas. En cola; se enviará cuando haya hueco
+751	Pendiente
+752	Máximo de conversaciones simultáneas
+753	Varias conversaciones pueden trabajar a la vez; dentro de una misma conversación, los mensajes siguen yendo de uno en uno. Cada una de más ocupa unos cientos de MB de memoria: bájalo si el teléfono va justo de memoria. 1 = de una en una.
+754	Consultando saldo…
+755	No se pudo consultar el saldo: {msg}
+756	Bonificado
+757	Recargado
+758	Cupones
+759	Efectivo
+760	Saldo
+761	No disponible
+762	Usado
+763	Esta clave no tiene límite de gasto, así que no hay saldo que mostrar
+764	Mensual
+765	Cuota del Coding Plan (Zhipu no tiene API pública de saldo; las claves de pago por uso no se pueden consultar)
+766	Esta clave no tiene cuota del Coding Plan. Zhipu no tiene API pública de saldo de pago por uso; consulta la consola
+767	El saldo de Model Studio pertenece a la cuenta principal de Alibaba Cloud y no se puede leer con una clave API; consulta la consola de Model Studio. Abajo está el uso de tokens registrado en este dispositivo.
+768	Esta plataforma no ofrece API de saldo. Abajo está el uso de tokens registrado en este dispositivo.
+769	Gastado hoy
+770	Gastado en total
+771	Calculado a partir de los cambios de saldo desde el {date}; las recargas no cuentan como gasto. Incluye el uso de la misma clave en otros sitios.
+772	Entrada {i} · Salida {o} · Caché {c}
+773	Tokens hoy
+774	Tokens en total
+775	El registro empieza tras el primer turno con este proveedor
+776	Convertido a 1 USD ≈ {r} CNY ({src}, {time})
+777	Saldo y gasto
+778	Modificado
+779	Archivo nuevo
+780	Renombrado
+781	Conflicto
+782	Binario
+783	Esta carpeta aún no es un repositorio git.
+784	Con un repositorio verás qué líneas cambian cada vez y podrás volver a una versión anterior cuando quieras.
+785	Crear un repositorio aquí
+786	Repositorio creado
+787	Cambios en {n} archivo(s)
+788	Sin cambios
+789	Árbol de trabajo limpio: nada ha cambiado desde el último commit.
+790	Toca un archivo para ver qué líneas cambiaron
+791	Devolver este archivo a como estaba en el último commit
+792	Mensaje del commit: qué cambió (obligatorio)
+793	Hacer commit de {n} archivo(s)
+794	Que Claude escriba el mensaje y haga el commit
+795	{f} es un archivo nuevo, así que deshacer significa borrarlo. ¿Continuar?
+796	¿Devolver {f} al último commit? Se perderán sus cambios sin commit.
+797	Deshecho
+798	Revisa los cambios de estos archivos en {root}, escribe un mensaje de commit breve y haz commit solo de ellos: {files}
+799	(todos los cambios)
+800	Escribe un mensaje de commit
+801	Commit hecho
+802	Antes del primer commit, dile a git tu nombre y correo (se guardan en el historial y en este dispositivo).
+803	Nombre
+804	Correo
+805	Guardar y hacer commit
+806	Sin diferencias
+807	Archivo binario; no se puede comparar línea a línea
+808	← Volver a este commit
+809	← Volver a los cambios
+810	Historial de este archivo
+811	Demasiados cambios; solo se muestra la primera parte
+812	Aún no hay commits.
+813	Solo el historial de {f}
+814	Ver todo
+815	Cargar más
+816	← Volver al historial
+817	Ver el diff completo del commit
+818	Diff
+819	Historial
+820	Igual que el último commit
+821	Tienes cambios sin guardar; aquí se compara la versión en disco con el último commit.
+822	La ruta no existe
+823	Git aún no tiene tu nombre y correo (se usan para firmar los commits).
+824	Commit hecho {hash}
+825	Rellena nombre y correo
+826	Versiones (git)
+827	Cambios
+828	Versiones
+829	Consultado a las {time}. Los cargos se reflejan con unos minutos de retraso; se vuelve a consultar tras cada ejecución
+830	{n} seleccionados
+831	Empieza a escribir…
+832	Negrita
+833	Cursiva
+834	Tachado
+835	Código
+836	texto del enlace
+837	descripción de la imagen
+838	ruta de la imagen
+839	Rehacer
+840	Encabezado
+841	Cita
+842	Lista con viñetas
+843	Lista numerada
+844	Lista de tareas
+845	Enlace
+846	Imagen
+847	Separador
+848	Buscar y reemplazar
+849	Buscar
+850	Reemplazar
+851	Siguiente
+852	Anterior
+853	Distinguir mayúsculas
+854	Regex
+855	Palabra completa
+856	Reemplazar todo
+857	Hay cambios sin guardar de la última vez ({time}). ¿Restaurarlos?\nAceptar: restaurar\nCancelar: descartar el borrador
+858	No se pudo cargar el editor; se usa texto sin formato: {msg}
+859	Todos los proyectos
+860	Este proyecto ({name})
+861	Este proyecto · solo este dispositivo
+862	Se guarda en ~/.claude/settings.json y se aplica a todos los proyectos.
+863	Se guarda en .claude/settings.json del proyecto y solo se aplica aquí; si el proyecto está en git, viaja con el repositorio.
+864	Se guarda en .claude/settings.local.json del proyecto y solo se aplica a este proyecto en este dispositivo.
+865	Abrir archivo de configuración
+866	Pausar todos los hooks (se conservan las reglas, pero no se ejecutan)
+867	Este archivo no es JSON válido ({msg}). Ábrelo y corrígelo primero para poder editar aquí.
+868	Coincide: {m}
+869	Tiempo límite {n} s
+870	Probar
+871	Editar
+872	Aún no hay reglas. Añade una desde «Reglas comunes» abajo.
+873	Añadir…
+874	Cuándo se ejecuta
+875	Otros (avanzado)
+876	Vacío = todo
+877	Comando a ejecutar
+878	(se genera con los campos de arriba; también puedes editarlo)
+879	p. ej.: echo hola >> ~/log.txt
+880	Tiempo límite (segundos; vacío = 60 por defecto)
+881	Guardar cambios
+882	Qué herramientas (nombres separados por | o regex; vacío = todas)
+883	Solo en estos casos (vacío = todos)
+884	Guardado. Se aplica desde el próximo mensaje.
+885	Se agotó el tiempo: el comando se detuvo antes de terminar.
+886	Terminado: lo que imprimió se pasará a Claude como contexto adicional.
+887	Permitido: Claude sigue con normalidad.
+888	Terminó con normalidad.
+889	Bloqueado (código 2): Claude no hará este paso y recibirá el texto de stderr.
+890	Código 2: Claude sigue trabajando y recibe el texto de stderr.
+891	Código 2: el texto de stderr se devuelve a Claude.
+892	Error (código {n}): no se bloquea nada, Claude sigue.
+893	Salida (stdout)
+894	Salida de error (stderr)
+895	Entrada simulada (edítala y vuelve a probar)
+896	Probar de nuevo
+897	El comando está vacío
+898	Ejecutando…
+899	¿Eliminar esta regla?
+900	Todos los hooks en pausa
+901	Hooks reanudados
+902	Antes de usar una herramienta
+903	Antes de cada llamada a una herramienta (editar archivos, ejecutar comandos, conectarse…). El código 2 bloquea la llamada y el motivo escrito en stderr se pasa a Claude.
+904	Después de usar una herramienta
+905	Después de que una herramienta funcione. Útil para formatear, registrar o comprobar; la acción ya ocurrió, así que el código 2 solo devuelve stderr a Claude.
+906	Cuando envías un mensaje
+907	Cada vez que envías un mensaje. Lo que imprima el comando se pasa a Claude como contexto; el código 2 bloquea el mensaje.
+908	Cuando Claude termina un turno
+909	Al terminar la respuesta de Claude. Útil para autoguardado y recordatorios; el código 2 hace que siga (cuidado con los bucles infinitos).
+910	Al iniciar una sesión
+911	Al iniciar una sesión: nueva, reanudada, limpiada o tras compactar. Lo que imprima el comando se da a Claude como contexto.
+912	Al terminar una sesión
+913	Al terminar una sesión. Útil para limpiar.
+914	Cuando Claude envía un aviso
+915	Cuando Claude necesita un permiso o espera tu respuesta.
+916	Al pedir permiso
+917	Antes de mostrar una solicitud de permiso. Avanzado: imprimir JSON puede permitir o denegar automáticamente.
+918	Después de que falle una herramienta
+919	Después de que falle una herramienta.
+920	Al iniciar un subagente
+921	Al terminar un subagente
+922	Cuando un subagente termina; el código 2 hace que siga.
+923	Antes de compactar el contexto
+924	Después de compactar el contexto
+925	Proteger archivos importantes
+926	Impide que Claude edite .env, claves y archivos de firma, y le explica por qué.
+927	Archivos protegidos (uno por línea; * es comodín; con / se compara la ruta completa)
+928	Bloquear comandos peligrosos
+929	Rechaza comandos como force-push, reset --hard o borrar la raíz, y pide a Claude otra forma.
+930	Texto prohibido (uno por línea; /…/ es una regex)
+931	Autoguardado en cada turno (git)
+932	Cada vez que Claude termina un turno, los cambios del proyecto se confirman y puedes volver a cualquier paso. Solo hace commit, nunca push; los proyectos sin git no se tocan.
+933	Inicio del mensaje de commit
+934	Autoguardado
+935	Añadir instrucciones fijas a cada mensaje
+936	Cada mensaje incluye este texto para Claude, p. ej. «responde en español» o «explica tu plan antes de editar».
+937	Texto que se añade
+938	Responde en español; antes de cambiar nada, explica brevemente qué piensas hacer.
+939	Leer un archivo de progreso al iniciar la sesión
+940	En cada sesión nueva (o tras compactar) se le lee a Claude un archivo del proyecto: progreso, esquema, lista de personajes… Se omite si no existe.
+941	Archivo (relativo a la carpeta del proyecto)
+942	progreso.md
+943	Registrar los comandos que ejecuta Claude
+944	Añade cada comando, con hora y carpeta, a ~/.claude/bash-history.log para revisarlo después.
+945	Formatear el código tras editar
+946	Tras editar un archivo de código, se formatea con la herramienta instalada (ruff / black, prettier, gofmt, clang-format…); si no hay ninguna, no pasa nada. Markdown y texto plano nunca se tocan.
+947	Hooks (reglas automáticas)
+948	Un hook es «cuando llegue este momento, ejecuta este comando»: antes o después de que Claude use una herramienta, al enviar un mensaje, al terminar un turno… El comando puede bloquear una acción, darle contexto o hacer tareas (guardar, registrar, formatear).
+949	Reglas comunes (toca Añadir y ajusta)
+950	Escribir una propia
+951	Cómo funcionan los hooks
+952	El comando se ejecuta con bash en la carpeta del proyecto. Claude le pasa los detalles del momento (qué herramienta, qué argumentos, qué dijiste…) en JSON por la entrada estándar.<br>El código de salida decide: <b>0</b> deja pasar; <b>2</b> bloquea el paso (en «Antes de usar una herramienta» y «Cuando envías un mensaje») y el motivo escrito en stderr se pasa a Claude; cualquier otro código es un error, no se bloquea nada.<br>En «Cuando envías un mensaje» y «Al iniciar una sesión», lo que imprima el comando se da a Claude como contexto.<br>Los cambios se aplican desde el próximo mensaje. Las reglas son comandos de shell normales y pueden hacer lo mismo que tú en una terminal: no añadas comandos de origen dudoso.
+953	Batería
+954	Hora
+955	Día
+956	Semana
+957	Estimación del sistema (requiere Shizuku)
+958	Últimas 24 horas
+959	Últimos 14 días
+960	Últimas 12 semanas
+961	CPU de la app {d}
+962	Primer plano {d}
+963	Pantalla encendida {d}
+964	Batería consumida {p}
+965	Nivel de batería
+966	Cargando
+967	Consumo del dispositivo
+968	Tiempo de CPU de la app
+969	Tiempo de pantalla encendida
+970	Pantalla encendida
+971	App en primer plano
+972	El registro acaba de empezar (una muestra cada 5 minutos). Vuelve dentro de un rato.
+973	Esta versión no tiene capa nativa: solo se registra el tiempo de CPU (nivel de batería, pantalla y primer plano requieren cccodroid).
+974	Batería {p}
+975	Cargando
+976	Con batería
+977	Estimación del sistema (desde la última carga completa, {ago}): esta app usó unos {mah} mAh, el {pct} de los {used} mAh del dispositivo; {scr} mAh corresponden a la pantalla. Puesto {rank} de {n} apps.
+978	Estimación del sistema (desde la última carga completa, {ago}): el dispositivo usó {used} mAh; no hay registro de esta app.
+979	Android atribuye el consumo de la pantalla a la app en primer plano: cuanto más tiempo está abierta, más alto aparece. La parte de CPU es lo que la app gastó por sí misma. Consultado {time}.
+980	Consultando al sistema…
+981	No se pudo obtener: {msg} (primero configura Shizuku arriba)
+982	No se recibieron datos
+983	Hoy
+984	Últimos 7 días
+985	Últimos 30 días
+986	Fijar
+987	Desfijar
+988	Buscar en las conversaciones…
+989	Buscando en las conversaciones…
+990	Ninguna conversación contiene «{q}».
+991	{n} coincidencias
+992	Actualizada {time}
+993	Creada {time}
+994	Compatibilidad con binarios estáticos
+995	Cubrir todos los programas que lanza claude
+996	Los programas estáticos descargados de internet (sobre todo herramientas de línea de comandos y servidores MCP escritos en Go) usan llamadas al sistema nuevas que Android prohíbe, y el sistema los mata en el acto. Con esto activado, esas llamadas devuelven «no compatible» y el programa vuelve al método antiguo y sigue. Cada subprograma tarda un poquito más en arrancar; si notas algo raro, prueba a desactivarlo. Se aplica desde el próximo mensaje.
+997	Cambiar o crear una rama
+998	Aún sin rama remota asociada
+999	Comprobar si hay commits nuevos en el remoto (no toca tus archivos)
+1000	Traer
+1001	Traer los commits nuevos del remoto (solo avance rápido)
+1002	Bajar
+1003	Subir tus commits locales nuevos
+1004	Subir
+1005	Primera subida de {b}: se creará en el remoto una rama con el mismo nombre y se asociará. ¿Continuar?
+1006	¿Dejar que Claude integre los commits del remoto?
+1007	La rama actual de {root} se ha separado del remoto. Primero ejecuta git fetch, explica qué commits tiene cada lado, luego integra los commits del remoto (rebase si se puede; si hay conflictos, para y pregúntame) y al final dime el resultado. No subas nada.
+1008	Borrada en el remoto
+1009	Sacar
+1010	Cambiar
+1011	Nombre de la rama nueva, p. ej. fix/login
+1012	Crear y cambiar
+1013	La rama nueva parte del commit actual; los cambios sin confirmar se llevan con ella.
+1014	Ramas locales
+1015	Aún no hay commits, así que tampoco ramas.
+1016	Ramas solo en el remoto
+1017	Este repositorio aún no tiene remoto, así que no se puede subir ni bajar.
+1018	Cambiado
+1019	Escribe un nombre de rama
+1020	Aquí se borraron {n} líneas
+1021	La línea {n} es nueva (no estaba en el último commit)
+1022	Aquí se borraron {n} líneas:
+1023	Modificada; en el último commit era:
+1024	Ver el diff del archivo completo
+1025	Tres minutos sin conexión; puede que no haya red.
+1026	El remoto pide iniciar sesión. Para repositorios de GitHub, inicia sesión una vez en Extensiones → GitHub (así también se configura la subida https de git); para otros sitios, configura las credenciales en la terminal.
+1027	La clave SSH no fue aceptada. Añade la clave pública de este dispositivo a tu cuenta remota, o cambia la dirección del remoto a https e inicia sesión con GitHub.
+1028	No se puede contactar con el remoto. Revisa la red o el proxy.
+1029	El remoto tiene commits que no tienes en local. Primero baja y luego sube.
+1030	El local y el remoto tienen commits nuevos cada uno (se han separado), así que no se puede avanzar rápido. Claude puede fusionar o hacer rebase por ti.
+1031	Se sobrescribirían cambios sin confirmar. Confirma o descarta esos archivos y vuelve a intentarlo.
+1032	Este repositorio aún no tiene remoto.
+1033	La rama actual no tiene rama remota asociada. Sube una vez para asociarla.
+1034	Hay conflictos sin resolver. Resuélvelos antes de bajar.
+1035	No estás en ninguna rama. Cambia a una rama antes de subir.
+1036	Traído: {n} commits nuevos en el remoto
+1037	Traído: no hay commits nuevos
+1038	Ya está al día
+1039	Bajado
+1040	No hay nada que subir
+1041	Subido
+1042	Nombre de rama no válido
+1043	Hay conflictos sin resolver. Resuélvelos antes de cambiar.
+1044	Cambiado a {b} ({n} cambios sin confirmar vinieron con ella)
+1045	Cambiado a {b}
+1046	Ramas
+1047	No se encontró «{q}» en los mensajes cargados
+1048	Instalar desde un archivo de kit ya descargado
+1049	Archivo local…
+1050	¿Instalar el kit de desarrollo desde un archivo local?\n\nElige un devkit-cc.codroid.tar.gz (o .tar); puedes descargarlo de la página de versiones de GitHub o de cccodroid.net. Se compara con las versiones publicadas antes de instalar; el servicio se pausa 1–2 minutos durante la instalación.\nLo que instalaste en el kit con pip / npm -g se conserva.
+1051	Registro de comandos privilegiados
+1052	Todavía no se ha ejecutado ningún comando con priv
+1053	Últimas {n} entradas (las más recientes primero). Solo se guardan en este dispositivo; nunca se suben.
+1054	Captura en {n} s: cambia a la app que quieras capturar
+1055	Captura adjuntada
+1056	No se pudo hacer la captura (¿Shizuku está disponible? Ajustes → Shizuku)
+1057	Captura lista
+1058	Captura para Claude
+1059	Captura en 5 s (cambia antes a la app)
+1060	No se pudo cargar: {src}
+1061	Convertir a PDF con LibreOffice
+1062	Diseño original
+1063	No se pudo leer este documento: {msg}
+1064	(El documento está vacío)
+1065	No se pudo leer esta hoja de cálculo: {msg}
+1066	(Esta hoja está vacía)
+1067	La hoja es demasiado grande: solo se muestran las primeras {r} filas y {c} columnas. Usa «Diseño original» o descárgala para verla entera.
+1068	Diseño web
+1069	Convirtiendo a PDF con LibreOffice…
+1070	La primera vez tarda un poco; el resultado se guarda en caché
+1071	Error en la conversión
+1072	Este tipo de archivo necesita convertirse con LibreOffice para verse, y aquí no está disponible.
+1073	Para ver este tipo de archivo, instala primero LibreOffice (unos 190 MB de descarga, unos 830 MB instalado). Se instala una vez y luego se abren directamente los archivos de PowerPoint, Word y Excel.
+1074	Instalar LibreOffice
+1075	Instalando LibreOffice… Puedes hacer otra cosa mientras tanto y volver cuando termine.
+1076	LibreOffice instalado
+1077	No se pudo instalar LibreOffice: {msg}
+1078	LibreOffice no pudo convertirlo
+1079	En el dispositivo
+1080	{name} cargado (se descarga tras {min} min sin uso)
+1081	Cargando {name}…
+1082	No arrancó la última vez: {msg}
+1083	No está en marcha (se carga al enviar un mensaje)
+1084	llama.cpp instalado
+1085	llama.cpp no está instalado: instala el componente llama-cpp en la página Extensiones
+1086	Inferencia por GPU (Vulkan)
+1087	Solo inferencia por CPU (el componente de controlador GPU la hace varias veces más rápida)
+1088	Memoria {total}, {avail} libre; contexto {ctx} tokens, {n} hilos
+1089	Modelos ({dir})
+1090	Modo
+1091	Chat
+1092	cargado en {s} s
+1093	Descargar modelo
+1094	Cambiado (se aplica desde el próximo mensaje)
+1095	Aún no hay modelo local: pon un archivo .gguf en {dir}
+1096	Cargando el modelo local {name} ({how})…
+1097	El modelo local está leyendo el prompt: {pct} %
+1098	El modelo local no arrancó
+1099	Modelo local cargado ({s} s)
+1100	Se agotó el tiempo al cargar el modelo local
+1101	Descargar modelos
+1102	Descargado
+1103	En uso
+1104	Error al descargar: {msg}
+1105	¿Eliminar el modelo {name}?
+1106	Lee {skill} y ayúdame a configurar un modo personalizado para el modelo en el dispositivo.
+1107	Aún no hay modelos. Descarga uno en «Descargar modelos» del componente llama-cpp (página Extensiones) o coloca un archivo .gguf en la carpeta de arriba.
+1108	Sin herramientas; indicación más corta, respuestas más rápidas
+1109	Personalizado
+1110	Herramientas: {tools}
+1111	Sin herramientas
+1112	Aún sin configurar
+1113	El archivo de configuración tiene un error; se usa el modo chat: {msg}
+1114	Un móvil no tiene potencia para que un modelo pequeño haga trabajo real, así que solo viene el chat. Si quieres experimentar, escribe {file} para activar un modo personalizado (herramientas, indicación del sistema, opciones de llama-server). Lo más fácil: cambia a un modelo en la nube y envíale esto:
+1115	El nivel superior debe ser un objeto
+1116	{k} debe ser un texto de {n} caracteres como máximo
+1117	llamaArgs debe ser un arreglo de textos (máximo 40)
+1118	ctx debe ser un entero entre 512 y 262144
+1119	llamaArgs no puede cambiar {k} (lo gestiona la pasarela)
+1120	llama-server se cerró inesperadamente (rc={code})
+1121	No se puede escribir en la carpeta de modelos
+1122	Este modelo no está en el catálogo
+1123	No existe ese modelo
+1124	No está en la carpeta de modelos
+1125	Piensa primero
+1126	Orientado a código
+1127	Grande
+1128	Los modelos se guardan en /sdcard/cccodroid/models; úsalos en Ajustes → Servicio de modelos → Modelo en el dispositivo. Memoria del dispositivo: {ram} GB. Todos en cuantización Q4_K_M; en un móvil lo práctico es 1–4B, por encima de 6B va muy lento.
+1129	{n} descargado(s)
+1130	¿No está en la lista? Pega el enlace de descarga de un archivo .gguf (HuggingFace, ModelScope, etc.). No se verifica la suma de comprobación, solo la cabecera del archivo.
+1131	{name} tiene unos {p}B parámetros ({size}). Irá muy lento en un móvil y puede que no quepa en memoria. ¿Descargar de todos modos?
+1132	Pega primero un enlace
+1133	Ya existe un modelo con ese nombre
+1134	El archivo descargado no es un modelo GGUF (eliminado)
+1135	Enlace no válido
+1136	Solo se admiten enlaces https
+1137	El enlace debe apuntar a un archivo .gguf
+1138	Los modelos divididos (…-00001-of-0000N.gguf) no son compatibles; busca una versión de un solo archivo
+1139	mmproj es un archivo de proyección multimodal y no sirve por sí solo para chatear
+1140	Listo · {n} tarea(s) en segundo plano
+1141	Tareas en segundo plano
+1142	Bifurcar desde aquí
+1143	Esta sesión aún no se ha guardado; bifurca cuando termine una respuesta
+1144	No hay ningún mensaje tuyo antes de esta respuesta, así que no se puede bifurcar desde aquí
+1145	Bifurcada: se conservaron los primeros {n} turnos. Sigue desde aquí
+1146	No se encontró la sesión.
+1147	No se encontró este turno en el registro de la sesión. Actualiza e inténtalo de nuevo.
+1148	Este turno aún se está generando. Bifurca cuando termine.
+1149	bifurcación
+1150	Conectando
+1151	Conectado, esperando respuesta
+1152	Error de conexión, reintento {a}/{m}
+1153	Pensando
+1154	Escribiendo los parámetros de {name}
+1155	Flujo
+1156	Monitor
+1157	Objetivo
+1158	revisado {n} veces
+1159	{d} transcurrido
+1160	Abandonar
+1161	Falta: 
+1162	{n} rondas
+1163	Objetivo cumplido
+1164	No se puede cumplir el objetivo
+1165	Detener
+1166	{n} en segundo plano
+1167	{n} más
+1168	{i} de {n}
+1169	La conversación lleva casi una hora inactiva y su caché de prompt está por caducar, así que el contexto se compactó automáticamente; tu próximo mensaje no tendrá que reprocesar todo el historial. Puedes desactivarlo en Ajustes.
+1170	Esta tarea en segundo plano ya terminó
+1171	↩ Restaurar lo que acabas de borrar
+1172	Compactación en reposo
+1173	Compactar conversaciones largas inactivas casi una hora
+1174	Solo se aplica a una cuenta de Claude o a una clave de API de Anthropic. Cuando una conversación de más de 200K tokens lleva unos 54 minutos inactiva y su caché de prompt de 1 hora está por caducar, se compacta una vez; al retomarla no se reprocesa todo el historial a precio completo: gastas menos uso de tu suscripción o menos dinero con la clave de API. Claude Code en el escritorio hace lo mismo.
+1175	Tareas
+1176	Tareas hechas
+1177	espera {ids}
+1178	Pasos del subagente
+1179	Detenido
+1180	Sin registro
+1181	Rebobinar hasta aquí
+1182	La conversación aún no se ha guardado; rebobina después de la primera respuesta
+1183	Todavía generando; rebobina cuando termine
+1184	Comprobando qué archivos cambiaron después…
+1185	Se revirtieron los cambios en {n} archivos; la conversación vuelve a antes de este mensaje
+1186	La conversación vuelve a antes de este mensaje; la original se conserva
+1187	Se revirtieron los cambios en {n} archivos
+1188	Se revertirán los cambios de Claude en {n} archivos hechos después de este punto
+1189	Desde entonces Claude no ha editado archivos con sus herramientas de edición.
+1190	No hay instantáneas de archivos después de este punto (los mensajes anteriores a esta versión no son compatibles); solo se puede rebobinar la conversación.
+1191	Rebobinar a antes de este mensaje
+1192	Solo se revierten los cambios hechos con las herramientas de edición (Edit / Write); los archivos cambiados con comandos y los paquetes instalados no se restauran.
+1193	Revertir el código y volver a preguntar desde aquí
+1194	Volver a preguntar desde aquí
+1195	Revertir solo el código
+1196	Volver a preguntar abre una conversación nueva; la original se conserva.
+1197	rebobinado
+1198	Se agotó el tiempo del rebobinado
+1199	Esta conversación todavía está generando; rebobina cuando termine.
+1200	No hay instantáneas de archivos después de este mensaje, así que los cambios no se pueden revertir.
+1201	Comandos:
+1202	La firma del índice no es válida; rechazado
+1203	El índice no está firmado; rechazado
+1204	{cmd} salió con el código {code}: {err}
+1205	Informar en GitHub
+1206	«Informar en GitHub» abre una nueva incidencia con tu dispositivo, la versión de Android y el resultado del autodiagnóstico ya rellenados; solo tienes que describir qué pasó. Requiere cuenta de GitHub. No incluye registros ni conversaciones.
+1207	Se abrirá una nueva incidencia en GitHub con lo siguiente ya rellenado. Puedes editarlo antes de enviarla:
+1208	Qué pasó
+1209	Qué hiciste, qué esperabas y qué pasó en realidad. Puedes arrastrar capturas aquí.
+1210	Pasos para reproducirlo
+1211	Código
+1212	Abrir en el navegador
+1213	No se puede abrir la vista previa
+1214	La vista previa muestra el archivo tal como está guardado. ¿Guardar primero tus cambios?
+1215	Novedades
+1216	Entendido
+1217	No se pudo obtener el índice del repositorio glibc: {msg}
+1218	No se indicó ningún archivo
+1219	No se encontró el archivo: {p}
+1220	Elige un archivo (el programa o un archivo comprimido)
+1221	Error al descomprimir: {msg}
+1222	Los paquetes .{ext} aún no son compatibles: usa el programa o un .tar.gz / .zip
+1223	Archivo no reconocido: no es un programa (ELF), un script ni un archivo comprimido compatible
+1224	Se eliminó un enlace simbólico que apuntaba fuera del paquete: {p}
+1225	Está vacío
+1226	{p} requiere GLIBC_{need} y este dispositivo tiene {have}; puede que no funcione
+1227	Es un programa {arch}; no puede ejecutarse en este dispositivo (arm64)
+1228	Intérprete {i} no reconocido
+1229	Los programas musl aún no son compatibles: busca una versión estática o glibc del mismo programa
+1230	No se encontró ningún programa ejecutable (ELF arm64 o script)
+1231	Descargando {pkg} ({mb} MB)
+1232	Error al descargar {pkg}: {msg}
+1233	{pkg} no superó la suma de comprobación
+1234	{pkg} tiene una estructura de paquete inesperada
+1235	Error al desempaquetar {pkg}: {msg}
+1236	El análisis caducó; vuelve a importarlo
+1237	El ID solo admite minúsculas, dígitos y -
+1238	Ya existe un componente personalizado llamado {id}; elige otro ID o desinstálalo primero
+1239	Nombre de comando no válido: {c}
+1240	Nombre de comando duplicado: {c}
+1241	El kit de herramientas ya tiene un comando {c}; elige otro nombre
+1242	El comando {c} lo usa otro componente personalizado
+1243	Elige al menos un comando
+1244	patchelf falló con {p}: {msg}
+1245	Programa Linux (glibc)
+1246	Programa nativo de Android
+1247	Programa estático
+1248	Script
+1249	No se puede ejecutar
+1250	falta el lanzador
+1251	{n} bibliotecas añadidas
+1252	Aún faltan estas bibliotecas, puede que no funcione: {libs}
+1253	Subiendo y analizando {name}…
+1254	Analizando…
+1255	El kit ya tiene un comando con este nombre; cámbialo
+1256	Otro componente personalizado usa este nombre
+1257	Cámbiale el nombre (solo letras, dígitos y ._+-)
+1258	Comando
+1259	Usar GPU
+1260	Reescribe el intérprete del programa en vez de iniciarlo con el cargador. Úsalo si el programa busca sus datos según su propia ubicación
+1261	Faltan: {libs}
+1262	Se descargarán estas bibliotecas del repositorio glibc de Termux (unos {size}): {libs}
+1263	No se encontró origen para estas bibliotecas; los programas que las usan pueden fallar: {libs}
+1264	{src}: {n} archivos, {size}
+1265	Nombre
+1266	Descripción
+1267	Opcional: qué hace (Claude lo verá)
+1268	Comandos que añadir
+1269	Tú respondes del origen del programa: puede leer y escribir todos los archivos de esta app.
+1270	Descargando bibliotecas e instalando…
+1271	Instalando…
+1272	Instalado, pero aún faltan {n} bibliotecas
+1273	Instalado. Ya pueden usarlo Claude y la terminal
+1274	¿Desinstalar el componente personalizado {name}? Se borrarán el programa importado, las bibliotecas añadidas y sus comandos.
+1275	(sin salida, código de salida {c})
+1276	Componentes personalizados
+1277	¿No está en el mercado? Importa tú mismo un programa Linux arm64: un programa suelto o un .tar.gz / .zip. Se descargan las bibliotecas que faltan y se crean los comandos, listos para Claude y la terminal.
+1278	Importar programa…
+1279	Analizar
+1280	O escribe una ruta del dispositivo, p. ej. /sdcard/Download/foo.tar.gz
+1281	desde {src}
+1282	Estadísticas de uso
+1283	Informe mensual
+1284	conversaciones
+1285	Un mes con Claude
+1286	{p} frente al mes pasado
+1287	Días activos
+1288	{n} / {d} días
+1289	Racha más larga
+1290	{n} días
+1291	Día más activo · {n}
+1292	Día más activo
+1293	Llamadas a herramientas
+1294	{n}
+1295	Claude escribió
+1296	Por día
+1297	Hora del día
+1298	Más a las {h}:00
+1299	Modelos más usados
+1300	{t} respuestas · {i} tokens leídos
+1301	Ayer
+1302	Esta semana
+1303	La semana pasada
+1304	Este mes
+1305	El mes pasado
+1306	{p}: {n}
+1307	El registro está en pausa.
+1308	Registro en vivo desde el {d}.
+1309	Los datos anteriores se reconstruyeron a partir de sesiones pasadas (las sesiones borradas no se recuperan).
+1310	Solo se guardan recuentos y uso, nunca el contenido; los datos se quedan en este dispositivo.
+1311	Reconstruyendo desde sesiones pasadas…
+1312	Listo: {f} archivos de sesión, {n} mensajes.
+1313	¿Reconstruir las estadísticas anteriores al {d} con las sesiones que quedan? Las borradas no cuentan, así que las cifras pueden bajar.
+1314	¿Borrar las estadísticas de {m}?
+1315	¿Borrar todas las estadísticas? El registro empezará de nuevo ahora.
+1316	Mes anterior
+1317	Mes siguiente
+1318	Guardar imagen
+1319	Compartir
+1320	Gestionar datos
+1321	Registrar estadísticas
+1322	Reconstruir desde sesiones
+1323	Borrar este mes
+1324	Borrar todo

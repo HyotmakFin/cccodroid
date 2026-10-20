@@ -136,7 +136,11 @@ sh scripts/build.sh          # javac → d8 → aapt2 → 签名，产出 dist/c
 node devkit/devkit.mjs build --target cc.codroid   # 构建开发工具包（也可由 CI 完成）
 ```
 
-`build.sh` 目前在作者的安卓设备上运行，依赖设备上的 JDK、d8、aapt2、GCC 与签名工具。路径写在脚本开头，在别的环境构建需要相应调整。
+**不用自己配环境**：每个 PR、每次推到 main，GitHub Actions 都会构建一个 APK，在那次运行的 Artifacts 里下载（见 [.github/workflows/apk.yml](.github/workflows/apk.yml)）。推到 main 的用正式钥匙签，能直接覆盖安装；别人仓库来的 PR 用临时测试钥匙签，要先卸载正式版才能装，建议装在测试机上。
+
+想在自己电脑上构建：装好 JDK 17、Node.js、Android SDK（build-tools、platform）和 NDK，按 `build.sh` 开头的说明设好几个环境变量即可，`apk.yml` 就是一份现成的示例。脚本默认的工具路径是作者的安卓平板。
+
+正式版的签名证书 SHA-256：`B7:03:61:59:5D:D3:D8:D7:04:DD:21:0E:D5:96:FC:57:70:14:CE:22:72:88:4F:B6:98:0B:F6:96:23:33:8F:E0`。
 
 开发工具包由 GitHub Actions 构建并发布：推 `devkit-YYYY.MM.DD` 这样的 tag 即可（见 [.github/workflows/devkit.yml](.github/workflows/devkit.yml)）。
 App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt) 决定；同一版的大小与 SHA-256 摘在 [devkit-pin.json](devkit-pin.json) 里随 APK 走，首装（GitHub、cccodroid.net 镜像或本地文件三选一）和认本地文件都以它为准。换版本时改完前者跑 `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`，两个文件一起提交，`build.sh` 会核对它们是同一版。
@@ -146,7 +150,8 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | 目录 | 内容 |
 |---|---|
 | `android/` | Java 外壳、Manifest、资源、终端小工具（`assets/bin/`）、原生小库（`native/`） |
-| `gateway/` | 网关与界面（源头目前在作者的另一个仓库，由 `scripts/sync-shared.sh` 同步） |
+| `gateway/` | 网关（`server.mjs`，Node.js）与界面（`web/`，原生 JS，无构建步骤） |
+| `i18n/` | 界面译文：各语言的 txt 与生成、检查脚本，见 [i18n/README.md](i18n/README.md) |
 | `devkit/` | 开发工具包构建脚本与清单 |
 | `docs/design-philosophy.zh-CN.md` | 项目为什么存在、背后的原则 |
 | `docs/large-screen.md` | 大屏布局（平板、折叠屏）与代码位置（英文） |

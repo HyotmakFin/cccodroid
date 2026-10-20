@@ -1,0 +1,72 @@
+# 在 GitHub 上构建 APK：每个 PR、每次推到 main 都出一个包（在这次运行的 Artifacts 里下载）。
+# 有仓库 secret CCCODROID_RELEASE_KEY（钥匙 JSON 的 base64）时用正式钥匙签，能直接覆盖安装正式版；
+# 别人仓库来的 PR 拿不到 secret，就用临时生成的测试钥匙签 —— 能装，但要先卸载正式版（数据会丢），建议装在测试机上。
+name: apk
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**.md", "devkit/**", "devkit-*", ".github/workflows/devkit.yml"]
+  pull_request:
+    paths-ignore: ["docs/**", "**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_TOOLS: "35.0.0"
+      PLATFORM: "android-35"
+      NDK: "27.2.12479018"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Android SDK / NDK
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "build-tools;$BUILD_TOOLS" "platforms;$PLATFORM" "ndk;$NDK" > /dev/null
+
+      - name: 签名钥匙
+        env:
+          RELEASE_KEY: ${{ secrets.CCCODROID_RELEASE_KEY }}
+        run: |
+          if [ -n "$RELEASE_KEY" ]; then
+            printf '%s' "$RELEASE_KEY" | base64 -d > "$RUNNER_TEMP/key.json"
+            echo "KEY=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
+            echo "SIGNED=release" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -keystore "$RUNNER_TEMP/test.jks" -storepass android -keypass android \
+              -alias test -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=cccodroid test build" 2> /dev/null
+            echo "KS=$RUNNER_TEMP/test.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=test" >> "$GITHUB_ENV"
+          fi
+
+      - name: 构建
+        run: |
+          BT="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS"
+          export CC_ANDROID="$ANDROID_SDK_ROOT/ndk/$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+          export JAVAC=javac D8="$BT/d8" AAPT2="$BT/aapt2" ANDROID_JAR="$ANDROID_SDK_ROOT/platforms/$PLATFORM/android.jar"
+          export SIGN=apksigner APKSIGNER="$BT/apksigner" ZIPALIGN="$BT/zipalign"
+          sh scripts/build.sh
+          rm -f "$RUNNER_TEMP/key.json"
+          # 证书指纹：正式钥匙应当是 README 里写的那一个
+          "$BT/apksigner" verify --print-certs dist/cccodroid.apk | grep -i "SHA-256"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cccodroid-${{ env.SIGNED }}-${{ env.SHORT_SHA }}
+          path: dist/cccodroid.apk
+          retention-days: 30
