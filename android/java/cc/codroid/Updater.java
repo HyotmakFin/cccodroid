@@ -349,7 +349,7 @@ final class Updater {
         // 版本号：官方 → cccodroid.net 镜像 → npm 镜像的 dist-tags（Anthropic 在 npm 上用同名的 stable / latest 标签）。
         // 这里只是「有没有新版」；真正下载时 install-claude.mjs 会按官方清单的 sha256 或 npm 签名校验
         String v = null, why = "";
-        String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + channel(), "https://cccodroid.net/claude-code/" + channel(),
+        String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + channel(), "https://cccodroid.net/claude-code/" + channel(), "https://dl.cccodroid.net/claude-code/" + channel(),
             "https://registry.npmmirror.com/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags",
             "https://registry.npmjs.org/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags" };
         for (String u : urls) {

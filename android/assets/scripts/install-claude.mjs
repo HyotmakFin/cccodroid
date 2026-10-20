@@ -20,7 +20,9 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 
 const OFFICIAL = process.env.CCODROID_CLAUDE_OFFICIAL || "https://downloads.claude.ai/claude-code-releases";   // 两个变量只给测试换地址用
-const MIRROR = process.env.CCODROID_CLAUDE_MIRROR || "https://cccodroid.net/claude-code";
+// 清单镜像两条线：cccodroid.net 走 Cloudflare，dl.cccodroid.net 直连服务器（国内有的网络只通其中一条）
+const MIRRORS = process.env.CCODROID_CLAUDE_MIRROR ? [["cccodroid.net 镜像", process.env.CCODROID_CLAUDE_MIRROR]]
+  : [["cccodroid.net 镜像", "https://cccodroid.net/claude-code"], ["dl.cccodroid.net 镜像", "https://dl.cccodroid.net/claude-code"]];
 const PKG = "@anthropic-ai/claude-code-linux-arm64", PLATFORM = "linux-arm64";
 const REGISTRIES = [
   ["npmmirror", "https://registry.npmmirror.com"],
@@ -93,10 +95,13 @@ function verifyDetached(data, sigArmored, keys) {
 }
 
 
-/** 小文件：curl 拿到内存，失败返回 null（不抛） */
+/** 小文件：curl 拿到内存，失败再试一次，还不行返回 null（不抛） */
 function small(url, t = 20) {
-  const r = spawnSync(CURL, ["-fsSL", "--connect-timeout", "10", "--max-time", String(t), url], { maxBuffer: 32 << 20 });
-  return r.status === 0 ? r.stdout : null;
+  for (let i = 0; i < 2; i++) {
+    const r = spawnSync(CURL, ["-fsSL", "--connect-timeout", "10", "--max-time", String(t), url], { maxBuffer: 32 << 20 });
+    if (r.status === 0) return r.stdout;
+  }
+  return null;
 }
 const jsonOf = (b) => { try { return b && JSON.parse(b.toString("utf8")); } catch { return null; } };
 const isVer = (v) => /^\d+\.\d+\.\d+/.test(v || "");
@@ -123,7 +128,7 @@ let VER = isVer(CHANNEL) ? CHANNEL : "";
 if (!VER) {
   for (const [name, get] of [
     ["官方", () => small(`${OFFICIAL}/${CHANNEL}`)],
-    ["cccodroid.net", () => small(`${MIRROR}/${CHANNEL}`)],
+    ...MIRRORS.map(([n, u]) => [n, () => small(`${u}/${CHANNEL}`)]),
     ...REGISTRIES.map(([n, u]) => [n, () => { const j = jsonOf(small(`${u}/-/package/${PKG.replace("/", "%2f")}/dist-tags`)); return j && j[CHANNEL] ? Buffer.from(j[CHANNEL]) : null; }]),
   ]) {
     const v = (get() || "").toString().trim();
@@ -135,13 +140,13 @@ if (!VER) {
 
 // ── 2. 官方清单（信任锚 ①）──────────────────────────────────
 function officialManifest(ver, quiet) {
-  for (const [name, base, mustSign] of [["官方", OFFICIAL, false], ["cccodroid.net 镜像", MIRROR, true]]) {
+  for (const [name, base, mustSign] of [["官方", OFFICIAL, false], ...MIRRORS.map(([n, u]) => [n, u, true])]) {
     const m = small(`${base}/${ver}/manifest.json`);
     if (!m) { quiet || say(`  ${name}清单取不到`); continue; }
     const sig = small(`${base}/${ver}/manifest.json.sig`);
     let signed = false;
     if (sig) { try { verifyDetached(m, sig.toString("utf8"), ANTHROPIC_KEYS); signed = true; } catch (e) { say(`  ${name}清单签名不对（${e.message}），不用`); continue; } }
-    if (mustSign && !signed) { quiet || say(`  ${name}清单没有签名，不用`); continue; }
+    if (mustSign && !signed) { quiet || say(`  ${name}的签名文件取不到，不用`); continue; }
     const j = jsonOf(m), p = j && j.platforms && j.platforms[PLATFORM];
     if (!j || j.version !== ver || !p || !/^[a-f0-9]{64}$/.test(p.checksum)) { say(`  ${name}清单内容不对，不用`); continue; }
     return { sum: p.checksum, size: p.size, anchor: signed ? `${name}清单（Anthropic 签名已验）` : `${name}清单（HTTPS）` };
@@ -201,7 +206,10 @@ else {
   });
 
   let done = false;
-  for (let round = 0; round < 2 && !done; round++) for (const s of srcs) {
+  for (let round = 0; round < 2 && !done; round++) {
+   // 第一轮全断了多半是网络整个掉了（切后台、换网络）：等一会儿再来一轮
+   if (round) { say("所有来源都没下成功，15 秒后再试一轮…"); await new Promise((ok) => setTimeout(ok, 15000)); }
+   for (const s of srcs) {
     let url, file, total;
     if (s.kind === "raw") { url = s.url; file = raw; total = SIZE; tag(raw, SUM); }
     else {
@@ -233,6 +241,7 @@ else {
     else { fs.writeFileSync(path.join(OUT, ".npm-only"), VER + "\n"); say("✓ npm 签名与 sha512 一致（官方清单以后连得上时会自动补核）"); }
     try { fs.writeFileSync(lastFile, s.id); } catch {}
     done = true; break;
+   }
   }
   if (!done) die("所有来源都没下成功：检查网络后重试（已下的部分会保留，下次接着续传）");
 }
