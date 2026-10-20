@@ -42,6 +42,8 @@ Only two devices have been tested by hand: a **Lenovo TB320FC** (ZUXOS, Android 
 
 If something breaks on your device, go to **Settings → Troubleshooting → Report on GitHub**. Your device, Android version and self-test results are filled in for you; you only describe what went wrong. No GitHub account? Use **I'm stuck · bundle diagnostics** next to it.
 
+If everything works, please tell us too: open a GitHub issue with the [Device report](https://github.com/greyoak111/cccodroid/issues/new?template=device.yml) template, or post in [Discussions](https://github.com/greyoak111/cccodroid/discussions). The more devices are tested, the more reliable this section becomes.
+
 ### On every device
 
 - **Android version**: the minimum is Android 8.0; only 14 and 15 have actually been tested.

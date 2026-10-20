@@ -1,0 +1,53 @@
+name: 机型报告 / Device report
+description: 告诉我们 cccodroid 在你的机型上用得怎么样，一切正常也欢迎报。Tell us how cccodroid runs on your device, even if everything works.
+labels: [device-report]
+title: "[机型] "
+body:
+  - type: input
+    id: device
+    attributes:
+      label: 机型 / Device
+      placeholder: 例如 Lenovo Legion Tab Y700 (TB320FC)
+    validations:
+      required: true
+  - type: input
+    id: rom
+    attributes:
+      label: 系统 / ROM 与安卓版本 / ROM and Android version
+      placeholder: 例如 ZUI 17 · Android 15
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: cccodroid 版本 / Version
+    validations:
+      required: true
+  - type: dropdown
+    id: overall
+    attributes:
+      label: 总体 / Overall
+      options:
+        - 一切正常 / Everything works
+        - 大体能用，有小问题 / Mostly works, minor issues
+        - 有功能用不了 / Some features don't work
+        - 装不上或开不起来 / Can't install or start
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: 试过并且能用的 / Tried and working
+      options:
+        - label: 首次安装、下载工具包 / First install and toolchain download
+        - label: 登录或填 Key 后正常对话 / Chatting after login or API key
+        - label: 应用内终端 / In-app terminal
+        - label: 后台运行不被杀 / Keeps running in the background
+        - label: Shizuku（priv）
+        - label: 可选组件 / Optional components
+        - label: 分屏、横屏或大屏布局 / Split screen, landscape or large-screen layout
+  - type: textarea
+    id: notes
+    attributes:
+      label: 问题或补充 / Problems or notes
+      description: 哪里不行、需要什么特别设置（比如厂商的后台限制、省电策略）。What failed, and any special settings your ROM needed (background limits, battery saver…).

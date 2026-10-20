@@ -1211,3 +1211,16 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .us-mhead .icon-btn { font-size:20px; width:32px; height:32px; }
 .us-mhead .icon-btn:disabled { opacity:.3; }
 .us-card { display:block; width:100%; max-width:480px; margin:0 auto; height:auto; border-radius:14px; box-shadow:0 2px 10px var(--shadow); }
+
+/* 交流群与参与（帮助页末尾、更新说明卡片底部） */
+.cm-box{margin:6px 0 10px}
+.cm-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cm-k{color:var(--fg2);font-size:14px}
+.cm-num{border:1px solid var(--line);background:var(--bg3);color:var(--fg);font:inherit;font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.5px;padding:4px 12px;border-radius:9px;cursor:pointer}
+.cm-num:active{background:var(--accent);color:#fff}
+.cm-qr{display:block;width:100%;max-width:260px;margin:10px 0 4px;border-radius:12px}
+.cm-qr.hidden{display:none}
+.cm-box p{margin:8px 0;font-size:14px;line-height:1.6}
+.cm-links{margin-top:8px;font-size:13.5px;color:var(--fg3)}
+.cm-links a{color:var(--accent);text-decoration:none}
+.cm-box.compact .cm-links{margin-top:6px}

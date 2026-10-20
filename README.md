@@ -1,6 +1,6 @@
 # cccodroid
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md) · [Discussions](https://github.com/greyoak111/cccodroid/discussions) · [Contributing](CONTRIBUTING.md)
 
 **A development launcher that runs Claude Code on Android phones.** No root, no custom ROM, no chroot / proot / VM.
 
@@ -8,7 +8,7 @@ Android already runs on a Linux kernel. Once the tools run natively on that kern
 write code, compile C/C++, run Python / Node, build APKs and push with git — all on the phone.
 
 > cccodroid is a third-party project and is not affiliated with Anthropic. It runs the **official, unmodified Claude Code**:
-> downloaded from Anthropic's official channel at install time, verified against the official sha256 manifest, never modified.
+> downloaded from Anthropic's official channel at install time (or, when that is unreachable, the identical file Anthropic publishes on npm, via a mirror), verified against the official sha256 manifest, never modified.
 
 ## Why
 
@@ -91,6 +91,15 @@ Versions with a suffix (such as `v0.2.0-rc1`) are pre-releases. In-app updates o
 RedMagic / ZTE: App info → App battery usage → Battery optimization → **Background running: Allow**, **Auto-start: Allow**.
 
 **Offline install**: put `devkit-cc.codroid.tar.gz` in `/sdcard/cccodroid/`; the first launch uses it instead of downloading.
+
+**Versions**: v0.3.0 is the first stable release. 0.3.x updates only fix problems; new features go into the next version series.
+
+## Community and contributing
+
+- **Questions, ideas, device reports**: [GitHub Discussions](https://github.com/greyoak111/cccodroid/discussions), in English or Chinese. There is also a Chinese-speaking QQ group, 1062538743.
+- **Bugs**: in the app, tap Settings → Report on GitHub; your device and self-test results are filled in for you.
+
+**cccodroid is maintained by one person and badly needs help.** Device reports, translation fixes, component recipes, docs and code are all welcome, and you can help without writing code. See the [contributing guide](CONTRIBUTING.md).
 
 ## Architecture
 

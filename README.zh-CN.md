@@ -1,6 +1,6 @@
 # cccodroid
 
-[English](README.md) · **简体中文**
+[English](README.md) · **简体中文** · [QQ 交流群 1062538743](#交流与参与) · [讨论区](https://github.com/greyoak111/cccodroid/discussions) · [参与开发](CONTRIBUTING.zh-CN.md)
 
 **在安卓手机上运行 Claude Code 的开发启动台。** 不 root、不换系统、不走 chroot / proot / 虚拟机。
 
@@ -8,7 +8,7 @@
 写代码、编译 C/C++、跑 Python / Node、打 APK、用 git 推送，全部在手机上完成。
 
 > cccodroid 是第三方项目，与 Anthropic 无关。它运行的是 **官方原版 Claude Code**：
-> 安装时从 Anthropic 官方渠道下载，按官方清单校验 sha256，不做任何修改。
+> 安装时从 Anthropic 官方渠道下载（官方连不上时，改从 npm 镜像取 Anthropic 发布的同一份文件），按官方清单校验 sha256，不做任何修改。
 
 
 ## 为什么
@@ -92,6 +92,18 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 **后台运行：允许**、**自启动：允许**。
 
 **离线安装**：把 `devkit-cc.codroid.tar.gz` 放到 `/sdcard/cccodroid/` 下，首次启动会直接用它，不再下载。
+
+**版本**：v0.3.0 是第一个稳定版。0.3.x 的更新只修问题，不加新功能；新功能放进下一个版本系列。
+
+## 交流与参与
+
+- **QQ 交流群：1062538743**（扫码见下）。用起来的问题、想法、机型适配情况都可以来聊。
+- **报 bug**：在应用里点 设置 → 到 GitHub 反馈，机型和自检结果会自动填好。
+- **讨论区**：[GitHub Discussions](https://github.com/greyoak111/cccodroid/discussions)，想法和提问都欢迎。
+
+**这个项目目前只有作者一个人在维护，非常需要帮手。** 机型报告、译文校对、组件配方、文档、代码，不会写代码也能帮上忙。怎么参与见 [贡献指南](CONTRIBUTING.zh-CN.md)。
+
+<img src="docs/assets/qq-group.jpg" alt="QQ 交流群二维码，群号 1062538743" width="220">
 
 ## 架构
 

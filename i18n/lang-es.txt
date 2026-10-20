@@ -1322,3 +1322,17 @@
 1322	Reconstruir desde sesiones
 1323	Borrar este mes
 1324	Borrar todo
+1325	Grupo de QQ
+1326	Toca para copiar el número
+1327	Código QR
+1328	Ocultar código QR
+1329	Código QR del grupo de QQ
+1330	¿Dudas o ideas? Pásate a charlar. Para errores, usa Ajustes → Informar en GitHub: el dispositivo y el autodiagnóstico se rellenan solos y el informe no se pierde en el chat.
+1331	cccodroid lo mantiene una sola persona y necesita ayuda: correcciones de traducción, informes de dispositivos, recetas de componentes, documentación y código son bienvenidos, y puedes ayudar sin programar. La guía de contribución del repositorio explica cómo.
+1332	Debates
+1333	Informar de un problema
+1334	Contribuir
+1335	Número {n} copiado
+1336	Comunidad y cómo participar
+1337	Comunidad y comentarios
+1338	No se pudieron restaurar {n} archivos

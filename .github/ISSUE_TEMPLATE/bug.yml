@@ -1,0 +1,34 @@
+name: 问题反馈 / Bug report
+description: "最方便的是在应用里点「设置 → 到 GitHub 反馈」，机型和自检结果会自动填好。Easiest: Settings → Report on GitHub in the app."
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        在应用里点 **设置 → 到 GitHub 反馈** 会自动填好机型、系统版本、自检结果，比在这里手填省事。
+        Tapping **Settings → Report on GitHub** in the app fills in your device and self-test results for you.
+  - type: input
+    id: device
+    attributes:
+      label: 机型与系统 / Device and Android version
+      placeholder: 例如 Xiaomi 14 · HyperOS 2 · Android 15
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: cccodroid 版本 / Version
+      placeholder: 设置 → 更新 里能看到 / see Settings → Updates
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 遇到了什么 / What happened
+      description: 做了什么、想要什么结果、实际怎样。截图可以直接拖进来。What you did, what you expected, what you got. Screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 怎么复现 / How to reproduce

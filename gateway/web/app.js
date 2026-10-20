@@ -5155,6 +5155,36 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
+  // ── 交流群与参与：帮助页最后一节、更新说明卡片底部共用。群号为主，二维码点开才显示 ──
+  const COMMUNITY = { qq: "1062538743", repo: "https://github.com/greyoak111/cccodroid" };
+  function communityHtml(compact) {
+    const R = COMMUNITY.repo, zh = isZh();
+    return `<div class="cm-box${compact ? " compact" : ""}">
+      <div class="cm-row"><span class="cm-k">${esc(t("QQ 交流群"))}</span>
+        <button type="button" class="cm-num" data-cm="copy" title="${esc(t("点一下复制群号"))}">${COMMUNITY.qq}</button>
+        <button type="button" class="btn ghost sm" data-cm="qr">${esc(t("二维码"))}</button></div>
+      <img class="cm-qr hidden" src="/qq-group.jpg" alt="${esc(t("QQ 交流群二维码"))}" loading="lazy">
+      ${compact ? "" : `<p>${esc(t("用起来有问题、有想法，欢迎进群聊。报 bug 最好走「设置 → 到 GitHub 反馈」，机型和自检结果会自动带上，群里消息一多就沉了。"))}</p>
+      <p>${esc(t("这个项目目前只有作者一个人在维护，非常需要帮手：译文校对、机型适配报告、组件配方、文档、代码都欢迎，不会写代码也能帮上忙。怎么参与见仓库里的贡献指南。"))}</p>`}
+      <div class="cm-links"><a href="${R}/discussions">${esc(t("讨论区"))}</a> · <a href="${R}/issues">${esc(t("反馈问题"))}</a> · <a href="${R}/blob/main/${zh ? "CONTRIBUTING.zh-CN.md" : "CONTRIBUTING.md"}">${esc(t("参与开发"))}</a></div>
+    </div>`;
+  }
+  function communityBind(root) {
+    root.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-cm]"), a = e.target.closest(".cm-links a");
+      if (b && b.dataset.cm === "copy") {
+        navigator.clipboard?.writeText(COMMUNITY.qq).then(() => toast(t("已复制群号 {n}", { n: COMMUNITY.qq })), () => toast(COMMUNITY.qq));
+      } else if (b && b.dataset.cm === "qr") {
+        const img = b.closest(".cm-box").querySelector(".cm-qr");
+        img.classList.toggle("hidden");
+        b.textContent = img.classList.contains("hidden") ? t("二维码") : t("收起二维码");
+      } else if (a) {
+        e.preventDefault();
+        if (window.CCApp && CCApp.openUrl) CCApp.openUrl(a.href); else window.open(a.href, "_blank", "noopener");
+      }
+    });
+  }
+
   // ── 帮助 ── 文档是 web/help/zh.md、en.md（其他语言先用英文）。第一次点开才取、才渲染；
   // 「## 」小节做成目录，点了在侧栏里滚到那一节；每节标题旁一个 ↑ 回目录。换了界面语言下次点开重新取。
   let helpLang = "";
@@ -5167,6 +5197,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const r = await fetch("/help/" + lang + ".md", { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
       setHtml(body, renderMd(await r.text()));
+      // 最后一节：交流群与参与（不写在 md 里：群号、二维码、链接要能点）
+      body.insertAdjacentHTML("beforeend", `<h3>${esc(t("交流群与参与"))}</h3>` + communityHtml(false));
+      if (!body.dataset.cm) { body.dataset.cm = "1"; communityBind(body); }
       helpLang = lang;
     } catch (e) { body.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
     toc.textContent = "";
@@ -6913,7 +6946,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   };
   if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
   window.__cc = { view, srv, state, send, abort, openSession, newConversation,
-    openGit, openViewer, openFiles, openDrawer, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };
+    openGit, openViewer, openFiles, openDrawer, showWhatsNew, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };
 
   // ── 启动 ──────────────────────────────────────────────────────────
   (async function boot() {
@@ -6947,9 +6980,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     el.id = "whatsnew";
     el.innerHTML = `<div class="wn-card" role="dialog" aria-modal="true" aria-labelledby="wn-title">
       <div class="wn-head" id="wn-title">${esc(t("更新说明"))}</div>
-      <div class="wn-body">${list.map((x) => `<section><div class="wn-ver">v${esc(x.v)}</div><div class="bubble wn-md">${renderMd(x.md)}</div></section>`).join("")}</div>
+      <div class="wn-body">${list.map((x) => `<section><div class="wn-ver">v${esc(x.v)}</div><div class="bubble wn-md">${renderMd(x.md)}</div></section>`).join("")}
+        <section class="wn-cm"><div class="wn-ver">${esc(t("交流与反馈"))}</div>${communityHtml(true)}</section></div>
       <div class="wn-foot"><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
     const close = () => el.remove();
+    communityBind(el);
     el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-act=ok]")) close(); });
     el.querySelectorAll(".wn-md a[href]").forEach((a) => a.addEventListener("click", (e) => {
       const u = a.getAttribute("href") || "";
