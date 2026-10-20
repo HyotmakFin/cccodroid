@@ -165,6 +165,7 @@ Layout:
 | `docs/large-screen.md` | Large-screen layout (tablets, foldables) and where its code lives |
 | `docs/known-issues.md` | Known issues and unresolved risks, plus test actions that create fake bugs |
 | `docs/download-sources.md` | Every download chain: sources, trust anchors, server mirrors, how to check and maintain them |
+| `docs/operit2-on-device-build.md` | Case study: building Operit2 (Flutter + Rust) from source into an APK on a phone, with every gap and fix |
 | `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → light / dark PNG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |
 

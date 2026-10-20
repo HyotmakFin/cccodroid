@@ -169,6 +169,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `docs/large-screen.md` | 大屏布局（平板、折叠屏）与代码位置（英文） |
 | `docs/known-issues.zh-CN.md` | 已知问题与未排除的隐患，以及会制造假问题的测试动作 |
 | `docs/download-sources.zh-CN.md` | 各条下载链路：来源顺序、信任锚、服务器镜像、检查与维护方法 |
+| `docs/operit2-on-device-build.zh-CN.md` | 案例：在手机上从源码构建 Operit2（Flutter + Rust）APK，含完整踩坑与补齐记录 |
 | `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 浅色 / 深色 PNG） |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
 
