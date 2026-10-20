@@ -721,17 +721,25 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (s.textEl) s.list.appendChild(s.textEl);       // 汇报总在最后
         return b;
       },
+      // 新版 claude 跑得久的普通命令（Bash 等）也会发 task_progress / task_notification，
+      // id 是那张工具卡自己的：只有子代理卡才有「过程」可放，别的卡只更新状态，不挂空的「子代理过程」
       subText(text) {
+        if (!isAgent) return;
         const s = subArea();
         if (!s.textEl) { s.textEl = document.createElement("div"); s.textEl.className = "ts-text md"; }
         s.list.appendChild(s.textEl);
         setHtml(s.textEl, renderMd(String(text || "")));
       },
-      subProgress(desc) { if (desc) subArea().now.textContent = desc; },
+      subProgress(desc) { if (desc && isAgent) subArea().now.textContent = desc; },
       subDone(status) {
-        const s = subArea();
-        s.done = true; s.now.textContent = "";
         const ok = status === "completed";
+        if (!isAgent) {
+          if (result && result.ok === ok) return;          // 工具结果已经说清楚了
+          if (!result && ok) return;                        // 结果马上就到，交给 result()
+        } else {
+          const s = subArea();
+          s.done = true; s.now.textContent = "";
+        }
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : status === "failed" ? t("失败") : t("已停止");
       },
