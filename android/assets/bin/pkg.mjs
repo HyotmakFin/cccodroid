@@ -35,12 +35,22 @@ const ENV = { ...process.env, PATH: [path.join(PREFIX, "bin"), process.env.PATH]
 // 和工具包用同一组仓库（devkit/devkit.json 的 repos）
 const REPOS = [
   { name: "main", base: "https://packages-cf.termux.dev/apt/termux-main/", dist: "stable", component: "main", arch: "aarch64",
-    mirrors: ["https://packages.termux.dev/apt/termux-main/", "https://grimler.se/termux/termux-main/"] },
+    mirrors: ["https://packages.termux.dev/apt/termux-main/", "https://grimler.se/termux/termux-main/",
+      "https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main/", "https://mirrors.ustc.edu.cn/termux/apt/termux-main/",
+      "https://mirrors.bfsu.edu.cn/termux/apt/termux-main/", "https://mirror.nju.edu.cn/termux/apt/termux-main/"] },
   { name: "glibc", base: "https://packages-cf.termux.dev/apt/termux-glibc/", dist: "glibc", component: "stable", arch: "aarch64",
-    mirrors: ["https://packages.termux.dev/apt/termux-glibc/"] },
+    mirrors: ["https://packages.termux.dev/apt/termux-glibc/"] },          // 国内镜像都没同步 glibc 仓库（2026-10-20 查过清华/中科大/北外/南大）
   { name: "x11", base: "https://packages-cf.termux.dev/apt/termux-x11/", dist: "x11", component: "main", arch: "aarch64",
-    mirrors: ["https://packages.termux.dev/apt/termux-x11/"] },
+    mirrors: ["https://packages.termux.dev/apt/termux-x11/",
+      "https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-x11/", "https://mirrors.ustc.edu.cn/termux/apt/termux-x11/",
+      "https://mirrors.bfsu.edu.cn/termux/apt/termux-x11/", "https://mirror.nju.edu.cn/termux/apt/termux-x11/"] },
 ];
+// 仓库索引的签名钥：Termux 自动构建钥（termux-keyring 的 termux-autobuilds.gpg；与 keyserver.ubuntu.com、keys.openpgp.org 上同指纹的一致）。
+// Release 验过签名，Packages.gz 按 Release 里的 sha256 核，每个 .deb 再按 Packages 里的 sha256 核 —— 所以从哪个镜像下都一样可信。
+// Termux 自己的域名（packages*.termux.dev）拿不到签名文件时照旧只靠 HTTPS；别的镜像没有有效签名一律不用
+const TERMUX_KEYS = {"CC72CF8BA7DBFA0182877D045A897D96E57CF20C":{"kty":"RSA","n":"yBh7FtnoP4xlWnvU-AUwXXYxgv7waUkxQ-4iE-pv_Ro0Lw7siRcYrJbt-VFVEC8se51FV2HsqgAVCfq3JUtiV82QBJa_h7ffLL5EDdRGlgBG16EtjXQ6nMG1l960a8fQYrP762_EFBO-HjQOknYiGzu7dGW8-nxYiNfRAX-fO8yGljur_JWJq-Ud6y6j2anoHlJ-vGuaKBdCoILPldL_nE3-mkyUzgvVZe3QPHvDEwbMDgCINxJd4U6weRn-IGXSfp4bWk4sOjTbPWFRpqzBpfVpS7ABsOdhWgfryfUC3w-fLZw9H_10QJ8ytnWr7i5cCg8jRd97kTmj7uX0I0ATF_ALjqdQ1ZVb5qjShYP67ZP86sAN9N92WLN7CgrIGfABDXKzHzS8U-RztzfiwXbx0jWHwliUyFZDrH2KZVx6PDYb3TICQGMHdF7MG31fGfKx4z_Anl5oqe1S4QB9IwaRlHQwBRGT1uh2g6YQ0S_BSlA0yd1rw-bpD1OB5AmjB8m3m4YrOCXcNWkxVmTibUup7UdYch-ekS3AkQSFGg4lPM4ZQgAKtt7LMSmlKqG2y8YLliQzR-jL_D8V6dA_OQqSAPtfIFHj5vG_-1G_0pB54WRlR5TckdTvXv241XyliDaRnOozf9NpOfji8e0wlqvmNxO69JTYoFPpgP0u7EMK4Jc","e":"AQAB"}};
+const OFFICIAL_HOST = /^https:\/\/packages(-cf)?\.termux\.dev\//;
+
 // 在本应用里没有意义的包（给 Termux App 本身发广播的）
 const EXCLUDE = new Set(["termux-am", "termux-am-socket", "termux-api", "termux-tools", "termux-exec", "termux-keyring", "termux-licenses"]);
 // 解包时丢掉的文件：Termux App 专属脚本；以及我们自己的 pkg/apt 入口别被盖掉
@@ -188,6 +198,57 @@ function owners() {
   return m;
 }
 
+function dearmor(t) {
+  const body = String(t).replace(/\r/g, "").split("\n\n").slice(1).join("\n\n").split("\n=")[0];
+  return Buffer.from(body.replace(/\s/g, ""), "base64");
+}
+function packets(b) {
+  const out = [];
+  for (let o = 0; o < b.length;) {
+    const h = b[o++]; if (!(h & 0x80)) throw new Error("bad packet");
+    let tag, len;
+    if (h & 0x40) { tag = h & 63; const l = b[o++]; if (l < 192) len = l; else if (l < 224) len = ((l - 192) << 8) + b[o++] + 192; else if (l === 255) { len = b.readUInt32BE(o); o += 4; } else throw new Error("partial len"); }
+    else { tag = (h >> 2) & 15; const lt = h & 3; if (lt === 0) len = b[o++]; else if (lt === 1) { len = b.readUInt16BE(o); o += 2; } else if (lt === 2) { len = b.readUInt32BE(o); o += 4; } else len = b.length - o; }
+    out.push({ tag, body: b.subarray(o, o + len) }); o += len;
+  }
+  return out;
+}
+const mpi = (b, o) => { const bits = b.readUInt16BE(o), n = (bits + 7) >> 3; return [b.subarray(o + 2, o + 2 + n), o + 2 + n]; };
+const b64u = (x) => Buffer.from(x).toString("base64url");
+/** 公钥块里所有 RSA 钥（主钥 + 子钥）：[{fpr, jwk}] */
+function rsaKeys(armored) {
+  const keys = [];
+  for (const p of packets(dearmor(armored))) {
+    if ((p.tag !== 6 && p.tag !== 14) || p.body[0] !== 4 || p.body[5] !== 1) continue;
+    const [n, o1] = mpi(p.body, 6), [e] = mpi(p.body, o1);
+    const hdr = Buffer.from([0x99, p.body.length >> 8, p.body.length & 255]);
+    keys.push({ fpr: crypto.createHash("sha1").update(hdr).update(p.body).digest("hex").toUpperCase(), primary: p.tag === 6, jwk: { kty: "RSA", n: b64u(n), e: b64u(e) } });
+  }
+  return keys;
+}
+/** 验分离签名：data 是被签的原始字节，keys 是 {指纹: jwk}。返回签名用的指纹，不通过抛错 */
+function verifyDetached(data, sigArmored, keys) {
+  const sp = packets(dearmor(sigArmored)).find((p) => p.tag === 2);
+  if (!sp) throw new Error("no signature packet");
+  const s = sp.body;
+  if (s[0] !== 4 || s[1] !== 0 || s[2] !== 1) throw new Error("unsupported signature (want v4 binary RSA)");
+  const hashName = { 8: "sha256", 9: "sha384", 10: "sha512" }[s[3]];
+  if (!hashName) throw new Error("unsupported hash " + s[3]);
+  const hl = s.readUInt16BE(4), hashed = s.subarray(0, 6 + hl);
+  let fpr = "";
+  const sub = (buf) => { for (let o = 0; o < buf.length;) { let l = buf[o++]; if (l >= 192 && l < 255) l = ((l - 192) << 8) + buf[o++] + 192; else if (l === 255) { l = buf.readUInt32BE(o); o += 4; } const t = buf[o] & 0x7f; if (t === 33) fpr = buf.subarray(o + 2, o + l).toString("hex").toUpperCase(); o += l; } };
+  sub(s.subarray(6, 6 + hl));
+  const ul = s.readUInt16BE(6 + hl); if (!fpr) sub(s.subarray(8 + hl, 8 + hl + ul));
+  const jwk = keys[fpr];
+  if (!jwk) throw new Error("signed by unknown key " + (fpr || "?"));
+  const [sig] = mpi(s, 8 + hl + ul + 2);
+  const trailer = Buffer.alloc(6); trailer[0] = 4; trailer[1] = 0xff; trailer.writeUInt32BE(hashed.length, 2);
+  const pub = crypto.createPublicKey({ key: jwk, format: "jwk" });
+  const nlen = Buffer.from(jwk.n, "base64url").length, sigp = Buffer.concat([Buffer.alloc(Math.max(0, nlen - sig.length)), sig]);
+  if (!crypto.verify(hashName, Buffer.concat([data, hashed, trailer]), pub, sigp)) throw new Error("bad signature");
+  return fpr;
+}
+
 // ── 仓库索引（缓存一天）───────────────────────────────────────────────
 function loadRepo(repo) {
   const cf = path.join(STATE, "index", repo.name + ".json");
@@ -196,7 +257,11 @@ function loadRepo(repo) {
   let lastErr;
   for (const base of [repo.base, ...repo.mirrors]) {
     try {
-      const rel = curlBuf(`${base}dists/${repo.dist}/Release`).toString();
+      const relBuf = curlBuf(`${base}dists/${repo.dist}/Release`);
+      let sig = null; try { sig = curlBuf(`${base}dists/${repo.dist}/Release.gpg`, 60).toString(); } catch {}
+      if (sig) verifyDetached(relBuf, sig, TERMUX_KEYS);              // 签名不对直接抛，换下一个源
+      else if (!OFFICIAL_HOST.test(base)) throw new Error("镜像的 Release 签名取不到");
+      const rel = relBuf.toString();
       const rp = `${repo.component}/binary-${repo.arch}/Packages.gz`;
       const want = (rel.split("SHA256:")[1] || "").split("\n").find((l) => l.trim().endsWith(" " + rp));
       if (!want) throw new Error("Release 里没有 " + rp);
@@ -210,7 +275,7 @@ function loadRepo(repo) {
         pkgs[f.Package] = { v: f.Version, f: f.Filename, h: f.SHA256, s: +f.Size, i: +(f["Installed-Size"] || 0) * 1024,
           d: [f["Pre-Depends"], f.Depends].filter(Boolean).join(", "), p: f.Provides || "", t: f.Description || "", hp: f.Homepage || "" };
       }
-      const out = { at: Date.now(), date: (rel.match(/^Date: (.+)$/m) || [])[1] || "", pkgs };
+      const out = { at: Date.now(), date: (rel.match(/^Date: (.+)$/m) || [])[1] || "", from: base, pkgs };
       writeJson(cf, out);
       return out;
     } catch (e) { lastErr = e; }
@@ -222,8 +287,12 @@ let FORCE_UPDATE = false, IDX = null;
 function index() {
   if (IDX) return IDX;
   const pkgs = new Map(), provides = new Map();
+  // 单个仓库取不到就先跳过（例如 glibc 仓库国内没有镜像，连不上官方时不该连累 main 里的包）；全取不到才报错
+  let okRepos = 0, lastErr;
   for (const repo of REPOS) {
-    const r = loadRepo(repo);
+    let r;
+    try { r = loadRepo(repo); okRepos++; repo.from = r.from; }
+    catch (e) { lastErr = e; console.error(`pkg：仓库 ${repo.name} 的索引取不到（${e.message}），这次先不用它`); continue; }
     for (const [n, p] of Object.entries(r.pkgs)) {
       if (pkgs.has(n)) continue;
       pkgs.set(n, { name: n, ...p, repo });
@@ -233,6 +302,7 @@ function index() {
       }
     }
   }
+  if (!okRepos) throw lastErr;
   return (IDX = { pkgs, provides });
 }
 
@@ -291,7 +361,9 @@ function download(p) {
   const part = dest + ".part";
   const tty = process.stderr.isTTY;
   let gone = 0;                                                // 回 404 的源数：全是 404 就是索引过期（包已经换了新版本）
-  for (const base of [p.repo.base, ...p.repo.mirrors]) {
+  // 索引是从哪个源拿到的，包就先从那儿下（官方连不上时不用每个包都先在官方地址上空等）
+  const all = [p.repo.base, ...p.repo.mirrors], from = p.repo.from;
+  for (const base of from && all.includes(from) ? [from, ...all.filter((b) => b !== from)] : all) {
     for (let i = 0; i < 3; i++) {
       // 进度条走 stderr 照常显示；stdout 只收 HTTP 状态码
       const r = spawnSync(BIN("curl"), ["-fL", tty ? "-#" : "-sS", "-C", "-", "--speed-limit", "10000", "--speed-time", "30", "-w", "%{http_code}", "-o", part, base + p.f],

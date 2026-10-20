@@ -371,6 +371,10 @@ final class Updater {
             else if (c > 0 || claude.current.isEmpty()) claude.set("available", tag);
             else claude.set("available", Tr.f("切回 {0} 渠道：将换成 {1}（比当前的 {2} 旧）", channel(), v, claude.current));
         }
+        // 当初只能靠 npm 签名装上、后来按官方清单补核又对不上的（网关 install-claude.mjs --recheck 留下 .mismatch）：
+        // 当成「有更新」，点更新（或自动更新）就从头重下这一版，装之前按官方清单核 sha256
+        if (!"installing".equals(claude.state) && new File(env.home, ".local/share/cccodroid/claude/current/.mismatch").isFile())
+            claude.set("available", Tr.t("这一版与官方清单的 sha256 对不上，点更新重新下载"));
     }
 
     /** 发布列表地址。home/.config/cccodroid/update-feed 里写了地址就用它（测试更新流程用，形状同 GitHub API） */

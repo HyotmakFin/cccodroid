@@ -1281,4 +1281,5 @@ window.I18N_DICT["ar"] = {
   "导入程序…": "استيراد برنامج…",
   "分析": "تحليل",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "أو أدخل مسارًا على الجهاز، مثل ‎/sdcard/Download/foo.tar.gz",
+  "来自 {src}": "من {src}",
 };

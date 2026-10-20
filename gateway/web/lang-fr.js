@@ -1281,4 +1281,5 @@ window.I18N_DICT["fr"] = {
   "导入程序…": "Importer un programme…",
   "分析": "Analyser",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "Ou saisissez un chemin sur l’appareil, ex. /sdcard/Download/foo.tar.gz",
+  "来自 {src}": "depuis {src}",
 };

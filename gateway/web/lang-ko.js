@@ -1281,4 +1281,5 @@ window.I18N_DICT["ko"] = {
   "导入程序…": "프로그램 가져오기…",
   "分析": "분석",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "또는 기기 경로 입력(예: /sdcard/Download/foo.tar.gz)",
+  "来自 {src}": "{src}에서",
 };

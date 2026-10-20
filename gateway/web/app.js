@@ -2916,7 +2916,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       let bar = "";
       if (pr && pr.total) {
         const pct = Math.min(100, (pr.done / pr.total) * 100).toFixed(1);
-        bar = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + MB(pr.done) + " / " + MB(pr.total) + "</div>";
+        bar = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + MB(pr.done) + " / " + MB(pr.total) + (pr.via ? " · " + t("来自 {src}", { src: esc(pr.via) }) : "") + "</div>";
       }
       const ver = c.installedVersion || c.version;
       const meta = "<span>" + esc(st) + "</span>" + (ver ? "<span>" + esc(ver) + "</span>" : "") +

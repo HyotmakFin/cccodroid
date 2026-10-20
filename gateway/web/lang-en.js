@@ -1310,4 +1310,5 @@ window.I18N_DICT.en = {
   "导入程序…": "Import program…",
   "分析": "Analyze",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "Or enter a path on this device, e.g. /sdcard/Download/foo.tar.gz",
+  "来自 {src}": "from {src}",
 };

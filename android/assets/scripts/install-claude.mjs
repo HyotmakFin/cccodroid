@@ -237,6 +237,7 @@ else {
       fs.renameSync(f, BIN); fs.rmSync(x, { recursive: true, force: true }); fs.rmSync(tgz, { force: true });
     }
     for (const f of [raw, tgz]) { fs.rmSync(f, { force: true }); fs.rmSync(f + ".for", { force: true }); }
+    fs.rmSync(path.join(OUT, ".mismatch"), { force: true });      // 补核没过、重下成功的，标记一起去掉
     if (SUM) { fs.rmSync(path.join(OUT, ".npm-only"), { force: true }); say("✓ sha256 与官方清单一致"); }
     else { fs.writeFileSync(path.join(OUT, ".npm-only"), VER + "\n"); say("✓ npm 签名与 sha512 一致（官方清单以后连得上时会自动补核）"); }
     try { fs.writeFileSync(lastFile, s.id); } catch {}

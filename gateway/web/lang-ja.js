@@ -1281,4 +1281,5 @@ window.I18N_DICT["ja"] = {
   "导入程序…": "プログラムをインポート…",
   "分析": "解析",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "または端末上のパスを入力（例：/sdcard/Download/foo.tar.gz）",
+  "来自 {src}": "{src} から",
 };

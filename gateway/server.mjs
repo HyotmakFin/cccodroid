@@ -2960,7 +2960,7 @@ async function compList(force) {
       version: b ? b.version : null, bytes: b ? b.bytes : 0, installed: b ? b.installed : 0,
       available: !!b, installedVersion: rec ? rec.version : null,
       state: compState(id, e, dk),
-      progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total } : null,
+      progress: job && !job.finished ? { phase: job.phase, done: job.done, total: job.total, via: job.phase === "downloading" ? job.via || "" : "" } : null,
       error: job && job.error ? tr(LAST_LANG, job.error) : "",
       bin: (b && b.bin) || (rec && rec.bin) || [],
       selftest: (b && b.selftest) || "",
@@ -3158,6 +3158,14 @@ function compClearStage(id) {
   for (const n of list) if (n === id || mine.test(n)) fs.rmSync(path.join(stage, n), { recursive: true, force: true });
 }
 
+// 组件包的镜像地址：官网生成器把两份签名索引里的包同步到 dl.cccodroid.net/components/<official|community>/<文件名>
+let compMirrorFirst = false;
+function compMirrorUrl(b) {
+  const asset = b.asset || String(b.url || "").split("/").pop();
+  if (!/^https:\/\/github\.com\//.test(b.url || "") || !/^[\w.+-]+$/.test(asset)) return "";
+  return `https://dl.cccodroid.net/components/${b.source === "community" ? "community" : "official"}/${asset}`;
+}
+
 async function compRunInstall(id, b, job) {
   const stage = path.join(COMP_DIR, ".staging"), gz = path.join(stage, `${id}-${b.sha256.slice(0, 12)}.tar.gz`), tree = path.join(stage, id);
   fs.mkdirSync(stage, { recursive: true });
@@ -3171,12 +3179,18 @@ async function compRunInstall(id, b, job) {
     const part = gz + ".part";
     const tick = setInterval(() => { try { job.done = fs.statSync(part).size; } catch {} }, 500);
     try {
+      // 两个来源轮流试：GitHub 与 dl.cccodroid.net 镜像（逐字节同一份，内容一律按签名索引里的 sha256 把关，镜像不需要被信任）。
+      // 同一个 .part 接着续传；哪边成功了下回先试哪边
+      const urls = compMirrorFirst ? [compMirrorUrl(b), b.url] : [b.url, compMirrorUrl(b)];
+      const srcs = urls.filter(Boolean);
       let lastErr;
       for (let i = 0; i < 4 && !job.cancelled; i++) {
+        const url = srcs[i % srcs.length];
+        job.via = url === b.url ? "GitHub" : "dl.cccodroid.net";
         try {
-          await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "10000", "--speed-time", "60", "-o", part, b.url]);
-          lastErr = null; break;
-        } catch (e) { lastErr = e; if (job.cancelled) break; }
+          await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "2", "--connect-timeout", "15", "--speed-limit", "10000", "--speed-time", "45", "-o", part, url]);
+          lastErr = null; compMirrorFirst = url !== b.url; break;
+        } catch (e) { lastErr = e; if (job.cancelled) break; log(`[comp] ${id} 从 ${job.via} 下载中断：${e.message}`); }
       }
       if (job.cancelled) throw new Error("cancelled");
       // 上回已经下全、没来得及改名就被打断：续传会得到 416，直接去校验

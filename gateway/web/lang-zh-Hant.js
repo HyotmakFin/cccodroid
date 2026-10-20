@@ -1281,4 +1281,5 @@ window.I18N_DICT["zh-Hant"] = {
   "导入程序…": "匯入程式…",
   "分析": "分析",
   "或者填本机路径，如 /sdcard/Download/foo.tar.gz": "或者填本機路徑，如 /sdcard/Download/foo.tar.gz",
+  "来自 {src}": "來自 {src}",
 };
