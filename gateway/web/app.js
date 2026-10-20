@@ -1887,7 +1887,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (s.maxParallel) srv.max = s.maxParallel;
     pickViewRun();
     const busy = isBusy();
-    sendEl.classList.toggle("busy", busy && !inputEl.value.trim());
+    sendEl.classList.toggle("busy", busy && !hasDraft());
     inputEl.placeholder = busy
       ? t("生成中 · 回车 = 排队 · ⚡ = 插话（不打断）")
       : t("给 Claude 发消息，/ 命令，@ 引用文件…");
@@ -1953,7 +1953,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   /** 插话键只在「正在跑 + 输入框里有字」时露头 */
   function syncInterject() {
-    const has = !!inputEl.value.trim();
+    const has = hasDraft();
     interjectEl.classList.toggle("hidden", !(isBusy() && has));
     sendEl.classList.toggle("busy", isBusy() && !has);
   }
@@ -1998,13 +1998,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   async function send(forcedText, mode) {
     const fromInput = forcedText == null;
-    const text = (fromInput ? inputEl.value : forcedText).trim();
+    const typed = (fromInput ? inputEl.value : forcedText).trim();
+    // 附件只在附件栏里显示，发出时才把 @路径 接到末尾（claude 靠它读文件）；手动写过的不重复
+    const refs = fromInput ? state.attachments.map((a) => "@" + a.path).filter((r) => !typed.includes(r)) : [];
+    const text = typed && refs.length ? typed + "\n\n" + refs.join(" ") : typed || refs.join(" ");
     if (!text) return;
     if (fromInput) draftLast = "";      // 发出去的不算「误删」：有的输入法清空后还会补一个空的 input 事件
     hidePopup();
 
     // 纯界面命令：不惊动 claude
-    if (text === "/clear" || text === "/new") {
+    if (typed === "/clear" || typed === "/new") {
       if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
       newConversation(t("已清空上下文，开始新会话"));
       return;
@@ -2040,6 +2043,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
     const cid = newCid();
     view.cids.add(cid);
+    const sentAtt = fromInput ? state.attachments : [];
     if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
     syncInterject();
     try {
@@ -2061,7 +2065,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         : srv.run ? t("已排队，这一轮结束后发出") : t("同时在跑的会话已到上限，已排队，有空位就发出"));
     } catch (e) {
       view.cids.delete(cid);
-      if (fromInput && !inputEl.value) { inputEl.value = text; autoGrow(); }   // 别把用户的话吞了
+      if (fromInput && !inputEl.value) { inputEl.value = typed; autoGrow(); }   // 别把用户的话吞了
+      if (fromInput && !state.attachments.length && sentAtt.length) { state.attachments = sentAtt; renderAttachments(); }
       toast(e.message || t("发送失败"), true);
       if (e.status === 503) openDrawer("settings");
     }
@@ -2069,7 +2074,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   /** 插话：不打断，把输入框里的字递进正在跑的这一轮（claude 在当前这一步结束后就会看到） */
   function interjectNow() {
-    if (!inputEl.value.trim()) return;
+    if (!hasDraft()) return;
     send(null, "inject");
   }
 
@@ -2244,7 +2249,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   // 有字就发（忙时自动排队）；没字且正在生成 = 停止
-  sendEl.addEventListener("click", () => (inputEl.value.trim() || !isBusy() ? send() : abort()));
+  sendEl.addEventListener("click", () => (hasDraft() || !isBusy() ? send() : abort()));
   interjectEl.addEventListener("click", interjectNow);
 
   // ── 递东西进来：上传 ──────────────────────────────────────────────
@@ -2265,6 +2270,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <span class="att-name">${esc(a.name)}</span>
         <button class="att-x" aria-label="${t("移除")}">✕</button>
       </div>`).join("");
+    syncInterject();
     attachStrip.querySelectorAll(".att").forEach((el) => {
       const a = list[Number(el.dataset.i)];
       el.querySelector("img")?.addEventListener("click", () => openLightbox(a.path));
@@ -2275,16 +2281,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     state.attachments = [];
     renderAttachments();
   }
-  /** 移除附件：连带把它插进输入框的那段路径一起删掉 */
   function removeAttachment(a) {
     state.attachments = state.attachments.filter((x) => x.path !== a.path);
-    const re = new RegExp("@?" + a.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s?", "g");
-    inputEl.value = inputEl.value.replace(re, "").replace(/\s{2,}/g, " ");
-    autoGrow();
     renderAttachments();
   }
+  /** 输入框有字或附件栏里有东西，就算有话要发 */
+  function hasDraft() { return !!inputEl.value.trim() || state.attachments.length > 0; }
 
-  /** 上传一批文件，成功后把路径插进输入框 */
+  /** 上传一批文件，成功后放进附件栏（发出时才把路径接进消息） */
   async function uploadFiles(files, { insert = true } = {}) {
     const list = [...files];
     if (!list.length) return [];
@@ -2300,7 +2304,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         done.push(j);
         if (insert) {
           state.attachments.push(j);
-          insertAtCursor("@" + j.path);
         }
       } catch (e) {
         toast(t("「{name}」附加失败：{msg}", { name: f.name, msg: e.message }), true);
@@ -2322,7 +2325,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       path: p, name, size: 0,
       kind: /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i.test(p) ? "image" : "other",
     });
-    insertAtCursor("@" + p);
     renderAttachments();
     toast(t("已附加 {name}", { name }));
   });
@@ -6764,7 +6766,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     try {
       const j = await api("/api/screenshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delay }) });
       state.attachments.push(j);
-      insertAtCursor("@" + j.path);
       renderAttachments();
       toast(t("已附加截屏"));
     } catch (e) { toast(e.message, true); }
