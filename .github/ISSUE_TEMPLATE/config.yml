@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: 安全问题（私密报告）/ Security vulnerability (private)
+    url: https://github.com/greyoak111/cccodroid/security/advisories/new
+    about: 安全问题别公开发，走私密报告。Please report security problems privately, not in a public issue.
   - name: 想法、提问、闲聊 / Ideas, questions, chat
     url: https://github.com/greyoak111/cccodroid/discussions
     about: 新功能的想法和使用上的疑问，先在讨论区聊。Feature ideas and how-to questions go to Discussions.

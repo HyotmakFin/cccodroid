@@ -18,6 +18,10 @@ This is what we need most. Open an issue with the "Device report" template and t
 
 In the app, tap **Settings → Report on GitHub**. Your device, Android version and self-test results are filled in; you only describe what happened and how to reproduce it. No logs or conversations are attached.
 
+### Report a security problem
+
+Privately, please: see [SECURITY.md](SECURITY.md). Don’t post it in a public issue or the group.
+
 ### Fix translations
 
 The UI ships in seven other languages, mostly translated by the author with AI help, so some strings will read awkwardly or be wrong. See [i18n/README.md](i18n/README.md); it's a single text file per language.
