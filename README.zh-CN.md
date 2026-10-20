@@ -183,6 +183,8 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 
 ### 社区贡献者
 
+- **[bmbmm-114514](https://github.com/bmbmm-114514)**：一轮细致的代码审查，报了 10 个安全与稳定性问题，每条都带复现方法和代码位置，0.3.2 全部修复。
+- **[IVESHOWARD](https://github.com/IVESHOWARD)**：反馈技能压缩包导入的问题（多个技能只能导入一个、有时识别不到），0.3.2 修复。
 - **[CCB-Fox](https://github.com/CCB-Fox)**：天玑 GPU 驱动组件（[cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)），促成了 0.3.3 的 Mali 机型支持。
 - **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
 

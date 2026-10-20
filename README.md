@@ -179,6 +179,8 @@ Layout:
 
 ### Community contributors
 
+- **[bmbmm-114514](https://github.com/bmbmm-114514)**: a careful code review that reported ten security and stability problems, each with reproduction steps and code locations; all fixed in 0.3.2.
+- **[IVESHOWARD](https://github.com/IVESHOWARD)**: reported the skill archive import problems (only one of several skills imported, archives sometimes not recognised); fixed in 0.3.2.
 - **[CCB-Fox](https://github.com/CCB-Fox)**: the Dimensity GPU driver component ([cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)), which led to Mali support in 0.3.3.
 - **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
 
