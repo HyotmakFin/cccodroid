@@ -817,6 +817,7 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public boolean hasPane() { return true; }
             @android.webkit.JavascriptInterface public void paneOpen(String url) {
                 if (url != null && !url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) return;
+                if (isGatewayUrl(url)) return;
                 ui.post(() -> openPane(url));
             }
             /** 页面坐标（CSS px，相对对话 WebView 左上角）；w <= 0 = 先藏起来（被别的窗格 / 浮层盖住时） */
@@ -828,6 +829,7 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void paneClose() { ui.post(() -> closePane(false)); }
             /** 应用内浏览器（回复里的网页链接、本机开发服务）；url 为空 = 回到上次那页 */
             @android.webkit.JavascriptInterface public void openBrowser(String url) {
+                if (isGatewayUrl(url)) return;
                 if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
                     ui.post(() -> BrowserActivity.open(MainActivity.this, url));
             }
@@ -1050,6 +1052,19 @@ public class MainActivity extends Activity {
     }
 
     /** 系统给的 createIntent() 不管网页要不要多选，一律只能选一个：<input multiple> 时补上 EXTRA_ALLOW_MULTIPLE */
+    /** 网关自己的地址不许进浏览器 / 窗格：它们和界面共用 Cookie，预览页里的脚本能借这个桥拿到网关权限 */
+    static boolean isGatewayUrl(String url) {
+        if (url == null || url.isEmpty()) return false;
+        try {
+            Uri u = Uri.parse(url.trim());
+            String h = u.getHost();
+            if (h == null) return false;
+            h = h.toLowerCase(java.util.Locale.ROOT);
+            boolean local = h.equals("127.0.0.1") || h.equals("localhost") || h.equals("[::1]") || h.equals("::1") || h.equals("0.0.0.0");
+            return local && u.getPort() == Env.PORT;
+        } catch (Exception e) { return true; }
+    }
+
     static Intent chooserIntent(WebChromeClient.FileChooserParams p) {
         Intent i = p.createIntent();
         if (p.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);

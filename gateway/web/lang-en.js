@@ -1368,4 +1368,8 @@ window.I18N_DICT.en = {
   "交流群与参与": "Community & contributing",
   "交流与反馈": "Community & feedback",
   "有 {n} 个文件没能还原": "{n} files couldn't be restored",
+  "未装：{msg}": "Not installed: {msg}",
+  "压缩包解开后太大（超过 {n} MB），没有导入": "The archive is too large once extracted (over {n} MB), so it was not imported",
+  "不是 zip，也不是带 name 的 SKILL.md": "Not a zip, nor a SKILL.md with a name",
+  "已有同名技能": "A skill with this name already exists",
 };

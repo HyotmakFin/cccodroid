@@ -1266,6 +1266,7 @@ function runClaude(args, { cwd, timeoutMs = 60000 } = {}) {
     const timer = setTimeout(() => {
       if (!done) { done = true; killTree(child); resolve({ out, err, timeout: true }); }
     }, timeoutMs);
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
     child.stdout.on("data", (d) => { out += d.toString("utf8"); });
     child.stderr.on("data", (d) => { err += d.toString("utf8"); });
     child.on("error", (e) => {
@@ -1458,7 +1459,7 @@ async function searchSessionsNow(q) {
 }
 
 function findSessionFile(id) {
-  if (!/^[A-Za-z0-9._-]+$/.test(id)) return null;   // 防目录穿越
+  if (!SID_RE.test(id)) return null;   // 防目录穿越
   let dirs = [];
   try {
     dirs = fs.readdirSync(PATHS.projects, { withFileTypes: true }).filter((d) => d.isDirectory());
@@ -1475,7 +1476,8 @@ function findSessionFile(id) {
 // 每个会话一格：<id>.jsonl + 同名目录（子代理、超长工具结果）+ meta.json（原项目目录、标题、删除时间）。
 const TRASH_DIR = path.join(CFG.home, ".ccapp-trash");
 const TRASH_KEEP_DAYS = 30;
-const SID_RE = /^[A-Za-z0-9._-]+$/;
+// 只当单个目录名用：不许全是点（「.」「..」拼进路径就跳出了所在目录，回收站清理曾因此删掉整个 home）
+const SID_RE = /^(?!\.+$)[A-Za-z0-9._-]{1,200}$/;
 
 // ── 分叉：从某一轮之后另起一个会话 ──
 // 把 transcript 从头抄到「这一轮的最后一行」（下一条用户消息之前），换个会话号写成新文件。
@@ -1629,6 +1631,7 @@ function rewindFiles(sid, userUuid, dryRun) {
     let buf = "", done = false, err = "", exited = false;
     const finish = (r) => { if (done) return; done = true; clearTimeout(t); try { child.stdin.end(); } catch {} setTimeout(() => { if (!exited) killTree(child); }, 3000); resolve(r); };
     const t = setTimeout(() => finish({ ok: false, error: tz("回退超时") }), 60000);
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
     child.stdout.on("data", (d) => {
       buf += d; let i;
       while ((i = buf.indexOf("\n")) >= 0) {
@@ -1805,8 +1808,10 @@ function zipBuild(entries) {
   return Buffer.concat([...locals, cd, end]);
 }
 
-function zipRead(buf) {
+function zipRead(buf, max = 512 * 1024 * 1024) {
   let e = buf.length - 22;
+  let total = 0;
+  const tooBig = () => new Error(tz("压缩包解开后太大（超过 {n} MB），没有导入", { n: Math.round(max / 1048576) }));
   while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--;
   if (e < 0) throw new Error(tz("不是 zip 文件"));
   const n = buf.readUInt16LE(e + 10);
@@ -1817,13 +1822,21 @@ function zipRead(buf) {
     const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20);
     const nlen = buf.readUInt16LE(p + 28), xlen = buf.readUInt16LE(p + 30), clen = buf.readUInt16LE(p + 32);
     const lo = buf.readUInt32LE(p + 42);
-    const name = buf.toString("utf8", p + 46, p + 46 + nlen);
+    const usize = buf.readUInt32LE(p + 24);
+    // Windows 上打的包可能用反斜杠分目录
+    const name = buf.toString("utf8", p + 46, p + 46 + nlen).replace(/\\/g, "/");
     p += 46 + nlen + xlen + clen;
     if (name.endsWith("/")) continue;
     const ds = lo + 30 + buf.readUInt16LE(lo + 26) + buf.readUInt16LE(lo + 28);
     const body = buf.subarray(ds, ds + csize);
     if (method !== 0 && method !== 8) throw new Error(tz("不支持的压缩方式：{name}", { name }));
-    out.push({ name, data: method === 8 ? zlib.inflateRawSync(body) : Buffer.from(body) });
+    if ((total += usize) > max) throw tooBig();
+    let data;
+    try { data = method === 8 ? zlib.inflateRawSync(body, { maxOutputLength: max - total + usize }) : Buffer.from(body); }
+    catch (err) { if (err.code === "ERR_BUFFER_TOO_LARGE" || err.code === "ERR_OUT_OF_RANGE") throw tooBig(); throw err; }
+    total += data.length - usize;    // 目录里写的大小可能是假的：按实际解出来的算
+    if (total > max) throw tooBig();
+    out.push({ name, data });
   }
   return out;
 }
@@ -2270,6 +2283,8 @@ function previewServe(req, res) {
   try { if (fs.statSync(full).isDirectory()) full = path.join(full, "index.html"); } catch {}
   const r = safeFilePath(full);
   if (r.error) return fail(r.status || 404, r.error);
+  // 上面比的是字面路径；目录里的符号链接能指到外面去，解析过的真实路径也得在预览目录里
+  if (r.file !== g.root && !r.file.startsWith(g.root + path.sep)) return fail(403, "outside preview folder");
   const head = { "content-type": MIME[path.extname(r.file).toLowerCase()] || "application/octet-stream",
     "cache-control": "no-store", "x-content-type-options": "nosniff", "accept-ranges": "bytes" };
   // 音视频要 Range 才能拖进度
@@ -3370,6 +3385,7 @@ function ghLogin() {
     const u = buf.match(/https:\/\/github\.com\/login\/device\b/);
     if (u) job.url = u[0];
   };
+  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
   child.stdout.on("data", onData);
   child.stderr.on("data", onData);
   child.on("error", (e) => { job.state = "error"; job.error = e.message; });
@@ -4262,6 +4278,7 @@ function loginStart(flag) {
   const child = spawn(PATHS.loader, claudeArgv(["auth", "login", flag]), { cwd: CFG.home, env, stdio: ["ignore", "pipe", "pipe"] });
   const L = LOGIN = { child, out: "", startedAt: Date.now(), done: false, ok: false, flag };
   const onData = (d) => { L.out += String(d); };
+  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
   child.stdout.on("data", onData); child.stderr.on("data", onData);
   child.on("close", (code) => {
     L.done = true;
@@ -4291,6 +4308,7 @@ function runAuth(args, timeoutMs = 20000) {
   return new Promise((resolve) => {
     const child = spawn(PATHS.loader, claudeArgv(["auth", ...args]), { cwd: CFG.home, env: authEnv(), stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
     child.stdout.on("data", (d) => (out += d)); child.stderr.on("data", (d) => (out += d));
     const t = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, timeoutMs);
     child.on("close", (code) => { clearTimeout(t); resolve({ code, out }); });
@@ -4585,6 +4603,7 @@ async function startRun(item) {
     if (!run.inputOpen || run.ended || run.aborted) return false;
     try { writeUser(item.message); } catch { return false; }
     run.pendingInject.push(item);
+    saveRunMark();     // 马上落盘：送达前 App 被强停，下次启动它还能回到队列里，不会凭空消失
     log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容
     return true;
   };
@@ -4694,7 +4713,7 @@ async function startRun(item) {
     if (usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
     if (run.replays++ === 0) return;
     const it = run.pendingInject.shift();
-    if (it) emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id });
+    if (it) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
   };
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
@@ -4734,6 +4753,7 @@ async function startRun(item) {
     translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
   };
 
+  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
   child.stdout.on("data", (d) => {
     buf += d.toString("utf8");
     let nl;
@@ -5837,6 +5857,7 @@ function envFactsRun() {
   let out = "";
   log("[env] 本机自检开始（工具包或应用换了版本）");
   envFactsJob = spawn(argv[0], argv.slice(1), { env: termEnv(), cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  envFactsJob.stdout.setEncoding("utf8"); envFactsJob.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
   envFactsJob.stdout.on("data", (d) => { if (out.length < 1 << 20) out += d; });
   envFactsJob.stderr.on("data", () => {});
   const t = setTimeout(() => { try { killTree(envFactsJob); } catch {} }, 15 * 60e3);
@@ -6207,6 +6228,7 @@ function extRun(args, timeoutMs = 180000) {
       env: claudeEnv(), stdio: ["ignore", "pipe", "pipe"], detached: true,
     });
     let out = "", err = "";
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
     child.stdout.on("data", (d) => (out += d)); child.stderr.on("data", (d) => (err += d));
     const t = setTimeout(() => killTree(child), timeoutMs);
     child.on("close", (code) => { clearTimeout(t); resolve({ code, out, err }); });
@@ -6448,6 +6470,7 @@ function testHook({ command, event, matcher, dir, input, timeout }) {
     });
     let out = "", err = "", timedOut = false;
     const cap = (s, d) => (s.length < 64 * 1024 ? s + d : s);
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
     child.stdout.on("data", (d) => (out = cap(out, d)));
     child.stderr.on("data", (d) => (err = cap(err, d)));
     const tm = setTimeout(() => { timedOut = true; killTree(child); }, ms);
@@ -6583,26 +6606,55 @@ async function listMcpCatalog(q, cursor) {
 }
 
 /** 从 zip 装技能：包里找 SKILL.md，它所在的目录就是技能根（兼容「包一层文件夹」和「直接打包」两种） */
+function skillDirName(text, fallback) {
+  const fm = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  const nm = fm && (/^name:\s*(.+?)\s*$/m.exec(fm[1]) || [])[1];
+  return String(nm || fallback || "skill").trim().replace(/^["']|["']$/g, "").replace(/[^A-Za-z0-9._-]/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+}
+/** 导入技能：zip（含 .skill）里每个 SKILL.md 各算一个技能，一次全装；也接受单独一个 SKILL.md。
+ *  同名已存在的跳过并说明，不覆盖 */
 function importSkill(buf) {
-  const files = zipRead(buf);
-  const md = files.filter((f) => /(^|\/)SKILL\.md$/.test(f.name)).sort((a, b) => a.name.length - b.name.length)[0];
-  if (!md) throw new Error(tz("压缩包里没有 SKILL.md"));
-  const root = md.name.slice(0, md.name.length - "SKILL.md".length);
-  const text = md.data.toString("utf8");
-  const nm = (text.match(/^---\n[\s\S]*?^name:\s*(.+)$/m) || [])[1];
-  const dir = String(nm || root.replace(/\/$/, "").split("/").pop() || "skill").trim().replace(/^["']|["']$/g, "").replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
-  if (!SID_RE.test(dir) || dir === "." || dir === "..") throw new Error(tz("技能名不合法"));
-  const dst = path.join(SKILLS_DIR, dir);
-  if (fs.existsSync(dst)) throw new Error(tz("已有同名技能「{name}」，先删掉旧的", { name: dir }));
-  for (const f of files) {
-    if (!f.name.startsWith(root)) continue;
-    const rel = f.name.slice(root.length);
-    if (!rel || rel.split("/").some((x) => !x || x === "." || x === "..")) continue;
-    const out = path.join(dst, rel);
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, f.data);
+  const isZip = buf.length >= 4 && buf.readUInt32LE(0) === 0x04034b50;
+  if (!isZip) {
+    const text = buf.toString("utf8");
+    if (!/^\uFEFF?---\r?\n[\s\S]*?\r?\n---/.test(text)) throw new Error(tz("不是 zip，也不是带 name 的 SKILL.md"));
+    const dir = skillDirName(text, "");
+    if (!dir || !SID_RE.test(dir)) throw new Error(tz("技能名不合法"));
+    const dst = path.join(SKILLS_DIR, dir);
+    if (fs.existsSync(dst)) throw new Error(tz("已有同名技能「{name}」，先删掉旧的", { name: dir }));
+    fs.mkdirSync(dst, { recursive: true });
+    fs.writeFileSync(path.join(dst, "SKILL.md"), buf);
+    return { ok: true, dir, dirs: [dir], skipped: [] };
   }
-  return { ok: true, dir };
+  const files = zipRead(buf, 200 * 1024 * 1024).filter((f) => !/(^|\/)(__MACOSX|\.git)\//.test(f.name) && !/(^|\/)\._/.test(f.name));
+  // 浅的先占：一个技能目录里面再出现的 SKILL.md（示例、模板）归它自己，不另算
+  const mds = files.filter((f) => /(^|\/)skill\.md$/i.test(f.name)).sort((a, b) => a.name.split("/").length - b.name.split("/").length);
+  if (!mds.length) throw new Error(tz("压缩包里没有 SKILL.md"));
+  const roots = [];
+  for (const md of mds) {
+    const root = md.name.slice(0, md.name.length - "SKILL.md".length);
+    if (roots.some((r) => root.startsWith(r.root))) continue;
+    roots.push({ root, md });
+  }
+  const dirs = [], skipped = [];
+  for (const { root, md } of roots) {
+    const dir = skillDirName(md.data.toString("utf8"), root.replace(/\/$/, "").split("/").pop());
+    if (!dir || !SID_RE.test(dir)) { skipped.push({ name: root || md.name, why: tz("技能名不合法") }); continue; }
+    const dst = path.join(SKILLS_DIR, dir);
+    if (fs.existsSync(dst) || dirs.includes(dir)) { skipped.push({ name: dir, why: tz("已有同名技能") }); continue; }
+    for (const f of files) {
+      if (!f.name.startsWith(root)) continue;
+      let rel = f.name.slice(root.length);
+      if (f === md) rel = "SKILL.md";       // 统一成 Claude 认的大写文件名
+      if (!rel || rel.split("/").some((x) => !x || x === "." || x === "..")) continue;
+      const out = path.join(dst, rel);
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, f.data);
+    }
+    dirs.push(dir);
+  }
+  if (!dirs.length) throw new Error(skipped.map((x) => `${x.name}：${x.why}`).join("；"));
+  return { ok: true, dir: dirs.join("、"), dirs, skipped };
 }
 
 // ── 访问控制 ──────────────────────────────────────────────────────────
@@ -6635,8 +6687,10 @@ const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`]
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
 
 function tokenOk(t) {
-  if (typeof t !== "string" || t.length !== TOKEN.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(t), Buffer.from(TOKEN));
+  if (typeof t !== "string") return false;
+  // 按字节比长度：非 ASCII 的字符串字符数相同、字节数不同，timingSafeEqual 会直接抛错把网关带走
+  const a = Buffer.from(t), b = Buffer.from(TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 function cookieToken(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([0-9a-f]{64})(?:;|$)`).exec(req.headers.cookie || "");
@@ -7158,6 +7212,9 @@ const server = http.createServer(async (req, res) => {
         "content-length": r.size,
         "cache-control": "no-store",
         "x-mtime": String(r.mtime),     // 编辑器保存时带回来做冲突检测
+        // 文件内容不可信（Claude 写的、别处下的）：哪怕被整页打开，也只当不透明源、不跑脚本，碰不到网关的 Cookie 和 /api
+        "content-security-policy": "sandbox",
+        "x-content-type-options": "nosniff",
       };
       if (u.searchParams.get("download") === "1") {
         head["content-disposition"] =
@@ -7193,10 +7250,12 @@ const server = http.createServer(async (req, res) => {
       const r = safeWritePath(u.searchParams.get("path"));
       if (r.error) return sendJson(res, r.status || 400, { error: r.error });
       const base = Number(u.searchParams.get("mtime") || 0);
-      if (!r.fresh && base && Math.abs(r.mtime - base) > 1 && u.searchParams.get("force") !== "1") {
-        return sendJson(res, 409, { error: "changed on disk", mtime: r.mtime, size: r.size });
-      }
+      // 先收完请求体再比 mtime：收的过程中磁盘上的文件也可能被改
       const buf = await readBodyBuf(req, 16 * 1024 * 1024);
+      let cur = null; try { cur = fs.statSync(r.file); } catch {}
+      if (cur && base && Math.abs(cur.mtimeMs - base) > 1 && u.searchParams.get("force") !== "1") {
+        return sendJson(res, 409, { error: "changed on disk", mtime: cur.mtimeMs, size: cur.size });
+      }
       try { fs.writeFileSync(r.file, buf); } catch (e) { return sendJson(res, 500, { error: e.message }); }
       const st = fs.statSync(r.file);
       log(`[file] 保存 ${r.file} ${buf.length}B`);
@@ -7251,8 +7310,15 @@ const server = http.createServer(async (req, res) => {
       if (!buf.length) return sendJson(res, 400, { error: "empty body" });
       fs.mkdirSync(UPLOAD_DIR, { recursive: true });
       const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-      const out = path.join(UPLOAD_DIR, `${stamp}-${safe || "upload.bin"}`);
-      try { fs.writeFileSync(out, buf); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+      // 同一秒同名的（一次附加两个同名文件）别互相覆盖：撞了就加 -2、-3
+      const nm = safe || "upload.bin", dot = nm.lastIndexOf("."), stem = dot > 0 ? nm.slice(0, dot) : nm, ext = dot > 0 ? nm.slice(dot) : "";
+      let out = "";
+      for (let i = 1; i < 1000 && !out; i++) {
+        const cand = path.join(UPLOAD_DIR, `${stamp}-${i === 1 ? nm : stem + "-" + i + ext}`);
+        try { fs.writeFileSync(cand, buf, { flag: "wx" }); out = cand; }
+        catch (e) { if (e.code !== "EEXIST") return sendJson(res, 500, { error: e.message }); }
+      }
+      if (!out) return sendJson(res, 500, { error: "name taken" });
       const kind = fileKind(out, false);
       log(`[upload] ${safe || "upload.bin"} ${buf.length}B → ${out}`);
       return sendJson(res, 200, {

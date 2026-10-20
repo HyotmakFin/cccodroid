@@ -1339,4 +1339,8 @@ window.I18N_DICT["fr"] = {
   "交流群与参与": "Communauté et contribution",
   "交流与反馈": "Communauté et retours",
   "有 {n} 个文件没能还原": "{n} fichiers n’ont pas pu être restaurés",
+  "未装：{msg}": "Non installé : {msg}",
+  "压缩包解开后太大（超过 {n} MB），没有导入": "L’archive est trop volumineuse une fois extraite (plus de {n} Mo) ; elle n’a pas été importée",
+  "不是 zip，也不是带 name 的 SKILL.md": "Ni un zip, ni un SKILL.md avec un name",
+  "已有同名技能": "Une compétence porte déjà ce nom",
 };

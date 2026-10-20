@@ -1336,3 +1336,7 @@
 1336	Comunidad y cómo participar
 1337	Comunidad y comentarios
 1338	No se pudieron restaurar {n} archivos
+1339	No instalado: {msg}
+1340	El archivo es demasiado grande al descomprimirlo (más de {n} MB); no se importó
+1341	No es un zip ni un SKILL.md con name
+1342	Ya existe una habilidad con ese nombre

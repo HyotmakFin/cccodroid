@@ -1336,3 +1336,7 @@
 1336	Communauté et contribution
 1337	Communauté et retours
 1338	{n} fichiers n’ont pas pu être restaurés
+1339	Non installé : {msg}
+1340	L’archive est trop volumineuse une fois extraite (plus de {n} Mo) ; elle n’a pas été importée
+1341	Ni un zip, ni un SKILL.md avec un name
+1342	Une compétence porte déjà ce nom

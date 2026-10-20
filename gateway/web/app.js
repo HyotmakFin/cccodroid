@@ -3678,11 +3678,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("ext-p-q").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPlugins(false); });
   $("ext-s-import").addEventListener("click", () => $("ext-s-file").click());
   $("ext-s-file").addEventListener("change", async (e) => {
-    const f = e.target.files && e.target.files[0]; e.target.value = "";
-    if (!f) return;
-    const r = await api("/api/ext/skills/import", { method: "POST", headers: { "content-type": "application/zip" }, body: await f.arrayBuffer() })
-      .catch((err) => ({ ok: false, message: err.message }));
-    toast(r.ok ? t("已安装技能 {name}", { name: r.dir }) : t("安装失败：{msg}", { msg: r.message || "" }), !r.ok);
+    // 文件选择器不限类型（群里转来的 zip 常被标成别的类型，限了就选不中）；可一次选多个，zip 里有几个技能装几个
+    const list = [...(e.target.files || [])]; e.target.value = "";
+    if (!list.length) return;
+    const ok = [], bad = [];
+    for (const f of list) {
+      const r = await api("/api/ext/skills/import", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: await f.arrayBuffer() })
+        .catch((err) => ({ ok: false, message: err.message }));
+      if (r.ok) ok.push(...(r.dirs || [r.dir]));
+      else bad.push(`${f.name}：${r.message || ""}`);
+      for (const x of r.skipped || []) bad.push(`${x.name}：${x.why}`);
+    }
+    if (ok.length) toast(t("已安装技能 {name}", { name: ok.join("、") }) + (bad.length ? "\n" + t("未装：{msg}", { msg: bad.join("；") }) : ""), !!bad.length);
+    else toast(t("安装失败：{msg}", { msg: bad.join("；") }), true);
     loadExtSkills();
   });
   $("ext-m-add").addEventListener("click", async () => {
@@ -5894,7 +5902,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     catch (e) { if (p === VW.path) $("vw-body").innerHTML = `<div class="vw-empty">${t("预览打不开")}: ${esc(e.message)}</div>`; return; }
     if (p !== VW.path || VW.mode !== "html") return;
     VW.pv = { url: r.url, mtime: r.mtime };
-    $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(r.url)}" allow="autoplay; fullscreen; clipboard-write" referrerpolicy="same-origin"></iframe>`;
+    $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(r.url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock" allow="autoplay; fullscreen; clipboard-write" referrerpolicy="same-origin"></iframe>`;
     // Claude 一边改、你一边看：每 1.5 秒看一眼修改时间，变了就重新载入
     VW.pvTimer = setInterval(async () => {
       if (viewerEl.classList.contains("hidden") || VW.mode !== "html" || VW.path !== p) return vwHtmlStop();

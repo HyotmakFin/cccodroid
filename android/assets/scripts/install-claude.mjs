@@ -247,8 +247,12 @@ else {
   if (!done) die("所有来源都没下成功：检查网络后重试（已下的部分会保留，下次接着续传）");
 }
 
-// ── 5. 换上，留一版旧的 ─────────────────────────────────────
+// ── 5. 先试跑新版，跑得起来才换上，留一版旧的 ─────────────────────
+// 先换 current 再试跑的话，试跑失败会让 current 指着一个跑不起来的版本，旧版明明还在却用不上
 fs.chmodSync(BIN, 0o755);
+const P = process.env.CCAPP_CLAUDE_PRELOAD && fs.existsSync(process.env.CCAPP_CLAUDE_PRELOAD) ? ["--preload", process.env.CCAPP_CLAUDE_PRELOAD] : [];
+const r = spawnSync(path.join(PREFIX, "glibc/lib/ld-linux-aarch64.so.1"), ["--library-path", path.join(PREFIX, "glibc/lib"), ...P, BIN, "--version"], { stdio: "inherit" });
+if (r.status !== 0) die("新版本试跑失败（--version 没跑通），没有换上，继续用原来的版本");
 const cur = path.join(DEST, "current");
 let prev = ""; try { prev = fs.readlinkSync(cur); } catch {}
 const tmp = cur + ".new"; fs.rmSync(tmp, { force: true }); fs.symlinkSync(OUT, tmp); fs.renameSync(tmp, cur);
@@ -258,7 +262,4 @@ for (const d of fs.readdirSync(DEST)) {
   if (d.startsWith(".") || d === "current" || p === OUT || p === prev) continue;
   try { if (fs.lstatSync(p).isDirectory()) fs.rmSync(p, { recursive: true, force: true }); } catch {}
 }
-// 试跑一次（只读版本号）
-const P = process.env.CCAPP_CLAUDE_PRELOAD && fs.existsSync(process.env.CCAPP_CLAUDE_PRELOAD) ? ["--preload", process.env.CCAPP_CLAUDE_PRELOAD] : [];
-const r = spawnSync(path.join(PREFIX, "glibc/lib/ld-linux-aarch64.so.1"), ["--library-path", path.join(PREFIX, "glibc/lib"), ...P, path.join(cur, "claude"), "--version"], { stdio: "inherit" });
-process.exit(r.status === 0 ? 0 : 1);
+process.exit(0);
