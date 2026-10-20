@@ -156,7 +156,7 @@ public class BrowserPane extends LinearLayout {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
-                try { act.startActivityForResult(p.createIntent(), BrowserPane.this.fileReq); } catch (Exception e) { fileCb = null; return false; }
+                try { act.startActivityForResult(MainActivity.chooserIntent(p), BrowserPane.this.fileReq); } catch (Exception e) { fileCb = null; return false; }
                 return true;
             }
         });
@@ -258,7 +258,7 @@ public class BrowserPane extends LinearLayout {
     /** 宿主在 onActivityResult 里转过来（请求码是构造时给的 fileReq） */
     public void onResult(int res, Intent data) {
         if (fileCb == null) return;
-        fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+        fileCb.onReceiveValue(MainActivity.chooserResult(res, data));
         fileCb = null;
     }
 

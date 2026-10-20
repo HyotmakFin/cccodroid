@@ -2086,6 +2086,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     state.popup.items = [];
   }
 
+  // 点浮层和输入框以外的地方就收起（手机上没有 Esc；之前只能删掉那个 / 才关得掉）
+  document.addEventListener("pointerdown", (e) => {
+    if (!state.popup.mode || popupEl.contains(e.target) || e.target === inputEl) return;
+    hidePopup();
+  }, true);
+
   function showPopup(mode, items, head) {
     state.popup.mode = mode;
     state.popup.items = items;

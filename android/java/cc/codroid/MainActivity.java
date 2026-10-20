@@ -872,7 +872,7 @@ public class MainActivity extends Activity {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
-                try { startActivityForResult(p.createIntent(), 7); } catch (Exception e) { fileCb = null; return false; }
+                try { startActivityForResult(chooserIntent(p), 7); } catch (Exception e) { fileCb = null; return false; }
                 return true;
             }
             // 页面里的 alert / confirm / prompt：系统默认的对话框标题是「网址为 http://127.0.0.1 的网页显示」，
@@ -1044,9 +1044,28 @@ public class MainActivity extends Activity {
             return;
         }
         if (req == 7 && fileCb != null) {
-            fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+            fileCb.onReceiveValue(chooserResult(res, data));
             fileCb = null;
         }
+    }
+
+    /** 系统给的 createIntent() 不管网页要不要多选，一律只能选一个：<input multiple> 时补上 EXTRA_ALLOW_MULTIPLE */
+    static Intent chooserIntent(WebChromeClient.FileChooserParams p) {
+        Intent i = p.createIntent();
+        if (p.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        return i;
+    }
+
+    /** 系统的 parseResult() 只读 getData()：一次选了多个时文件在 ClipData 里，它会返回空，结果一个都附加不上 */
+    static Uri[] chooserResult(int res, Intent data) {
+        if (res != RESULT_OK || data == null) return null;
+        android.content.ClipData c = data.getClipData();
+        if (c != null && c.getItemCount() > 0) {
+            java.util.ArrayList<Uri> out = new java.util.ArrayList<>();
+            for (int i = 0; i < c.getItemCount(); i++) { Uri u = c.getItemAt(i).getUri(); if (u != null) out.add(u); }
+            if (!out.isEmpty()) return out.toArray(new Uri[0]);
+        }
+        return data.getData() != null ? new Uri[] { data.getData() } : null;
     }
 
     @Override public void onBackPressed() {
