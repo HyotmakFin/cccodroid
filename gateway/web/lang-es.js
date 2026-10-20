@@ -1372,4 +1372,5 @@ window.I18N_DICT["es"] = {
   "输入文字": "Escribir texto",
   "返回 / 主页等按键": "Atrás / inicio y otras teclas",
   "截屏": "Captura de pantalla",
+  "默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。": "Desactivado por defecto. Actívalo cuando quieras que Claude pruebe una app que estás creando o envíe a otra app los archivos que genera; mientras está activo, cada turno lleva entre mil y dos mil tokens extra de descripciones de herramientas.",
 };

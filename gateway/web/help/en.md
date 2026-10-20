@@ -150,6 +150,18 @@ Sidebar → Capabilities lists the slash commands, tools, skills, subagents, MCP
 - With Shizuku, keep-alive is more reliable and app updates can install silently when idle.
 - Every command run through `priv` is logged (time, who started it, the command, exit code). See it under Shizuku in Settings → "Privileged command log". The log stays on the device.
 
+## Device tools (optional, off by default)
+
+Lets Claude use a few phone features directly: post notifications, read and write the clipboard, share a file to another app, open a link or an app, check battery and network. Turn them on in Settings → Device tools; each tool can be switched off on its own.
+
+- **When to turn them on**: when you want Claude to test an app you're building, or to send a PDF, image or APK it made to a chat app. While on, every turn carries one or two thousand extra tokens of tool descriptions, so leave it off otherwise.
+- **Anything that opens another app only pre-fills it**: calendar, alarm, email, SMS and the dialer get the details filled in; you tap save, send or call yourself. When cccodroid is in the background Android won't let it show a screen, so it posts a notification you tap instead.
+- **Screen reading and tapping** need the accessibility service, a separate setting that is off by default:
+  - **On when needed**: switched on when Claude reads the screen and off again after a few idle minutes, so it doesn't run all the time or drain the battery. Needs Shizuku activated.
+  - **Always on**: stays on and uses more battery.
+  - Without Shizuku you have to turn cccodroid on in the system accessibility settings yourself. On Android 13 and later, sideloaded apps first need App info → top-right menu → Allow restricted settings.
+- Each call is confirmed like any other tool, according to your permission mode.
+
 ## Memory manager (optional, off by default)
 
 During heavy work (compiling, rendering, transcoding), background apps that keep restarting themselves compete for memory. The memory manager can stop them first and keep them down until the job finishes. It needs Shizuku; turn it on in Settings.

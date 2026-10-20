@@ -1402,4 +1402,5 @@ window.I18N_DICT.en = {
   "输入文字": "Type text",
   "返回 / 主页等按键": "Back / home and other keys",
   "截屏": "Screenshot",
+  "默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。": "Off by default. Turn it on when you want Claude to test an app you're building or send files it made to another app; while on, every turn carries one or two thousand extra tokens of tool descriptions.",
 };

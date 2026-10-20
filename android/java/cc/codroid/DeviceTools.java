@@ -68,7 +68,7 @@ final class DeviceTools {
         for (String s : BASIC) tools.put(new JSONObject().put("name", s).put("enabled", !off.contains(s)));
         for (String s : SCREEN) tools.put(new JSONObject().put("name", s).put("enabled", !off.contains(s)).put("screen", true));
         return new JSONObject().put("ok", true)
-            .put("on", p.getBoolean("on", true))
+            .put("on", p.getBoolean("on", false))
             .put("tools", tools)
             .put("a11y", new JSONObject()
                 .put("mode", mode)
@@ -104,7 +104,7 @@ final class DeviceTools {
         if (a == null) a = new JSONObject();
         try {
             SharedPreferences p = sp(c);
-            if (!p.getBoolean("on", true)) return fail(Tr.t("用户在设置里关掉了设备工具"));
+            if (!p.getBoolean("on", false)) return fail(Tr.t("用户在设置里关掉了设备工具"));
             if (!known(tool)) return fail(Tr.t("没有这个设备工具：") + tool);
             if (p.getStringSet("off", new HashSet<>()).contains(tool)) return fail(Tr.t("用户在设置里关掉了这个工具：") + tool);
             if (isScreen(tool)) {

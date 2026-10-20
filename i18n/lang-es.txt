@@ -1369,3 +1369,4 @@
 1369	Escribir texto
 1370	Atrás / inicio y otras teclas
 1371	Captura de pantalla
+1372	Desactivado por defecto. Actívalo cuando quieras que Claude pruebe una app que estás creando o envíe a otra app los archivos que genera; mientras está activo, cada turno lleva entre mil y dos mil tokens extra de descripciones de herramientas.
