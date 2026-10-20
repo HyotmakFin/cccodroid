@@ -250,6 +250,40 @@
         </div>
       </div>
 
+      <!-- 使用统计：每天 / 周 / 月和 Claude 对话多少次；月报是 canvas 画的图，可保存、分享。数据在网关 home/ccapp-usage.json -->
+      <div class="field" id="us-field">
+        <label data-i18n>使用统计</label>
+        <div class="prov-card">
+          <div class="us-tiles" id="us-tiles"></div>
+          <div class="us-year" id="us-year"></div>
+          <div class="us-mhead">
+            <button class="icon-btn" id="us-prev" aria-label="上个月" data-i18n-attr="aria-label">‹</button>
+            <span id="us-mlabel"></span>
+            <button class="icon-btn" id="us-next" aria-label="下个月" data-i18n-attr="aria-label">›</button>
+          </div>
+          <canvas id="us-card" class="us-card"></canvas>
+          <div id="us-actions">
+            <div class="row-actions">
+              <button class="btn sm" data-act="save" data-i18n>保存图片</button>
+              <button class="btn sm ghost" data-act="share" id="us-share" data-i18n>分享</button>
+            </div>
+            <details class="ext-more"><summary data-i18n>管理统计数据</summary>
+              <label class="tiny" style="display:flex;gap:8px;align-items:center;margin:4px 0">
+                <input type="checkbox" id="us-off" style="width:auto;margin:0">
+                <span data-i18n>记录使用统计</span>
+              </label>
+              <div class="row-actions">
+                <button class="btn sm ghost" data-act="import" data-i18n>从历史会话重新补算</button>
+                <button class="btn sm ghost danger" data-act="clear-month" data-i18n>清除这个月</button>
+                <button class="btn sm ghost danger" data-act="clear-all" data-i18n>清空全部</button>
+              </div>
+            </details>
+          </div>
+          <div class="tiny" id="us-note"></div>
+          <div class="prov-state" id="us-result"></div>
+        </div>
+      </div>
+
       <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
       <div class="field hidden" id="upd-field">
                 <label data-i18n>更新</label>

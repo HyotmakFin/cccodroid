@@ -4580,6 +4580,7 @@ async function startRun(item) {
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
   run.bgList = [];             // 后台任务明细：{ id, type, desc }（shell / 子代理 / monitor / 工作流），界面列出来、可单独停
   run.replays = 0;
+  run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
     try { writeUser(item.message); } catch { return false; }
@@ -4656,6 +4657,7 @@ async function startRun(item) {
   const onInit = (init) => {
     LAST_INIT = init;
     run.sessionId = init.session_id;
+    run.usageModel = init.model || run.usageModel;
     // 新会话的 run_start 发出时还没有会话号：回填进日志，别的视图切过来、整轮重放时才认得出这是它的
     for (const e of run.log || []) if (e.type === "run_start" && !e.sessionId) e.sessionId = run.sessionId;
     RUN_SESSIONS.set(run.id, run.sessionId);
@@ -4678,6 +4680,7 @@ async function startRun(item) {
   };
   const onResult = (r) => {
     lastResult = r;
+    if (!isCmd && r.usage) usageAdd({ t: 1, i: promptTokens(r.usage), o: r.usage.output_tokens || 0 }, run.sessionId, run.usageModel);
     if (run.pendingInject.length) return;
     if (!run.bgTasks) return closeInput();
     // 答完了，只是后台任务（本地服务之类）还在跑：界面上算这一轮结束，进程和 stdin 留着等任务回报
@@ -4687,6 +4690,8 @@ async function startRun(item) {
   };
   const onReplay = () => {
     // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
+    const said = run.replays === 0 ? message : run.pendingInject[0] && run.pendingInject[0].message;
+    if (usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
     if (run.replays++ === 0) return;
     const it = run.pendingInject.shift();
     if (it) emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id });
@@ -4697,6 +4702,11 @@ async function startRun(item) {
     // 清单工具一出结果就推，不等 4 秒轮询
     if (ev.type === "user" && ev.tool_use_result && (ev.tool_use_result.task || ev.tool_use_result.statusChange || ev.tool_use_result.updatedFields)) setImmediate(() => tasksCheck(run.sessionId));
     if (ev.type === "control_response") return;          // 我们发的 set_permission_mode 的回执
+    if (ev.type === "assistant" && Array.isArray(ev.message && ev.message.content)) {
+      let n = 0;
+      for (const c of ev.message.content) if (c && c.type === "tool_use" && c.id && !run.usageTools.has(c.id)) { run.usageTools.add(c.id); n++; }
+      if (n) usageAdd({ tl: n }, run.sessionId);
+    }
     if (ev.type === "control_cancel_request") {           // claude 自己撤回了（比如被中断）
       if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
       return;
@@ -5349,6 +5359,97 @@ function toFront(text) {
 // 电量、充电、亮屏和前台时长由 Java（Battery.java，经 Priv 套接字 op=battery）给，开发端没有这一层就只记 CPU。
 // 每 5 分钟采一次，按「小时」「天」两级桶存（8 天 / 120 天），周由天现算。
 // 系统自己的估算（dumpsys batterystats，按电源模型折成 mAh）要 Shizuku，只在用户点了才查一次 —— 那条命令本身就不轻。
+// ── 使用统计：每条发给 Claude 的消息、每轮回复、工具调用、token，按 UTC 小时分桶记下来 ──
+// 键是「1970 年起第几个小时」，前端按本地时区自己汇总成日 / 周 / 月（换时区也不乱）。
+// since：开始实时记录的时刻；它之前的小时可以从历史会话补算（imported 记补算时间，null = 还没补过）。
+// 桶：m 消息数、t 回复轮数、tl 工具调用、i 输入 token（含缓存）、o 输出 token、s 当时用过的会话、md 各模型的轮数；x = 补算来的
+const USAGE_FILE = path.join(CFG.home, "ccapp-usage.json");
+const USAGE = { v: 1, since: Date.now(), imported: null, off: false, hours: {} };
+try { Object.assign(USAGE, JSON.parse(fs.readFileSync(USAGE_FILE, "utf8"))); } catch {}
+let usageTimer = null;
+function usageSave(now) {
+  clearTimeout(usageTimer);
+  const write = () => {
+    const tmp = USAGE_FILE + ".tmp";
+    try { fs.writeFileSync(tmp, JSON.stringify(USAGE)); fs.renameSync(tmp, USAGE_FILE); } catch (e) { log("使用统计写盘失败：" + e.message); }
+  };
+  if (now) write(); else usageTimer = setTimeout(write, 5000);
+}
+if (!fs.existsSync(USAGE_FILE)) usageSave(true);
+function usageBucket(hours, h) {
+  return hours[h] || (hours[h] = { m: 0, t: 0, tl: 0, i: 0, o: 0, s: [], md: {} });
+}
+function usageAdd(d, sid, model, ts) {
+  if (USAGE.off) return;
+  const b = usageBucket(USAGE.hours, Math.floor((ts || Date.now()) / 3600e3));
+  for (const k of ["m", "t", "tl", "i", "o"]) if (d[k]) b[k] += d[k];
+  if (sid && !b.s.includes(sid) && b.s.length < 200) b.s.push(sid);
+  if (model && d.t) b.md[model] = (b.md[model] || 0) + d.t;
+  usageSave();
+}
+// 用户自己打的字才算一次对话：斜杠命令、命令回显、系统注入的不算
+const usageIsPrompt = (text) => {
+  const s = String(text || "").trimStart();
+  return !!s && !s.startsWith("/") && !/^<(command-|local-command|bash-|system-reminder|task-notification)/.test(s) && !s.startsWith("Caveat: ");
+};
+const usageText = (content) => typeof content === "string" ? content
+  : Array.isArray(content) && !content.some((c) => c && c.type === "tool_result") ? content.filter((c) => c && c.type === "text").map((c) => c.text).join("\n") : "";
+
+/** 从 ~/.claude/projects 下的会话记录补算 since 之前的部分。分叉出来的会话会重复带上原会话的消息，按 uuid / message.id 去重 */
+let usageImporting = null;
+function usageImport() {
+  return usageImporting || (usageImporting = (async () => {
+    const until = Math.floor(USAGE.since / 3600e3);
+    const hours = {}, seenU = new Set(), seenTool = new Set(), msgs = new Map();
+    let files = 0, prompts = 0;
+    let dirs = [];
+    try { dirs = fs.readdirSync(PATHS.projects); } catch {}
+    for (const d of dirs) {
+      let list = [];
+      try { list = fs.readdirSync(path.join(PATHS.projects, d)).filter((f) => f.endsWith(".jsonl")); } catch { continue; }
+      for (const f of list) {
+        files++;
+        let pending = null;            // 刚收到一条提问、还没见到回复：第一条回复的模型算这一轮的
+        const rl = (await import("node:readline")).createInterface({ input: fs.createReadStream(path.join(PATHS.projects, d, f)), crlfDelay: Infinity });
+        for await (const line of rl) {
+          if (line.length < 20 || !/"type":"(user|assistant)"/.test(line)) continue;
+          let e; try { e = JSON.parse(line); } catch { continue; }
+          if (e.isSidechain || !e.timestamp) continue;
+          const ts = Date.parse(e.timestamp), h = Math.floor(ts / 3600e3);
+          if (!(h < until)) continue;
+          const m = e.message || {};
+          if (e.type === "user" && m.role === "user") {
+            if (e.isMeta || e.isCompactSummary || (e.uuid && seenU.has(e.uuid))) continue;
+            if (!usageIsPrompt(usageText(m.content))) continue;
+            if (e.uuid) seenU.add(e.uuid);
+            const b = usageBucket(hours, h);
+            b.m++; prompts++;
+            if (e.sessionId && !b.s.includes(e.sessionId) && b.s.length < 200) b.s.push(e.sessionId);
+            pending = b;
+          } else if (e.type === "assistant" && m.model && m.model !== "<synthetic>") {
+            if (pending) { pending.t++; pending.md[m.model] = (pending.md[m.model] || 0) + 1; pending = null; }
+            for (const c of m.content || []) if (c && c.type === "tool_use" && c.id && !seenTool.has(c.id)) { seenTool.add(c.id); usageBucket(hours, h).tl++; }
+            // 同一条回复流式拆成好几行、每行都带 usage：按 message.id 只算一次（取最后一行的）
+            if (m.id && m.usage) msgs.set(m.id, [h, m.usage]);
+          }
+        }
+      }
+    }
+    for (const [h, u] of msgs.values()) {
+      const b = usageBucket(hours, h);
+      b.i += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      b.o += u.output_tokens || 0;
+    }
+    // 换掉上次补算的（since 之前的实时数据——比如清空后重新补——也一并以这次为准）
+    for (const k of Object.keys(USAGE.hours)) if (+k < until) delete USAGE.hours[k];
+    for (const [k, b] of Object.entries(hours)) USAGE.hours[k] = { ...b, x: 1 };
+    USAGE.imported = Date.now();
+    usageSave(true);
+    log(`使用统计：从 ${files} 个会话记录补算了 ${prompts} 条消息`);
+    return { files, prompts };
+  })().finally(() => { usageImporting = null; }));
+}
+
 const ENERGY_FILE = path.join(CFG.home, ".cache", "ccapp-energy.json");
 const ENERGY_STEP = 5 * 60e3, ENERGY_HOUR = 3600e3;
 const energy = { v: 1, last: null, hours: {}, days: {}, levels: [], sys: null };
@@ -7274,6 +7375,36 @@ const server = http.createServer(async (req, res) => {
     // OAuth 全程由 claude 自己完成，令牌由它写进它自己的 ~/.claude/.credentials.json；
     // 我们只转交用户在授权页拿到的一次性授权码（等同于在终端里粘贴），不读、不存任何凭据。
     // ── Shizuku（调试提权）──
+    // ── 使用统计 ──
+    if (req.method === "GET" && p === "/api/usage") return sendJson(res, 200, { since: USAGE.since, imported: USAGE.imported, off: !!USAGE.off, importing: !!usageImporting, hours: USAGE.hours, now: Date.now() });
+    if (req.method === "POST" && p.startsWith("/api/usage/")) {
+      let b; try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
+      const op = p.slice(11);
+      if (op === "import") return sendJson(res, 200, { ok: true, ...(await usageImport()) });
+      if (op === "set") { USAGE.off = !!b.off; usageSave(true); return sendJson(res, 200, { ok: true, off: USAGE.off }); }
+      if (op === "clear") {
+        if (b.all) { USAGE.hours = {}; USAGE.since = Date.now(); USAGE.imported = Date.now(); }
+        else {
+          const from = Number(b.from), to = Number(b.to);
+          if (!(from < to)) return sendJson(res, 400, { error: "bad range" });
+          for (const k of Object.keys(USAGE.hours)) if (+k * 3600e3 >= from && +k * 3600e3 < to) delete USAGE.hours[k];
+        }
+        usageSave(true);
+        return sendJson(res, 200, { ok: true });
+      }
+      // 月报图片：前端画好的 PNG 落到导出目录，再交给「保存到」/ 分享
+      if (op === "card") {
+        const name = String(b.name || ""), data = Buffer.from(String(b.data || ""), "base64");
+        if (!/^[\w.-]+\.png$/.test(name) || data.length < 100 || data.readUInt32BE(0) !== 0x89504e47) return sendJson(res, 400, { error: "bad image" });
+        const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
+        const dir = path.join(base, "exports");
+        fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, name);
+        fs.writeFileSync(file, data);
+        return sendJson(res, 200, { ok: true, file });
+      }
+      return sendJson(res, 404, { error: "unknown op" });
+    }
     // ── 内存管家 ──
     if (req.method === "GET" && p === "/api/energy") return sendJson(res, 200, await energyReport(u.searchParams.get("view") || "hour"));
     if (req.method === "POST" && p === "/api/energy/system") return sendJson(res, 200, await energySystem());

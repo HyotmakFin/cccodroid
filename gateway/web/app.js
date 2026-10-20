@@ -2556,8 +2556,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   // 会话页三种视图：普通列表 / 多选（导出、批量删除）/ 回收站
-  // q：搜索词；hits：网关返回的内容命中（null = 还没回来）；pinFold：置顶组折叠
-  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30, q: "", hits: null, pinFold: localStorage.getItem("cc.pinFold") === "1" };
+  // q：搜索词；hits：网关返回的内容命中（null = 还没回来）；fold：各分组折叠状态（pin / today / week / month / m:年-月）
+  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30, q: "", hits: null, fold: loadSessFold() };
+  function loadSessFold() {
+    let f = {};
+    try { f = JSON.parse(localStorage.getItem("cc.sessFold") || "{}") || {}; } catch {}
+    if (!("pin" in f) && localStorage.getItem("cc.pinFold") === "1") f.pin = true;   // 旧版只记了置顶组
+    return f;
+  }
+  // 没手动动过的：一个月以前的按月分组默认收起，其余展开
+  const sessFolded = (k) => k in sess.fold ? !!sess.fold[k] : k.startsWith("m:");
 
   // 精确到分钟；今年的省掉年份
   function fmtStamp(ms) {
@@ -2566,15 +2574,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const md = p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
     return d.getFullYear() === new Date().getFullYear() ? md : d.getFullYear() + "-" + md;
   }
-  // 按最后变动分组：今天 / 7 天内（不含今天）/ 30 天内 / 某年某月
+  // 按最后变动分组：今天 / 7 天内（不含今天）/ 30 天内 / 某年某月。key 不随界面语言变，用来记折叠状态
   function sessGroup(ms) {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const day = 86400000, t0 = d0.getTime();
-    if (ms >= t0) return t("今天");
-    if (ms >= t0 - 7 * day) return t("7 天内");
-    if (ms >= t0 - 30 * day) return t("30 天内");
-    try { return new Date(ms).toLocaleDateString(document.documentElement.lang || undefined, { year: "numeric", month: "long" }); }
-    catch { const d = new Date(ms); return d.getFullYear() + "-" + (d.getMonth() + 1); }
+    if (ms >= t0) return { key: "today", label: t("今天") };
+    if (ms >= t0 - 7 * day) return { key: "week", label: t("7 天内") };
+    if (ms >= t0 - 30 * day) return { key: "month", label: t("30 天内") };
+    const d = new Date(ms), key = "m:" + d.getFullYear() + "-" + (d.getMonth() + 1);
+    try { return { key, label: d.toLocaleDateString(document.documentElement.lang || undefined, { year: "numeric", month: "long" }) }; }
+    catch { return { key, label: key.slice(2) }; }
   }
   // 先转义再标出命中（不区分大小写）
   function markHit(text, q) {
@@ -2626,17 +2635,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         + (list.length ? list.map(item).join("") : sess.hits ? `<div class="tiny">${t("没有找到包含「{q}」的会话。", { q: esc(q) })}</div>` : "");
       return;
     }
-    const pins = state.sessions.filter((s) => s.pinned), rest = state.sessions.filter((s) => !s.pinned);
-    let html = "";
-    if (pins.length) {
-      html += `<div class="sess-grp pin ${sess.pinFold ? "folded" : ""}" data-g="pin"><span class="chev">▾</span>${t("置顶")} · ${pins.length}</div>`;
-      if (!sess.pinFold) html += pins.map(item).join("");
+    // 分组：置顶在最前，其余按时间；每组标题可点击折叠，收起时仍露出当前会话
+    const groups = [];
+    const pins = state.sessions.filter((s) => s.pinned);
+    if (pins.length) groups.push({ key: "pin", label: t("置顶"), list: pins });
+    for (const s of state.sessions) {
+      if (s.pinned) continue;
+      const g = sessGroup(s.mtime), top = groups[groups.length - 1];
+      if (top && top.key === g.key) top.list.push(s); else groups.push({ ...g, list: [s] });
     }
-    let last = "";
-    for (const s of rest) {
-      const g = sessGroup(s.mtime);
-      if (g !== last) { html += `<div class="sess-grp">${esc(g)}</div>`; last = g; }
-      html += item(s);
+    let html = "";
+    for (const g of groups) {
+      const folded = sessFolded(g.key);
+      html += `<div class="sess-grp ${g.key === "pin" ? "pin" : ""} ${folded ? "folded" : ""}" data-g="${esc(g.key)}"><span class="chev">▾</span>${esc(g.label)} · ${g.list.length}</div>`;
+      html += (folded ? g.list.filter((s) => s.id === view.sessionId) : g.list).map(item).join("");
     }
     box.innerHTML = html;
   }
@@ -2776,9 +2788,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   $("session-list").addEventListener("click", async (e) => {
-    if (e.target.closest(".sess-grp.pin")) {
-      sess.pinFold = !sess.pinFold;
-      localStorage.setItem("cc.pinFold", sess.pinFold ? "1" : "0");
+    const grp = e.target.closest(".sess-grp[data-g]");
+    if (grp) {
+      const k = grp.dataset.g;
+      sess.fold[k] = !sessFolded(k);
+      localStorage.setItem("cc.sessFold", JSON.stringify(sess.fold));
       return renderSessions();
     }
     const el = e.target.closest(".item");
@@ -4575,6 +4589,248 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       Number.isFinite(b.currentUa) && b.currentUa ? Math.round(Math.abs(b.currentUa) / (Math.abs(b.currentUa) > 20000 ? 1000 : 1)) + " mA" : ""].filter(Boolean).join(" · ") : "";
     enCaption();
   }
+  // ── 使用统计：网关按 UTC 小时记，这里按本地时区汇总成日 / 周 / 月；月报画在 canvas 上，看到的就是导出的 ──
+  const us = { raw: null, days: new Map(), month: null, busy: false };
+  const usDayKey = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const usMonthKey = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  const usNum = (n) => Number(n || 0).toLocaleString(I18N.lang);
+  const usCompact = (n) => { try { return new Intl.NumberFormat(I18N.lang, { notation: "compact", maximumFractionDigits: 1 }).format(n || 0); } catch { return usNum(n); } };
+  function usEmpty() { return { m: 0, t: 0, tl: 0, i: 0, o: 0, s: new Set(), md: {}, hr: new Array(24).fill(0) }; }
+  function usMerge(a, b, hour) {
+    for (const k of ["m", "t", "tl", "i", "o"]) a[k] += b[k] || 0;
+    for (const x of b.s || []) a.s.add(x);
+    for (const [k, v] of Object.entries(b.md || {})) a.md[k] = (a.md[k] || 0) + v;
+    if (hour != null) a.hr[hour] += b.m || 0; else if (b.hr) b.hr.forEach((v, i) => { a.hr[i] += v; });
+    return a;
+  }
+  function usBuild() {
+    us.days = new Map();
+    for (const [k, b] of Object.entries(us.raw.hours || {})) {
+      const d = new Date(+k * 3600e3), key = usDayKey(d);
+      if (!us.days.has(key)) us.days.set(key, usEmpty());
+      usMerge(us.days.get(key), b, d.getHours());
+    }
+  }
+  /** [a, b) 两个本地日期之间的合计 */
+  function usSum(a, b) {
+    const out = usEmpty();
+    for (const d = new Date(a); d < b; d.setDate(d.getDate() + 1)) { const x = us.days.get(usDayKey(d)); if (x) usMerge(out, x); }
+    return out;
+  }
+  const usDay0 = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const usAddDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const usWeek0 = (d) => { const x = usDay0(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };   // 周一起算
+  const usMonth0 = (y, m) => new Date(y, m, 1);
+  const usMonthName = (y, m) => new Date(y, m, 1).toLocaleDateString(I18N.lang, { year: "numeric", month: "long" });
+
+  /** 一个月的全部数字：月报和下面的按钮都用它 */
+  function usMonthStats(y, m) {
+    const a = usMonth0(y, m), b = usMonth0(y, m + 1), today = usDay0(new Date());
+    const tot = usSum(a, b), prev = usSum(usMonth0(y, m - 1), a);
+    const cal = [];
+    let streak = 0, best = 0, active = 0, top = null;
+    for (const d = new Date(a); d < b; d.setDate(d.getDate() + 1)) {
+      const x = us.days.get(usDayKey(d)), n = x ? x.m : 0;
+      cal.push({ date: new Date(d), n, future: d > today });
+      if (n) { active++; streak++; best = Math.max(best, streak); if (!top || n > top.n) top = { date: new Date(d), n }; } else streak = 0;
+    }
+    const peak = tot.hr.reduce((bi, v, i, arr) => (v > arr[bi] ? i : bi), 0);
+    const models = Object.entries(tot.md).sort((p, q) => q[1] - p[1]);
+    const days = Math.round((b - a) / 86400e3);
+    return { y, m, tot, prev, cal, active, best, top, peak, models, days };
+  }
+
+  // 画月报：固定深色卡片（分享出去在哪都好看），宽 1080
+  function usDraw(cv, st) {
+    const W = 1080, P = 72, ACC = "#d97757", FG = "#f3ede6", FG2 = "#b9b0a6", FG3 = "#7d756c", TILE = "rgba(255,255,255,0.055)";
+    const font = (w, px) => `${w} ${px}px system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif`;
+    const calRows = Math.ceil((((st.cal[0].date.getDay() + 6) % 7) + st.cal.length) / 7);
+    const cell = Math.floor((W - 2 * P - 6 * 14) / 7), calH = 52 + calRows * (cell + 14);
+    const mdRows = Math.min(st.models.length, 4);
+    const H = 880 + calH + 70 + 300 + (mdRows ? 90 + mdRows * 64 : 0) + 110;   // 与下面逐段累加的 y 一致
+    cv.width = W; cv.height = H;
+    const c = cv.getContext("2d");
+    const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h); };
+    const text = (s, x, y, f, col, align) => { c.font = f; c.fillStyle = col; c.textAlign = align || "left"; c.fillText(s, x, y); };
+    // 底色 + 右上角一团暖光
+    const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#211d1a"); bg.addColorStop(1, "#151311");
+    c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    const glow = c.createRadialGradient(W - 120, 60, 0, W - 120, 60, 560); glow.addColorStop(0, "rgba(217,119,87,0.30)"); glow.addColorStop(1, "rgba(217,119,87,0)");
+    c.fillStyle = glow; c.fillRect(0, 0, W, H);
+    c.textBaseline = "alphabetic";
+    let y = P + 34;
+    text("cccodroid · " + t("使用月报"), P, y, font(500, 30), FG2);
+    y += 92; text(usMonthName(st.y, st.m), P, y, font(700, 76), FG);
+    // 主数字
+    y += 190;
+    c.font = font(800, 168); const nw = c.measureText(usNum(st.tot.m)).width;
+    const hero = c.createLinearGradient(P, y - 150, P + nw, y); hero.addColorStop(0, "#f0a37f"); hero.addColorStop(1, ACC);
+    c.fillStyle = hero; c.textAlign = "left"; c.fillText(usNum(st.tot.m), P - 6, y);
+    text(t("次对话"), P + nw + 20, y - 12, font(600, 44), FG);
+    const dp = st.prev.m ? Math.round(((st.tot.m - st.prev.m) / st.prev.m) * 100) : null;
+    y += 62;
+    text(dp == null ? t("和 Claude 一起度过的这个月") : t("比上月 {p}", { p: (dp >= 0 ? "+" : "") + dp + "%" }), P, y, font(500, 32), dp == null ? FG2 : dp >= 0 ? "#8fd19e" : "#e8a08a");
+    // 六格数字
+    y += 50;
+    const tiles = [
+      [t("活跃天数"), t("{n} / {d} 天", { n: st.active, d: st.days })],
+      [t("会话"), t("{n} 个", { n: usNum(st.tot.s.size) })],
+      [t("最长连续"), t("{n} 天", { n: st.best })],
+      [st.top ? t("最忙的一天 · {n} 次", { n: usNum(st.top.n) }) : t("最忙的一天"), st.top ? st.top.date.toLocaleDateString(I18N.lang, { month: "short", day: "numeric" }) : "—"],
+      [t("工具调用"), t("{n} 次", { n: usCompact(st.tot.tl) })],
+      [t("Claude 写了"), usCompact(st.tot.o) + " token"],
+    ];
+    const tw = (W - 2 * P - 2 * 24) / 3;
+    tiles.forEach(([k, v], i) => {
+      const x = P + (i % 3) * (tw + 24), ty = y + Math.floor(i / 3) * 170;
+      c.fillStyle = TILE; rr(x, ty, tw, 146, 26); c.fill();
+      text(k, x + 28, ty + 52, font(500, 26), FG3);
+      c.font = font(700, 40); let s = v; while (c.measureText(s).width > tw - 56 && s.length > 2) s = s.slice(0, -2) + "…";
+      text(s, x + 28, ty + 110, font(700, 40), FG);
+    });
+    y += 2 * 170 + 40;
+    // 日历热力图：颜色按本月最多那天分五档
+    text(t("每天"), P, y + 10, font(600, 30), FG);
+    const wk = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(I18N.lang, { weekday: "narrow" }));
+    const max = Math.max(1, ...st.cal.map((x) => x.n));
+    wk.forEach((w, i) => text(w, P + i * (cell + 14) + cell / 2, y + 58, font(500, 22), FG3, "center"));
+    const lv = ["rgba(255,255,255,0.06)", "rgba(217,119,87,0.28)", "rgba(217,119,87,0.48)", "rgba(217,119,87,0.70)", "rgba(226,133,100,0.90)", "#f0a37f"];
+    const today = usDayKey(new Date());
+    st.cal.forEach((d, i) => {
+      const k = i + ((st.cal[0].date.getDay() + 6) % 7), x = P + (k % 7) * (cell + 14), cy = y + 76 + Math.floor(k / 7) * (cell + 14);
+      const l = d.n ? Math.min(5, 1 + Math.floor((d.n / max) * 4.999)) : 0;
+      c.fillStyle = d.future ? "rgba(255,255,255,0.025)" : lv[l]; rr(x, cy, cell, cell, 18); c.fill();
+      if (usDayKey(d.date) === today) { c.strokeStyle = FG; c.lineWidth = 3; rr(x + 1.5, cy + 1.5, cell - 3, cell - 3, 17); c.stroke(); }
+      text(String(d.date.getDate()), x + 16, cy + 34, font(600, 22), l >= 4 ? "#2a1a12" : d.future ? FG3 : FG2);
+      if (d.n) text(usNum(d.n), x + cell - 16, cy + cell - 18, font(700, 28), l >= 4 ? "#2a1a12" : FG, "right");
+    });
+    y += calH + 70;
+    // 24 小时分布
+    const hmax = Math.max(1, ...st.tot.hr);
+    text(t("一天里什么时候聊"), P, y, font(600, 30), FG);
+    if (st.tot.m) text(t("最常在 {h} 点前后", { h: st.peak }), W - P, y, font(500, 26), ACC, "right");
+    const bw = (W - 2 * P) / 24, by = y + 200;
+    st.tot.hr.forEach((v, i) => {
+      const h = Math.max(4, (v / hmax) * 150);
+      c.fillStyle = v === hmax && v ? ACC : v ? "rgba(217,119,87,0.45)" : "rgba(255,255,255,0.07)";
+      rr(P + i * bw + 4, by - h, bw - 8, h, 6); c.fill();
+      if (i % 6 === 0) text(String(i).padStart(2, "0"), P + i * bw + bw / 2, by + 40, font(500, 22), FG3, "center");
+    });
+    y += 300;
+    // 模型
+    if (mdRows) {
+      text(t("用得最多的模型"), P, y, font(600, 30), FG);
+      const sum = st.models.reduce((a, [, v]) => a + v, 0);
+      st.models.slice(0, 4).forEach(([name, v], i) => {
+        const ry = y + 50 + i * 64, pct = v / sum;
+        text(name.replace(/^claude-/, "").replace(/-\d{8}$/, ""), P, ry + 30, font(500, 28), FG2);
+        c.fillStyle = "rgba(255,255,255,0.07)"; rr(P + 420, ry + 8, W - 2 * P - 420 - 110, 26, 13); c.fill();
+        c.fillStyle = i ? "rgba(217,119,87,0.55)" : ACC; rr(P + 420, ry + 8, Math.max(26, (W - 2 * P - 420 - 110) * pct), 26, 13); c.fill();
+        text(pct < 0.01 ? "<1%" : Math.round(pct * 100) + "%", W - P, ry + 32, font(600, 28), FG, "right");
+      });
+      y += 90 + mdRows * 64;
+    }
+    // 页脚
+    c.fillStyle = "rgba(255,255,255,0.08)"; c.fillRect(P, y, W - 2 * P, 2);
+    text(t("{t} 轮回复 · 读了 {i} token", { t: usNum(st.tot.t), i: usCompact(st.tot.i) }), P, y + 56, font(500, 24), FG3);
+    text("cccodroid.net", W - P, y + 56, font(600, 24), FG2, "right");
+  }
+
+  function usRender() {
+    if (!us.raw) return;
+    const now = new Date(), d0 = usDay0(now), w0 = usWeek0(now), m0 = usMonth0(now.getFullYear(), now.getMonth());
+    const tile = (label, cur, prev, prevLabel) => `<div class="us-tile"><div class="us-n">${usNum(cur.m)}</div><div class="us-l">${esc(label)}</div>
+      <div class="us-sub">${esc(t("{p}：{n}", { p: prevLabel, n: usNum(prev.m) }))}</div></div>`;
+    $("us-tiles").innerHTML = tile(t("今天"), usSum(d0, usAddDays(d0, 1)), usSum(usAddDays(d0, -1), d0), t("昨天"))
+      + tile(t("本周"), usSum(w0, usAddDays(w0, 7)), usSum(usAddDays(w0, -7), w0), t("上周"))
+      + tile(t("本月"), usSum(m0, usMonth0(now.getFullYear(), now.getMonth() + 1)), usSum(usMonth0(now.getFullYear(), now.getMonth() - 1), m0), t("上月"));
+    // 近 12 个月的小柱子，点一下切到那个月
+    const months = Array.from({ length: 12 }, (_, i) => { const d = usMonth0(now.getFullYear(), now.getMonth() - 11 + i); return { y: d.getFullYear(), m: d.getMonth(), n: usSum(d, usMonth0(d.getFullYear(), d.getMonth() + 1)).m }; });
+    const mx = Math.max(1, ...months.map((x) => x.n));
+    const [sy, sm] = us.month;
+    $("us-year").innerHTML = months.map((x) => `<button class="us-mb ${x.y === sy && x.m === sm ? "on" : ""}" data-ym="${x.y}-${x.m}" title="${esc(usMonthName(x.y, x.m) + " · " + usNum(x.n))}">
+      <i style="height:${Math.max(x.n ? 8 : 3, Math.round((x.n / mx) * 100))}%"></i><span>${x.m + 1}</span></button>`).join("");
+    const st = usMonthStats(sy, sm);
+    $("us-mlabel").textContent = usMonthName(sy, sm);
+    $("us-next").disabled = sy > now.getFullYear() || (sy === now.getFullYear() && sm >= now.getMonth());
+    usDraw($("us-card"), st);
+    const r = us.raw;
+    $("us-note").textContent = [
+      r.off ? t("已暂停记录。") : t("从 {d} 起实时记录。", { d: new Date(r.since).toLocaleDateString(I18N.lang) }),
+      r.imported ? t("更早的部分是从历史会话补算的（删掉的会话补不回来）。") : "",
+      t("只记次数和用量，不记对话内容；数据只存在本机。"),
+    ].filter(Boolean).join(" ");
+    $("us-off").checked = !r.off;
+    $("us-share").classList.toggle("hidden", !canShare() && !navigator.canShare);
+  }
+  async function loadUsage() {
+    try {
+      us.raw = await api("/api/usage");
+      if (!us.month) { const n = new Date(); us.month = [n.getFullYear(), n.getMonth()]; }
+      usBuild(); usRender();
+      // 第一次打开：把装这个版本之前的历史会话补算进来
+      if (!us.raw.imported && !us.raw.importing && !us.busy) usImport(true);
+    } catch (e) { $("us-result").textContent = "✗ " + e.message; }
+  }
+  async function usImport(auto) {
+    us.busy = true;
+    $("us-result").textContent = t("正在从历史会话补算…");
+    try {
+      const r = await post("/api/usage/import", {});
+      $("us-result").textContent = t("补算完成：{f} 个会话记录、{n} 条消息。", { f: r.files, n: usNum(r.prompts) });
+      us.busy = false;
+      if (!auto || r.prompts) loadUsage();
+    } catch (e) { us.busy = false; $("us-result").textContent = "✗ " + e.message; }
+  }
+  $("us-year").addEventListener("click", (e) => {
+    const b = e.target.closest(".us-mb");
+    if (!b) return;
+    us.month = b.dataset.ym.split("-").map(Number);
+    usRender();
+  });
+  $("us-prev").addEventListener("click", () => { const d = usMonth0(us.month[0], us.month[1] - 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
+  $("us-next").addEventListener("click", () => { const d = usMonth0(us.month[0], us.month[1] + 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
+  $("us-off").addEventListener("change", async (e) => {
+    try { await post("/api/usage/set", { off: !e.target.checked }); loadUsage(); } catch (err) { toast(err.message, true); }
+  });
+  // 月报图片：先交给网关落成文件，再走「保存到」/ 系统分享；都没有就让浏览器自己下载
+  async function usCardFile() {
+    const [y, m] = us.month, name = `cccodroid-usage-${y}-${String(m + 1).padStart(2, "0")}.png`;
+    const data = $("us-card").toDataURL("image/png");
+    return { name, data, file: (await post("/api/usage/card", { name, data: data.split(",")[1] })).file };
+  }
+  $("us-actions").addEventListener("click", async (e) => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (!act) return;
+    const [y, m] = us.month;
+    try {
+      if (act === "save") {
+        const r = await usCardFile();
+        if (canSaveAs()) return saveAs(r.file, "image/png");
+        const a = document.createElement("a"); a.href = r.data; a.download = r.name; a.click();
+      } else if (act === "share") {
+        const r = await usCardFile();
+        if (canShare()) {
+          const j = await post("/api/app/share_file", { path: r.file, mime: "image/png" });
+          if (!j.ok) toast(j.message || t("分享失败"), true);
+        } else if (navigator.canShare) {
+          const f = new File([await (await fetch(r.data)).blob()], r.name, { type: "image/png" });
+          if (navigator.canShare({ files: [f] })) await navigator.share({ files: [f] }); else toast(t("已保存：{name}", { name: r.file }));
+        } else toast(t("已保存：{name}", { name: r.file }));
+      } else if (act === "import") {
+        if (confirm(t("按现存的会话记录重新补算 {d} 之前的统计？删掉的会话补不回来，那部分会变少。", { d: new Date(us.raw.since).toLocaleDateString(I18N.lang) }))) usImport(false);
+      } else if (act === "clear-month") {
+        if (!confirm(t("清除 {m} 的统计？", { m: usMonthName(y, m) }))) return;
+        await post("/api/usage/clear", { from: usMonth0(y, m).getTime(), to: usMonth0(y, m + 1).getTime() });
+        loadUsage();
+      } else if (act === "clear-all") {
+        if (!confirm(t("清空全部使用统计？之后从现在重新开始记。"))) return;
+        await post("/api/usage/clear", { all: true });
+        loadUsage();
+      }
+    } catch (err) { toast(err.message, true); }
+  });
+
   async function loadEnergy() {
     try { en.data = await api("/api/energy?view=" + en.view); en.sel = -1; enRender(); if (en.data.sys) enSys(en.data.sys); }
     catch (e) { $("en-cap").textContent = "✗ " + e.message; }
@@ -4895,7 +5151,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
     if (name === "help") loadHelp();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadEnergy(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadEnergy(); loadUsage(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
