@@ -181,6 +181,13 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[Shizuku](https://shizuku.rikka.app)**（RikkaApps）：不 root 也能拿到系统权限。
 - **[OpenCC](https://github.com/BYVoid/OpenCC)** / [opencc-js](https://github.com/nk2028/opencc-js)：繁体中文界面文案用它从简体转换，再人工校对。
 
+### 社区贡献者
+
+- **[CCB-Fox](https://github.com/CCB-Fox)**：天玑 GPU 驱动组件（[cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)），促成了 0.3.3 的 Mali 机型支持。
+- **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
+
+报告问题、测试机型、审查代码同样是贡献，都会记在这里。
+
 ## 许可
 
 cccodroid 本身以 [Apache License 2.0](LICENSE) 发布（另见 [NOTICE](NOTICE)）。

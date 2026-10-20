@@ -177,6 +177,13 @@ Layout:
 - **[Shizuku](https://shizuku.rikka.app)** (RikkaApps): system privileges without root.
 - **[OpenCC](https://github.com/BYVoid/OpenCC)** / [opencc-js](https://github.com/nk2028/opencc-js): the Traditional Chinese UI strings were converted with it, then reviewed by hand.
 
+### Community contributors
+
+- **[CCB-Fox](https://github.com/CCB-Fox)**: the Dimensity GPU driver component ([cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)), which led to Mali support in 0.3.3.
+- **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
+
+Reports, device testing and code review are contributions too, and they're recorded here.
+
 ## License
 
 cccodroid itself is released under the [Apache License 2.0](LICENSE) (see also [NOTICE](NOTICE)).
