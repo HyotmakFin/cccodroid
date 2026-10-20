@@ -1340,3 +1340,6 @@
 1340	展開後のサイズが大きすぎるため（{n} MB 超）、取り込みませんでした
 1341	zip でも、name のある SKILL.md でもありません
 1342	同じ名前のスキルがすでにあります
+1343	このコンポーネントは ARM Mali GPU（Dimensity、Exynos など）搭載の機種専用で、この端末では使えません
+1344	ARM Mali GPU（Dimensity、Exynos など）専用。この端末では使えません
+1345	Mali 専用

@@ -419,7 +419,11 @@ final class Updater {
                 new Thread(this::installClaude, "upd-claude").start();
                 return r.put("ok", true).put("message", Tr.t("开始更新 Claude Code"));
             }
-            if (it.url == null) return r.put("ok", false).put("message", Tr.t("没有可用的更新，先检查"));
+            if (it.url == null) {
+                // 「出错」时的「重试」：没有待下载的东西（出错的是检查本身），就重新检查一遍
+                if ("error".equals(it.state)) { checkAsync(true); return r.put("ok", true).put("message", Tr.t("正在重新检查更新")); }
+                return r.put("ok", false).put("message", Tr.t("没有可用的更新，先检查"));
+            }
             if ("ready".equals(it.state)) {
                 if (it == app) { new Thread(this::installApp, "upd-install").start(); return r.put("ok", true).put("message", Tr.t("正在安装")); }
                 if (user) { new Thread(this::startDevkitApply, "upd-devkit").start(); return r.put("ok", true).put("message", Tr.t("正在替换开发工具包")); }
@@ -618,7 +622,8 @@ final class Updater {
                     }
                     int bad = v.optInt("missing") + v.optInt("changed");
                     if (bad == 0) {
-                        devkit.set("damaged".equals(prev) ? "uptodate" : prev, full ? Tr.f("已核对 {0} 个文件，全部完好", v.optInt("total")) : prevMsg);
+                        // 之前是「出错」（多半是上次检查 / 下载没成功）也一样：装着的这份完好，就别再挂着出错和一个点了没用的「重试」
+                        devkit.set("damaged".equals(prev) || "error".equals(prev) ? "uptodate" : prev, full ? Tr.f("已核对 {0} 个文件，全部完好", v.optInt("total")) : prevMsg);
                         recheckAfterVerify();
                         return;
                     }

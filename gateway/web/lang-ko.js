@@ -1343,4 +1343,7 @@ window.I18N_DICT["ko"] = {
   "压缩包解开后太大（超过 {n} MB），没有导入": "압축을 풀면 너무 커서({n} MB 초과) 가져오지 않았습니다",
   "不是 zip，也不是带 name 的 SKILL.md": "zip도 아니고 name이 있는 SKILL.md도 아닙니다",
   "已有同名技能": "같은 이름의 스킬이 이미 있습니다",
+  "这个组件只能用在 ARM Mali GPU（天玑、Exynos 等）的设备上，本机用不了": "이 컴포넌트는 ARM Mali GPU(Dimensity, Exynos 등) 기기에서만 동작하며 이 기기에서는 쓸 수 없습니다",
+  "只限 ARM Mali GPU（天玑、Exynos 等）设备，本机用不了": "ARM Mali GPU(Dimensity, Exynos 등) 전용, 이 기기에서는 사용 불가",
+  "Mali 专用": "Mali 전용",
 };

@@ -1340,3 +1340,6 @@
 1340	압축을 풀면 너무 커서({n} MB 초과) 가져오지 않았습니다
 1341	zip도 아니고 name이 있는 SKILL.md도 아닙니다
 1342	같은 이름의 스킬이 이미 있습니다
+1343	이 컴포넌트는 ARM Mali GPU(Dimensity, Exynos 등) 기기에서만 동작하며 이 기기에서는 쓸 수 없습니다
+1344	ARM Mali GPU(Dimensity, Exynos 등) 전용, 이 기기에서는 사용 불가
+1345	Mali 전용

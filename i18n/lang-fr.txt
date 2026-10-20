@@ -1340,3 +1340,6 @@
 1340	L’archive est trop volumineuse une fois extraite (plus de {n} Mo) ; elle n’a pas été importée
 1341	Ni un zip, ni un SKILL.md avec un name
 1342	Une compétence porte déjà ce nom
+1343	Ce composant ne fonctionne que sur les appareils à GPU ARM Mali (Dimensity, Exynos…) ; il ne peut pas tourner ici
+1344	GPU ARM Mali uniquement (Dimensity, Exynos…) ; inutilisable ici
+1345	Mali uniquement

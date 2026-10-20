@@ -1340,3 +1340,6 @@
 1340	El archivo es demasiado grande al descomprimirlo (más de {n} MB); no se importó
 1341	No es un zip ni un SKILL.md con name
 1342	Ya existe una habilidad con ese nombre
+1343	Este componente solo funciona en dispositivos con GPU ARM Mali (Dimensity, Exynos, etc.); aquí no se puede usar
+1344	Solo GPU ARM Mali (Dimensity, Exynos…); aquí no funciona
+1345	Solo Mali

@@ -2942,8 +2942,10 @@ function compState(id, entry, dk) {
   return "ok";
 }
 
-// 只限骁龙的组件（needs.gpu 写 "adreno"）：Turnip 走 /dev/kgsl-3d0，别家 SoC 上没有这个节点，装了也用不了
-const compUnsupported = (e) => (e && e.needs && e.needs.gpu === "adreno" && !fs.existsSync("/dev/kgsl-3d0") ? "adreno" : "");
+// 只限某家 GPU 的组件：needs.gpu 写 "adreno"（Turnip 走 /dev/kgsl-3d0）或 "mali"（厂商驱动走 /dev/mali0），
+// 别家 SoC 上没有那个节点，装了也用不了
+const GPU_NODE = { adreno: "/dev/kgsl-3d0", mali: "/dev/mali0" };
+const compUnsupported = (e) => { const g = e && e.needs && e.needs.gpu; return GPU_NODE[g] && !fs.existsSync(GPU_NODE[g]) ? g : ""; };
 // 依赖的组件装好了没有（有新版本可更新也算装好）
 const compDepOk = (rid, comps, dk) => ["ok", "update"].includes(compState(rid, comps[rid] || null, dk));
 const compName = (rid, comps) => (comps[rid] && comps[rid].name) || { zh: rid, en: rid };
@@ -3114,7 +3116,8 @@ async function compInstall(id) {
   const ix = await compIndex(true);
   const entry = ix.data && ix.data.components && ix.data.components[id];
   if (!entry) return { ok: false, message: ix.error || tz("没有这个组件") };
-  if (compUnsupported(entry)) return { ok: false, message: tz("这个组件只能用在高通骁龙（Adreno GPU）的设备上，本机用不了") };
+  const un = compUnsupported(entry);
+  if (un) return { ok: false, message: un === "mali" ? tz("这个组件只能用在 ARM Mali GPU（天玑、Exynos 等）的设备上，本机用不了") : tz("这个组件只能用在高通骁龙（Adreno GPU）的设备上，本机用不了") };
   const miss = (entry.requires || []).filter((rid) => !compDepOk(rid, ix.data.components, dk));
   if (miss.length) return { ok: false, message: tz("要先装：{names}", { names: miss.map((rid) => compName(rid, ix.data.components).zh || rid).join("、") }) };
   const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source, requires: entry.requires || [] };

@@ -1343,4 +1343,7 @@ window.I18N_DICT["zh-Hant"] = {
   "压缩包解开后太大（超过 {n} MB），没有导入": "壓縮檔解開後太大（超過 {n} MB），沒有匯入",
   "不是 zip，也不是带 name 的 SKILL.md": "不是 zip，也不是帶 name 的 SKILL.md",
   "已有同名技能": "已有同名技能",
+  "这个组件只能用在 ARM Mali GPU（天玑、Exynos 等）的设备上，本机用不了": "這個元件只能用在 ARM Mali GPU（天璣、Exynos 等）的裝置上，本機用不了",
+  "只限 ARM Mali GPU（天玑、Exynos 等）设备，本机用不了": "只限 ARM Mali GPU（天璣、Exynos 等）裝置，本機用不了",
+  "Mali 专用": "Mali 專用",
 };

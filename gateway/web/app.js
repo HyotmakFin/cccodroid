@@ -2926,7 +2926,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       }[c.state] || c.state;
       // 依赖没装齐：安装按钮置灰，下面写明要先装哪个；只限骁龙的组件在别家 SoC 上干脆不给装
       const miss = (c.requires || []).filter((d) => !d.ok).map((d) => esc(pickLang(d.name) || d.id));
-      const adreno = c.needs && c.needs.gpu === "adreno";
+      const gpuOnly = c.needs && (c.needs.gpu === "adreno" || c.needs.gpu === "mali") ? c.needs.gpu : "";
       let acts = "";
       if (c.state === "absent" && c.available && !c.unsupported) acts = btn("install", c.id, t("下载安装"));
       else if (c.state === "downloading" || c.state === "verifying") acts = btn("cancel", c.id, t("取消"));
@@ -2947,7 +2947,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         (c.source === "community" ? "<span>" + t("社区") + "</span>" : "") +
         (!c.verified ? '<span class="warn">' + t("未经真机验证") + "</span>" : "") +
         (c.license && c.state !== "ok" ? "<span>" + esc(c.license) + "</span>" : "") +
-        (adreno && c.state !== "ok" ? (c.unsupported ? '<span class="warn">' + t("只限高通骁龙（Adreno GPU）设备，本机用不了") + "</span>" : "<span>" + t("骁龙专用") + "</span>") : "");
+        (gpuOnly && c.state !== "ok" ? (c.unsupported ? '<span class="warn">' + (gpuOnly === "mali" ? t("只限 ARM Mali GPU（天玑、Exynos 等）设备，本机用不了") : t("只限高通骁龙（Adreno GPU）设备，本机用不了")) + "</span>"
+          : "<span>" + (gpuOnly === "mali" ? t("Mali 专用") : t("骁龙专用")) + "</span>") : "");
       let desc = '<div class="tiny ext-desc">' + esc(pickLang(c.desc)) + "</div>";
       if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
       if (miss.length && c.state !== "ok") desc += '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>";
