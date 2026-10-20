@@ -4444,6 +4444,50 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("ntf-" + k).addEventListener("change", (e) => post("/api/app/notify_set", { [k]: e.target.checked }).then(loadNotify).catch(() => {}));
   $("ntf-sys").addEventListener("click", () => post("/api/app/notify_settings").catch(() => {}));
 
+  // ── 设备工具（只有 cccodroid：DeviceTools.java + A11y.java，经 device-mcp.mjs 给 Claude）──
+  const devName = (n) => ({
+    device_status: t("设备状态"), notify: t("发通知"), clipboard_read: t("读剪贴板"), clipboard_write: t("写剪贴板"),
+    open: t("打开应用 / 链接 / 日历…"), share_file: t("分享文件"), app_list: t("已装应用列表"),
+    screen_read: t("读屏"), screen_tap: t("点按"), screen_swipe: t("滑动 / 滚动"), screen_type: t("输入文字"), screen_key: t("返回 / 主页等按键"), screenshot: t("截屏"),
+  })[n] || n;
+  function devRender(st) {
+    $("dev-field").classList.remove("hidden");
+    $("dev-on").checked = !!st.on;
+    const box = $("dev-tools");
+    box.replaceChildren();
+    for (const tl of st.tools || []) {
+      const l = document.createElement("label");
+      l.className = "tiny";
+      l.style.cssText = "display:flex;gap:6px;align-items:center";
+      l.innerHTML = `<input type="checkbox" style="width:auto;margin:0"${tl.enabled ? " checked" : ""}${st.on ? "" : " disabled"}><span>${esc(devName(tl.name))}</span>`;
+      l.firstChild.addEventListener("change", (e) => post("/api/app/dev_set", { tool: tl.name, enabled: e.target.checked }).then(devRender).catch(() => {}));
+      box.appendChild(l);
+    }
+    const a = st.a11y || {};
+    $("dev-a11y").value = a.mode || "off";
+    $("dev-a11y").disabled = !st.on;
+    $("dev-idle").value = a.idle || 10;
+    $("dev-idle-row").classList.toggle("hidden", a.mode !== "auto");
+    const s = $("dev-a11y-state");
+    s.className = "prov-state " + (a.connected ? "ok" : a.mode === "off" ? "" : "warn");
+    s.textContent = a.connected ? t("无障碍服务：已连接") : a.mode === "off" ? t("无障碍服务：关") : t("无障碍服务：现在没开（用到时再开）");
+    // 自己开不了（没 WRITE_SECURE_SETTINGS）时，只能让用户去系统设置里开；安卓 13+ 侧载的应用还要先「允许受限设置」
+    $("dev-a11y-how").textContent = a.mode !== "off" && !a.canToggle
+      ? t("还没激活 Shizuku，应用没法自己开关无障碍：去系统无障碍设置里手动打开 cccodroid。安卓 13 起，侧载的应用要先在 应用信息 → 右上角菜单 → 允许受限设置。")
+      : "";
+    if (st.message) toast(st.message, true);
+  }
+  async function loadDev() {
+    let st;
+    try { st = await api("/api/app/dev_status"); } catch { return; }
+    if (!st.ok) return;
+    devRender(st);
+  }
+  $("dev-on").addEventListener("change", (e) => post("/api/app/dev_set", { on: e.target.checked }).then(devRender).catch(() => {}));
+  $("dev-a11y").addEventListener("change", (e) => post("/api/app/dev_set", { a11y: e.target.value }).then(devRender).catch((e2) => toast(e2.message, true)));
+  $("dev-idle").addEventListener("change", (e) => post("/api/app/dev_set", { idle: Number(e.target.value) || 10 }).then(devRender).catch(() => {}));
+  $("dev-a11y-sys").addEventListener("click", () => post("/api/app/a11y_settings").catch(() => {}));
+
   $("upd-check").addEventListener("click", async () => {
     await post("/api/app/upd_check").catch((e2) => toast(e2.message, true));
     followUpd(); setTimeout(loadUpd, 300);
@@ -5176,7 +5220,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
     if (name === "help") loadHelp();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadEnergy(); loadUsage(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadEnergy(); loadUsage(); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 

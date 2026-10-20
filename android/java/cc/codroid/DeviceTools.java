@@ -1,0 +1,363 @@
+package cc.codroid;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.Uri;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.os.StatFs;
+import android.provider.AlarmClock;
+import android.provider.CalendarContract;
+import android.util.Log;
+import java.io.File;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+/**
+ * 设备工具：网关给 claude 挂的 MCP（bin/device-mcp.mjs）经 Priv 的套接字调到这里。
+ *
+ * 边界（借 PalmClaw「结构化设备工具」的思路，代码是自己写的）：
+ *   · 每个工具有固定参数，不收任意 Intent / 任意命令；
+ *   · 用户在 设置 → 设备工具 里可以整体关掉，也可以逐个关；关掉的工具 MCP 里直接不出现；
+ *   · claude 那边每次调用照常走权限确认（除非用户自己选了放行）；
+ *   · 会打开别的应用的（链接、日历、拨号…）只「打开并预填」，保存 / 发送 / 拨出由用户在那个应用里点。
+ *     应用在后台时安卓不让弹界面，改发一条通知让用户点。
+ *   · 读屏 / 点按要无障碍，默认关，见 A11y。
+ */
+final class DeviceTools {
+    static final String TAG = "cccodroid";
+    static final String PREFS = "devtools";
+    static final String CH = "agent";
+    static final String[] BASIC = {"device_status", "notify", "clipboard_read", "clipboard_write", "open", "share_file", "app_list"};
+    static final String[] SCREEN = {"screen_read", "screen_tap", "screen_swipe", "screen_type", "screen_key", "screenshot"};
+    private static int noteId = 600;
+
+    private static SharedPreferences sp(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    private static boolean isScreen(String t) { for (String s : SCREEN) if (s.equals(t)) return true; return false; }
+    private static boolean known(String t) { for (String s : BASIC) if (s.equals(t)) return true; return isScreen(t); }
+
+    // ── 设置 ─────────────────────────────────────────────────────────────
+    static JSONObject status(Context c) throws Exception {
+        SharedPreferences p = sp(c);
+        Set<String> off = p.getStringSet("off", new HashSet<>());
+        String mode = p.getString("a11y", "off");
+        JSONArray tools = new JSONArray();
+        for (String s : BASIC) tools.put(new JSONObject().put("name", s).put("enabled", !off.contains(s)));
+        for (String s : SCREEN) tools.put(new JSONObject().put("name", s).put("enabled", !off.contains(s)).put("screen", true));
+        return new JSONObject().put("ok", true)
+            .put("on", p.getBoolean("on", true))
+            .put("tools", tools)
+            .put("a11y", new JSONObject()
+                .put("mode", mode)
+                .put("idle", p.getInt("a11yIdle", 10))
+                .put("connected", A11y.self != null)
+                .put("canToggle", A11y.canToggle(c))
+                .put("screenshot", Build.VERSION.SDK_INT >= 30));
+    }
+
+    static JSONObject set(Context c, JSONObject r) throws Exception {
+        SharedPreferences.Editor e = sp(c).edit();
+        if (r.has("on")) e.putBoolean("on", r.getBoolean("on"));
+        if (r.has("tool") && known(r.getString("tool"))) {
+            Set<String> off = new HashSet<>(sp(c).getStringSet("off", new HashSet<>()));
+            if (r.optBoolean("enabled", true)) off.remove(r.getString("tool")); else off.add(r.getString("tool"));
+            e.putStringSet("off", off);
+        }
+        if (r.has("idle")) e.putInt("a11yIdle", Math.max(1, Math.min(r.getInt("idle"), 240)));
+        String mode = r.optString("a11y", "");
+        if (mode.equals("off") || mode.equals("auto") || mode.equals("on")) e.putString("a11y", mode);
+        e.commit();
+        JSONObject res = status(c);
+        // 切到「常开」就马上开；切到「关」就马上关；「用时自动开」现在开着就让它按空闲时间自己关
+        if (mode.equals("on")) { String why = A11y.enable(c, 4000); res = status(c); if (why != null) res.put("message", why); }
+        if (mode.equals("off")) { A11y.disable(c); res = status(c); }
+        return res;
+    }
+
+    // ── 调用 ─────────────────────────────────────────────────────────────
+    static JSONObject call(Context c, JSONObject req) {
+        String tool = req.optString("tool");
+        JSONObject a = req.optJSONObject("args");
+        if (a == null) a = new JSONObject();
+        try {
+            SharedPreferences p = sp(c);
+            if (!p.getBoolean("on", true)) return fail(Tr.t("用户在设置里关掉了设备工具"));
+            if (!known(tool)) return fail(Tr.t("没有这个设备工具：") + tool);
+            if (p.getStringSet("off", new HashSet<>()).contains(tool)) return fail(Tr.t("用户在设置里关掉了这个工具：") + tool);
+            if (isScreen(tool)) {
+                if ("off".equals(p.getString("a11y", "off")))
+                    return fail(Tr.t("读屏 / 点按没开：用户要在 设置 → 设备工具 里把「无障碍」改成「用时自动开」或「常开」"));
+                String why = A11y.enable(c, 4000);
+                if (why != null) return fail(why);
+            }
+            Log.i(TAG, "设备工具 " + tool);
+            switch (tool) {
+                case "device_status": return deviceStatus(c);
+                case "notify": return notify(c, a);
+                case "clipboard_read": return clipRead(c);
+                case "clipboard_write": return clipWrite(c, a);
+                case "open": return open(c, a);
+                case "share_file": return shareFile(c, a);
+                case "app_list": return appList(c, a);
+                case "screen_read": return A11y.read(a.optBoolean("all", false));
+                case "screen_tap": return A11y.tap(a);
+                case "screen_swipe": return A11y.swipe(a);
+                case "screen_type": return A11y.type(a);
+                case "screen_key": return A11y.key(a);
+                case "screenshot": return A11y.screenshot(c);
+            }
+            return fail(tool);
+        } catch (Throwable t) {
+            Log.w(TAG, "设备工具 " + tool + " 出错", t);
+            try { return fail(t.getClass().getSimpleName() + ": " + t.getMessage()); } catch (Exception e) { return new JSONObject(); }
+        }
+    }
+
+    // ── 各个工具 ─────────────────────────────────────────────────────────
+    private static JSONObject deviceStatus(Context c) throws Exception {
+        JSONObject r = new JSONObject().put("ok", true);
+        Intent bat = c.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (bat != null) {
+            int lv = bat.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), sc = bat.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+            int st = bat.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+            r.put("battery", new JSONObject()
+                .put("percent", sc > 0 ? lv * 100 / sc : lv)
+                .put("charging", st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL)
+                .put("temperature_c", bat.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0));
+        }
+        ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+        Network n = cm.getActiveNetwork();
+        NetworkCapabilities nc = n == null ? null : cm.getNetworkCapabilities(n);
+        String type = nc == null ? "none" : nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "wifi"
+            : nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "cellular"
+            : nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? "ethernet" : "other";
+        r.put("network", new JSONObject().put("type", type)
+            .put("vpn", nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN))
+            .put("metered", cm.isActiveNetworkMetered()));
+        PowerManager pm = c.getSystemService(PowerManager.class);
+        r.put("screen_on", pm.isInteractive()).put("power_save", pm.isPowerSaveMode());
+        r.put("app_in_foreground", MainActivity.visible);
+        JSONObject st = new JSONObject();
+        for (String[] d : new String[][]{{"app", c.getFilesDir().getPath()}, {"shared", "/sdcard"}}) {
+            try { StatFs fs = new StatFs(d[1]); st.put(d[0] + "_free_gb", Math.round(fs.getAvailableBytes() / 1e8) / 10.0); } catch (Exception ignored) {}
+        }
+        r.put("storage", st);
+        r.put("device", Build.MANUFACTURER + " " + Build.MODEL).put("android", Build.VERSION.RELEASE).put("sdk", Build.VERSION.SDK_INT);
+        r.put("accessibility", A11y.self != null ? "connected" : sp(c).getString("a11y", "off"));
+        return r;
+    }
+
+    private static void channel(Context c) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm.getNotificationChannel(CH) == null)
+            nm.createNotificationChannel(new NotificationChannel(CH, Tr.t("Claude 发的通知"), NotificationManager.IMPORTANCE_DEFAULT));
+    }
+
+    private static JSONObject notify(Context c, JSONObject a) throws Exception {
+        String title = a.optString("title", "").trim(), text = a.optString("text", "").trim();
+        if (title.isEmpty() && text.isEmpty()) return fail(Tr.t("title 和 text 至少给一个"));
+        channel(c);
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (!nm.areNotificationsEnabled()) return fail(Tr.t("系统设置里关掉了本应用的通知"));
+        PendingIntent pi = PendingIntent.getActivity(c, 60, new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        int id = noteId++;
+        nm.notify(id, new Notification.Builder(c, CH)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(title.isEmpty() ? "Claude" : clip(title, 200))
+            .setContentText(clip(text, 1000))
+            .setStyle(new Notification.BigTextStyle().bigText(clip(text, 4000)))
+            .setContentIntent(pi).setAutoCancel(true).build());
+        return new JSONObject().put("ok", true).put("id", id);
+    }
+
+    /** 剪贴板要在主线程碰 */
+    private static <T> T onMain(java.util.concurrent.Callable<T> f) throws Exception {
+        if (Looper.myLooper() == Looper.getMainLooper()) return f.call();
+        AtomicReference<T> out = new AtomicReference<>();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        CountDownLatch done = new CountDownLatch(1);
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try { out.set(f.call()); } catch (Exception e) { err.set(e); }
+            done.countDown();
+        });
+        if (!done.await(5, TimeUnit.SECONDS)) throw new Exception("timeout");
+        if (err.get() != null) throw err.get();
+        return out.get();
+    }
+
+    private static JSONObject clipRead(Context c) throws Exception {
+        String s = onMain(() -> {
+            ClipboardManager cm = c.getSystemService(ClipboardManager.class);
+            ClipData d = cm.getPrimaryClip();
+            if (d == null || d.getItemCount() == 0) return null;
+            CharSequence t = d.getItemAt(0).coerceToText(c);
+            return t == null ? "" : t.toString();
+        });
+        // 安卓 10 起，应用不在前台读不到剪贴板（系统直接给 null）
+        if (s == null) return fail(MainActivity.visible ? Tr.t("剪贴板是空的") : Tr.t("安卓不让后台应用读剪贴板：要读的话，请用户先切回 cccodroid"));
+        return new JSONObject().put("ok", true).put("text", clip(s, 20000));
+    }
+
+    private static JSONObject clipWrite(Context c, JSONObject a) throws Exception {
+        String text = a.optString("text", "");
+        onMain(() -> { c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Claude", text)); return null; });
+        return new JSONObject().put("ok", true).put("chars", text.length());
+    }
+
+    private static JSONObject appList(Context c, JSONObject a) throws Exception {
+        String q = a.optString("query", "").toLowerCase();
+        PackageManager pm = c.getPackageManager();
+        List<ResolveInfo> l = pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0);
+        JSONArray out = new JSONArray();
+        Set<String> seen = new HashSet<>();
+        for (ResolveInfo ri : l) {
+            String pkg = ri.activityInfo.packageName, label = String.valueOf(ri.loadLabel(pm));
+            if (!seen.add(pkg)) continue;
+            if (!q.isEmpty() && !pkg.toLowerCase().contains(q) && !label.toLowerCase().contains(q)) continue;
+            out.put(new JSONObject().put("label", label).put("package", pkg));
+        }
+        return new JSONObject().put("ok", true).put("apps", out);
+    }
+
+    /** 固定几类「打开并预填」：不收任意 action，免得模型拼出拨打、静默发送之类的东西 */
+    private static JSONObject open(Context c, JSONObject a) throws Exception {
+        String kind = a.optString("kind");
+        Intent i;
+        String what;
+        switch (kind) {
+            case "url": {
+                String u = a.optString("url");
+                if (!u.matches("(?i)^https?://.+")) return fail(Tr.t("url 只收 http / https"));
+                i = new Intent(Intent.ACTION_VIEW, Uri.parse(u)); what = u; break;
+            }
+            case "map":
+                i = new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(a.optString("query"))));
+                what = a.optString("query"); break;
+            case "dial":       // 只把号码填进拨号盘，打不打由用户按
+                i = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(a.optString("number"))));
+                what = a.optString("number"); break;
+            case "email":
+                i = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(a.optString("to"), "@,.+-_")))
+                    .putExtra(Intent.EXTRA_SUBJECT, a.optString("subject")).putExtra(Intent.EXTRA_TEXT, a.optString("body"));
+                what = a.optString("to"); break;
+            case "sms":
+                i = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(a.optString("number"))))
+                    .putExtra("sms_body", a.optString("body"));
+                what = a.optString("number"); break;
+            case "calendar_event": {
+                i = new Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
+                    .putExtra(CalendarContract.Events.TITLE, a.optString("title"))
+                    .putExtra(CalendarContract.Events.DESCRIPTION, a.optString("description"))
+                    .putExtra(CalendarContract.Events.EVENT_LOCATION, a.optString("location"))
+                    .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, a.optBoolean("all_day", false));
+                long b = time(a.optString("start")), e = time(a.optString("end"));
+                if (b > 0) i.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, b);
+                if (e > 0) i.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, e);
+                what = a.optString("title"); break;
+            }
+            case "alarm":
+                i = new Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, a.optInt("hour"))
+                    .putExtra(AlarmClock.EXTRA_MINUTES, a.optInt("minute")).putExtra(AlarmClock.EXTRA_MESSAGE, a.optString("label"));
+                what = a.optInt("hour") + ":" + a.optInt("minute"); break;
+            case "timer":
+                i = new Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, a.optInt("seconds"))
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, a.optString("label"));
+                what = a.optInt("seconds") + "s"; break;
+            case "share_text":
+                i = Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, a.optString("text")), null);
+                what = Tr.t("分享文字"); break;
+            case "app": {
+                i = c.getPackageManager().getLaunchIntentForPackage(a.optString("package"));
+                if (i == null) return fail(Tr.t("没装这个应用，或者它没有启动入口：") + a.optString("package"));
+                what = a.optString("package"); break;
+            }
+            default:
+                return fail(Tr.t("kind 只能是 url / map / dial / email / sms / calendar_event / alarm / timer / share_text / app"));
+        }
+        return launch(c, i, what);
+    }
+
+    private static long time(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        try { return java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli(); } catch (Exception ignored) {}
+        try { return java.time.LocalDateTime.parse(s).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(); } catch (Exception ignored) {}
+        try { return java.time.LocalDate.parse(s).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(); } catch (Exception ignored) {}
+        return 0;
+    }
+
+    private static JSONObject shareFile(Context c, JSONObject a) throws Exception {
+        File f = new File(a.optString("path"));
+        if (!f.isFile()) return fail(Tr.t("文件不存在：") + f);
+        Uri u = Share.uriFor(c, f);
+        if (u == null) {
+            // 分享只认导出目录：拷一份过去（别的应用拿到的是这一份的只读授权）
+            if (f.length() > 512L << 20) return fail(Tr.t("文件超过 512 MB，不分享"));
+            File dir = new File(new Env(c).home, "exports/shared");
+            dir.mkdirs();
+            File dst = new File(dir, f.getName());
+            java.nio.file.Files.copy(f.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            f = dst;
+            u = Share.uriFor(c, f);
+            if (u == null) return fail(Tr.t("这个文件不能分享：") + f);
+        }
+        String mime = a.optString("mime", "");
+        if (mime.isEmpty()) {
+            String ext = android.webkit.MimeTypeMap.getFileExtensionFromUrl(f.getName());
+            mime = ext == null ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
+            if (mime == null) mime = "application/octet-stream";
+        }
+        Intent send = new Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, u)
+            .putExtra(Intent.EXTRA_SUBJECT, f.getName()).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        send.setClipData(ClipData.newRawUri(f.getName(), u));
+        return launch(c, Intent.createChooser(send, f.getName()).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), f.getName());
+    }
+
+    /** 能直接弹就弹（界面在前台、或无障碍连着 —— 系统都放行）；否则发通知让用户点 */
+    private static JSONObject launch(Context c, Intent i, String what) throws Exception {
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (i.getComponent() == null && i.resolveActivity(c.getPackageManager()) == null && !Intent.ACTION_CHOOSER.equals(i.getAction()))
+            return fail(Tr.t("这台设备上没有能处理它的应用"));
+        if (MainActivity.visible || A11y.self != null) {
+            try { c.startActivity(i); return new JSONObject().put("ok", true).put("shown", "opened"); }
+            catch (ActivityNotFoundException e) { return fail(Tr.t("这台设备上没有能处理它的应用")); }
+            catch (Exception ignored) { }
+        }
+        channel(c);
+        PendingIntent pi = PendingIntent.getActivity(c, 700 + (noteId % 50), i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        int id = noteId++;
+        c.getSystemService(NotificationManager.class).notify(id, new Notification.Builder(c, CH)
+            .setSmallIcon(android.R.drawable.ic_menu_send)
+            .setContentTitle(Tr.t("Claude 想打开："))
+            .setContentText(clip(what, 200))
+            .setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(10 * 60_000).build());
+        return new JSONObject().put("ok", true).put("shown", "notification")
+            .put("message", Tr.t("cccodroid 在后台，安卓不让直接弹出界面：已发通知，用户点了才会打开"));
+    }
+
+    private static String clip(String s, int n) { return s == null ? "" : s.length() > n ? s.substring(0, n) + "…" : s; }
+    private static JSONObject fail(String m) throws Exception { return new JSONObject().put("ok", false).put("message", m); }
+}

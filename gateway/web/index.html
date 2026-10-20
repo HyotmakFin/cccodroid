@@ -184,6 +184,34 @@
         </div>
       </div>
 
+      <!-- 设备工具：给 Claude 挂的 MCP（device-mcp.mjs → DeviceTools.java）。只有 cccodroid 有，开发端整块隐藏 -->
+      <div class="field hidden" id="dev-field">
+                <label data-i18n>设备工具</label>
+        <div class="prov-card">
+          <label class="tiny" style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="dev-on" style="width:auto;margin:0">
+                        <span data-i18n>让 Claude 使用设备工具（通知、剪贴板、打开链接 / 日历 / 闹钟、分享文件…）</span>
+          </label>
+          <div class="tiny" style="margin-top:6px" data-i18n>调用时和其他工具一样，按你选的权限模式确认。会打开别的应用的只是预填，保存、发送、拨出都由你在那个应用里点。</div>
+          <div id="dev-tools" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px"></div>
+          <div class="lbl" style="margin-top:12px" data-i18n>读屏与点按（无障碍）</div>
+          <select id="dev-a11y" style="margin-top:4px">
+            <option value="off" data-i18n>关（默认）</option>
+            <option value="auto" data-i18n>用时自动开，空闲后自动关（要先激活 Shizuku）</option>
+            <option value="on" data-i18n>常开（较耗电）</option>
+          </select>
+          <label class="tiny" id="dev-idle-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <span data-i18n>空闲多久自动关（分钟）</span>
+            <input type="number" id="dev-idle" min="1" max="240" style="width:5em;margin:0">
+          </label>
+          <div class="prov-state" id="dev-a11y-state"></div>
+          <div class="tiny" id="dev-a11y-how"></div>
+          <div class="row-actions">
+                        <button class="btn sm ghost" id="dev-a11y-sys" data-i18n>去系统无障碍设置</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Shizuku：调试提权。只有 cccodroid 带这项集成，旧版里整块隐藏 -->
       <div class="field hidden" id="priv-field">
                 <label data-i18n>Shizuku（调试提权）</label>

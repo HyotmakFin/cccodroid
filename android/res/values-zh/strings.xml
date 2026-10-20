@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_label">cccodroid 设备工具</string>
+    <string name="a11y_summary">你让 Claude 操作手机时，用它读屏、点按、输入和截屏。</string>
+    <string name="a11y_desc">只给 cccodroid 的设备工具用：你让 Claude 去操作别的应用时，它通过这个服务读当前界面、点按、输入、滚动和截屏。不在后台收集任何东西。在「用时自动开」模式下（设置 → 设备工具），平时服务是关的，用到时才打开，空闲几分钟后自己关掉。</string>
+</resources>

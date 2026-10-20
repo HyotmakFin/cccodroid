@@ -1343,3 +1343,29 @@
 1343	Este componente solo funciona en dispositivos con GPU ARM Mali (Dimensity, Exynos, etc.); aquí no se puede usar
 1344	Solo GPU ARM Mali (Dimensity, Exynos…); aquí no funciona
 1345	Solo Mali
+1346	Herramientas del dispositivo
+1347	Permitir que Claude use las herramientas del dispositivo (notificaciones, portapapeles, abrir enlaces / calendario / alarmas, compartir archivos…)
+1348	Las llamadas se confirman como las de cualquier otra herramienta, según tu modo de permisos. Lo que abre otra app solo rellena los datos: guardar, enviar o llamar lo pulsas tú en esa app.
+1349	Lectura de pantalla y toques (accesibilidad)
+1350	Desactivado (predeterminado)
+1351	Se activa al usarlo y se apaga tras inactividad (requiere Shizuku activado)
+1352	Siempre activado (consume más batería)
+1353	Apagar tras inactividad (minutos)
+1354	Abrir ajustes de accesibilidad del sistema
+1355	Servicio de accesibilidad: conectado
+1356	Servicio de accesibilidad: desactivado
+1357	Servicio de accesibilidad: apagado por ahora (se activa al usarlo)
+1358	Shizuku no está activado, así que la app no puede encender el servicio de accesibilidad por sí misma: actívala en los ajustes de accesibilidad del sistema. Desde Android 13, las apps instaladas fuera de la tienda necesitan antes Info de la app → menú arriba a la derecha → Permitir ajustes restringidos.
+1359	Estado del dispositivo
+1360	Notificaciones
+1361	Leer portapapeles
+1362	Escribir en el portapapeles
+1363	Abrir apps / enlaces / calendario…
+1364	Compartir archivos
+1365	Apps instaladas
+1366	Leer pantalla
+1367	Tocar
+1368	Deslizar / desplazar
+1369	Escribir texto
+1370	Atrás / inicio y otras teclas
+1371	Captura de pantalla

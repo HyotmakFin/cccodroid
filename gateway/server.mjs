@@ -4555,6 +4555,10 @@ async function startRun(item) {
   ];
   if (model) argv.push("--model", model);
   if (run.sessionId) argv.push("--resume", String(run.sessionId));
+  // 设备工具（通知、剪贴板、打开应用、读屏点按…）：只有 cccodroid 有 Java 那一层。开关在应用里，
+  // 这里只看总开关决定挂不挂；具体哪些工具出现由 device-mcp.mjs 现问应用。端侧小模型不挂（读不起）
+  const devMcp = deviceMcpConfig();
+  if (devMcp && !PROVIDER.local && (await privCall({ op: "dev_status" }, 3000)).on) argv.push("--mcp-config", devMcp);
 
   // 告诉 claude 这台设备上有什么现成工具 —— 不说它就不会去用。
   // 和用户自己的追加提示合成一条：重复给同一个单值参数，解析器一般只留一个，合成一条最稳
@@ -5647,6 +5651,13 @@ function ccMem(args, timeoutMs = 90000) {
       resolve({ ok: false, message: (errOut || out || (err && err.message) || "").trim().slice(0, 400) });
     });
   });
+}
+
+/** 设备工具 MCP 的配置（JSON 串）。不是 cccodroid 布局、或脚本不在就返回 null */
+function deviceMcpConfig() {
+  const f = path.join(HERE, "bin", "device-mcp.mjs");
+  if (!PREFIX || !fs.existsSync(f)) return null;
+  return JSON.stringify({ mcpServers: { device: { type: "stdio", command: process.execPath, args: [f] } } });
 }
 
 function privCall(req, timeoutMs = 20000) {
@@ -7502,7 +7513,7 @@ const server = http.createServer(async (req, res) => {
     // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
     if (p.startsWith("/api/app/")) {
       const op = p.slice(9);
-      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack", "notify_status", "notify_set", "notify_settings"];
+      const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack", "notify_status", "notify_set", "notify_settings", "dev_status", "dev_set", "a11y_settings"];
       if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: tz("未知操作") });
       const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
       if (!PREFIX) return sendJson(res, 200, await devApp(op, b));

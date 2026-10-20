@@ -1343,3 +1343,29 @@
 1343	Ce composant ne fonctionne que sur les appareils à GPU ARM Mali (Dimensity, Exynos…) ; il ne peut pas tourner ici
 1344	GPU ARM Mali uniquement (Dimensity, Exynos…) ; inutilisable ici
 1345	Mali uniquement
+1346	Outils de l’appareil
+1347	Autoriser Claude à utiliser les outils de l’appareil (notifications, presse-papiers, ouvrir liens / agenda / alarmes, partager des fichiers…)
+1348	Les appels sont confirmés comme pour tout autre outil, selon votre mode d’autorisation. Ce qui ouvre une autre appli ne fait que préremplir : c’est vous qui enregistrez, envoyez ou appelez dans cette appli.
+1349	Lecture de l’écran et appuis (accessibilité)
+1350	Désactivé (par défaut)
+1351	Activé au besoin, désactivé après inactivité (Shizuku doit être activé)
+1352	Toujours activé (consomme plus de batterie)
+1353	Désactiver après inactivité (minutes)
+1354	Ouvrir les réglages d’accessibilité
+1355	Service d’accessibilité : connecté
+1356	Service d’accessibilité : désactivé
+1357	Service d’accessibilité : désactivé pour l’instant (activé au besoin)
+1358	Shizuku n’est pas activé : l’appli ne peut pas activer elle-même le service d’accessibilité. Activez cccodroid dans les réglages d’accessibilité du système. Depuis Android 13, une appli installée hors store doit d’abord passer par Infos sur l’appli → menu en haut à droite → Autoriser les paramètres restreints.
+1359	État de l’appareil
+1360	Notifications
+1361	Lire le presse-papiers
+1362	Écrire dans le presse-papiers
+1363	Ouvrir applis / liens / agenda…
+1364	Partager des fichiers
+1365	Applis installées
+1366	Lire l’écran
+1367	Appuyer
+1368	Balayer / défiler
+1369	Saisir du texte
+1370	Retour / accueil et autres touches
+1371	Capture d’écran

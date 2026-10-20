@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_label">cccodroid device tools</string>
+    <string name="a11y_summary">Lets Claude read the screen, tap, type and take screenshots when you ask it to.</string>
+    <string name="a11y_desc">Used only by cccodroid\'s device tools: when you ask Claude to operate another app, it reads the current screen, taps, types, scrolls and takes screenshots through this service. Nothing is collected in the background. In \"auto\" mode (Settings → Device tools) the service is switched on only when needed and switches itself off after a few idle minutes.</string>
+</resources>

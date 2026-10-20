@@ -324,6 +324,14 @@ final class Priv {
                 case "share_logs": resp = Share.send(ctx, Share.bundleLogs(ctx), "application/zip"); break;
                 case "share_file": resp = Share.send(ctx, new java.io.File(req.optString("path")), req.optString("mime", "application/octet-stream")); break;
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
+                // 设备工具（device-mcp.mjs 调）与它的设置页
+                case "dev": resp = DeviceTools.call(ctx, req); break;
+                case "dev_status": resp = DeviceTools.status(ctx); break;
+                case "dev_set": resp = DeviceTools.set(ctx, req); break;
+                case "a11y_settings":
+                    ctx.startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    resp = new JSONObject().put("ok", true);
+                    break;
                 default: resp = new JSONObject().put("ok", false).put("message", Tr.t("未知操作 ") + op);
             }
             out.write((resp.toString() + "\n").getBytes(StandardCharsets.UTF_8));
