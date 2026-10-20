@@ -48,7 +48,7 @@ If everything works, please tell us too: open a GitHub issue with the [Device re
 
 - **Android version**: the minimum is Android 8.0; only 14 and 15 have actually been tested.
 - **Background**: the app keeps a foreground service running (the notification), which is enough for stock Android's background limits. **It does not stop vendors' own freezers and cleaners.** While frozen, the gateway and any running task stop completely and resume when you come back. If the app notices it was frozen, Settings shows a notice with the steps for your brand.
-- **GPU components are Snapdragon-only**: both GPU drivers, GPU benchmarks and clvk need Qualcomm Adreno's `/dev/kgsl-3d0`. On MediaTek Dimensity, Samsung Exynos, Google Tensor and Huawei Kirin devices the extensions page marks them "Snapdragon only" and they can't be installed. Components that can use the GPU, like Blender and llama.cpp, still install there and fall back to the CPU, just slower. Support for other GPUs is being looked into; reports from people with those devices help a lot.
+- **Most GPU components are Snapdragon-only**: the two Snapdragon GPU drivers, GPU benchmarks and clvk need Qualcomm Adreno's `/dev/kgsl-3d0`. Since 0.3.3, devices with a Mali GPU (MediaTek Dimensity and others) can install `gpu-driver-mali`, which uses the vendor's own Vulkan driver; it has been tested on a Redmi K70 Ultra and a vivo V2502A ([#14](https://github.com/greyoak111/cccodroid/issues/14)). On Samsung Exynos and Huawei Kirin devices the extensions page marks them "Snapdragon only" and they can't be installed. Components that can use the GPU, like Blender and llama.cpp, still install where no matching driver exists and fall back to the CPU, just slower. Reports from people with those devices help a lot.
 
 ### Lenovo (ZUI / ZUXOS) · tested
 
@@ -83,7 +83,7 @@ App info → Battery → **Unrestricted**, and in Settings → Battery → Backg
 
 ### Google Pixel and near-stock systems · not tested
 
-Background rules follow stock Android, so the foreground service is enough. Tensor chips use a Mali GPU, so the GPU components don't work.
+Background rules follow stock Android, so the foreground service is enough. Tensor G1–G4 use a Mali GPU, so `gpu-driver-mali` should work, but nobody has tested it yet; the other GPU components don't work.
 
 ## For developers: tests can create fake bugs
 

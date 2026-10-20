@@ -82,7 +82,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
 
 Requirements: Android 8.0+, arm64, about 4 GB free space.
 
-Tested devices: Lenovo TB320FC (Snapdragon 8+ Gen 1, Android 15) and Red Magic 9 Pro NX769J (Snapdragon 8 Gen 3, Android 14, installed from scratch following this section). Non-Snapdragon chips and Android 12 / 13 have not been tested on real hardware yet; reports are welcome.
+Tested devices: Lenovo TB320FC (Snapdragon 8+ Gen 1, Android 15) and Red Magic 9 Pro NX769J (Snapdragon 8 Gen 3, Android 14, installed from scratch following this section). Community reports: Redmi K70 Ultra (Dimensity 9300+, Android 16, [#14](https://github.com/greyoak111/cccodroid/issues/14)) and vivo V2502A (Dimensity, Android 16). Android 12 / 13 have not been tested on real hardware yet; reports are welcome.
 
 Versions with a suffix (such as `v0.2.0-rc1`) are pre-releases. In-app updates only offer stable releases; download pre-releases from Releases by hand.
 
@@ -183,6 +183,7 @@ Layout:
 - **[IVESHOWARD](https://github.com/IVESHOWARD)**: reported the skill archive import problems (only one of several skills imported, archives sometimes not recognised); fixed in 0.3.2.
 - **[CCB-Fox](https://github.com/CCB-Fox)**: the Dimensity GPU driver component ([cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)), which led to Mali support in 0.3.3.
 - **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
+- **[gogoiPhone](https://github.com/gogoiPhone)**: a Redmi K70 Ultra device report with their own Vulkan compute test ([#14](https://github.com/greyoak111/cccodroid/issues/14)).
 
 Reports, device testing and code review are contributions too, and they're recorded here.
 

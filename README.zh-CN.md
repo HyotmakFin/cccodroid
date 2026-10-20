@@ -83,7 +83,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 
 要求：Android 8.0+，arm64，可用空间约 4 GB。
 
-实测设备：联想 TB320FC（骁龙 8+ Gen 1，Android 15）、红魔 9 Pro NX769J（骁龙 8 Gen 3，Android 14，按本节步骤从零装起走完整流程）。非骁龙芯片和 Android 12 / 13 还没有真机实测，遇到问题欢迎反馈。
+实测设备：联想 TB320FC（骁龙 8+ Gen 1，Android 15）、红魔 9 Pro NX769J（骁龙 8 Gen 3，Android 14，按本节步骤从零装起走完整流程）。社区报告：Redmi K70 Ultra（天玑 9300+，Android 16，[#14](https://github.com/greyoak111/cccodroid/issues/14)）、vivo V2502A（天玑，Android 16）。Android 12 / 13 还没有真机实测，遇到问题欢迎反馈。
 
 带后缀的版本（如 `v0.2.0-rc1`）是预发布版，应用内更新只推正式版；想试预发布版请到 Releases 手动下载。
 
@@ -187,6 +187,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[IVESHOWARD](https://github.com/IVESHOWARD)**：反馈技能压缩包导入的问题（多个技能只能导入一个、有时识别不到），0.3.2 修复。
 - **[CCB-Fox](https://github.com/CCB-Fox)**：天玑 GPU 驱动组件（[cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)），促成了 0.3.3 的 Mali 机型支持。
 - **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
+- **[gogoiPhone](https://github.com/gogoiPhone)**：Redmi K70 Ultra 机型报告，附自写的 Vulkan 计算实测（[#14](https://github.com/greyoak111/cccodroid/issues/14)）。
 
 报告问题、测试机型、审查代码同样是贡献，都会记在这里。
 
