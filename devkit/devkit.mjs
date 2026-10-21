@@ -58,6 +58,18 @@ async function get(url) {
   }
 }
 
+// 仓库外构件的下载：重试几次；jsDelivr 的 /gh/ 地址对 GitHub Actions 的机器常回 503，失败时改从
+// raw.githubusercontent.com 取同一提交下的同一文件（内容随后照样按 sha256 核对，换来源不降低把关）
+function fetchUrl(url) {
+  const curl = (u) => execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", u], { maxBuffer: 2 ** 30 });
+  try { return curl(url); } catch (e) {
+    const m = url.match(/^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
+    if (!m) throw e;
+    console.log(`  jsDelivr 取不到，改从 GitHub 原始地址取：${m[4]}`);
+    return curl(`https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`);
+  }
+}
+
 // ── 索引 ─────────────────────────────────────────────────────────────
 // 多个仓库：termux-main 优先，其次 termux-glibc（给官方 Claude Code 的 glibc 版二进制提供运行库）
 const REPOS = MAN.repos || [MAN.repo];
@@ -867,7 +879,7 @@ if (cmd === "build" || cmd === "component") {
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {
-      b = execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", f.url], { maxBuffer: 2 ** 30 });
+      b = fetchUrl(f.url);
       if (sha256(b) !== f.sha256) throw new Error(`${p}: 哈希不符`);
       fs.writeFileSync(dest, b);
     }
@@ -895,7 +907,7 @@ if (cmd === "build" || cmd === "component") {
       const dest = path.join(CACHE, file);
       let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
       if (!b || sha256(b) !== w.sha256) {
-        b = execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", w.url], { maxBuffer: 2 ** 30 });
+        b = fetchUrl(w.url);
         if (sha256(b) !== w.sha256) throw new Error(`${file}: 哈希不符`);
         fs.writeFileSync(dest, b);
       }
