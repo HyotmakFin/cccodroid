@@ -1429,5 +1429,12 @@ window.I18N_DICT["fr"] = {
   "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} en attente · le tour précédent de cette conversation n'est pas tout à fait terminé (tâches en arrière-plan ou finalisation) ; envoi dès qu'il se termine",
   "已排队：这个会话的上一轮还没完全结束，结束后发出": "En file : le tour précédent de cette conversation n'est pas tout à fait terminé ; envoi dès qu'il se termine",
   "卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。": "Désinstaller le kit de développement ?\n\nLe kit entier est supprimé, avec les composants installés dedans, les modules ajoutés et tout ce que vous avez installé avec pip / npm -g / pkg, puis l’installation initiale reprend pour choisir à nouveau la source de téléchargement et les modules.\n\nConversations, espace de travail, connexion et réglages sont conservés. Les terminaux ouverts seront fermés.",
-  "卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，随后自动重新下载最新版（约 275 MB）。\n\n登录、会话和设置都保留。": "Désinstaller Claude Code ?\n\nLe programme Claude Code téléchargé est supprimé, puis la dernière version est retéléchargée aussitôt (environ 275 Mo).\n\nConnexion, conversations et réglages sont conservés.",
+  "卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，之后不会自动装回。要用时在这里点「安装…」，自己选版本（stable、latest 或具体版本号）。\n\n登录、会话和设置都保留；没装的时候发消息会提示先安装。": "Désinstaller Claude Code ?\n\nLe programme Claude Code téléchargé est supprimé et ne sera pas réinstallé automatiquement. Quand vous en aurez besoin, touchez « Installer… » ici et choisissez une version (stable, latest ou un numéro précis).\n\nConnexion, conversations et réglages sont conservés ; envoyer un message sans lui vous invitera à l’installer.",
+  "旧工具包留下的 {n} 个程序（{size}）已隔离，{d} 天后自动删除。": "{n} programmes laissés par l’ancien kit ({size}) sont mis en quarantaine et seront supprimés automatiquement dans {d} jours.",
+  "立即删除": "Supprimer maintenant",
+  "立即删除隔离的 {n} 个旧程序？删了就找不回来了。": "Supprimer maintenant les {n} anciens programmes en quarantaine ? Impossible de revenir en arrière.",
+  "已删除 {n} 个": "{n} supprimés",
+  "安装…": "Installer…",
+  "装哪个版本？\n填 stable、latest，或具体版本号（如 {v}）。": "Quelle version installer ?\nIndiquez stable, latest ou un numéro de version précis (par ex. {v}).",
+  "Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。": "Claude Code n’est pas installé. Allez dans Réglages → Mises à jour et touchez « Installer… » pour choisir une version.",
 };

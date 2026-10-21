@@ -431,8 +431,9 @@ final class Installer {
     /** 卸载删到一半被打断留下的 usr.trash：启动时顺手删掉 */
     void dropTrash() { deleteTree(usrTrash()); }
 
-    /** 卸载 Claude Code：删掉 install-claude.mjs 装的各个版本。~/.claude 里的登录、会话、设置不动 */
-    void uninstallClaude() {
+    /** 卸载 Claude Code：删掉 install-claude.mjs 装的各个版本，记下「用户卸了」（不再自动装回）。~/.claude 里的登录、会话、设置不动 */
+    void uninstallClaude() throws IOException {
+        write(env.claudeOffFlag(), "{\"at\":" + System.currentTimeMillis() + "}\n");
         deleteTree(new File(env.home, ".local/share/cccodroid/claude"));
     }
 

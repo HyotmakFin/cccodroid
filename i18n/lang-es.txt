@@ -1426,4 +1426,11 @@
 1426	{n} en espera · el turno anterior de esta conversación aún no ha terminado del todo (tareas en segundo plano o cierre); se enviarán cuando termine
 1427	En cola: el turno anterior de esta conversación aún no ha terminado del todo; se enviará cuando termine
 1428	¿Desinstalar el kit de desarrollo?\n\nSe borra el kit completo, junto con los componentes instalados en él, los módulos añadidos y todo lo que hayas instalado con pip / npm -g / pkg; después vuelve la instalación inicial para elegir de nuevo el origen de descarga y los módulos.\n\nSe conservan las conversaciones, el espacio de trabajo, la sesión iniciada y los ajustes. Los terminales abiertos se cerrarán.
-1429	¿Desinstalar Claude Code?\n\nSe borra el programa Claude Code descargado y enseguida se vuelve a descargar la última versión (unos 275 MB).\n\nSe conservan la sesión iniciada, las conversaciones y los ajustes.
+1429	¿Desinstalar Claude Code?\n\nSe borra el programa Claude Code descargado y no se reinstalará automáticamente. Cuando lo necesites, toca «Instalar…» aquí y elige la versión (stable, latest o un número concreto).\n\nSe conservan la sesión iniciada, las conversaciones y los ajustes; si envías un mensaje sin tenerlo, se te pedirá instalarlo primero.
+1430	{n} programas que dejó el kit anterior ({size}) están en cuarentena y se borrarán automáticamente en {d} días.
+1431	Borrar ahora
+1432	¿Borrar ahora los {n} programas antiguos en cuarentena? No se puede deshacer.
+1433	{n} borrados
+1434	Instalar…
+1435	¿Qué versión instalar?\nEscribe stable, latest o un número de versión concreto (p. ej. {v}).
+1436	Claude Code no está instalado. Ve a Ajustes → Actualizaciones y toca «Instalar…» para elegir una versión.

@@ -1462,5 +1462,12 @@ window.I18N_DICT.en = {
   "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} waiting · this conversation's previous turn hasn't fully finished (background tasks running or wrapping up); they'll go out after it ends",
   "已排队：这个会话的上一轮还没完全结束，结束后发出": "Queued: this conversation's previous turn hasn't fully finished; it will go out after that",
   "卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。": "Uninstall the development kit?\n\nThis deletes the whole kit, including the components installed in it, any extra modules, and anything you installed with pip / npm -g / pkg, then returns to first-time setup so you can choose the download source and modules again.\n\nConversations, workspace, sign-in and settings are kept. Open terminals will be closed.",
-  "卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，随后自动重新下载最新版（约 275 MB）。\n\n登录、会话和设置都保留。": "Uninstall Claude Code?\n\nThe downloaded Claude Code program is deleted and the latest version is downloaded again right away (about 275 MB).\n\nSign-in, conversations and settings are kept.",
+  "卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，之后不会自动装回。要用时在这里点「安装…」，自己选版本（stable、latest 或具体版本号）。\n\n登录、会话和设置都保留；没装的时候发消息会提示先安装。": "Uninstall Claude Code?\n\nThe downloaded Claude Code program is deleted and won't be reinstalled automatically. When you need it, tap \"Install…\" here and pick a version (stable, latest or a specific version number).\n\nSign-in, conversations and settings are kept; sending a message while it's not installed tells you to install it first.",
+  "旧工具包留下的 {n} 个程序（{size}）已隔离，{d} 天后自动删除。": "{n} programs left over from the old kit ({size}) are quarantined and will be deleted automatically in {d} days.",
+  "立即删除": "Delete now",
+  "立即删除隔离的 {n} 个旧程序？删了就找不回来了。": "Delete the {n} quarantined old programs now? This can't be undone.",
+  "已删除 {n} 个": "Deleted {n}",
+  "安装…": "Install…",
+  "装哪个版本？\n填 stable、latest，或具体版本号（如 {v}）。": "Which version to install?\nEnter stable, latest, or a specific version number (e.g. {v}).",
+  "Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。": "Claude Code isn't installed. Go to Settings → Updates and tap \"Install…\" to pick a version.",
 };

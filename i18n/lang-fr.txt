@@ -1426,4 +1426,11 @@
 1426	{n} en attente · le tour précédent de cette conversation n'est pas tout à fait terminé (tâches en arrière-plan ou finalisation) ; envoi dès qu'il se termine
 1427	En file : le tour précédent de cette conversation n'est pas tout à fait terminé ; envoi dès qu'il se termine
 1428	Désinstaller le kit de développement ?\n\nLe kit entier est supprimé, avec les composants installés dedans, les modules ajoutés et tout ce que vous avez installé avec pip / npm -g / pkg, puis l’installation initiale reprend pour choisir à nouveau la source de téléchargement et les modules.\n\nConversations, espace de travail, connexion et réglages sont conservés. Les terminaux ouverts seront fermés.
-1429	Désinstaller Claude Code ?\n\nLe programme Claude Code téléchargé est supprimé, puis la dernière version est retéléchargée aussitôt (environ 275 Mo).\n\nConnexion, conversations et réglages sont conservés.
+1429	Désinstaller Claude Code ?\n\nLe programme Claude Code téléchargé est supprimé et ne sera pas réinstallé automatiquement. Quand vous en aurez besoin, touchez « Installer… » ici et choisissez une version (stable, latest ou un numéro précis).\n\nConnexion, conversations et réglages sont conservés ; envoyer un message sans lui vous invitera à l’installer.
+1430	{n} programmes laissés par l’ancien kit ({size}) sont mis en quarantaine et seront supprimés automatiquement dans {d} jours.
+1431	Supprimer maintenant
+1432	Supprimer maintenant les {n} anciens programmes en quarantaine ? Impossible de revenir en arrière.
+1433	{n} supprimés
+1434	Installer…
+1435	Quelle version installer ?\nIndiquez stable, latest ou un numéro de version précis (par ex. {v}).
+1436	Claude Code n’est pas installé. Allez dans Réglages → Mises à jour et touchez « Installer… » pour choisir une version.

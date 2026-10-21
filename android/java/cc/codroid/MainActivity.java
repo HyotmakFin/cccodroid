@@ -155,7 +155,7 @@ public class MainActivity extends Activity {
                     Ledger.add(env, "install", true, Tr.t("首次安装开发工具包"), null);
                 }
                 deployAssets();
-                if (!env.claudeReady()) {
+                if (!env.claudeReady() && !env.claudeOff()) {      // 用户自己卸的不装回，等他在设置里选版本
                     ins.installClaude(new File(env.app, "scripts/install-claude.sh"));
                     say(Tr.t("✓ Claude Code 就绪"));
                 }
@@ -606,14 +606,30 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 卸载开发工具包 / Claude Code：界面切回安装页、停网关、删掉，再走一遍启动流程 ——
-     * 缺什么装什么，所以卸工具包 = 回到首装（重选来源和模块），卸 Claude Code = 重新下载最新版。
-     * 会话、工作区、登录、设置都在 home 里，不动。
+     * 卸载开发工具包 / Claude Code（设置页，确认框页面里弹过了）。会话、工作区、登录、设置都在 home 里，不动。
+     * · 工具包：网关靠里面的 node 跑，卸了只能回首装 —— 切回安装页、停网关、删掉，再走一遍启动流程（重选来源和模块）
+     * · Claude Code：只删程序、记下「用户卸了」，不自动装回；界面照常用，设置里那一项显示「未安装 · 安装…」，由用户选版本
      */
     private void uninstallUi(String item) {
         new Thread(() -> {
             if (Updater.gatewayBusy() || Updater.get(this).devkitMoving()) {
-                ui.post(() -> android.widget.Toast.makeText(this, Tr.t("有任务正在跑，等它结束再卸载"), android.widget.Toast.LENGTH_LONG).show());
+                toast(Tr.t("有任务正在跑，等它结束再卸载"));
+                return;
+            }
+            Installer ins = new Installer(env, new Installer.Progress() {
+                public void step(String m) { say(m); }
+                public void bytes(long d, long t) { progress(d, t); }
+            });
+            if ("claude".equals(item)) {
+                try {
+                    ins.uninstallClaude();
+                    Ledger.add(env, "uninstall", true, Tr.t("卸载 Claude Code"), null);
+                    Updater.get(this).claudeRemoved();
+                    toast(Tr.t("已卸载 Claude Code。要用时到 设置 → 更新 里点「安装…」"));
+                } catch (Exception e) {
+                    Ledger.add(env, "uninstall", false, e.getMessage(), null);
+                    toast("✗ " + e.getMessage());
+                }
                 return;
             }
             CountDownLatch shown = new CountDownLatch(1);
@@ -623,19 +639,14 @@ public class MainActivity extends Activity {
                 buildSetupUi();
                 shown.countDown();
             });
-            boolean dk = "devkit".equals(item);
             try {
                 shown.await();
-                Installer ins = new Installer(env, new Installer.Progress() {
-                    public void step(String m) { say(m); }
-                    public void bytes(long d, long t) { progress(d, t); }
-                });
-                say(dk ? Tr.t("卸载开发工具包…") : Tr.t("卸载 Claude Code…"));
+                say(Tr.t("卸载开发工具包…"));
                 GatewayService.pause(true);
-                try { if (dk) ins.uninstallDevkit(); else ins.uninstallClaude(); }
+                try { ins.uninstallDevkit(); }
                 finally { GatewayService.pause(false); }
-                Ledger.add(env, "uninstall", true, dk ? Tr.t("卸载开发工具包") : Tr.t("卸载 Claude Code"), null);
-                say(dk ? Tr.t("✓ 已卸载。接下来重新安装开发工具包：") : Tr.t("✓ 已卸载。接下来重新下载 Claude Code："));
+                Ledger.add(env, "uninstall", true, Tr.t("卸载开发工具包"), null);
+                say(Tr.t("✓ 已卸载。接下来重新安装开发工具包："));
             } catch (Exception e) {
                 Ledger.add(env, "uninstall", false, e.getMessage(), null);
                 say("✗ " + e.getMessage());
@@ -643,6 +654,8 @@ public class MainActivity extends Activity {
             ui.post(this::boot);
         }, "uninstall").start();
     }
+
+    private void toast(String m) { ui.post(() -> android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show()); }
 
     /** 替换工具包：网关要停，界面切回进度页，装完再回来 */
     private void applyDevkitUi() {

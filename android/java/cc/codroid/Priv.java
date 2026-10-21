@@ -308,7 +308,7 @@ final class Priv {
                 // 更新（Updater）
                 case "upd_status": resp = Updater.get(ctx).status(); break;
                 case "upd_check": Updater.get(ctx).checkAsync(true); resp = Updater.get(ctx).status(); break;
-                case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true); break;
+                case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true, req.optString("version", "")); break;
                 case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
                 case "upd_verify": resp = Updater.get(ctx).verifyAsync(req.optBoolean("full", true)); break;
                 case "upd_repair": resp = Updater.get(ctx).repair(); break;

@@ -9,14 +9,13 @@
 // 14 天后自动删。故意留下的：
 //   · npm -g 的软链（指进 lib/node_modules）、对应模块还在的 Python 命令 —— carryOver 本来就该搬的
 //   · 当前工具包装好之后才出现的文件 —— 用户自己放的
-//   · which —— 10.22 工具包漏了 debianutils，删了就没有 which 了，等工具包补上再说
 import fs from "node:fs";
 import path from "node:path";
 import { PREFIX, log } from "./config.mjs";
 import { ledger } from "./claude.mjs";
 import { compNeeds, compRecords } from "./components.mjs";
+import { NEXT, sendJson } from "./http.mjs";
 
-const KEEP = new Set(["bin/which"]);
 // 放在 usr 外面：0.3.10 起 Installer 每装一次工具包都写它（那时 carryOver 已修好，搬过来的才真是用户的，不能动）。
 // 所以只有「当前工具包是 0.3.9 及以前装的」才会清理，且只清一次
 const MARK = () => path.join(path.dirname(PREFIX), ".orphans-v1");
@@ -99,7 +98,7 @@ export function cleanOrphans() {
   const cand = new Map();               // rel → lstat
   for (const n of fs.readdirSync(bin)) {
     const rel = "bin/" + n;
-    if (owned.has(rel) || KEEP.has(rel)) continue;
+    if (owned.has(rel)) continue;     // which 不用留：10.22 没带 debianutils，APK 自带了一个（assets/bin/which）
     let st; try { st = fs.lstatSync(path.join(bin, n)); } catch { continue; }
     if (st.mtimeMs >= since) continue;  // 当前工具包装好之后才有的：用户自己放的
     cand.set(rel, st);
@@ -143,4 +142,37 @@ export function cleanOrphans() {
     ledger("repair", true, `清理旧工具包残留：${moved.length} 个程序挪到 ${path.basename(dst)}（14 天后删除）`, { sample: moved.slice(0, 20) });
   }
   fs.writeFileSync(MARK(), JSON.stringify({ at: Date.now(), moved: out.size }) + "\n");
+}
+
+/** 隔离着的：[{ name, count, bytes, at }] */
+function orphanDirs() {
+  const root = path.dirname(PREFIX), out = [];
+  let names = [];
+  try { names = fs.readdirSync(root).filter((n) => /^orphans-\d{8}$/.test(n)); } catch {}
+  for (const n of names) {
+    const d = path.join(root, n);
+    let count = 0, bytes = 0;
+    const walk = (p) => {
+      for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+        const f = path.join(p, e.name);
+        if (e.isDirectory()) walk(f);
+        else { if (path.basename(p) === "bin") count++; try { bytes += fs.lstatSync(f).size; } catch {} }
+      }
+    };
+    try { walk(d); out.push({ name: n, count, bytes, at: fs.statSync(d).mtimeMs }); } catch {}
+  }
+  return out;
+}
+
+// ── 路由：GET /api/orphans（隔离了什么）、POST /api/orphans/purge（不等 14 天，立即删）──
+export async function routeOrphans(req, res, u, p) {
+  if (p === "/api/orphans" && req.method === "GET") return sendJson(res, 200, { ok: true, dirs: PREFIX ? orphanDirs() : [], ttlDays: TTL / 86400e3 });
+  if (p === "/api/orphans/purge" && req.method === "POST") {
+    const dirs = PREFIX ? orphanDirs() : [];
+    for (const d of dirs) fs.rmSync(path.join(path.dirname(PREFIX), d.name), { recursive: true, force: true });
+    const n = dirs.reduce((a, d) => a + d.count, 0);
+    if (dirs.length) { log(`[orphans] 立即删除隔离目录：${dirs.map((d) => d.name).join(" ")}`); ledger("repair", true, `立即删除了隔离的旧工具包残留（${n} 个程序）`); }
+    return sendJson(res, 200, { ok: true, removed: n });
+  }
+  return NEXT;
 }

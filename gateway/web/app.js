@@ -4454,14 +4454,34 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("priv-auto").addEventListener("change", (e) => post("/api/app/shz_autostart", { enable: e.target.checked }).catch(() => {}));
 
   // ── 更新：应用本体 / 开发工具包 / Claude Code ──
-    const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查"), verifying: t("校验中"), damaged: t("已损坏") };
+    const UPD_TEXT = { uptodate: t("已是最新"), available: t("有新版本"), downloading: t("下载中"), ready: t("已下载，待安装"), installing: t("安装中"), error: t("出错"), unknown: t("未检查"), verifying: t("校验中"), damaged: t("已损坏"), missing: t("未安装") };
   let updPoll = null;
   let updFollowUntil = 0;
   const followUpd = () => { updFollowUntil = Date.now() + 15000; };
+  let lastUpd = {};
+  // 升级工具包时留下的旧程序（网关启动时隔离到 files/orphans-<日期>/，14 天后自动删）：有就提一句，给个立即删
+  async function loadOrphans() {
+    const r = await api("/api/orphans").catch(() => null);
+    const el = $("upd-orphans");
+    const n = r && r.ok ? r.dirs.reduce((a, d) => a + d.count, 0) : 0;
+    el.classList.toggle("hidden", !n);
+    if (!n) return;
+    const bytes = r.dirs.reduce((a, d) => a + d.bytes, 0);
+    el.innerHTML = `<div class="row-actions" style="justify-content:space-between">
+      <span class="tiny">${esc(t("旧工具包留下的 {n} 个程序（{size}）已隔离，{d} 天后自动删除。", { n, size: fmtSize(bytes), d: r.ttlDays }))}</span>
+      <button class="btn sm ghost danger" id="orphans-purge">${t("立即删除")}</button></div>`;
+    $("orphans-purge").onclick = async () => {
+      if (!confirm(t("立即删除隔离的 {n} 个旧程序？删了就找不回来了。", { n }))) return;
+      const x = await post("/api/orphans/purge", {}).catch((e2) => ({ ok: false, message: e2.message }));
+      toast(x.ok ? t("已删除 {n} 个", { n: x.removed }) : x.message, !x.ok);
+      loadOrphans();
+    };
+  }
   async function loadUpd() {
     let st;
     try { st = await api("/api/app/upd_status"); } catch { return; }
     if (!st.ok || !st.items) return;                 // 旧版 / 开发端：没有这项
+    lastUpd = st;
     $("upd-field").classList.remove("hidden");
     $("upd-auto").checked = !!st.auto;
     $("upd-channel").value = st.channel || "stable";
@@ -4472,11 +4492,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const ver = esc(it.current || "?") + (it.latest && it.latest !== it.current && it.state !== "uptodate" ? " → " + esc(it.latest) : "");
       const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done)} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
         : (it.state === "installing" || it.state === "verifying") && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
-      const cls = it.state === "error" || it.state === "damaged" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
-      const btn = it.state === "available" ? (it.id === "claude" ? t("更新") : t("下载并安装"))
+      const cls = it.state === "error" || it.state === "damaged" || it.state === "missing" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
+      const btn = it.state === "missing" ? t("安装…") : it.state === "available" ? (it.id === "claude" ? t("更新") : t("下载并安装"))
         : it.state === "ready" ? t("安装") : it.state === "damaged" ? t("修复") : it.state === "error" && it.latest ? t("重试") : "";
       // 工具包：随时可以逐个核对文件；坏了就「修复」（重装同一版本）
-      const act = it.state === "damaged" ? "repair" : "";
+      const act = it.state === "damaged" ? "repair" : it.state === "missing" ? "pick" : "";
       const verifyBtn = it.id === "devkit" && it.current && ["uptodate", "unknown", "error", "damaged"].includes(it.state)
         ? `<button class="btn sm ghost" data-item="devkit" data-act="verify">${t("校验")}</button>` : "";
       // 从本地文件装（离线、或者已经用电脑下好了）：外壳弹系统文件选择器，认身份、替换都在外壳里做
@@ -4493,6 +4513,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const v = st.verify;
     if (v && v.manifest && (v.missing || v.changed) && (v.samples || []).length)
       $("upd-items").insertAdjacentHTML("beforeend", `<pre class="tiny mono" style="white-space:pre-wrap;margin:6px 0 0;color:var(--fg3)">${esc(v.samples.join("\n"))}${v.missing + v.changed > v.samples.length ? "\n…" : ""}</pre>`);
+    loadOrphans();
     $("upd-last").textContent = st.checking ? t("检查中…") : st.error ? "✗ " + st.error
       : st.lastCheck ? t("上次检查：{at}", { at: new Date(st.lastCheck).toLocaleString() }) : t("还没检查过");
     clearTimeout(updPoll);
@@ -4503,10 +4524,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const item = e.target.dataset && e.target.dataset.item;
     if (!item) return;
     const act = e.target.dataset.act;
+    if (act === "pick") {
+      // 卸载后重装：用户自己定版本（stable / latest / 具体版本号），默认当前渠道查到的最新版
+      const it = (lastUpd.items || []).find((x) => x.id === item) || {};
+      const v = prompt(t("装哪个版本？\n填 stable、latest，或具体版本号（如 {v}）。", { v: it.latest || "2.1.100" }), it.latest || "stable");
+      if (v === null || !v.trim()) return;
+      const r = await post("/api/app/upd_apply", { item, version: v.trim() }).catch((e2) => ({ ok: false, message: e2.message }));
+      toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
+      followUpd(); setTimeout(loadUpd, 500);
+      return;
+    }
     if (act === "uninstall") {
       const msg = item === "devkit"
         ? t("卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。")
-        : t("卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，随后自动重新下载最新版（约 275 MB）。\n\n登录、会话和设置都保留。");
+        : t("卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，之后不会自动装回。要用时在这里点「安装…」，自己选版本（stable、latest 或具体版本号）。\n\n登录、会话和设置都保留；没装的时候发消息会提示先安装。");
       if (!confirm(msg)) return;
       CCApp.uninstall(item);
       return;

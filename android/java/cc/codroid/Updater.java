@@ -413,6 +413,8 @@ final class Updater {
         }
         if (v == null) throw new IOException(why);
         claude.latest = v;
+        // 用户在设置里卸了：只报「未安装」，不当成「有更新」（那样自动更新、换渠道都会把它装回去）
+        if (env.claudeOff() && !env.claudeReady()) { if (!"installing".equals(claude.state)) claude.set("missing", ""); return; }
         // 已装的版本要和所选渠道的版本「一致」，而不只是「不比它旧」：
         // 从 latest 切回 stable 时，stable 的版本号更小，以前这里判成「已是最新」，结果一直停在 latest 的版本上
         if (!"installing".equals(claude.state)) {
@@ -459,16 +461,24 @@ final class Updater {
 
     // ── 应用更新 ─────────────────────────────────────────────────────────
     /** @param user 用户点的（或从通知点进来的）：APK 就走安装确认；工具包就去替换 */
-    JSONObject apply(String id, boolean user) {
+    JSONObject apply(String id, boolean user) { return apply(id, user, ""); }
+
+    /** version：只对 Claude Code 有用 —— stable / latest / 具体版本号；空 = 当前渠道查到的最新版 */
+    JSONObject apply(String id, boolean user, String version) {
         Item it = id.equals("app") ? app : id.equals("devkit") ? devkit : id.equals("claude") ? claude : null;
         JSONObject r = new JSONObject();
         try {
             if (it == null) return r.put("ok", false).put("message", Tr.t("未知项 ") + id);
             if ("downloading".equals(it.state) || "installing".equals(it.state)) return r.put("ok", true).put("message", Tr.t("进行中"));
             if (it == claude) {
-                if (claude.latest.isEmpty()) return r.put("ok", false).put("message", Tr.t("先检查更新"));
-                new Thread(this::installClaude, "upd-claude").start();
-                return r.put("ok", true).put("message", Tr.t("开始更新 Claude Code"));
+                String ver = version == null ? "" : version.trim();
+                if (!ver.isEmpty() && !ver.matches("stable|latest|\\d+\\.\\d+\\.\\d+[\\w.+-]*"))
+                    return r.put("ok", false).put("message", Tr.f("版本号不对：{0}（填 stable、latest 或 2.1.100 这样的版本号）", ver));
+                if (ver.isEmpty()) ver = claude.latest;
+                if (ver.isEmpty()) return r.put("ok", false).put("message", Tr.t("先检查更新"));
+                final String v = ver;
+                new Thread(() -> installClaude(v), "upd-claude").start();
+                return r.put("ok", true).put("message", claude.current.isEmpty() ? Tr.f("开始安装 Claude Code {0}", v) : Tr.t("开始更新 Claude Code"));
             }
             if (it.url == null) {
                 // 「出错」时的「重试」：没有待下载的东西（出错的是检查本身），就重新检查一遍
@@ -598,13 +608,17 @@ final class Updater {
         it.set(ok ? "uptodate" : "ready", ok ? "" : msg);
     }
 
-    private void installClaude() {
+    /** 卸载之后（MainActivity.uninstallUi）：状态改成「未安装」 */
+    void claudeRemoved() { refreshCurrent(); claude.set("missing", ""); }
+
+    private void installClaude(String ver) {
         claude.set("installing", "");
         claude.done = 0; claude.total = 0;
         try {
-            int rc = installer(claude).run(env.bin("bash").getPath(), new File(env.app, "scripts/install-claude.sh").getPath(), claude.latest);
+            int rc = installer(claude).run(env.bin("bash").getPath(), new File(env.app, "scripts/install-claude.sh").getPath(), ver);
             refreshCurrent();
             if (rc != 0) throw new IOException(Tr.t("install-claude.sh 返回 ") + rc);
+            env.claudeOffFlag().delete();        // 装上了：以后照常跟着更新走
             claude.set("uptodate", Tr.f("已更新到 {0}（下一轮对话起生效）", claude.current));
         } catch (Exception e) { claude.set("error", e.getMessage()); }
     }

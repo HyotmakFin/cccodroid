@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import { CFG, LAST_LANG, log, tr, tz } from "./config.mjs";
+import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { API_KEY, PERM_MODES, PROVIDER, billAfterRun, noteTokens } from "./providers.mjs";
 import { ALIAS_SEEN, isLoginMode } from "./models.mjs";
@@ -53,6 +53,11 @@ export async function startRun(item) {
 
   if (!API_KEY && !PROVIDER.login) {
     emit({ type: "error", message: tr(LAST_LANG, tz("未配置 API 密钥。请在设置里填入 {name} 的密钥。", { name: PROVIDER.label || PROVIDER.id })) });
+    return endRun(run, { failed: true });
+  }
+  // 用户在设置里卸了 Claude Code（之后自己选版本装）：说清楚，别让加载器报一句看不懂的找不到文件
+  if (!fs.existsSync(PATHS.claude)) {
+    emit({ type: "error", message: tr(LAST_LANG, tz("Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。")) });
     return endRun(run, { failed: true });
   }
   if (!isLoginMode() && !(await ensureBridge())) {

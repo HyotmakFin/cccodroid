@@ -55,6 +55,10 @@ final class Env {
 
     boolean claudeReady() { return claude().canExecute(); }
 
+    /** 用户在设置里卸了 Claude Code：有这个标记就别自动装回去（启动、换渠道都不装），等用户点「安装…」自己选版本 */
+    File claudeOffFlag() { return new File(files, ".claude-uninstalled"); }
+    boolean claudeOff() { return claudeOffFlag().isFile(); }
+
     /**
      * 工作区放在私有目录。/sdcard 是 FUSE：不能执行程序、不能建符号链接、git 嫌属主不对、
      * npm install 建不了 .bin —— 实测在那里几乎干不了开发。私有目录里这些都正常，界面的文件浏览器也看得到。
