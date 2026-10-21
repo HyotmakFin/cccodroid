@@ -790,8 +790,13 @@ public class MainActivity extends Activity {
         WebView.setWebContentsDebuggingEnabled(new File(env.home, ".webdebug").exists());
         web = new WebView(this) {
             @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
-                if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) hangCheck();
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) { hangCheck(); imeCheck(); }
                 return super.dispatchTouchEvent(e);
+            }
+            @Override public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo o) {
+                android.view.inputmethod.InputConnection ic = super.onCreateInputConnection(o);
+                imeNoConn = ic == null;
+                return ic;
             }
         };
         WebSettings s = web.getSettings();
@@ -920,6 +925,24 @@ public class MainActivity extends Activity {
     //  2026-10-16 实测：触摸滚动冻住后 location.reload() 和切后台都不好，跳到 127.0.0.2:9 再跳回来就好 ——
     //  卡住的是 WebView 给这个文档的手势状态，换站点才会重建。127.0.0.2:9 是浏览器直接拒绝的端口，不发任何网络请求。
     //  loadUrl 不经过 shouldOverrideUrlLoading，不会被当外链拦掉。跳的那一下先把 WebView 藏起来，免得闪错误页。
+    // ── 输入法拿着空连接 ──
+    //  「首启打不了中文」的真因（2026-10-21 输入法事件流实测）：页面一加载完，新会话就用 JS 把焦点放进输入框，
+    //  这时没有键盘、也没人点，WebView 不会为它新建输入连接，输入法手里还是页面刚出来时那条空连接（没有可编辑处时给的）。
+    //  之后手指点输入框，焦点没变，WebView 只叫键盘出来、不重建连接，于是讯飞照常出候选，选的字却交给了空连接，一个也进不去。
+    //  英文能进，多半是输入法在没有连接时退回去发按键事件（还没单独验证）。分屏 / 切屏让窗口失焦再得焦，连接重建，所以又好了。
+    //  这里在手指抬起后看一眼：页面焦点在可编辑处、手里的连接却还是空的，就让输入法重新连一次。
+    private boolean imeNoConn = false;
+    private void imeCheck() {
+        ui.postDelayed(() -> {
+            if (web == null || !imeNoConn || !web.hasFocus()) return;
+            web.evaluateJavascript("(function(){var a=document.activeElement;return !!a&&(a.isContentEditable||/^(TEXTAREA|INPUT)$/.test(a.tagName))})()", v -> {
+                if (!"true".equals(v) || web == null || !imeNoConn) return;
+                android.view.inputmethod.InputMethodManager m = getSystemService(android.view.inputmethod.InputMethodManager.class);
+                if (m != null) m.restartInput(web);
+            });
+        }, 300);
+    }
+
     // ── 页面卡死兜底 ──
     //  滑动在 WebView 的合成线程上做，点按要页面的 JS 主线程处理。主线程卡住（死循环、或者等一个没显示出来的对话框）时，
     //  内容照样能滑、什么都点不动，页面里的雪花按钮也救不了。这里在原生层看：手指抬起时问页面一句，
