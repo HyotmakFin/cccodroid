@@ -1060,12 +1060,23 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (g && g.active && g.setAt) { if (!goalTick) goalTick = setInterval(renderRunStrip, 1000); }
     else if (goalTick) { clearInterval(goalTick); goalTick = null; }
   }
+  // 点 ✕ 收起的清单 / 目标记录按会话记在 localStorage，重开 App 不再冒出来（只留最近 50 个会话）
+  function stripHidden() { try { return JSON.parse(localStorage.getItem("cc.stripHide") || "{}"); } catch { return {}; } }
+  function saveStripHidden() {
+    if (!view.sessionId) return;
+    const m = stripHidden();
+    delete m[view.sessionId];
+    m[view.sessionId] = { t: view.tasksHide, g: view.goalHide };
+    const ks = Object.keys(m);
+    for (const k of ks.slice(0, Math.max(0, ks.length - 50))) delete m[k];
+    try { localStorage.setItem("cc.stripHide", JSON.stringify(m)); } catch {}
+  }
   runStrip.addEventListener("click", (e) => {
     const b = e.target.closest("button");
-    if (b && b.classList.contains("rs-tx")) { view.tasksHide = tasksSig(view.tasks || []); renderRunStrip(); return; }
+    if (b && b.classList.contains("rs-tx")) { view.tasksHide = tasksSig(view.tasks || []); saveStripHidden(); renderRunStrip(); return; }
     if (!b && e.target.closest(".rs-thead")) { tasksOpen = !tasksOpen; localStorage.setItem("cc.tasksOpen", tasksOpen ? "1" : "0"); renderRunStrip(); return; }
     if (!b) return;
-    if (b.classList.contains("rs-x")) { view.goalHide = view.goal?.at || Date.now(); renderRunStrip(); return; }
+    if (b.classList.contains("rs-x")) { view.goalHide = view.goal?.at || Date.now(); saveStripHidden(); renderRunStrip(); return; }
     if (b.classList.contains("rs-goal-stop")) {
       // 目标进行中那一轮会一直跑下去，排队的 /goal clear 轮不到：先停这一轮，收尾后再发（见 onRunEnd）
       if (srv.run && !srv.run.idle && isBusy()) {
@@ -1490,9 +1501,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.lastRunId = null;
     view.title = "";
     view.goal = null;
-    view.goalHide = 0;
+    const hid = stripHidden()[view.sessionId] || {};
+    view.goalHide = hid.g || 0;
     view.tasks = null;
-    view.tasksHide = "";
+    view.tasksHide = hid.t || "";
     renderRunStrip();
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
