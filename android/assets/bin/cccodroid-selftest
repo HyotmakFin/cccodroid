@@ -46,6 +46,12 @@ t "gdb" "gdb -batch -ex run -ex bt ./a 2>&1 | tail -2"
 t "strace" "strace -c -o /dev/null ./a"
 t "patchelf" "patchelf --print-interpreter ./a"
 else skip C/C++ "C/C++ 构建"; fi
+echo "== 基础命令"
+# 10.22.1 起补进基础模块（以前漏了：没有 which、patch）
+t "which" "which bash"
+t "patch" "printf 'a\\n' > p1 && printf 'b\\n' > p2 && { diff -u p1 p2 > p.diff; true; } && patch -s p1 p.diff && cat p1"
+t "tree" "tree -L 1 . | tail -1"
+t "其余基础命令" "for c in ed dos2unix lsof nano hostname ifconfig netstat; do command -v \$c >/dev/null || { echo 缺 \$c; exit 1; }; done; echo 都在"
 echo "== Python"
 t "python3" "python3 -c 'import sys,ssl,sqlite3,zlib,ctypes;print(sys.version.split()[0],ssl.OPENSSL_VERSION)'"
 t "python https" "python3 -c 'import urllib.request;print(urllib.request.urlopen(\"https://pypi.org/simple/\",timeout=20).status)'"

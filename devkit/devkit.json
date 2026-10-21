@@ -21,7 +21,16 @@
       "curl",
       "ca-certificates",
       "openssl",
-      "openssl-tool"
+      "openssl-tool",
+      "debianutils",
+      "patch",
+      "ed",
+      "dos2unix",
+      "lsof",
+      "nano",
+      "inetutils",
+      "net-tools",
+      "tree"
     ],
     "build": [
       "clang",

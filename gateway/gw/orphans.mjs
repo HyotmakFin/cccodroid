@@ -98,7 +98,7 @@ export function cleanOrphans() {
   const cand = new Map();               // rel → lstat
   for (const n of fs.readdirSync(bin)) {
     const rel = "bin/" + n;
-    if (owned.has(rel)) continue;     // which 不用留：10.22 没带 debianutils，APK 自带了一个（assets/bin/which）
+    if (owned.has(rel)) continue;
     let st; try { st = fs.lstatSync(path.join(bin, n)); } catch { continue; }
     if (st.mtimeMs >= since) continue;  // 当前工具包装好之后才有的：用户自己放的
     cand.set(rel, st);
