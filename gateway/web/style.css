@@ -1319,3 +1319,14 @@ html[data-skin="qiusuo"] .cursor{width:8px;height:8px;border-radius:50%;vertical
   html[data-skin="qiusuo"] .think.live:last-child > summary,html[data-skin="qiusuo"] .run-phase{animation:none;background:none;color:var(--think-ink)}
   html[data-skin="qiusuo"] .tool-state.run::before,html[data-skin="qiusuo"] .dots span,html[data-skin="qiusuo"] .cursor{animation:none}
 }
+
+/* 标题下的状态（就绪 / 生成中…）：原生用绿 / 琥珀，求索里太跳。照 DSH 的做法：
+   空闲是中性灰，忙是品牌蓝并带同一道扫光；出错仍是红 */
+html[data-skin="qiusuo"] #sub-title.ok{color:var(--fg3)}
+html[data-skin="qiusuo"] #sub-title.warn{
+  color:transparent;
+  background:linear-gradient(105deg,var(--accent) 0 35%,var(--think-shine) 45% 55%,var(--accent) 65% 100%) 0 0/300% 100% no-repeat;
+  -webkit-background-clip:text;background-clip:text;
+  animation:qs-shimmer 1.5s steps(48,end) .3s infinite;
+}
+@media (prefers-reduced-motion:reduce){html[data-skin="qiusuo"] #sub-title.warn{animation:none;background:none;color:var(--accent)}}
