@@ -545,10 +545,16 @@ final class Installer {
         java.util.Set<String> owned = new java.util.HashSet<>();
         File[] lists = new File(old, "var/lib/dpkg/info").listFiles((d, n) -> n.endsWith(".list"));
         if (lists != null) for (File l : lists) {
-            try { for (String line : java.nio.file.Files.readAllLines(l.toPath())) owned.add(line.trim()); }
+            // 清单里写的是 /data/data/<包名>/files/usr/…，而 env.usr 是 /data/user/0/…：只比 usr/ 之后的相对路径。
+            // 0.3.9 及以前直接拿绝对路径比，一条都对不上，旧工具包和旧组件 bin/ 下的东西全被当成用户的搬了过来
+            try {
+                for (String line : java.nio.file.Files.readAllLines(l.toPath())) {
+                    int i = line.indexOf("/files/usr/");
+                    if (i >= 0) owned.add(line.trim().substring(i + 11));
+                }
+            }
             catch (IOException ignored) {}
         }
-        String pre = env.usr.getPath() + "/";
         java.util.List<String> dirs = new java.util.ArrayList<>(java.util.Arrays.asList("bin", "lib/node_modules"));
         File[] py = new File(old, "lib").listFiles((d, n) -> n.matches("python3\\.\\d+"));
         if (py != null) for (File p : py) if (new File(neu, "lib/" + p.getName()).isDirectory()) dirs.add("lib/" + p.getName() + "/site-packages");
@@ -558,7 +564,7 @@ final class Installer {
             if (kids == null) continue;
             for (File k : kids) {
                 String rel = d + "/" + k.getName();
-                if (owned.contains(pre + rel) || owned.contains("/" + rel)) continue;
+                if (owned.contains(rel)) continue;
                 File to = new File(neu, rel);
                 if (to.exists() || isSymlink(to)) continue;
                 to.getParentFile().mkdirs();

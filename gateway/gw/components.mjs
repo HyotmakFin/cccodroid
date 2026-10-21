@@ -196,7 +196,7 @@ export function compRun(job, cmd, args, opts = {}) {
 }
 
 /** 把暂存区里的 usr/ 树逐个搬进 $PREFIX；返回搬进去的相对路径（文件与软链） */
-function compMoveIn(stageUsr, rel = "", moved = [], skipped = []) {
+function compMoveIn(stageUsr, rel = "", moved = [], skipped = [], orphans = new Set()) {
   for (const d of fs.readdirSync(path.join(stageUsr, rel), { withFileTypes: true })) {
     const r = rel ? rel + "/" + d.name : d.name;
     const src = path.join(stageUsr, r), dst = path.join(PREFIX, r);
@@ -204,12 +204,12 @@ function compMoveIn(stageUsr, rel = "", moved = [], skipped = []) {
       let st = null; try { st = fs.lstatSync(dst); } catch {}
       if (st && !st.isDirectory()) { skipped.push(r); continue; }
       if (!st) fs.mkdirSync(dst, { recursive: true });
-      compMoveIn(stageUsr, r, moved, skipped);
+      compMoveIn(stageUsr, r, moved, skipped, orphans);
       continue;
     }
     // 工具包已有的同名文件不覆盖（组件只带底座里没有的包，撞名多半是共用的目录索引之类）
     let exists = false; try { fs.lstatSync(dst); exists = true; } catch {}
-    if (exists) { skipped.push(r); continue; }
+    if (exists && !orphans.has(r)) { skipped.push(r); continue; }
     fs.renameSync(src, dst);
     moved.push(r);
   }
@@ -217,6 +217,25 @@ function compMoveIn(stageUsr, rel = "", moved = [], skipped = []) {
 }
 
 const PKG_LIST = /^var\/lib\/dpkg\/info\/(.+)\.list$/;
+
+/** 没人认领的文件：不在任何包的清单（工具包 + 已装组件带进来的 .list）里，也没有已装组件在用。
+ *  0.3.9 及以前升级工具包时 carryOver 认错了路径，把旧工具包 / 旧组件 bin/ 下的东西当成用户自己装的搬了过来
+ *  （10.18 带的 poppler 的 pdfinfo 就这样留下，配上组件新带的 libpoppler 链接失败）。装组件撞上这种文件就覆盖 */
+function compOrphans(list, selfId) {
+  const owned = new Set();
+  try {
+    for (const f of fs.readdirSync(path.join(PREFIX, "var/lib/dpkg/info")))
+      if (f.endsWith(".list")) for (const r of compPkgFiles(f.slice(0, -5))) owned.add(r);
+  } catch {}
+  for (const [id, rec] of compRecords()) if (id !== selfId) for (const r of compNeeds(id, rec)) owned.add(r);
+  const out = new Set();
+  for (const r of list) {
+    // 只管 bin/：carryOver 只搬过 bin/ 这类目录；share/ 下的目录索引、缓存（gschemas.compiled 等）本来就不在清单里，不能动
+    if (!r.startsWith("bin/") || owned.has(r)) continue;
+    try { if (fs.lstatSync(path.join(PREFIX, r)).isFile()) out.add(r); } catch {}
+  }
+  return out;
+}
 /** 磁盘上某个包现在的文件清单（devkit 给每个包写的 var/lib/dpkg/info/<包>.list，绝对路径 → 相对 $PREFIX） */
 function compPkgFiles(pkg) {
   const out = [];
@@ -448,9 +467,11 @@ async function compRunInstall(id, b, job) {
     }
   })("");
   // 已经在的（工具包自带，或别的组件放进去的）不覆盖、不归我们，但记进 shared：那个组件卸载时要知道我们也在用
-  for (const r of list) { let have = false; try { fs.lstatSync(path.join(PREFIX, r)); have = true; } catch {} (have ? rec.shared : rec.files).push(r); }
+  const orphans = compOrphans(list, id);
+  if (orphans.size) log(`[comp] ${id}：${orphans.size} 个没人认领的旧文件被新包覆盖（${[...orphans].slice(0, 5).join(", ")}）`);
+  for (const r of list) { let have = false; try { fs.lstatSync(path.join(PREFIX, r)); have = true; } catch {} (have && !orphans.has(r) ? rec.shared : rec.files).push(r); }
   compWriteRecord(id, rec);
-  const { skipped } = compMoveIn(path.join(tree, "usr"));
+  const { skipped } = compMoveIn(path.join(tree, "usr"), "", [], [], orphans);
   if (skipped.length) log(`[comp] ${id}：${skipped.length} 个文件已经在了（工具包或别的组件放的），保留原样`);
   // 4) 首次运行配置（各包 postinst），失败不算安装失败
   const fr = path.join(PREFIX, lx, "first-run.sh");
