@@ -811,7 +811,10 @@ public class MainActivity extends Activity {
         chooser = new LinearLayout(this);
         chooser.setOrientation(LinearLayout.VERTICAL);
         chooser.setVisibility(View.GONE);
-        col.addView(chooser, new LinearLayout.LayoutParams(-1, -2));
+        // 套一层 ScrollView：手机竖屏放不下 8 个模块 +「开始安装」，不套的话按钮被挤出屏幕、也划不动
+        ScrollView chooserScroll = new ScrollView(this);
+        chooserScroll.addView(chooser);
+        col.addView(chooserScroll, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout acts = new LinearLayout(this);
         acts.addView(retry, new LinearLayout.LayoutParams(-2, -2));
         acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
