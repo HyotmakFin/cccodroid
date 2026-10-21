@@ -4,7 +4,7 @@
 
 These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, tap **Settings → Troubleshooting → Report on GitHub** in the app (device, Android version and self-test results are filled in) and say what you were doing; attach the zip from **I'm stuck · bundle diagnostics** if logs are needed. Problems tied to a particular phone or vendor system are covered in section 5 below.
 
-## 1. The keyboard stops typing into the message box (fixed in 0.3.7)
+## 1. ~~The keyboard stops typing into the message box (the mystery mobile bug)~~ Fixed in 0.3.7
 
 - **Symptom**: right after opening the app, you tap the message box, the keyboard comes up with suggestions, but picking one puts nothing in the box. English works, and split screen or switching apps clears it.
 - **Cause** (found on 2026-10-21 by recording what passes between the keyboard and the page): as soon as the page loads, the new session puts focus in the message box from script. The keyboard isn't up then, so WebView doesn't create an input connection for the box, and the keyboard keeps the empty connection it got when the page first appeared. Tapping the box later doesn't change focus, so WebView only brings up the keyboard and keeps that connection, and everything you pick goes into it. Split screen or switching apps takes window focus away and back, which rebuilds the connection.
