@@ -1243,3 +1243,79 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .cm-links{margin-top:8px;font-size:13.5px;color:var(--fg3)}
 .cm-links a{color:var(--accent);text-decoration:none}
 .cm-box.compact .cm-links{margin-top:6px}
+
+/* ───────────── 求索风格（设置 → 外观 → 求索 · 浅色 / 深色）─────────────
+   配色、动效取自 DeepSeek Harness 的界面（github.com/deepseek-ai/deepseek-harness，MIT）：
+   色值来自 ui-theme/design-platform.css；思考中的扫光照 ui-primitives/TextShimmer（105° 斜向蒙版、1.5 s、48 步），
+   运行中的转圈照 StateDot 的 spinner（淡轨 + 1.5 s 旋转），等回复的点照 InputBar 的 input-pending（透明度呼吸）。
+   只换颜色和这几处动效，布局与原生风格一致。 */
+html[data-skin="qiusuo"]{
+  --bg:#151517; --bg2:#1b1b1c; --bg3:#232324; --bg4:#2c2c2e; --line:#2f3033;
+  --fg:#f9fafb; --fg2:#cfd3d6; --fg3:#81858c;
+  --accent:#5686fe; --accent-dim:#4868b2;
+  --ok:#4ed17e; --err:#f25a5a; --warn:#f59e0b; --tool:#7aaaff; --purple:#b49ae0;
+  --bar-bg:#151517; --bar-bg2:#151517; --veil:rgba(21,21,23,.86);
+  --strong:#ffffff; --code-bg:#1b1b1c; --think-bg:#1b1b1c; --more-bg:#232324; --more-line:#353638;
+  --user-bg:#2c2c2e; --user-line:#2c2c2e; --sys-bg:#1f222b; --sys-line:#34415b;
+  --tool-bg:#1b1b1c; --tool-line:#2c2c2e; --tool-sep:#232324; --cmd-bg:#1d1f26;
+  --err-bg:#3c1f1b; --err-line:#6b2b25; --err-fg:#f8a8a0; --active-bg:#283142;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
+  --input-bg:#2c2c2e;
+  --think-ink:color-mix(in srgb,#5686fe 55%,#adb2b8);
+  --think-shine:color-mix(in srgb,#93c5fd 65%,#7aaaff);
+}
+html[data-skin="qiusuo"][data-theme="light"]{
+  --bg:#ffffff; --bg2:#f9fafb; --bg3:#f1f3f5; --bg4:#ebeef2; --line:#e5e7eb;
+  --fg:#0f1115; --fg2:#61666b; --fg3:#81858c;
+  --accent:#4176e6; --accent-dim:#b7c8fe;
+  --ok:#16a34a; --err:#dc2626; --warn:#b45309; --tool:#2563eb; --purple:#7650c0;
+  --bar-bg:#ffffff; --bar-bg2:#ffffff; --veil:rgba(255,255,255,.88);
+  --strong:#000000; --code-bg:#f9fafb; --think-bg:#f9fafb; --more-bg:#f1f3f5; --more-line:#e1e5ee;
+  --user-bg:#edf3fe; --user-line:#edf3fe; --sys-bg:#f5f6fa; --sys-line:#e1e5ee;
+  --tool-bg:#f9fafb; --tool-line:#ebeef2; --tool-sep:#f1f3f5; --cmd-bg:#f6f8fc;
+  --err-bg:#fdecea; --err-line:#f5c2bb; --err-fg:#ba2723; --active-bg:#e4edfd;
+  --shadow:rgba(15,17,21,.08); --scrim:rgba(0,0,0,.24);
+  --input-bg:#ffffff;
+  --think-ink:color-mix(in srgb,#4176e6 70%,#172554);
+  --think-shine:color-mix(in srgb,#4176e6 30%,#172554);
+}
+/* 输入卡片：大圆角、底色单列；顶栏和输入区不画分隔线，跟页面连成一片 */
+html[data-skin="qiusuo"] #composer{border-top-color:transparent}
+html[data-skin="qiusuo"] #topbar{border-bottom-color:transparent}
+html[data-skin="qiusuo"] #composer-inner{background:var(--input-bg);border-radius:24px;border-color:var(--line);box-shadow:0 2px 12px var(--shadow)}
+html[data-skin="qiusuo"] .msg.user .bubble{border-radius:20px}
+
+/* 思考中：标题用「深潜」蓝，一道光从左往右扫过（DSH TextShimmer 的节奏） */
+html[data-skin="qiusuo"] .think summary{color:var(--think-ink)}
+html[data-skin="qiusuo"] .think.live:last-child > summary,
+html[data-skin="qiusuo"] .run-phase{
+  color:transparent;
+  background:linear-gradient(105deg,var(--think-ink) 0 35%,var(--think-shine) 45% 55%,var(--think-ink) 65% 100%) 0 0/300% 100% no-repeat;
+  -webkit-background-clip:text;background-clip:text;
+  animation:qs-shimmer 1.5s steps(48,end) .3s infinite;
+}
+html[data-skin="qiusuo"] .think.live:last-child > summary::before{color:var(--think-ink)}
+html[data-skin="qiusuo"] .run-phase.slow{color:var(--warn);background:none;animation:none}
+html[data-skin="qiusuo"] .run-phase.bad{color:var(--err);background:none;animation:none}
+@keyframes qs-shimmer{0%{background-position:100% 0}66.6667%,100%{background-position:0 0}}
+
+/* 工具运行中：字前面一个转圈（淡色整圈 + 一段弧） */
+html[data-skin="qiusuo"] .tool-state.run{color:var(--fg3)}
+html[data-skin="qiusuo"] .tool-state.run::before{
+  content:"";display:inline-block;width:9px;height:9px;margin-inline-end:5px;vertical-align:-1px;
+  border-radius:50%;border:1.6px solid color-mix(in srgb,currentColor 25%,transparent);border-top-color:currentColor;
+  animation:qs-spin 1.5s linear infinite;
+}
+@keyframes qs-spin{to{transform:rotate(360deg)}}
+
+/* 等回复的三个点、正文末尾的光标：品牌蓝圆点，透明度呼吸 */
+html[data-skin="qiusuo"] .dots span{background:var(--accent);animation:qs-pending 1s ease-in-out infinite alternate}
+html[data-skin="qiusuo"] .dots span:nth-child(2){animation-delay:.2s}
+html[data-skin="qiusuo"] .dots span:nth-child(3){animation-delay:.4s}
+html[data-skin="qiusuo"] .cursor{width:8px;height:8px;border-radius:50%;vertical-align:1px;animation:qs-pending 1s ease-in-out infinite alternate}
+@keyframes qs-pending{from{opacity:.35}to{opacity:1}}
+
+@media (prefers-reduced-motion:reduce){
+  html[data-skin="qiusuo"] .think.live:last-child > summary,html[data-skin="qiusuo"] .run-phase{animation:none;background:none;color:var(--think-ink)}
+  html[data-skin="qiusuo"] .tool-state.run::before,html[data-skin="qiusuo"] .dots span,html[data-skin="qiusuo"] .cursor{animation:none}
+}

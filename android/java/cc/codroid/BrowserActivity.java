@@ -30,7 +30,7 @@ public class BrowserActivity extends Activity implements BrowserPane.Host {
         setTheme(night ? android.R.style.Theme_Material_NoActionBar : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(b);
         Log.i(BrowserPane.TAG, "onCreate saved=" + (b != null));
-        int bg = Color.parseColor(night ? "#1f1e1d" : "#faf9f5");
+        int bg = BrowserPane.pal(this, night, "bg");
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(bg);
         if (!night) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);

@@ -1379,3 +1379,9 @@
 1379	Tous ({n})
 1380	Aucun modèle correspondant
 1381	Changer de modèle et d’effort de réflexion
+1382	Natif · Suivre le système
+1383	Natif · Clair
+1384	Natif · Sombre
+1385	Quête · Suivre le système
+1386	Quête · Clair
+1387	Quête · Sombre

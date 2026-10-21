@@ -240,7 +240,7 @@ public class MainActivity extends Activity {
     /** 状态栏 / 导航栏跟着界面换色；浅色时图标改深色 */
     private void applyBars(boolean dark) {
         android.view.Window w = getWindow();
-        int bg = dark ? Color.parseColor("#1f1e1d") : Color.parseColor("#faf9f5");
+        int bg = BrowserPane.pal(this, dark, "bg");
         w.setNavigationBarColor(bg);           // 状态栏保持透明（见 edgeToEdge），只换图标深浅
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             int m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
@@ -364,8 +364,8 @@ public class MainActivity extends Activity {
         File part = new File(env.files, gz.optString("file") + ".part");
         ui.post(() -> {
             boolean dark = uiDark();
-            int fg = Color.parseColor(dark ? "#ece9e1" : "#29261f"), dim = Color.parseColor(dark ? "#aaa59b" : "#5d594f");
-            int line = Color.parseColor(dark ? "#3a3935" : "#e0dcd0"), accent = Color.parseColor(dark ? "#d97757" : "#c96442");
+            int fg = BrowserPane.pal(MainActivity.this, dark, "fg"), dim = BrowserPane.pal(MainActivity.this, dark, "dim");
+            int line = BrowserPane.pal(MainActivity.this, dark, "line"), accent = BrowserPane.pal(MainActivity.this, dark, "accent");
             chooser.removeAllViews();
             TextView q = new TextView(this);
             q.setTextColor(fg);
@@ -682,9 +682,9 @@ public class MainActivity extends Activity {
     // ── 界面 ───────────────────────────────────────────────────────────
     private void buildSetupUi() {
         boolean dark = uiDark();
-        int accent = Color.parseColor(dark ? "#d97757" : "#c96442");
+        int accent = BrowserPane.pal(this, dark, "accent");
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor(dark ? "#1f1e1d" : "#faf9f5"));
+        root.setBackgroundColor(BrowserPane.pal(this, dark, "bg"));
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(20), dp(40), dp(20), dp(20));
@@ -699,16 +699,16 @@ public class MainActivity extends Activity {
         bar.setIndeterminate(true);
         bar.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
         bar.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(accent));
-        bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor(dark ? "#3a3935" : "#e0dcd0")));
+        bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BrowserPane.pal(this, dark, "line")));
         col.addView(bar, new LinearLayout.LayoutParams(-1, dp(8)));
         stat = new TextView(this);
-        stat.setTextColor(Color.parseColor(dark ? "#ece9e1" : "#29261f"));
+        stat.setTextColor(BrowserPane.pal(this, dark, "fg"));
         stat.setTextSize(12.5f);
         stat.setPadding(0, dp(6), 0, dp(10));
         stat.setTypeface(android.graphics.Typeface.MONOSPACE);
         col.addView(stat);
         log = new TextView(this);
-        log.setTextColor(Color.parseColor(dark ? "#aaa59b" : "#5d594f"));   // 原始输出压暗一档，进度和结论靠上面那行
+        log.setTextColor(BrowserPane.pal(this, dark, "dim"));   // 原始输出压暗一档，进度和结论靠上面那行
         log.setTextSize(11.5f);
         log.setLineSpacing(0, 1.15f);
         log.setTypeface(android.graphics.Typeface.MONOSPACE);
@@ -793,7 +793,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        web.setBackgroundColor(Color.parseColor(uiDark() ? "#1f1e1d" : "#faf9f5"));
+        web.setBackgroundColor(BrowserPane.pal(this, uiDark(), "bg"));
         // 本机网关之外的地址一律交给系统浏览器：登录授权页、"去官网创建 Key" 之类。
         // 在 WebView 里打开登录页会被 Google 等拒绝，而且 OAuth 回调要回到浏览器才能跳 localhost。
         web.setWebViewClient(new WebViewClient() {
@@ -854,6 +854,11 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void whatsNewSeen() { WhatsNew.seen(MainActivity.this); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
+            /** 界面里的风格（native / qiusuo）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
+            @android.webkit.JavascriptInterface public void skinPref(String s) {
+                if ("native".equals(s) || "qiusuo".equals(s))
+                    getSharedPreferences("ui", MODE_PRIVATE).edit().putString("skin", s).commit();
+            }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
             /** 界面最终用的语言（i18n.js 解析过的 code，不是 auto）：外壳的通知、安装页、更新文案跟着换 */
             @android.webkit.JavascriptInterface public void langPref(String code) { Tr.set(code); }
@@ -937,8 +942,8 @@ public class MainActivity extends Activity {
         if (withCancel) b.setNegativeButton(android.R.string.cancel, (d, w) -> r.cancel());
         try {
             android.app.AlertDialog d = b.show();
-            int accent = Color.parseColor(dark ? "#d97757" : "#c96442");
-            d.getWindow().setBackgroundDrawable(roundBg(Color.parseColor(dark ? "#262624" : "#faf9f5")));
+            int accent = BrowserPane.pal(this, dark, "accent");
+            d.getWindow().setBackgroundDrawable(roundBg(BrowserPane.pal(this, dark, "card")));
             for (int k : new int[] { android.app.AlertDialog.BUTTON_POSITIVE, android.app.AlertDialog.BUTTON_NEGATIVE }) {
                 android.widget.Button bt = d.getButton(k);
                 if (bt != null) bt.setTextColor(accent);

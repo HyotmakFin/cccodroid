@@ -1382,4 +1382,10 @@ window.I18N_DICT["fr"] = {
   "全部 {n} 个": "Tous ({n})",
   "没有匹配的模型": "Aucun modèle correspondant",
   "切换模型与思考强度": "Changer de modèle et d’effort de réflexion",
+  "原生 · 跟随系统": "Natif · Suivre le système",
+  "原生 · 浅色": "Natif · Clair",
+  "原生 · 深色": "Natif · Sombre",
+  "求索 · 跟随系统": "Quête · Suivre le système",
+  "求索 · 浅色": "Quête · Clair",
+  "求索 · 深色": "Quête · Sombre",
 };

@@ -619,11 +619,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return {
       kind: "think",
       el,
-      append(t) { thinking += t; tick(); },
-      set(t) { thinking = t; done = true; label.textContent = fmtChars(thinking.length); },
+      append(t) { thinking += t; if (!done) el.classList.add("live"); tick(); },
+      set(t) { thinking = t; done = true; el.classList.remove("live"); label.textContent = fmtChars(thinking.length); },
       finish() {
         if (timer) { clearTimeout(timer); timer = 0; }
         done = true;
+        el.classList.remove("live");
         label.textContent = fmtChars(thinking.length);
         if (el.open) render("full");
       },

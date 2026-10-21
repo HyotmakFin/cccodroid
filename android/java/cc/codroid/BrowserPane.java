@@ -62,12 +62,12 @@ public class BrowserPane extends LinearLayout {
         super(a);
         act = a; host = h; this.fileReq = fileReq;
         boolean night = night(a);
-        // 和对话界面同一套暖色（style.css 的 --bg / --fg / --bg3 / --fg3 / --accent）
-        int bg = Color.parseColor(night ? "#1f1e1d" : "#faf9f5");
-        int fg = Color.parseColor(night ? "#ece9e1" : "#29261f");
-        int field = Color.parseColor(night ? "#2f2e2b" : "#efece4");
-        int hint = Color.parseColor(night ? "#7f7a70" : "#8b867a");
-        int accent = Color.parseColor(night ? "#d97757" : "#c96442");
+        // 和对话界面同一套色（style.css 的 --bg / --fg / --bg3 / --fg3 / --accent，跟着风格走）
+        int bg = pal(a, night, "bg");
+        int fg = pal(a, night, "fg");
+        int field = pal(a, night, "field");
+        int hint = pal(a, night, "hint");
+        int accent = pal(a, night, "accent");
         setOrientation(VERTICAL);
         setBackgroundColor(bg);
 
@@ -176,6 +176,21 @@ public class BrowserPane extends LinearLayout {
                 return true;
             }
         });
+    }
+
+    /** 外壳自己画的东西（状态栏、安装页、对话框、浏览器工具条）和界面同一套色。
+     *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）。
+     *  键：bg 页面底 / card 对话框 / field 输入框 / line 分隔线 / fg 正文 / dim 次要字 / hint 提示字 / accent 强调色 */
+    static int pal(Context c, boolean night, String k) {
+        boolean qs = "qiusuo".equals(c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("skin", "native"));
+        String[] keys = { "bg", "card", "field", "line", "fg", "dim", "hint", "accent" };
+        String[] v = qs
+            ? (night ? new String[] { "#151517", "#232324", "#2c2c2e", "#2f3033", "#f9fafb", "#cfd3d6", "#81858c", "#5686fe" }
+                     : new String[] { "#ffffff", "#ffffff", "#f1f3f5", "#e5e7eb", "#0f1115", "#61666b", "#81858c", "#4176e6" })
+            : (night ? new String[] { "#1f1e1d", "#262624", "#2f2e2b", "#3a3935", "#ece9e1", "#aaa59b", "#7f7a70", "#d97757" }
+                     : new String[] { "#faf9f5", "#faf9f5", "#efece4", "#e0dcd0", "#29261f", "#5d594f", "#8b867a", "#c96442" });
+        for (int i = 0; i < keys.length; i++) if (keys[i].equals(k)) return Color.parseColor(v[i]);
+        throw new IllegalArgumentException(k);
     }
 
     /** 跟界面里选的外观走（theme.js → CCApp.themePref 存在 prefs "ui"），没选过才看系统 */

@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
-//  theme.js —— 外观：浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
+//  theme.js —— 外观：两套风格（原生 / 求索）× 浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
 //
-//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"。
-//  结果写到 <html data-theme="light|dark">，样式只认这个属性（style.css 里的变量表）。
+//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"，求索风格加前缀 "qs-"。
+//  结果写到 <html data-theme="light|dark" data-skin="native|qiusuo">，样式只认这两个属性（style.css 里的变量表）。
 //
 //  「跟随系统」靠什么判断：
 //    · 壳里有 CCApp.nightMode() 就以它为准 —— 应用主题固定是深色时，WebView 的
@@ -13,7 +13,9 @@
 // ─────────────────────────────────────────────────────────────────────
 (function () {
   const LS = "ccapp.theme";
-  const MODES = ["auto", "light", "dark"];
+  const MODES = ["auto", "light", "dark", "qs-auto", "qs-light", "qs-dark"];
+  // 状态栏 / 导航栏底色要和页面底色一致（壳那边也有一份同样的表：BrowserPane.bg）
+  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" } };
   const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
   const app = () => (window.CCApp && typeof window.CCApp.nightMode === "function" ? window.CCApp : null);
 
@@ -30,16 +32,21 @@
   }
 
   function apply() {
-    const dark = pref === "dark" || (pref === "auto" && systemDark());
+    const skin = pref.startsWith("qs-") ? "qiusuo" : "native";
+    const mode = pref.replace(/^qs-/, "");
+    const dark = mode === "dark" || (mode === "auto" && systemDark());
     const name = dark ? "dark" : "light";
     const root = document.documentElement;
     if (root.dataset.theme !== name) root.dataset.theme = name;
+    if (root.dataset.skin !== skin) root.dataset.skin = skin;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = dark ? "#1f1e1d" : "#faf9f5";
+    if (meta) meta.content = BAR[skin][name];
     const a = app();
+    // 先告诉壳风格，再让它换栏色 —— 栏色按风格取
+    if (a && typeof a.skinPref === "function") { try { a.skinPref(skin); } catch {} }
     if (a && typeof a.setBars === "function") { try { a.setBars(dark); } catch {} }
-    // 外壳记下这个选择，下次启动的安装页 / 空白页照着上色（cccodroid 0.1.20 起有）
-    if (a && typeof a.themePref === "function") { try { a.themePref(pref); } catch {} }
+    // 外壳记下这个选择，下次启动的安装页 / 空白页照着上色（cccodroid 0.1.20 起有）；壳只认 auto/light/dark
+    if (a && typeof a.themePref === "function") { try { a.themePref(mode); } catch {} }
     const s = document.getElementById("set-theme");
     if (s && s.value !== pref) s.value = pref;
     return name;
@@ -54,10 +61,10 @@
   }
 
   /** 壳在系统切换夜间模式时调用 */
-  function system(dark) { sysDark = !!dark; if (pref === "auto") apply(); }
+  function system(dark) { sysDark = !!dark; if (pref.endsWith("auto")) apply(); }
 
   if (mq) {
-    const on = () => { if (sysDark == null && !app() && pref === "auto") apply(); };
+    const on = () => { if (sysDark == null && !app() && pref.endsWith("auto")) apply(); };
     mq.addEventListener ? mq.addEventListener("change", on) : mq.addListener(on);
   }
 

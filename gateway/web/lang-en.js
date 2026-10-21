@@ -1412,4 +1412,10 @@ window.I18N_DICT.en = {
   "全部 {n} 个": "All {n}",
   "没有匹配的模型": "No matching models",
   "切换模型与思考强度": "Switch model & thinking effort",
+  "原生 · 跟随系统": "Native · Follow system",
+  "原生 · 浅色": "Native · Light",
+  "原生 · 深色": "Native · Dark",
+  "求索 · 跟随系统": "Seeker · Follow system",
+  "求索 · 浅色": "Seeker · Light",
+  "求索 · 深色": "Seeker · Dark",
 };

@@ -1379,3 +1379,9 @@
 1379	Todos ({n})
 1380	Ningún modelo coincide
 1381	Cambiar modelo y esfuerzo de razonamiento
+1382	Nativo · Seguir al sistema
+1383	Nativo · Claro
+1384	Nativo · Oscuro
+1385	Búsqueda · Seguir al sistema
+1386	Búsqueda · Claro
+1387	Búsqueda · Oscuro
