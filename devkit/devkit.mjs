@@ -58,16 +58,20 @@ async function get(url) {
   }
 }
 
-// 仓库外构件的下载：重试几次；jsDelivr 的 /gh/ 地址对 GitHub Actions 的机器常回 503，失败时改从
-// raw.githubusercontent.com 取同一提交下的同一文件（内容随后照样按 sha256 核对，换来源不降低把关）
+// 仓库外构件的下载。jsDelivr 主站对 GitHub Actions 的机器常回 503：/gh/ 地址按镜像链依次试，每个源只重试一次，
+// 最后退到 raw.githubusercontent.com 的同一提交。内容随后一律按 sha256 核对，换来源不降低把关
 function fetchUrl(url) {
-  const curl = (u) => execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", u], { maxBuffer: 2 ** 30 });
-  try { return curl(url); } catch (e) {
-    const m = url.match(/^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
-    if (!m) throw e;
-    console.log(`  jsDelivr 取不到，改从 GitHub 原始地址取：${m[4]}`);
-    return curl(`https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`);
+  const curl = (u, n) => execFileSync("curl", ["-fsSL", "--retry", String(n), "--retry-all-errors", "--retry-delay", "5", "--max-time", "600", u], { maxBuffer: 2 ** 30 });
+  const m = url.match(/^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
+  if (!m) return curl(url, 4);
+  const tail = `gh/${m[1]}/${m[2]}@${m[3]}/${m[4]}`;
+  const srcs = ["cdn", "fastly", "gcore", "testingcf"].map((h) => `https://${h}.jsdelivr.net/${tail}`)
+    .concat(`https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`);
+  let err;
+  for (const u of srcs) {
+    try { const b = curl(u, 1); if (u !== url) console.log(`  jsDelivr 主站取不到，改用 ${new URL(u).host}：${m[4]}`); return b; } catch (e) { err = e; }
   }
+  throw err;
 }
 
 // ── 索引 ─────────────────────────────────────────────────────────────
