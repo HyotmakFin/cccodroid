@@ -4,14 +4,23 @@
 
 These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, tap **Settings → Troubleshooting → Report on GitHub** in the app (device, Android version and self-test results are filled in) and say what you were doing; attach the zip from **I'm stuck · bundle diagnostics** if logs are needed. Problems tied to a particular phone or vendor system are covered in section 5 below.
 
-## 1. The keyboard stops typing into the message box
+## 1. The keyboard stops typing into the message box (the mystery mobile bug)
 
-- **Symptom**: during or right after a reply, you tap the message box and type, but nothing appears. Only restarting the app fixes it. Seen on both a phone and a tablet.
-- **When it happened**: so far only while automated tests were running during development. At the time the tests were taking screenshots from the shell, opening a simulated secondary display (overlay display), switching keyboards with `ime set` and launching other test windows. It has not been reproduced in normal use.
-- **Current view**: most likely a side effect of those tests. Input focus moved to another window or virtual display, and the link between the WebView and the keyboard did not come back. **We never caught it in the act, so a bug in the app is not ruled out.**
-- **Ruled out**: the message box's attributes (placeholder etc.) are not being rewritten over and over while a reply streams.
-- **Workaround**: restart the app.
-- **To help**: if it happens, note four things: did the keyboard appear; did the suggestion bar show text; does typing on an English keyboard, or pasting, work; which panes were open (terminal, files, browser).
+- **Symptom**: you tap the message box, it highlights, the keyboard comes up and the suggestion bar shows what you're typing, but nothing lands in the box. One tap on the snowflake button (❄, freeze escape) in the top bar fixes it.
+- **When it happened**:
+  - During development while automated tests ran, on both a phone and a tablet (the tests were taking shell screenshots, opening a simulated secondary display and switching keyboards with `ime set`).
+  - From 2026-10-21 one phone hit it in normal use too, most often on the first launch after a cold start, when the gateway had just come up. Its owner said "almost every time".
+  - The same day, reinstalling the **same version** (0.3.5) from the website over the existing install made it go away. Not a line of code changed; we don't know why.
+- **Current view**: it looks a lot like the scroll freeze in section 2. WebView's internal state for this page gets stuck and a cross-site hop and back clears it. The keyboard believes it is sending text; the page receives none of it. What gets it stuck is unknown.
+- **Tried, didn't help**: 0.3.5 asks for WebView focus as soon as the page is shown; that didn't fix it. An automatic freeze escape when the keyboard sent text but the page saw no input events didn't work on the affected phone either, and was dropped.
+- **Ruled out**: the box does have focus, and its attributes (placeholder etc.) are not rewritten over and over while a reply streams.
+- **Workaround**: tap the snowflake button (❄) in the top bar. If that doesn't work, swipe the app away and reopen it.
+- **To help**: when it happens, before tapping the snowflake, try three things:
+  1. long-press the box and paste some text: does it go in?
+  2. switch keyboards (the system English keyboard, or voice input): can you type?
+  3. with a keyboard that shows pinyin in its own bar first, pick a suggestion: does it land?
+
+  Also note what happened before that cold start, e.g. an update, a phone restart, another app you had just opened. Write it up via **Settings → Troubleshooting → Report on GitHub**.
 
 ## 2. Touch scrolling freezes everywhere (patched; root cause is in WebView, not fixed)
 
