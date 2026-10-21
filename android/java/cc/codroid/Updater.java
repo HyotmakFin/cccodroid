@@ -360,11 +360,15 @@ final class Updater {
 
     /**
      * 这个 Release 有 modules.json（模块化）就改成按块装：要装哪些 = 现在已装的那些（整包用户 = 全部模块，一样不少）；
-     * 下载量 / 占用按这些块重算。取不到 modules.json 就照旧装整包。modules.json 走 GitHub HTTPS，和 devkit.lock.json 同一来源
+     * 下载量 / 占用按这些块重算。取不到 modules.json 就照旧装整包。
+     * modules.json 要带签名（modules.json.sig，和组件索引同一把 ed25519 钥匙）：里面有每块的 sha256，签名对不上就不信它，退回整包。
+     * 首装不走这里 —— 那时 modules.json 按 APK 钉的 sha256 核
      */
     private void planModules(String base) {
         try {
             byte[] b = Installer.httpGetSmall(base + "modules.json");
+            String sig = new String(Installer.httpGetSmall(base + "modules.json.sig"), StandardCharsets.UTF_8);
+            if (!Ed25519.verifyIndex(b, sig)) { Log.w(TAG, "planModules: modules.json 签名对不上，按整包装"); return; }
             JSONObject mj = new JSONObject(new String(b, StandardCharsets.UTF_8));
             if (!ctx.getPackageName().equals(mj.optString("target")) || mj.optInt("compat", 1) != DEVKIT_COMPAT) return;
             java.util.List<String> ids = installedModuleIds(mj);

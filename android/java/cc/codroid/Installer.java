@@ -261,7 +261,7 @@ final class Installer {
     }
 
     // ── 模块化工具包（0.3.9 起）：基础块 + 选中的模块一起解到 usr.new，全部核过才换上 ──
-    // modules.json 来自 APK 的钉子（首装）或 GitHub Release（更新），里面有每块 gz / tar 的 sha256；下载源不需要被信任。
+    // modules.json 来自 APK 的钉子（首装）或 GitHub Release（更新，验过 ed25519 签名），里面有每块 gz / tar 的 sha256；下载源不需要被信任。
     // 每块的 first-run 与 MANIFEST 在它的 dir（基础块是 libexec/devkit，其余 libexec/devkit/modules/<id>）；
     // 装好的块在 dir 里写 .ok。之后单个模块的加装 / 卸载由网关（gw/modules.mjs）做。
     static final String MODULES_JSON = "libexec/devkit/modules.json";
@@ -293,7 +293,7 @@ final class Installer {
 
     /**
      * 装模块化工具包（首装，或整包 / 旧快照换成这一份）。
-     * @param mjBytes modules.json 原文（调用方已核过来源：钉子的 sha256 或 GitHub HTTPS）
+     * @param mjBytes modules.json 原文（调用方已核过来源：钉子的 sha256 或 modules.json.sig 签名）
      * @param want 用户勾的模块（基础块和依赖自动带上）
      * @param base Release 目录（GitHub）；identity 这份快照整包 gz 的 sha256（写进 .devkit-ok，组件按它匹配）
      * @param mirrorFirst 先走 dl.cccodroid.net 镜像

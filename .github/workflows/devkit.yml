@@ -36,6 +36,12 @@ jobs:
           rm out/modules/*.tar
           cp out/modules.plan.json out/modules/
 
+      # modules.json 签名（和组件索引同一把钥匙）：App 更新工具包时验它，对不上就退回整包
+      - name: 签名 modules.json
+        env:
+          INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
+        run: node scripts/sign-modules.mjs out/modules/modules.json
+
       - name: 发布
         if: startsWith(github.ref, 'refs/tags/devkit-')
         env:
@@ -74,4 +80,4 @@ jobs:
           NOTES
           gh release create "$TAG" --title "$TAG" --notes-file notes.md \
             out/devkit-cc.codroid.tar.gz out/devkit.lock.json out/SBOM.tsv \
-            out/modules/*.tar.gz out/modules/module-*.lock.json out/modules/SBOM-*.tsv out/modules/modules.json
+            out/modules/*.tar.gz out/modules/module-*.lock.json out/modules/SBOM-*.tsv out/modules/modules.json out/modules/modules.json.sig
