@@ -4502,13 +4502,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return;
     }
     if (act === "verify" || act === "repair") {
-      if (act === "repair" && !confirm(t("修复开发工具包？\n\n会重新下载当前这一版（约 600 MB，断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
+      if (act === "repair" && !confirm(t("修复开发工具包？\n\n会重新下载当前这一版你装着的部分（断点续传）并重装，装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
       const r = await post(act === "verify" ? "/api/app/upd_verify" : "/api/app/upd_repair", { full: true }).catch((e2) => ({ ok: false, message: e2.message }));
       toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
       followUpd(); setTimeout(loadUpd, 500);
       return;
     }
-    if (item === "devkit" && !confirm(t("更新开发工具包？\n\n下载约 600 MB（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
+    if (item === "devkit" && !confirm(t("更新开发工具包？\n\n要下多少见这一项旁边标的大小（断点续传），装的时候会暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
     const r = await post("/api/app/upd_apply", { item }).catch((e2) => ({ ok: false, message: e2.message }));
     toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
     followUpd(); setTimeout(loadUpd, 500);

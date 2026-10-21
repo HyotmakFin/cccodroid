@@ -14,7 +14,7 @@ Last verified: 2026-10-20 (v0.2.19).
 
 | # | What | Sources (in order) | Trust anchor | Code |
 |---|---|---|---|---|
-| 1 | Devkit (~680 MB) | GitHub Release → dl.cccodroid.net/devkit/ | `devkit-pin.json` shipped in the APK (sha256 of gz and tar) | `Installer.java`, `Updater.java` |
+| 1 | Devkit (by module from 0.4.0: ~330 MB by default, ~700 MB for all; older apps use the ~650 MB single package) | GitHub Release → dl.cccodroid.net/devkit/ | `devkit-pin.json` shipped in the APK (sha256 of the single-package gz / tar and of `modules.json`, which in turn holds each block's sha256) | `Installer.java`, `Updater.java`, `gateway/gw/modules.mjs` (adding modules later) |
 | 2 | APK updates | GitHub API → cccodroid.net/dl/releases.json | Android APK signature (only the same release key can update) + sha256 in the release list | `Updater.java` |
 | 3 | Claude Code | Official → npmmirror → Tencent npm → npmjs (last success first) | sha256 from Anthropic's official manifest (manifest checked against Anthropic's PGP signature); npm ECDSA signature when no manifest is reachable | `assets/scripts/install-claude.mjs` |
 | 4 | Component index | GitHub Release → cccodroid.net/components/ | ed25519 key pinned in the gateway | `gateway/gw/components.mjs` `compFetchIndex` |

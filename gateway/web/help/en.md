@@ -4,7 +4,7 @@ cccodroid runs the **official, unmodified Claude Code** on your phone, wraps it 
 
 ## Getting started
 
-1. **The first launch** installs the toolchain (about 650 MB) and the official Claude Code (about 230 MB). For the toolchain it first asks where to get it: **GitHub**, the **cccodroid.net mirror**, or a **local file** (for example a `devkit-cc.codroid.tar.gz` you downloaded on a computer; see [cccodroid.net/download](https://cccodroid.net/en/download/#devkit)). The two download sources back each other up: if one stalls, the app switches to the other and resumes. Whatever the source, the file is checked against the SHA-256 that ships inside the APK. Free space is checked first; if there is not enough, you are told how much is needed.
+1. **The first launch** installs the toolchain and the official Claude Code (about 275 MB). The toolchain is split into modules and you pick which ones to install: the base (Python, Node, git, curl, adb and so on) is required, and the common command-line tools and the C/C++ compilers are ticked by default, about 330 MB to download in total. Java and Android packaging, graphics libraries, audio/video (ffmpeg), Typst / DuckDB / ImageMagick and the rest can be added later under **Extensions → Toolkit modules**; everything together is about 700 MB. It then asks where to get it: **GitHub**, the **cccodroid.net mirror**, or a **local file** (for example a `devkit-cc.codroid.tar.gz` you downloaded on a computer; see [cccodroid.net/download](https://cccodroid.net/en/download/#devkit)). The two download sources back each other up: if one stalls, the app switches to the other and resumes. Whatever the source, the file is checked against the SHA-256 that ships inside the APK. Free space is checked first; if there is not enough, you are told how much is needed.
 2. **Connect a model** (Settings → Provider). Pick one:
    - **Sign in with a Claude account**: if you have a Pro / Max subscription or a Console account, authorize once in the browser and you are sent back to the app. No key needed.
    - **Enter an API key**: an Anthropic key, or the official Anthropic-compatible endpoints of DeepSeek, Zhipu GLM, Qwen or Kimi. You can also add any compatible endpoint.
@@ -127,6 +127,7 @@ The layout follows the **window width**, not the orientation:
 
 Sidebar → Extensions:
 
+- **Toolkit modules**: each module lists what it is for, its main commands, download and installed size, what it depends on and which components use it; install and remove them at any time. A large library shared by several modules (LLVM) is its own block and is removed only together with the last module that uses it. Typing a command from a module that is not installed tells you which module has it and how big it is.
 - **Optional components**: large tools you install only when needed, such as a headless Chromium browser, GitHub CLI, Blender, Godot, LibreOffice, llama.cpp or GPU drivers. Signatures and per-file manifests are checked before installing, and uninstalling removes everything. Each component ships a skill, so Claude knows how to use it.
 - **Plugins**: search the official directory or add other marketplaces; install, enable, disable, uninstall.
 - **Skills**: install from a zip or from the official skills library.
@@ -178,7 +179,7 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 
 ## Updates and repair
 
-- **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens, keeping anything you installed with pip / npm -g.
+- **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens. Only the modules you have installed are downloaded, and anything you installed with pip / npm -g is kept. Coming from a single-package toolchain (0.3.x), every module is installed so nothing goes missing; remove the ones you do not need on the Extensions page.
 - Updates never cut each other off. A replacement is checked against the release manifest before the old version is touched; if it is interrupted, the next launch finishes it or rolls back.
 - **Verify / Repair**: checks every toolchain file against its hash; Repair reinstalls the same version and keeps your own packages.
 - **Local file…**: installs the toolchain from a file you've already downloaded (offline, or when the network is too slow). It's checked against the published releases first; if it doesn't match, you're told plainly and decide yourself.

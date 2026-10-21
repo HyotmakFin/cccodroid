@@ -256,7 +256,7 @@ if (r.status !== 0) die("新版本试跑失败（--version 没跑通），没有
 const cur = path.join(DEST, "current");
 let prev = ""; try { prev = fs.readlinkSync(cur); } catch {}
 const tmp = cur + ".new"; fs.rmSync(tmp, { force: true }); fs.symlinkSync(OUT, tmp); fs.renameSync(tmp, cur);
-// 只留当前版和上一版（每版约 240 MB）。正在跑的旧 claude 已经映射进内存，删文件不影响它
+// 只留当前版和上一版（每版约 275 MB）。正在跑的旧 claude 已经映射进内存，删文件不影响它
 for (const d of fs.readdirSync(DEST)) {
   const p = path.join(DEST, d);
   if (d.startsWith(".") || d === "current" || p === OUT || p === prev) continue;

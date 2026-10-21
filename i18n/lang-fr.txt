@@ -211,7 +211,7 @@
 211	Rechercher des mises à jour
 212	CLI : stable
 213	CLI : latest
-214	Mettre à jour le kit de développement ?\n\nEnviron 600 Mo à télécharger (reprise possible) ; l'installation met le service en pause 1 à 2 minutes.\nCe que vous avez installé dans le kit avec pip / npm -g est conservé.
+214	Mettre à jour le kit de développement ?\n\nLa taille à télécharger est indiquée à côté de cet élément (reprise possible) ; l'installation met le service en pause 1 à 2 minutes.\nCe que vous avez installé dans le kit avec pip / npm -g est conservé.
 215	Démarré
 216	Mise à jour automatique (activée par défaut) : Claude Code se met à jour en silence ; une nouvelle version de l'application est téléchargée puis proposée à l'installation (installée automatiquement au repos si Shizuku est disponible) ; le kit de développement n'est pré-téléchargé qu'en Wi-Fi et installé à la prochaine ouverture de l'application
 217	Activer le renfort de maintien en vie ?\n\nCela modifie quelques réglages système : la limite des processus fantômes (toutes les applications), la liste blanche de batterie et les limites d'exécution en arrière-plan de cette application. Désactiver l'interrupteur restaure les deux premiers.
@@ -342,7 +342,7 @@
 342	Endommagé
 343	Réparer
 344	Vérifier
-345	Réparer le kit de développement ?\n\nLa version actuelle sera retéléchargée (environ 600 Mo, avec reprise) puis réinstallée ; le service est suspendu 1 à 2 minutes pendant l'installation.\nCe que vous avez installé avec pip / npm -g est conservé.
+345	Réparer le kit de développement ?\n\nLes parties installées de la version actuelle seront retéléchargées (avec reprise) puis réinstallées ; le service est suspendu 1 à 2 minutes pendant l'installation.\nCe que vous avez installé avec pip / npm -g est conservé.
 346	Annuler la sélection
 347	Sélectionner
 348	Retour aux sessions
