@@ -27,7 +27,7 @@ for (const f of inputs) {
     url: prefix.replace(/\/?$/, "/") + asset, asset, local: path.join(path.dirname(f), c.gz.file),
     sha256: c.gz.sha256, bytes: c.gz.bytes, installed: c.installed,
     bin: c.bin, skill: c.skill, selftest: c.selftest, packages: c.packages.length,
-    // 依赖链里由底座提供的包：模块化工具包（0.4.0 起）据此算出组件要先装哪些模块
+    // 依赖链里由底座提供的包：模块化工具包（0.3.9 起）据此算出组件要先装哪些模块
     baseDeps: (c.baseDeps || []).map((d) => d.name),
   });
   idx.components[c.id] = e;

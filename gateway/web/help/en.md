@@ -179,7 +179,7 @@ During heavy work (compiling, rendering, transcoding), background apps that keep
 
 ## Updates and repair
 
-- **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens. Only the modules you have installed are downloaded, and anything you installed with pip / npm -g is kept. Coming from a single-package toolchain (0.3.x), every module is installed so nothing goes missing; remove the ones you do not need on the Extensions page.
+- **Automatic updates** (on by default): Claude Code updates silently from the official channel; cccodroid itself is downloaded, signature-checked and then offered for install; the toolchain is pre-downloaded on Wi‑Fi only and swapped in the next time the app opens. Only the modules you have installed are downloaded, and anything you installed with pip / npm -g is kept. Coming from a single-package toolchain (0.3.8 and earlier), every module is installed so nothing goes missing; remove the ones you do not need on the Extensions page.
 - Updates never cut each other off. A replacement is checked against the release manifest before the old version is touched; if it is interrupted, the next launch finishes it or rolls back.
 - **Verify / Repair**: checks every toolchain file against its hash; Repair reinstalls the same version and keeps your own packages.
 - **Local file…**: installs the toolchain from a file you've already downloaded (offline, or when the network is too slow). It's checked against the published releases first; if it doesn't match, you're told plainly and decide yourself.

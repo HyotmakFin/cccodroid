@@ -176,7 +176,7 @@ function baseVersions() {
   }
   return new Map(((l && l.packages) || []).map((p) => [p.name, p.version]));
 }
-/** 模块化工具包（0.4.0 起）：没装的模块里有哪些包（包名 → 模块名）。这些包归模块管，pkg 不另装一份 ——
+/** 模块化工具包（0.3.9 起）：没装的模块里有哪些包（包名 → 模块名）。这些包归模块管，pkg 不另装一份 ——
  *  不然以后装模块就和 pkg 装的撞了。整包工具包返回空表 */
 function absentModulePkgs() {
   const m = new Map();

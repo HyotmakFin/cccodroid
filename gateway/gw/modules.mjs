@@ -5,7 +5,7 @@ import { killTree } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { compBaseDeps, compNeeds, compRecords, compRun, devkitIdentity, sha256File } from "./components.mjs";
 
-// ── 模块化工具包（0.4.0 起）──────────────────────────────────────────
+// ── 模块化工具包（0.3.9 起）──────────────────────────────────────────
 // 工具包按 devkit.json 的 modules 拆成基础块 + 若干模块（+ 自动算出的共享层），同一份 Termux 快照一起发布。
 //   · $PREFIX/libexec/devkit/modules.json 在 = 模块化工具包（基础块装进来时一并写入）；不在就是旧的整包，面板照旧显示一整行。
 //   · 某块已装 ⇔ 它的目录（modules.json 的 dir，如 libexec/devkit/modules/build）里有 MANIFEST 和 .ok。

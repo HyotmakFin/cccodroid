@@ -867,7 +867,7 @@ if (cmd === "build" || cmd === "component") {
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {
-      b = execFileSync("curl", ["-fsSL", "--max-time", "600", f.url], { maxBuffer: 2 ** 30 });
+      b = execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", f.url], { maxBuffer: 2 ** 30 });
       if (sha256(b) !== f.sha256) throw new Error(`${p}: 哈希不符`);
       fs.writeFileSync(dest, b);
     }
@@ -895,7 +895,7 @@ if (cmd === "build" || cmd === "component") {
       const dest = path.join(CACHE, file);
       let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
       if (!b || sha256(b) !== w.sha256) {
-        b = execFileSync("curl", ["-fsSL", "--max-time", "600", w.url], { maxBuffer: 2 ** 30 });
+        b = execFileSync("curl", ["-fsSL", "--retry", "4", "--retry-all-errors", "--retry-delay", "15", "--max-time", "600", w.url], { maxBuffer: 2 ** 30 });
         if (sha256(b) !== w.sha256) throw new Error(`${file}: 哈希不符`);
         fs.writeFileSync(dest, b);
       }

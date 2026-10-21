@@ -11,7 +11,7 @@ t() { # t 名称 命令… —— 每项限时 90 秒，卡住的算失败，不
   if [ $rc -eq 0 ]; then NP=$((NP+1)); [ -z "$Q" ] && echo "PASS $name :: $(echo "$out" | tail -1 | cut -c1-100)"
   else NF=$((NF+1)); echo "FAIL $name (rc=$rc$([ $rc = 124 ] && echo ' 超时')) :: $(echo "$out" | tr '\n' ' ' | cut -c1-300)"; fi
 }
-# 模块化工具包（0.4.0 起）：没装的模块整节跳过（打 SKIP，不算失败 —— 不然 Claude 会以为是这台设备坏了）。整包工具包一律算装了
+# 模块化工具包（0.3.9 起）：没装的模块整节跳过（打 SKIP，不算失败 —— 不然 Claude 会以为是这台设备坏了）。整包工具包一律算装了
 has() { [ ! -f "$PREFIX/libexec/devkit/modules.json" ] || [ -f "$PREFIX/libexec/devkit/modules/$1/.ok" ]; }
 skip() { echo "SKIP $1 :: 「$2」模块没装"; }
 echo "== 环境"; echo "PREFIX=$PREFIX TMPDIR=$TMPDIR"; echo "PATH=$PATH"; echo "LD_PRELOAD=${LD_PRELOAD:-（无）}"

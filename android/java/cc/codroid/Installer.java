@@ -260,7 +260,7 @@ final class Installer {
         return got;
     }
 
-    // ── 模块化工具包（0.4.0 起）：基础块 + 选中的模块一起解到 usr.new，全部核过才换上 ──
+    // ── 模块化工具包（0.3.9 起）：基础块 + 选中的模块一起解到 usr.new，全部核过才换上 ──
     // modules.json 来自 APK 的钉子（首装）或 GitHub Release（更新），里面有每块 gz / tar 的 sha256；下载源不需要被信任。
     // 每块的 first-run 与 MANIFEST 在它的 dir（基础块是 libexec/devkit，其余 libexec/devkit/modules/<id>）；
     // 装好的块在 dir 里写 .ok。之后单个模块的加装 / 卸载由网关（gw/modules.mjs）做。

@@ -2887,7 +2887,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  // ── 工具包模块（0.4.0 起）：基础 + 随装随卸的模块；用途、命令、包、大小、依赖、谁在用都摆出来 ──
+  // ── 工具包模块（0.3.9 起）：基础 + 随装随卸的模块；用途、命令、包、大小、依赖、谁在用都摆出来 ──
   let modTimer = 0;
   const MOD_USES = () => ({
     claude: t("Claude Code 本身"), git: t("git 面板"), terminal: t("终端"), shizuku: t("Shizuku 一键启动（无线调试）"), search: t("Claude 搜代码、看差异"),

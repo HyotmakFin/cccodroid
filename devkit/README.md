@@ -42,7 +42,7 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 分组见 `devkit.json`：不加 `--groups` 时**全部分组都打进去**，即整包；按模块分块打见下面「模块」一节。包括 `graphics`（Mesa、Vulkan 加载器等 9 个公共图形包，2026-10-15 并入，GPU 与浏览器组件共用）和 `media`（ffmpeg，2026-10-15 夜并入：+30 包，下载 +21 MB，解开后 +87 MB；带 MediaCodec 硬件编码）。共约 245 个包（devkit-2026.10.22），从 Termux 仓库下载约 425 MB，整包 gz 约 650 MB，解包后约 1.8 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
-## 模块（`modules`，cccodroid 0.4.0 起）
+## 模块（`modules`，cccodroid 0.3.9 起）
 
 工具包按 `devkit.json` 的 `modules` 拆成基础模块 + 若干可选模块，App 里随装随卸：
 

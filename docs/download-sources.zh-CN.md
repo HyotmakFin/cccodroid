@@ -14,7 +14,7 @@ cccodroid 要从网上取的东西有八类，大多有不止一个来源。这�
 
 | # | 下载什么 | 来源（按尝试顺序） | 信任锚 | 代码 |
 |---|---|---|---|---|
-| 1 | 开发工具包（0.4.0 起按模块：默认约 330 MB，全部约 700 MB；旧版 App 用整包约 650 MB） | GitHub Release → dl.cccodroid.net/devkit/ | APK 自带的 `devkit-pin.json`（整包 gz / tar 与 `modules.json` 的 sha256，`modules.json` 里再有每块的 sha256） | `Installer.java`、`Updater.java`、`gateway/gw/modules.mjs`（扩展页加装） |
+| 1 | 开发工具包（0.3.9 起按模块：默认约 330 MB，全部约 700 MB；旧版 App 用整包约 650 MB） | GitHub Release → dl.cccodroid.net/devkit/ | APK 自带的 `devkit-pin.json`（整包 gz / tar 与 `modules.json` 的 sha256，`modules.json` 里再有每块的 sha256） | `Installer.java`、`Updater.java`、`gateway/gw/modules.mjs`（扩展页加装） |
 | 2 | APK 更新 | GitHub API → cccodroid.net/dl/releases.json | Android 的 APK 签名（同一把发布钥匙才能覆盖安装）+ 发布列表里的 sha256 | `Updater.java` |
 | 3 | Claude Code | 官方直链 → npmmirror → 腾讯云 npm → npmjs（上次成功的排最前） | Anthropic 官方清单的 sha256（清单本身验 Anthropic 的 PGP 签名）；都拿不到时验 npm 的 ECDSA 签名 | `assets/scripts/install-claude.mjs` |
 | 4 | 组件索引 | GitHub Release → cccodroid.net/components/ | 钉在网关里的 ed25519 公钥 | `gateway/gw/components.mjs` `compFetchIndex` |

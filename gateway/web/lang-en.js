@@ -1418,7 +1418,7 @@ window.I18N_DICT.en = {
   "求索 · 跟随系统": "Seeker · Follow system",
   "求索 · 浅色": "Seeker · Light",
   "求索 · 深色": "Seeker · Dark",
-  // ── 工具包模块（0.4.0）
+  // ── 工具包模块（0.3.9）
   "Claude Code 本身": "Claude Code itself",
   "git 面板": "Git panel",
   "Shizuku 一键启动（无线调试）": "One-tap Shizuku start (wireless debugging)",
@@ -1456,6 +1456,6 @@ window.I18N_DICT.en = {
   "有模块正在安装，等它结束再试": "A module is being installed; try again when it finishes",
   "工具包模块": "Toolkit modules",
   "开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。": "The developer toolkit is split into modules by purpose — install only what you need. The base module is required; shared libraries are installed and removed automatically with the modules that use them.",
-  // ── 工具包模块（0.4.0）
+  // ── 工具包模块（0.3.9）
   "主要命令：": "Main commands:",
 };

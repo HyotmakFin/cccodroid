@@ -37,7 +37,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - **回复里的路径能点**：像 `/storage/emulated/0/…/report.pdf`（或 `file.js:12`）这样的绝对路径，点一下就在查看器里打开；目录则打开文件浏览器。已要求 Claude 一律写完整路径。读写文件的工具卡片上也有 ↗ 按钮。
   - **应用内浏览器**（顶栏地球按钮）：回复里的网页链接直接在应用里打开，看本机开发服务 `http://127.0.0.1:<端口>/` 很方便；宽屏时开在右侧工作区，边看网页边看对话。用的是系统 WebView，不额外下载任何东西；登录授权页仍交给系统浏览器。
   - 界面 9 种语言：简体中文、繁體中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
-- **工具包按模块装**（扩展 → 工具包模块，0.4.0 起）：开发工具包分成基础、命令行工具、C/C++ 编译、Java 与安卓打包、图形库、音视频、其他工具几块，首次安装时勾选，之后随装随卸。每块写明用途、主要命令、大小、依赖和被谁用着；在终端敲一个没装的命令会提示它在哪块。从 0.3.x 升级会装上全部模块，功能一样不少。
+- **工具包按模块装**（扩展 → 工具包模块，0.3.9 起）：开发工具包分成基础、命令行工具、C/C++ 编译、Java 与安卓打包、图形库、音视频、其他工具几块，首次安装时勾选，之后随装随卸。每块写明用途、主要命令、大小、依赖和被谁用着；在终端敲一个没装的命令会提示它在哪块。从 0.3.8 及以前升级会装上全部模块，功能一样不少。
 - **可选组件**（扩展 → 可选组件）：体积大的工具不随应用安装，用得上再下载。每个组件包都对应特定版本的工具包，装之前先核对 SHA-256 和逐文件清单，卸载干净。
   - **浏览器组件（无头 Chromium 155）**：下载约 254 MB，装好后约 750 MB。让 Claude 在后台打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页。附带一个技能，告诉 Claude 怎么用。
   - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前 28 个，加上面的浏览器共 29 个。开发：GitHub CLI（gh）、Godot（无头运行 / 导出 APK）、Graphviz / PlantUML 画图、Hugo 建站、逆向分析（rizin、binwalk）；图像影音：Blender（无头合成 / 渲染，3D 走 GPU）、LilyPond（乐谱排版）、音乐制作工具链；办公：LibreOffice、Pandoc、PDF 工具箱、OCR（简繁中英）、LaTeX（Tectonic，支持中文）；AI：llama.cpp；3D 与科学计算：OpenSCAD、GNU Octave、科学计算 Python（numpy / scipy / matplotlib）；电子设计：ngspice / gnucap、Icarus Verilog / Yosys；GPU：骁龙驱动（Vulkan / OpenGL / OpenCL）、Mali 驱动、GPU 跑分；网络：Cloudflare（wrangler）、rclone。见[完整列表](https://github.com/greyoak111/cccodroid-components/blob/main/README.zh-CN.md#组件列表)。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
@@ -94,7 +94,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 
 **离线安装**：把 `devkit-cc.codroid.tar.gz` 放到 `/sdcard/cccodroid/` 下，首次启动会直接用它，不再下载。
 
-**版本**：v0.3.0 是第一个稳定版。0.3.x 的更新只修问题，不加新功能；新功能放进下一个版本系列。
+**版本**：v0.3.0 是第一个稳定版。之后的 0.3.x 都是在它基础上的更新，覆盖安装即可，数据和装好的东西都会保留。
 
 ## 交流与参与
 

@@ -12,7 +12,7 @@ const tag = (base.match(/\/download\/([^/]+)\/?$/) || [])[1] || "";
 const pick = (o) => o && { file: o.file, sha256: o.sha256, bytes: o.bytes };
 const pin = { tag, base: base.replace(/\/?$/, "/"), target: lock.target, compat: lock.compat ?? 1, gz: pick(lock.gz), tar: pick(lock.tar) };
 if (!pin.gz || !/^[0-9a-f]{64}$/.test(pin.gz.sha256 || "")) { console.error("✗ 清单里没有 gz 的 sha256"); process.exit(1); }
-// 模块化 Release（0.4.0 起）另有 modules.json：钉它的 sha256，里面又有每块的 sha256，首装勾哪几块都核得上
+// 模块化 Release（0.3.9 起）另有 modules.json：钉它的 sha256，里面又有每块的 sha256，首装勾哪几块都核得上
 const mr = await fetch(pin.base + "modules.json", { redirect: "follow" });
 if (mr.ok) {
   const b = Buffer.from(await mr.arrayBuffer());
