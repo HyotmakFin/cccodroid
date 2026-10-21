@@ -4843,9 +4843,32 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return { y, m, tot, prev, cal, active, best, top, peak, models, days };
   }
 
-  // 画月报：固定深色卡片（分享出去在哪都好看），宽 1080
+  // 月报的配色跟着当前外观走（原生 / 求索 × 深 / 浅）：取 style.css 的变量，透明度另算
+  function usPalette() {
+    const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
+    const probe = document.createElement("canvas").getContext("2d");
+    const rgb = (col) => {
+      probe.fillStyle = "#000"; probe.fillStyle = col;
+      const x = probe.fillStyle;                       // 规范成 #rrggbb 或 rgba(r, g, b, a)
+      return x[0] === "#" ? [1, 3, 5].map((i) => parseInt(x.slice(i, i + 2), 16)) : x.match(/[\d.]+/g).slice(0, 3).map(Number);
+    };
+    const lum = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    const bg = rgb(v("--bg")), bg2 = rgb(v("--bg2")), fg = rgb(v("--fg")), acc = rgb(v("--accent"));
+    const dark = lum(bg) < 0.5;
+    const a = (c, al) => `rgba(${c[0]},${c[1]},${c[2]},${al})`;
+    const mix = (c, d, k) => `rgb(${c.map((x, i) => Math.round(x + (d[i] - x) * k)).join(",")})`;
+    return {
+      dark, BG0: a(dark ? bg2 : bg, 1), BG1: a(dark ? bg : bg2, 1),
+      ACC: a(acc, 1), ACC2: dark ? mix(acc, [255, 255, 255], 0.3) : mix(acc, [0, 0, 0], 0.15), acc: (al) => a(acc, al),
+      FG: a(fg, 1), FG2: v("--fg2"), FG3: v("--fg3"), fg: (al) => a(fg, al),
+      UP: v("--ok"), DOWN: v("--err"), ON: a(bg, 1),     // ON：铺满强调色的格子上的字（深色外观是深字、浅色外观是白字）
+    };
+  }
+
+  // 画月报：宽 1080，配色随当前外观（见 usPalette）
   function usDraw(cv, st) {
-    const W = 1080, P = 72, ACC = "#d97757", FG = "#f3ede6", FG2 = "#b9b0a6", FG3 = "#7d756c", TILE = "rgba(255,255,255,0.055)";
+    const K = usPalette();
+    const W = 1080, P = 72, ACC = K.ACC, FG = K.FG, FG2 = K.FG2, FG3 = K.FG3, TILE = K.fg(K.dark ? 0.055 : 0.05);
     const font = (w, px) => `${w} ${px}px system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif`;
     const calRows = Math.ceil((((st.cal[0].date.getDay() + 6) % 7) + st.cal.length) / 7);
     const cell = Math.floor((W - 2 * P - 6 * 14) / 7), calH = 52 + calRows * (cell + 14);
@@ -4855,10 +4878,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const c = cv.getContext("2d");
     const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h); };
     const text = (s, x, y, f, col, align) => { c.font = f; c.fillStyle = col; c.textAlign = align || "left"; c.fillText(s, x, y); };
-    // 底色 + 右上角一团暖光
-    const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#211d1a"); bg.addColorStop(1, "#151311");
+    // 底色 + 右上角一团强调色的光
+    const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, K.BG0); bg.addColorStop(1, K.BG1);
     c.fillStyle = bg; c.fillRect(0, 0, W, H);
-    const glow = c.createRadialGradient(W - 120, 60, 0, W - 120, 60, 560); glow.addColorStop(0, "rgba(217,119,87,0.30)"); glow.addColorStop(1, "rgba(217,119,87,0)");
+    const glow = c.createRadialGradient(W - 120, 60, 0, W - 120, 60, 560); glow.addColorStop(0, K.acc(K.dark ? 0.3 : 0.16)); glow.addColorStop(1, K.acc(0));
     c.fillStyle = glow; c.fillRect(0, 0, W, H);
     c.textBaseline = "alphabetic";
     let y = P + 34;
@@ -4867,12 +4890,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 主数字
     y += 190;
     c.font = font(800, 168); const nw = c.measureText(usNum(st.tot.m)).width;
-    const hero = c.createLinearGradient(P, y - 150, P + nw, y); hero.addColorStop(0, "#f0a37f"); hero.addColorStop(1, ACC);
+    const hero = c.createLinearGradient(P, y - 150, P + nw, y); hero.addColorStop(0, K.ACC2); hero.addColorStop(1, ACC);
     c.fillStyle = hero; c.textAlign = "left"; c.fillText(usNum(st.tot.m), P - 6, y);
     text(t("次对话"), P + nw + 20, y - 12, font(600, 44), FG);
     const dp = st.prev.m ? Math.round(((st.tot.m - st.prev.m) / st.prev.m) * 100) : null;
     y += 62;
-    text(dp == null ? t("和 Claude 一起度过的这个月") : t("比上月 {p}", { p: (dp >= 0 ? "+" : "") + dp + "%" }), P, y, font(500, 32), dp == null ? FG2 : dp >= 0 ? "#8fd19e" : "#e8a08a");
+    text(dp == null ? t("和 Claude 一起度过的这个月") : t("比上月 {p}", { p: (dp >= 0 ? "+" : "") + dp + "%" }), P, y, font(500, 32), dp == null ? FG2 : dp >= 0 ? K.UP : K.DOWN);
     // 六格数字
     y += 50;
     const tiles = [
@@ -4897,15 +4920,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const wk = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(I18N.lang, { weekday: "narrow" }));
     const max = Math.max(1, ...st.cal.map((x) => x.n));
     wk.forEach((w, i) => text(w, P + i * (cell + 14) + cell / 2, y + 58, font(500, 22), FG3, "center"));
-    const lv = ["rgba(255,255,255,0.06)", "rgba(217,119,87,0.28)", "rgba(217,119,87,0.48)", "rgba(217,119,87,0.70)", "rgba(226,133,100,0.90)", "#f0a37f"];
+    const lv = [K.fg(0.06), K.acc(0.28), K.acc(0.48), K.acc(0.7), K.acc(0.9), K.ACC2];
     const today = usDayKey(new Date());
     st.cal.forEach((d, i) => {
       const k = i + ((st.cal[0].date.getDay() + 6) % 7), x = P + (k % 7) * (cell + 14), cy = y + 76 + Math.floor(k / 7) * (cell + 14);
       const l = d.n ? Math.min(5, 1 + Math.floor((d.n / max) * 4.999)) : 0;
-      c.fillStyle = d.future ? "rgba(255,255,255,0.025)" : lv[l]; rr(x, cy, cell, cell, 18); c.fill();
+      c.fillStyle = d.future ? K.fg(0.025) : lv[l]; rr(x, cy, cell, cell, 18); c.fill();
       if (usDayKey(d.date) === today) { c.strokeStyle = FG; c.lineWidth = 3; rr(x + 1.5, cy + 1.5, cell - 3, cell - 3, 17); c.stroke(); }
-      text(String(d.date.getDate()), x + 16, cy + 34, font(600, 22), l >= 4 ? "#2a1a12" : d.future ? FG3 : FG2);
-      if (d.n) text(usNum(d.n), x + cell - 16, cy + cell - 18, font(700, 28), l >= 4 ? "#2a1a12" : FG, "right");
+      text(String(d.date.getDate()), x + 16, cy + 34, font(600, 22), l >= 4 ? K.ON : d.future ? FG3 : FG2);
+      if (d.n) text(usNum(d.n), x + cell - 16, cy + cell - 18, font(700, 28), l >= 4 ? K.ON : FG, "right");
     });
     y += calH + 70;
     // 24 小时分布
@@ -4915,7 +4938,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const bw = (W - 2 * P) / 24, by = y + 200;
     st.tot.hr.forEach((v, i) => {
       const h = Math.max(4, (v / hmax) * 150);
-      c.fillStyle = v === hmax && v ? ACC : v ? "rgba(217,119,87,0.45)" : "rgba(255,255,255,0.07)";
+      c.fillStyle = v === hmax && v ? ACC : v ? K.acc(0.45) : K.fg(0.07);
       rr(P + i * bw + 4, by - h, bw - 8, h, 6); c.fill();
       if (i % 6 === 0) text(String(i).padStart(2, "0"), P + i * bw + bw / 2, by + 40, font(500, 22), FG3, "center");
     });
@@ -4927,17 +4950,21 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       st.models.slice(0, 4).forEach(([name, v], i) => {
         const ry = y + 50 + i * 64, pct = v / sum;
         text(name.replace(/^claude-/, "").replace(/-\d{8}$/, ""), P, ry + 30, font(500, 28), FG2);
-        c.fillStyle = "rgba(255,255,255,0.07)"; rr(P + 420, ry + 8, W - 2 * P - 420 - 110, 26, 13); c.fill();
-        c.fillStyle = i ? "rgba(217,119,87,0.55)" : ACC; rr(P + 420, ry + 8, Math.max(26, (W - 2 * P - 420 - 110) * pct), 26, 13); c.fill();
+        c.fillStyle = K.fg(0.07); rr(P + 420, ry + 8, W - 2 * P - 420 - 110, 26, 13); c.fill();
+        c.fillStyle = i ? K.acc(0.55) : ACC; rr(P + 420, ry + 8, Math.max(26, (W - 2 * P - 420 - 110) * pct), 26, 13); c.fill();
         text(pct < 0.01 ? "<1%" : Math.round(pct * 100) + "%", W - P, ry + 32, font(600, 28), FG, "right");
       });
       y += 90 + mdRows * 64;
     }
     // 页脚
-    c.fillStyle = "rgba(255,255,255,0.08)"; c.fillRect(P, y, W - 2 * P, 2);
+    c.fillStyle = K.fg(0.08); c.fillRect(P, y, W - 2 * P, 2);
     text(t("{t} 轮回复 · 读了 {i} token", { t: usNum(st.tot.t), i: usCompact(st.tot.i) }), P, y + 56, font(500, 24), FG3);
     text("cccodroid.net", W - P, y + 56, font(600, 24), FG2, "right");
   }
+
+  // 换外观时重画月报（theme.js 只改 html 的 data-theme / data-skin，不发事件）
+  new MutationObserver(() => { if (us.raw && $("us-card")) usRender(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-skin"] });
 
   function usRender() {
     if (!us.raw) return;
