@@ -190,12 +190,12 @@ for (const f of jsFiles) {
              why: l.wrapped ? "t() 里不能用 ${} 模板，改成 t(\"…{name}…\", { name })" : "没包 t()" });
   }
 }
-// 网关提示语：server.mjs 里 tz 包着的中文原句也是键（见 server.mjs「提示语的多语言」）
-{
-  const srv = fs.readFileSync(path.join(WEB, "..", "server.mjs"), "utf8");
+// 网关提示语：server.mjs 与 gw/*.mjs 里 tz 包着的中文原句也是键（见 gw/config.mjs「提示语的多语言」）
+for (const f of ["server.mjs", ...fs.readdirSync(path.join(WEB, "..", "gw")).filter((x) => x.endsWith(".mjs")).map((x) => "gw/" + x)]) {
+  const srv = fs.readFileSync(path.join(WEB, "..", f), "utf8");
   for (const m of srv.matchAll(/(?:^|[^\w$.])tz\(\s*"((?:[^"\\]|\\.)*)"/g)) {
     const k = JSON.parse('"' + m[1] + '"');
-    if (!used.has(k)) used.set(k, "server.mjs");
+    if (!used.has(k)) used.set(k, f);
   }
 }
 const html = scanHtml(fs.readFileSync(path.join(WEB, "index.html"), "utf8"));

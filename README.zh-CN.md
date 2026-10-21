@@ -162,7 +162,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | 目录 | 内容 |
 |---|---|
 | `android/` | Java 外壳、Manifest、资源、终端小工具（`assets/bin/`）、原生小库（`native/`） |
-| `gateway/` | 网关（`server.mjs`，Node.js）与界面（`web/`，原生 JS，无构建步骤） |
+| `gateway/` | 网关（`server.mjs` 与 `gw/` 下的功能模块，Node.js）与界面（`web/`，原生 JS，无构建步骤） |
 | `i18n/` | 界面译文：各语言的 txt 与生成、检查脚本，见 [i18n/README.md](i18n/README.md) |
 | `devkit/` | 开发工具包构建脚本与清单 |
 | `docs/design-philosophy.zh-CN.md` | 项目为什么存在、背后的原则 |

@@ -1,0 +1,220 @@
+import fs from "node:fs";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import crypto from "node:crypto";
+import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
+import { ledger } from "./claude.mjs";
+import { NEXT, readBody, sendJson } from "./http.mjs";
+import { termEnv } from "./terminal.mjs";
+import { ccMem, privCall } from "./usage.mjs";
+
+// ── 开发端（非 cccodroid 布局）：没有 Java 那一层，更新和 Shizuku 状态由网关自己做 ──────────
+// cccodroid 里这些在 App 进程（Updater / ShizukuSetup）；开发端只有一个 runtime/claude 二进制，priv 走 rish。
+
+const DEV_UPD_FILE = path.join(CFG.home, "ccapp-update.json");
+const CC_BASE = "https://downloads.claude.ai/claude-code-releases";
+const devUpd = {
+  auto: true, channel: "stable", lastCheck: 0, checking: false, error: "",
+  claude: { id: "claude", name: "Claude Code", current: "", latest: "", state: "unknown", message: "", done: 0, total: 0 },
+};
+try { Object.assign(devUpd, JSON.parse(fs.readFileSync(DEV_UPD_FILE, "utf8")), { checking: false, error: "" }); devUpd.claude.state = devUpd.claude.state === "installing" ? "unknown" : devUpd.claude.state; } catch {}
+const devUpdSave = () => { try { fs.writeFileSync(DEV_UPD_FILE, JSON.stringify(devUpd)); } catch {} };
+const cmpVer = (a, b) => {
+  const x = String(a).split(/[^0-9]+/).map(Number), y = String(b).split(/[^0-9]+/).map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; }
+  return 0;
+};
+
+/** 跑某个 claude 二进制的 --version（新下载的那个在换上去之前先这样试跑一次） */
+function claudeVersionOf(bin) {
+  return new Promise((ok) => {
+    const pre = PATHS.preload && fs.existsSync(PATHS.preload) ? ["--preload", PATHS.preload] : [];
+    execFile(PATHS.loader, ["--library-path", PATHS.glibcLib, ...pre, bin, "--version"], { timeout: 30000 }, (e, out) => {
+      const m = String(out || "").match(/\d+\.\d+\.\d+/);
+      ok(m ? m[0] : "");
+    });
+  });
+}
+
+async function devUpdCheck() {
+  if (devUpd.checking) return;
+  devUpd.checking = true; devUpd.error = "";
+  const c = devUpd.claude;
+  try {
+    if (!c.current || c.state !== "installing") c.current = await claudeVersionOf(PATHS.claude);
+    const r = await fetch(`${CC_BASE}/${devUpd.channel}`, { signal: AbortSignal.timeout(20000) });
+    const v = (await r.text()).trim();
+    if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error(tz("版本号不对：{v}", { v: v.slice(0, 40) }));
+    c.latest = v;
+    // 已装版本要和所选渠道「一致」：从 latest 切回 stable 时版本号变小，以前判成「已是最新」就一直停在 latest 上
+    if (c.state !== "installing") {
+      const d = cmpVer(v, c.current);
+      c.state = d === 0 ? "uptodate" : "available";
+      c.message = d < 0 && c.current ? `切回 ${devUpd.channel} 渠道：将换成 ${v}（比当前的 ${c.current} 旧）` : devUpd.channel === "latest" ? "latest 渠道" : "";
+    }
+    devUpd.lastCheck = Date.now();
+  } catch (e) { devUpd.error = tz("连不上 downloads.claude.ai：{err}", { err: e.message }); }
+  finally { devUpd.checking = false; devUpdSave(); }
+}
+
+/**
+ * 换新版：下到 claude.part（断点续传）→ 按官方清单核 sha256 → 试跑 --version → 旧的改名 claude.prev（留一版可回退）→ 新的换上。
+ * 正在跑的 claude 已经映射了旧文件，换名不影响它；下一轮对话起用新版。
+ */
+async function devUpdInstall() {
+  const c = devUpd.claude;
+  if (c.state === "installing" || !c.latest) return;
+  c.state = "installing"; c.message = ""; c.done = 0; c.total = 0;
+  const part = PATHS.claude + ".part", tag = PATHS.claude + ".part.sha256";
+  try {
+    const man = await (await fetch(`${CC_BASE}/${c.latest}/manifest.json`, { signal: AbortSignal.timeout(20000) })).json();
+    const plat = man.platforms && man.platforms["linux-arm64"];
+    if (!plat || !/^[a-f0-9]{64}$/.test(plat.checksum)) throw new Error(tz("清单里没有 linux-arm64"));
+    c.total = plat.size;
+    let have = 0;
+    try { if (fs.readFileSync(tag, "utf8").trim() === plat.checksum) have = fs.statSync(part).size; } catch {}
+    if (!have) { fs.rmSync(part, { force: true }); fs.writeFileSync(tag, plat.checksum); }
+    for (let attempt = 1; have < plat.size; attempt++) {
+      try {
+        const r = await fetch(`${CC_BASE}/${c.latest}/linux-arm64/claude`, { headers: have ? { range: `bytes=${have}-` } : {} });
+        if (r.status !== 200 && r.status !== 206) throw new Error("HTTP " + r.status);
+        if (r.status === 200) { have = 0; fs.rmSync(part, { force: true }); }
+        const out = fs.openSync(part, "a");
+        try { for await (const chunk of r.body) { fs.writeSync(out, chunk); have += chunk.length; c.done = have; } }
+        finally { fs.closeSync(out); }
+      } catch (e) {
+        if (attempt >= 8) throw e;
+        c.message = `网络中断（${e.message}），${attempt * 3} 秒后续传…`;
+        await new Promise((ok) => setTimeout(ok, attempt * 3000));
+        have = fs.existsSync(part) ? fs.statSync(part).size : 0;
+      }
+    }
+    c.message = "校验 sha256…";
+    const h = crypto.createHash("sha256");
+    for await (const b of fs.createReadStream(part)) h.update(b);
+    const got = h.digest("hex");
+    if (got !== plat.checksum) { fs.rmSync(part, { force: true }); throw new Error(tz("sha256 不符（期望 {want}…，实得 {got}…）", { want: plat.checksum.slice(0, 12), got: got.slice(0, 12) })); }
+    fs.chmodSync(part, 0o755);
+    const v = await claudeVersionOf(part);
+    if (v !== c.latest) throw new Error(tz("新版试跑失败（--version 得到「{v}」）", { v }));
+    fs.rmSync(PATHS.claude + ".prev", { force: true });
+    fs.renameSync(PATHS.claude, PATHS.claude + ".prev");
+    fs.renameSync(part, PATHS.claude);
+    fs.rmSync(tag, { force: true });
+    log(`Claude Code 已更新 ${c.current} → ${v}`);
+    c.current = v; c.state = "uptodate"; c.message = `已更新到 ${v}（下一轮对话起生效；旧版留在 claude.prev）`;
+  } catch (e) {
+    c.state = "error"; c.message = e.message;
+  } finally { devUpdSave(); }
+}
+
+function devUpdStatus() {
+  const { claude, ...rest } = devUpd;
+  return { ok: true, ...rest, items: [claude] };
+}
+
+// 自动：启动 1 分钟后、之后每 30 分钟看一眼，距上次检查超过 6 小时就查；有新版且开着自动就装
+if (!PREFIX) {
+  const tick = async () => {
+    if (!devUpd.auto || Date.now() - devUpd.lastCheck < 6 * 3600_000) return;
+    await devUpdCheck();
+    if (devUpd.auto && devUpd.claude.state === "available") devUpdInstall();
+  };
+  setTimeout(tick, 60_000);
+  setInterval(tick, 30 * 60_000);
+}
+
+// cccodroid：Claude Code 若是官方清单拿不到时靠 npm 签名装上的（版本目录里有 .npm-only），
+// 连得上官方清单时补核一次 sha256（install-claude.mjs --recheck）。启动 2 分钟后、之后每 6 小时看一眼
+if (PREFIX && process.env.CCAPP_BIN) {
+  const dest = path.join(CFG.home, ".local", "share", "cccodroid", "claude");
+  const script = path.join(process.env.CCAPP_BIN, "..", "scripts", "install-claude.mjs");
+  const recheck = () => {
+    let pending = false;
+    try { pending = fs.readdirSync(dest).some((d) => fs.existsSync(path.join(dest, d, ".npm-only"))); } catch {}
+    if (!pending || !fs.existsSync(script)) return;
+    execFile(path.join(PREFIX, "bin", "node"), [script, "--recheck"], { env: termEnv(), timeout: 600000 }, (e, out) => {
+      const msg = String(out || "").trim();
+      if (msg) log("[claude 补核] " + msg.replace(/\n/g, "；"));
+      if (e && e.code === 3) ledger("verify", false, "Claude Code 与官方清单不符（npm 来源）", msg);
+      else if (/^✓/m.test(msg)) ledger("verify", true, "Claude Code 已按官方清单补核", msg);
+    });
+  };
+  setTimeout(recheck, 120_000);
+  setInterval(recheck, 6 * 3600_000);
+}
+
+/** 开发端的 priv 状态：真跑一次 priv 'id -u'（rish → Shizuku），拿到 2000/0 才算就绪 */
+export function devPrivStatus() {
+  return new Promise((ok) => {
+    execFile("priv", ["id -u"], { timeout: 8000, env: process.env }, (e, out, err) => {
+      const uid = String(out || "").trim();
+      if (uid === "2000" || uid === "0") return ok({ state: "ok", installed: true, running: true, granted: true, uid: +uid, wireless: false, paired: true, dev: true });
+      const msg = String(err || out || (e && e.message) || "").trim();
+      ok({ state: /not running|binder|没在运行|isn't running/i.test(msg) ? "not_running" : "no_permission", installed: true, running: false, granted: false,
+        wireless: false, paired: true, dev: true, message: msg.slice(0, 200) });
+    });
+  });
+}
+
+async function devApp(op, b) {
+  if (op === "upd_status") {
+    if (!devUpd.lastCheck && !devUpd.checking) devUpdCheck();
+    else if (!devUpd.claude.current) devUpd.claude.current = await claudeVersionOf(PATHS.claude);
+    return devUpdStatus();
+  }
+  if (op === "upd_check") { devUpdCheck(); await new Promise((r) => setTimeout(r, 200)); return devUpdStatus(); }
+  if (op === "upd_set") {
+    if (typeof b.auto === "boolean") devUpd.auto = b.auto;
+    // 换渠道 = 明说要那个渠道的版本：查完对不上就直接换（自动更新关着也换）
+    if ((b.channel === "stable" || b.channel === "latest") && b.channel !== devUpd.channel) {
+      devUpd.channel = b.channel;
+      devUpdCheck().then(() => { if (devUpd.claude.state === "available") devUpdInstall(); }).catch(() => {});
+    }
+    devUpdSave();
+    return devUpdStatus();
+  }
+  if (op === "upd_apply") {
+    if (b.item !== "claude") return { ok: false, message: tz("开发端只管 Claude Code（应用本体由你在本机构建安装）") };
+    if (devUpd.claude.state !== "available" && devUpd.claude.state !== "error") return { ok: false, message: tz("没有可装的新版，先检查更新") };
+    devUpdInstall();
+    return { ok: true, message: tz("开始更新 Claude Code") };
+  }
+  return { ok: false, message: tz("开发端不支持：{op}", { op }) };
+}
+
+// ── 路由：/api/mem/status /api/mem/clear /api/priv/status /api/priv/request /api/priv/open /api/priv/audit /api/priv/keepalive /api/app/ ──
+export async function routeDevside(req, res, u, p) {
+  if (req.method === "GET" && p === "/api/mem/status") return sendJson(res, 200, await ccMem(["status", "--json"]));
+  if (req.method === "POST" && p === "/api/mem/clear") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    return sendJson(res, 200, await ccMem(["clear", "--json", ...(b.hard ? ["--hard"] : []), ...(b.dryRun ? ["--dry-run"] : [])]));
+  }
+  if (req.method === "GET" && p === "/api/priv/status") return sendJson(res, 200, await privCall({ op: "status" }));
+  if (req.method === "POST" && p === "/api/priv/request") return sendJson(res, 200, await privCall({ op: "request" }));
+  if (req.method === "POST" && p === "/api/priv/open") return sendJson(res, 200, await privCall({ op: "open_manager" }));
+  // 特权命令记录：cccodroid 的 Priv.java 每执行一条就往 home/priv-audit.jsonl 记一行。最新的在前
+  if (req.method === "GET" && p === "/api/priv/audit") {
+    const f = path.join(CFG.home, "priv-audit.jsonl"), items = [];
+    for (const ff of [f, f + ".1"]) {
+      let txt = ""; try { txt = fs.readFileSync(ff, "utf8"); } catch {}
+      for (const l of txt.split("\n").reverse()) { if (items.length >= 300) break; try { if (l) items.push(JSON.parse(l)); } catch {} }
+      if (items.length >= 300) break;
+    }
+    return sendJson(res, 200, { ok: true, supported: !!PREFIX, items });
+  }
+  if (req.method === "POST" && p === "/api/priv/keepalive") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    return sendJson(res, 200, await privCall({ op: "keepalive", enable: b.enable !== false }, 60000));
+  }
+  // 更新（APK / 工具包 / Claude Code）与 Shizuku 一键安装激活：都在应用进程里做，这里只转话
+  if (p.startsWith("/api/app/")) {
+    const op = p.slice(9);
+    const OPS = ["upd_status", "upd_check", "upd_apply", "upd_set", "upd_verify", "upd_repair", "share_logs", "share_file", "shz_install", "shz_activate", "shz_pair", "shz_autostart", "shz_repair", "open_app_settings", "freeze_ack", "notify_status", "notify_set", "notify_settings", "dev_status", "dev_set", "a11y_settings"];
+    if (!OPS.includes(op)) return sendJson(res, 404, { ok: false, message: tz("未知操作") });
+    const b = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
+    if (!PREFIX) return sendJson(res, 200, await devApp(op, b));
+    return sendJson(res, 200, await privCall({ ...b, op }));
+  }
+  return NEXT;
+}

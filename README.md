@@ -158,7 +158,7 @@ Layout:
 | Directory | Contents |
 |---|---|
 | `android/` | Java shell, Manifest, resources, terminal helpers (`assets/bin/`), native libraries (`native/`) |
-| `gateway/` | Gateway (`server.mjs`, Node.js) and UI (`web/`, plain JS, no build step) |
+| `gateway/` | Gateway (`server.mjs` + feature modules in `gw/`, Node.js) and UI (`web/`, plain JS, no build step) |
 | `i18n/` | UI translations: one txt per language plus the generate and check scripts, see [i18n/README.md](i18n/README.md) |
 | `devkit/` | Toolchain build script and manifests |
 | `docs/design-philosophy.md` | Why the project exists and the principles behind it |

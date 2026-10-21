@@ -17,11 +17,11 @@ Last verified: 2026-10-20 (v0.2.19).
 | 1 | Devkit (~680 MB) | GitHub Release → dl.cccodroid.net/devkit/ | `devkit-pin.json` shipped in the APK (sha256 of gz and tar) | `Installer.java`, `Updater.java` |
 | 2 | APK updates | GitHub API → cccodroid.net/dl/releases.json | Android APK signature (only the same release key can update) + sha256 in the release list | `Updater.java` |
 | 3 | Claude Code | Official → npmmirror → Tencent npm → npmjs (last success first) | sha256 from Anthropic's official manifest (manifest checked against Anthropic's PGP signature); npm ECDSA signature when no manifest is reachable | `assets/scripts/install-claude.mjs` |
-| 4 | Component index | GitHub Release → cccodroid.net/components/ | ed25519 key pinned in the gateway | `server.mjs` `compFetchIndex` |
-| 5 | Component packages | GitHub Release ⇄ dl.cccodroid.net/components/ (alternating, last success remembered) | sha256 from the signed index, then the in-package MANIFEST after unpacking | `server.mjs` `compRunInstall` |
+| 4 | Component index | GitHub Release → cccodroid.net/components/ | ed25519 key pinned in the gateway | `gateway/gw/components.mjs` `compFetchIndex` |
+| 5 | Component packages | GitHub Release ⇄ dl.cccodroid.net/components/ (alternating, last success remembered) | sha256 from the signed index, then the in-package MANIFEST after unpacking | `gateway/gw/components.mjs` `compRunInstall` |
 | 6 | pkg | Termux official → packages.termux.dev → grimler.se → TUNA/USTC/BFSU/NJU (main, x11) | Termux autobuilds key pinned in pkg, checks `Release.gpg` | `assets/bin/pkg.mjs` |
-| 7 | glibc libs for custom components | Termux official glibc repo only | HTTPS + sha256 from `Packages` | `server.mjs` `customFetchLibs` |
-| 8 | On-device models | ModelScope (official Qwen only) → HuggingFace → hf-mirror.com | sha256 pinned in the catalog (from HF LFS) | `server.mjs` model catalog |
+| 7 | glibc libs for custom components | Termux official glibc repo only | HTTPS + sha256 from `Packages` | `gateway/gw/custom.mjs` `customFetchLibs` |
+| 8 | On-device models | ModelScope (official Qwen only) → HuggingFace → hf-mirror.com | sha256 pinned in the catalog (from HF LFS) | `gateway/gw/local.mjs` `LOCAL_CATALOG` |
 
 Some components also download things on first run, e.g. Blender fetches itself from Debian and a patched Mesa from GitHub. Those first-run scripts check their own pinned sha256 and are **outside the multi-source system** described here.
 

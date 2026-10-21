@@ -51,7 +51,7 @@ Optional components (Python, Blender, language runtimes…) live in the separate
 | `android/java/` | Android shell (Java): setup, updates, notifications, Shizuku, WebView |
 | `android/assets/bin/`, `android/assets/scripts/` | **Sources** of the terminal helpers and scripts (`pkg`, the Claude Code installer…) |
 | `android/native/` | A few small native programs (pseudo-terminal, seccomp fallback) |
-| `gateway/server.mjs` | The gateway: a single Node.js file using only built-in modules. It runs claude and serves sessions, files, settings and every other API |
+| `gateway/server.mjs`, `gateway/gw/` | The gateway, Node.js built-in modules only. `server.mjs` dispatches requests and starts up; each feature (sessions, files, git, components…) lives in its own module under `gw/` — the header of `server.mjs` lists them. It runs claude and serves sessions, files, settings and every other API |
 | `gateway/web/` | The UI: plain JS and CSS, **no build step** |
 | `i18n/` | Translations |
 | `devkit/` | Build script for the toolchain (assembled from the official Termux repositories) |

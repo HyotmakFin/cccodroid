@@ -51,7 +51,7 @@ cccodroid 目前只有作者一个人在维护。安卓机型千差万别，一�
 | `android/java/` | 安卓外壳（Java）：安装、更新、通知、Shizuku、WebView |
 | `android/assets/bin/`、`android/assets/scripts/` | 终端里的小工具与脚本（`pkg`、Claude Code 安装脚本等）的**源文件** |
 | `android/native/` | 几个小原生程序（伪终端、seccomp 兜底） |
-| `gateway/server.mjs` | 网关：Node.js 单文件，只用 Node 内置模块，负责跑 claude、会话、文件、设置等全部接口 |
+| `gateway/server.mjs`、`gateway/gw/` | 网关，只用 Node 内置模块，负责跑 claude、会话、文件、设置等全部接口。`server.mjs` 只管分发请求和启动，各功能（会话、文件、git、组件……）分在 `gw/` 下的模块里，清单见 `server.mjs` 文件头 |
 | `gateway/web/` | 界面：原生 JS + CSS，**没有构建步骤**，改完刷新就是 |
 | `i18n/` | 译文 |
 | `devkit/` | 开发工具包（Termux 官方仓库组装）的构建脚本 |

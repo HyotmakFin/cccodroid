@@ -1,0 +1,414 @@
+import fs from "node:fs";
+import { spawn } from "node:child_process";
+import { CFG, LAST_LANG, log, tr, tz } from "./config.mjs";
+import { SETTINGS } from "./settings.mjs";
+import { API_KEY, PERM_MODES, PROVIDER, billAfterRun, noteTokens } from "./providers.mjs";
+import { ALIAS_SEEN, isLoginMode } from "./models.mjs";
+import { claudeCmd, claudeEnv, ensureBridge, settingsArgs } from "./claude.mjs";
+import { tasksCheck } from "./goal.mjs";
+import { setLastInit } from "./caps.mjs";
+import { RUNS, SESSIONS, rememberSession, runFlag, runList } from "./runs.mjs";
+import { NEXT, readBody, sendJson } from "./http.mjs";
+import { INTERRUPTED, QUEUE, RUN_LANE, RUN_SESSIONS, abortRun, endRun, idleArm, idleDisarm, laneOfItem, publishState, runEmit, saveRunMark, setInterrupted, setPermMode } from "./queue.mjs";
+import { handleLocalCommand } from "./modelcmd.mjs";
+import { LL, ensureLlama, localCustomActive } from "./local.mjs";
+import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
+import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
+
+// ── 跑一轮 ────────────────────────────────────────────────────────────
+// 和 HTTP 请求完全脱钩：前端断了也接着跑，结果照样落进 transcript、照样广播。
+export async function startRun(item) {
+  const run = {
+    id: item.id,
+    text: item.message,
+    // 跟在一个还没拿到会话号的新会话后面排队的：等前一条 init 了再接上它的会话
+    sessionId: item.sessionId || (item.follow && RUN_SESSIONS.get(item.follow)) || null,
+    follow: item.follow,
+    cid: item.cid,
+    auto: item.auto || null,           // "idle" = 网关自己发起的空闲压缩（界面画成系统提示，不发通知）
+    startedAt: Date.now(),
+    child: null, aborted: false, ended: false,
+    provider: PROVIDER.id,             // 记 token 用：开跑时的厂商（跑着的时候不许切）
+    log: [], pend: null, pendTimer: null,
+  };
+  run.lane = laneOfItem(item);
+  RUNS.set(run.id, run);                 // 同步占槽，中间不许有 await
+  RUN_LANE.set(run.id, run.lane);
+  if (RUN_LANE.size > 1000) for (const k of [...RUN_LANE.keys()].slice(0, 500)) if (!RUNS.has(k)) RUN_LANE.delete(k);
+  runFlag(true);
+  // 在被中断的那个会话里又跑起来了（点了「继续」或者直接接着聊）：中断提示就不用再挂着了
+  if (INTERRUPTED && (INTERRUPTED.sessionId ? INTERRUPTED.sessionId === run.sessionId : !run.sessionId)) setInterrupted(null);
+  if (run.sessionId) { RUN_SESSIONS.set(run.id, run.sessionId); idleDisarm(run.sessionId); }
+  const emit = (ev) => runEmit(run, ev);
+  emit({ type: "run_start", text: run.text, sessionId: run.sessionId, follow: run.follow, cid: run.cid, startedAt: run.startedAt, ...(run.auto ? { auto: run.auto } : {}) });
+  publishState();
+
+  const message = run.text;
+  const local = message.trim().match(/^\/(model|models|effort|autocompact)(?:\s+([\s\S]*))?$/);
+  if (local) {
+    log(`⌘ 本地命令 /${local[1]}${local[2] ? " " + local[2].trim() : ""}`);
+    return handleLocalCommand(local[1], (local[2] || "").trim(),
+      (text, cmd) => endRun(run, { localCommand: cmd || local[1], resultText: text, durationMs: 0, costUsd: 0 }));
+  }
+
+  if (!API_KEY && !PROVIDER.login) {
+    emit({ type: "error", message: tr(LAST_LANG, tz("未配置 API 密钥。请在设置里填入 {name} 的密钥。", { name: PROVIDER.label || PROVIDER.id })) });
+    return endRun(run, { failed: true });
+  }
+  if (!isLoginMode() && !(await ensureBridge())) {
+    emit({ type: "error", message: tr(LAST_LANG, tz("本地 DNS 桥启动失败，无法连接 API。")) });
+    return endRun(run, { failed: true });
+  }
+  if (run.aborted) return endRun(run, { failed: true });   // 等桥的时候就被停了
+
+  // 模型三级取：本次请求指定 → 设置里存的 → 该厂商自己的默认。
+  // ⚠️ 不能回落到 CFG.model：那是全局兜底（deepseek-flash），只有内置厂商能碰。
+  let model = (item.model || SETTINGS.model || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
+  // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
+  if (PROVIDER.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
+  let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
+  if (!PERM_MODES.includes(permMode)) permMode = "default";
+
+  // 端侧小模型：先确保 llama-server 跑着、载的是这个模型（第一次要加载十几秒）
+  if (PROVIDER.local) {
+    try {
+      const m = await ensureLlama(model, (key, text) => emit({ type: "note", key, text }));
+      model = m.id;
+      LL.run = run;
+    } catch (e) {
+      emit({ type: "error", message: e.message });
+      return endRun(run, { failed: true });
+    }
+    if (run.aborted) return endRun(run, { failed: true });
+  }
+
+  const argv = [
+    "-p",
+    // 流式输入：stdin 一直开着，跑到一半还能再递消息进去（插话）。
+    // --replay-user-messages 让 claude 在真正吃进一条消息时回显出来 —— 我们靠它知道插话何时送达。
+    "--input-format", "stream-json",
+    "--replay-user-messages",
+    "--output-format", "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--permission-mode", permMode,
+    // 要确认的工具调用走 stdout 的 control_request(can_use_tool) 来问我们，前端出卡片，用户点了再回 stdin。
+    // 不加这个，-p 模式下 claude 不问，直接按拒绝处理（实测：工具结果 "…needs approval"）
+    "--permission-prompt-tool", "stdio",
+  ];
+  if (model) argv.push("--model", model);
+  if (run.sessionId) argv.push("--resume", String(run.sessionId));
+  // 设备工具（通知、剪贴板、打开应用、读屏点按…）：只有 cccodroid 有 Java 那一层。开关在应用里，
+  // 这里只看总开关决定挂不挂；具体哪些工具出现由 device-mcp.mjs 现问应用。端侧小模型不挂（读不起）
+  const devMcp = deviceMcpConfig();
+  if (devMcp && !PROVIDER.local && (await privCall({ op: "dev_status" }, 3000)).on) argv.push("--mcp-config", devMcp);
+
+  // 告诉 claude 这台设备上有什么现成工具 —— 不说它就不会去用。
+  // 和用户自己的追加提示合成一条：重复给同一个单值参数，解析器一般只留一个，合成一条最稳
+  // 端侧：--bare 换成很短的系统提示和精简工具（见「端侧小模型」一节）；本机工具清单太长，小模型读不起，不附
+  // 内置只有聊天（不给工具）；自定义模式的工具清单和提示由用户的配置文件给（见 localCustom）
+  const lcust = PROVIDER.local ? localCustomActive() : null;
+  if (PROVIDER.local) argv.push("--bare", "--tools", lcust ? lcust.tools : "");
+  // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
+  const localHint = !PROVIDER.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
+    : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
+  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), !PROVIDER.nativeModels && !PROVIDER.local ? TASKS_HINT : "", PROVIDER.local ? "" : PREVIEW_HINT, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
+  // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
+  // 密钥读取器也在这里（见 settingsArgs）
+  argv.push(...settingsArgs());
+  if (SETTINGS.effort) argv.push("--effort", SETTINGS.effort);
+  if (SETTINGS.allowedTools?.length) argv.push("--allowedTools", SETTINGS.allowedTools.join(","));
+  if (SETTINGS.disallowedTools?.length) argv.push("--disallowedTools", SETTINGS.disallowedTools.join(","));
+
+  const dirs = new Set();
+  if (fs.existsSync(CFG.workspace)) dirs.add(CFG.workspace);
+  if (process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED)) dirs.add(process.env.CCAPP_SHARED);
+  for (const d of SETTINGS.addDirs || []) if (fs.existsSync(d)) dirs.add(d);
+  for (const d of item.addDirs || []) if (typeof d === "string" && fs.existsSync(d)) dirs.add(d);
+  for (const d of dirs) argv.push("--add-dir", d);
+
+  const isCmd = message.trim().startsWith("/");
+  log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${SETTINGS.effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
+  const t0 = Date.now();
+
+  const [cmd0, args0] = claudeCmd(argv);
+  const child = spawn(cmd0, args0, {
+    cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home,
+    env: claudeEnv(),
+    stdio: ["pipe", "pipe", "pipe"],
+    detached: true,            // 当进程组长，中断时好整组带走（见 killTree）
+  });
+  run.child = child;
+  child.stdin.on("error", () => {});
+  const writeUser = (text) => child.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
+  writeUser(message);
+  run.inputOpen = true;
+  run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
+  run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
+  run.bgList = [];             // 后台任务明细：{ id, type, desc }（shell / 子代理 / monitor / 工作流），界面列出来、可单独停
+  run.replays = 0;
+  run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
+  run.inject = (item) => {
+    if (!run.inputOpen || run.ended || run.aborted) return false;
+    try { writeUser(item.message); } catch { return false; }
+    run.pendingInject.push(item);
+    saveRunMark();     // 马上落盘：送达前 App 被强停，下次启动它还能回到队列里，不会凭空消失
+    log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容
+    return true;
+  };
+  // 每轮 result 之后：没有待送达的插话就关 stdin，claude 随即退出；有就留着，它会接着处理
+  // ── 权限确认（stream-json 控制协议）──
+  // claude 要用需确认的工具时，往 stdout 发 control_request(can_use_tool) 然后等；我们回 control_response。
+  // 待答的请求存在 run.perms，同时作为 perm_request 事件发给前端（也进 run.log，断线重连能补到）。
+  run.perms = new Map();
+  const writeCtl = (o) => { try { child.stdin.write(JSON.stringify(o) + "\n"); return true; } catch { return false; } };
+  let ctlN = 0;
+  run.setMode = (mode) => run.inputOpen && writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "set_permission_mode", mode } });
+  // 停掉一个后台任务（stop_task 控制请求；claude 停完会再报一次 background_tasks_changed）
+  run.stopTask = (taskId) => run.inputOpen && run.bgList.some((t) => t.id === taskId) &&
+    writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "stop_task", task_id: taskId } });
+  run.answerPerm = (id, a) => {
+    const p = run.perms.get(id);
+    if (!p || run.ended || run.aborted) return false;
+    let resp;
+    if (a.behavior === "allow") {
+      // 参数一律用 claude 发来的原样，前端改不了命令；AskUserQuestion 只往里加 answers
+      const input = p.tool === "AskUserQuestion" && a.answers && typeof a.answers === "object"
+        ? { ...p.input, answers: Object.fromEntries(Object.entries(a.answers).map(([k, v]) => [String(k), String(v)])) }
+        : p.input;
+      resp = { behavior: "allow", updatedInput: input };
+      // 「始终允许」：只认 claude 自己给的建议（规则 + 目录），前端不能塞任意规则；切模式另走 a.mode
+      if (a.always) {
+        const ups = (p.suggestions || []).filter((x) => x && (x.type === "addRules" || x.type === "addDirectories"));
+        if (ups.length) resp.updatedPermissions = ups;
+      }
+    } else {
+      resp = { behavior: "deny", message: String(a.message || "").trim().slice(0, 2000) || "用户拒绝了这次操作。", ...(a.interrupt ? { interrupt: true } : {}) };
+    }
+    if (!writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: resp } })) return false;
+    run.perms.delete(id);
+    log(`${resp.behavior === "allow" ? "✓ 允许" : "✗ 拒绝"} ${p.tool}${a.always && resp.updatedPermissions ? "（始终）" : ""}${a.interrupt ? "（并停止）" : ""}`);
+    emit({ type: "perm_resolved", id, behavior: resp.behavior, always: !!resp.updatedPermissions, interrupt: !!a.interrupt });
+    if (a.mode && PERM_MODES.includes(a.mode)) setPermMode(a.mode);
+    publishState();
+    return true;
+  };
+  const onControl = (ev) => {
+    const id = ev.request_id, r = ev.request || {};
+    if (r.subtype === "can_use_tool" && id) {
+      const p = {
+        id, tool: String(r.tool_name || ""), input: r.input || {}, toolUseId: r.tool_use_id || null,
+        suggestions: Array.isArray(r.permission_suggestions) ? r.permission_suggestions : [],
+        reason: r.decision_reason || null, blockedPath: r.blocked_path || null, description: r.description || null,
+        interactive: !!r.requires_user_interaction, agentId: r.agent_id || null, at: Date.now(),
+        runId: run.id, sessionId: run.sessionId || null,   // 并行时通知要知道是哪个会话的
+      };
+      run.perms.set(id, p);
+      log(`⏸ 等确认 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
+      emit({ type: "perm_request", ...p });
+      publishState();
+      return;
+    }
+    // 别的控制请求（hook 回调、MCP elicitation…）我们不接：回错误，别让 claude 干等
+    if (id) writeCtl({ type: "control_response", response: { subtype: "error", request_id: id, error: `unsupported: ${r.subtype}` } });
+  };
+
+  const closeInput = () => {
+    if (!run.inputOpen || run.perms.size) return;
+    run.inputOpen = false;
+    try { child.stdin.end(); } catch {}
+  };
+
+  let buf = "", stderr = "", lastResult = null;
+  // 开了 --include-partial-messages，正文已经逐字发过，assistant 事件别重复整段
+  const flags = { gotDelta: false, isCmd };
+  const onInit = (init) => {
+    setLastInit(init);
+    run.sessionId = init.session_id;
+    run.usageModel = init.model || run.usageModel;
+    // 新会话的 run_start 发出时还没有会话号：回填进日志，别的视图切过来、整轮重放时才认得出这是它的
+    for (const e of run.log || []) if (e.type === "run_start" && !e.sessionId) e.sessionId = run.sessionId;
+    RUN_SESSIONS.set(run.id, run.sessionId);
+    if (RUN_SESSIONS.size > 500) RUN_SESSIONS.delete(RUN_SESSIONS.keys().next().value);
+    rememberSession(run.sessionId);
+    saveRunMark();                       // 标记里补上会话号：被杀之后「继续」要靠它 --resume
+    if (!SESSIONS.has(init.session_id)) {
+      SESSIONS.set(init.session_id, { id: init.session_id, title: message.slice(0, 60), createdAt: Date.now() });
+    }
+    if (model && init.model && model !== init.model) ALIAS_SEEN[model] = init.model;
+    emit({
+      type: "init",
+      sessionId: init.session_id,
+      model: init.model,
+      permissionMode: init.permissionMode,
+      outputStyle: init.output_style,
+      version: init.claude_code_version,
+    });
+    publishState();
+  };
+  const onResult = (r) => {
+    lastResult = r;
+    if (!isCmd && r.usage) usageAdd({ t: 1, i: promptTokens(r.usage), o: r.usage.output_tokens || 0 }, run.sessionId, run.usageModel);
+    if (run.pendingInject.length) return;
+    if (!run.bgTasks) return closeInput();
+    // 答完了，只是后台任务（本地服务之类）还在跑：界面上算这一轮结束，进程和 stdin 留着等任务回报
+    run.idle = true;
+    emit({ type: "run_idle", bg: run.bgTasks, at: Date.now() });
+    publishState();
+  };
+  const onReplay = () => {
+    // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
+    const said = run.replays === 0 ? message : run.pendingInject[0] && run.pendingInject[0].message;
+    if (usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
+    if (run.replays++ === 0) return;
+    const it = run.pendingInject.shift();
+    if (it) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
+  };
+  const feed = (line) => {
+    let ev; try { ev = JSON.parse(line); } catch { return; }
+    if (ev.type === "control_request") return onControl(ev);
+    // 清单工具一出结果就推，不等 4 秒轮询
+    if (ev.type === "user" && ev.tool_use_result && (ev.tool_use_result.task || ev.tool_use_result.statusChange || ev.tool_use_result.updatedFields)) setImmediate(() => tasksCheck(run.sessionId));
+    if (ev.type === "control_response") return;          // 我们发的 set_permission_mode 的回执
+    if (ev.type === "assistant" && Array.isArray(ev.message && ev.message.content)) {
+      let n = 0;
+      for (const c of ev.message.content) if (c && c.type === "tool_use" && c.id && !run.usageTools.has(c.id)) { run.usageTools.add(c.id); n++; }
+      if (n) usageAdd({ tl: n }, run.sessionId);
+    }
+    if (ev.type === "control_cancel_request") {           // claude 自己撤回了（比如被中断）
+      if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
+      return;
+    }
+    // 后台任务（run_in_background 的命令、后台子代理）：result 之后它们跑完，claude 会在同一进程里接着再跑一轮。
+    // 那时 stdin 要还开着，否则这一轮里所有授权请求都报「Tool permission request failed: AbortError: Stream closed」。
+    // claude 有任何别的动静（开始请求、回显通知…）就不替它收尾了：之后的 result 会正常关 stdin
+    if (run.idleClose && !(ev.type === "system" && ev.subtype === "background_tasks_changed")) { clearTimeout(run.idleClose); run.idleClose = null; }
+    if (ev.type === "system" && ev.subtype === "background_tasks_changed" && Array.isArray(ev.tasks)) {
+      run.bgTasks = ev.tasks.length;
+      run.bgList = ev.tasks.slice(0, 30).map((t) => ({ id: String(t.task_id || ""), type: String(t.task_type || ""), desc: String(t.description || "").slice(0, 200) }));
+      if (run.idle && run.bgTasks) emit({ type: "run_idle", bg: run.bgTasks });
+      publishState();                    // 明细跟着状态走（runInfo.bgList），断线重连也补得上
+      // 空闲中后台任务全没了：任务自己跑完时 claude 会接着起一轮（之后的 result 会关 stdin）；
+      // 被 stop_task 停掉的只排进它的队列、不起新一轮，这一轮就永远挂着。等 6 秒没动静就收尾
+      clearTimeout(run.idleClose);
+      if (run.idle && !run.bgTasks) run.idleClose = setTimeout(() => { if (run.idle && !run.bgTasks && !run.ended) closeInput(); }, 6000);
+    }
+    // 空闲中 claude 又动起来了（后台任务回报、或用户发来的新消息）：重新算「生成中」
+    if (run.idle && (ev.type === "assistant" || ev.type === "stream_event" || (ev.type === "system" && ev.subtype === "init"))) {
+      run.idle = false;
+      emit({ type: "run_busy", startedAt: Date.now() });
+      publishState();
+    }
+    translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
+  };
+
+  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
+  child.stdout.on("data", (d) => {
+    buf += d.toString("utf8");
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) feed(line);
+    }
+  });
+
+  child.stderr.on("data", (d) => {
+    const s = d.toString("utf8");
+    if (stderr.length < 20000) stderr += s;
+    if (/error|Error|failed|ENOENT|EACCES/.test(s)) log(`[claude!] ${s.trim().slice(0, 300)}`);
+  });
+
+  const finish = (code) => {
+    if (buf.trim()) feed(buf.trim());
+    buf = "";
+    run.inputOpen = false;
+    run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
+    if (run.pendingInject.length) {
+      log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
+      QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));
+      run.pendingInject = [];
+    }
+    const ms = Date.now() - t0;
+    if (run.aborted) {
+      log(`⏹ 已中断 (${ms}ms)`);
+      return endRun(run, { durationMs: ms });
+    }
+    if (lastResult) {
+      const localCmd = lastResult.local_command || null;
+      log(`✔ 完成 ${ms}ms  ${lastResult.num_turns || "?"} 轮  ` +
+          `上下文=${flags.contextTokens ?? "?"} out=${lastResult.usage?.output_tokens ?? "?"}  ` +
+          `$${Number(lastResult.total_cost_usd || 0).toFixed(5)}${localCmd ? "  [" + localCmd + "]" : ""}`);
+      noteTokens(run.provider, lastResult.usage);
+      billAfterRun(run.provider);
+      if (!isCmd && !lastResult.is_error && run.sessionId) idleArm(run.sessionId, flags);
+      return endRun(run, {
+        durationMs: ms,
+        // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报
+        costUsd: PROVIDER.nativeModels ? Number(lastResult.total_cost_usd || 0) : 0,
+        usage: lastResult.usage
+          ? {
+              output_tokens: lastResult.usage.output_tokens || 0,
+              context_tokens: flags.contextTokens || 0,   // 真实占用（累计和不算）
+              context_window: contextWindowOf(lastResult),
+            }
+          : null,
+        subtype: lastResult.subtype,
+        isError: !!lastResult.is_error,
+        // 本地命令（/context /cost …）的结果正文在这里
+        localCommand: localCmd,
+        resultText: localCmd ? String(lastResult.result || "") : "",
+      });
+    }
+    const hint = code !== 0 ? `生成失败（退出码 ${code}）` : "生成结束但没有返回结果";
+    log(`✖ ${hint}${stderr ? " :: " + stderr.trim().slice(0, 300) : ""}`);
+    emit({ type: "error", message: hint, detail: stderr.trim().slice(0, 1200) });
+    endRun(run, { failed: true, durationMs: ms });
+  };
+
+  child.on("error", (e) => {
+    log(`spawn 出错: ${e.message}`);
+    emit({ type: "error", message: tr(LAST_LANG, tz("无法启动 claude：{err}", { err: e.message })) });
+    endRun(run, { failed: true });
+  });
+  child.on("close", finish);
+}
+
+// ── 路由：/api/perm/answer /api/perm/mode /api/task/stop /api/abort ──
+export async function routeRun(req, res, u, p) {
+  // ── 权限确认：回答 claude 的 can_use_tool ──
+  if (req.method === "POST" && p === "/api/perm/answer") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    // 不带 runId（通知里的「拒绝」）就按请求号找它属于哪一轮
+    const run = b.runId ? RUNS.get(String(b.runId)) || null : runList().find((r) => r.perms && r.perms.has(String(b.id || ""))) || null;
+    if (!run || !run.answerPerm) return sendJson(res, 409, { error: "gone", message: tz("这一轮已经结束了") });
+    if (!run.answerPerm(String(b.id || ""), {
+      behavior: b.behavior === "allow" ? "allow" : "deny",
+      message: b.message, interrupt: !!b.interrupt, always: !!b.always,
+      answers: b.answers, mode: b.mode ? String(b.mode) : null,
+    })) return sendJson(res, 409, { error: "gone", message: tz("这项已经回答过了") });
+    return sendJson(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && p === "/api/perm/mode") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    if (!setPermMode(String(b.mode || ""))) return sendJson(res, 400, { error: "bad mode" });
+    return sendJson(res, 200, { ok: true, mode: SETTINGS.permissionMode, live: RUNS.size > 0 });
+  }
+  if (req.method === "POST" && p === "/api/task/stop") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    const run = RUNS.get(String(b.runId || ""));
+    if (!run || !run.stopTask || !run.stopTask(String(b.taskId || ""))) return sendJson(res, 409, { error: "gone", message: tz("这个后台任务已经结束了") });
+    log(`■ 停后台任务 ${String(b.taskId).slice(0, 12)}`);
+    return sendJson(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && p === "/api/abort") {
+    const b = JSON.parse((await readBody(req)) || "{}");
+    if (b.clearQueue) QUEUE.length = 0;
+    // 带 id 只停那一轮；不带 id（旧前端）停掉全部
+    const killed = b.id ? abortRun(RUNS.get(String(b.id))) : runList().map(abortRun).some(Boolean);
+    if (b.clearQueue) publishState();
+    return sendJson(res, 200, { ok: true, killed });
+  }
+  return NEXT;
+}

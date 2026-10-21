@@ -32,6 +32,7 @@ OUT=$ROOT/dist
 echo "▸ assets"
 rm -rf "$A/assets/app"; mkdir -p "$A/assets/app/web" "$A/assets/app/scripts" "$A/assets/app/bin"
 cp "$SRC/server.mjs" "$A/assets/app/"
+mkdir -p "$A/assets/app/gw"; cp "$SRC/gw/"*.mjs "$A/assets/app/gw/"     # 网关的各功能模块
 for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp -R "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
@@ -57,7 +58,7 @@ $CC_ANDROID -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack 
 $CC_ANDROID -O2 -o "$A/assets/app/lib/seccomp-enosys-run" "$A/native/seccomp-enosys-run.c"
 # 应用内终端的伪终端（node 没有 pty）：stdin/stdout 与 pty 对转，fd 3 收窗口大小
 $CC_ANDROID -O2 -o "$A/assets/app/lib/ptyhost" "$A/native/ptyhost.c"
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/gw/"* "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 

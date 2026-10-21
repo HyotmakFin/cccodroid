@@ -1,0 +1,142 @@
+import { log } from "./config.mjs";
+import { SETTINGS, saveSettings } from "./settings.mjs";
+import { PROVIDER } from "./providers.mjs";
+import { effortLevelsOf, fetchModels, normEffort } from "./models.mjs";
+import { effectiveAutoCompact } from "./stream.mjs";
+
+// ── /model 与 /effort：由网关本地处理 ─────────────────────────────────
+// 为什么不让 claude 自己处理：它自带的 /model 只改「当前会话」，
+// 而 GUI 每次调用都是新进程 —— 下一条消息就忘了。只有落到 SETTINGS 才持久。
+export async function handleLocalCommand(name, arg, reply) {
+  const models = await fetchModels(true);
+  const cur = models.find((m) => m.id === SETTINGS.model) || models[0];
+
+  // ── /autocompact ──
+  // 交给 claude 自己处理的话：它写进 ~/.claude/settings.json，但我们下发的 CLAUDE_CODE_AUTO_COMPACT_WINDOW
+  // 优先级更高（它会说 "env is set and takes precedence"），界面上的压缩线也要切一次模型才刷新。
+  // 所以由网关接住：存进设置（和设置页那一栏是同一个值），下一轮起生效，前端收到 run_end 就刷新刻度。
+  if (name === "autocompact") {
+    const win = Number(cur && cur.context_window) || 0;
+    const fmt = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(2) + "M" : Math.round(n / 1000) + "k");
+    if (!arg) {
+      const v = effectiveAutoCompact();
+      return reply(
+        `自动压缩线：**${v ? fmt(v) + " tokens" : "默认（由 claude 按模型窗口决定）"}**${win ? `　（当前模型窗口 ${fmt(win)}）` : ""}\n\n` +
+        "用法：`/autocompact 400k`、`/autocompact 1m`；恢复默认：`/autocompact off`。设置页「自动压缩」一栏是同一个值。",
+        "autocompact"
+      );
+    }
+    const a = arg.trim().toLowerCase();
+    let n = null;
+    if (!/^(off|default|reset|auto|0)$/.test(a)) {
+      const m = a.match(/^(\d+(?:\.\d+)?)\s*([km]?)$/);
+      if (!m) return reply(`看不懂 \`${arg.trim()}\`。写成 \`400k\`、\`1m\` 或纯数字；恢复默认用 \`off\`。`, "autocompact");
+      n = Math.round(Number(m[1]) * (m[2] === "m" ? 1e6 : m[2] === "k" ? 1e3 : 1));
+      if (n < 10000) return reply(`${fmt(n)} 太小了，压缩线至少 10k。`, "autocompact");
+    }
+    SETTINGS.autoCompactWindow = n;
+    saveSettings();
+    log(`⌘ /autocompact → ${n || "(默认)"}`);
+    return reply(
+      (n ? `自动压缩线已设为 **${fmt(n)} tokens**，下一轮起生效。` : "自动压缩线已恢复默认（由 claude 按模型窗口决定），下一轮起生效。") +
+      (n && win && n > win ? `\n\n> ⚠️ 比当前模型的窗口（${fmt(win)}）还大，实际会先撞上窗口上限。` : ""),
+      "autocompact"
+    );
+  }
+
+  // ── /model ──
+  if (name === "model" || name === "models") {
+    if (!arg) {
+      // 原生厂商（claude 自己认识模型）：不列清单，也不劝你手选
+      if (!models.length) {
+        return reply(
+          `当前厂商：**${PROVIDER.label || PROVIDER.id}**（claude 原生）\n\n` +
+          `> 该厂商由 claude 自己决定模型，未提供可切换的模型清单 —— \`/model\` 在此不适用。\n` +
+          `> 若要指定，可直接写进 \`ccapp-providers.json\` 的 \`defaultModel\`。`,
+          "model"
+        );
+      }
+      const lines = models.map((m) => {
+        const on = m.id === SETTINGS.model ? "**▸** " : "　　";
+        const img = (m.input_modalities || []).includes("image") ? " · 支持图片" : "";
+        const eff = (m.effort?.supported_levels || []).join(" / ");
+        return `${on}\`${m.id}\` — ${m.name || ""}\n　　上下文 ${Math.round((m.context_window || 0) / 1024)}k${img} · effort ${eff}`;
+      }).join("\n\n");
+      return reply(
+        `当前厂商：**${PROVIDER.label || PROVIDER.id}**\n` +
+        `当前模型：**${SETTINGS.model || "(由 claude 决定)"}**　（effort **${SETTINGS.effort || "默认"}**）\n\n` +
+        `可用模型：\n\n${lines}\n\n` +
+        `用法：\`/model <id>\`　切换思考强度：\`/effort\`\n\n` +
+        (PROVIDER.nativeModels
+          ? `> 模型名由 claude 自己解析，写错会直接报错。`
+          : `> 第三方厂商对不认识的名字**可能静默回落**，所以这里挡一道，免得你以为切成功了。`),
+        "model"
+      );
+    }
+    const t = arg.toLowerCase().trim();
+    const target = models.find((m) => m.id.toLowerCase() === t)
+      || models.find((m) => (m.name || "").toLowerCase() === t)
+      || models.find((m) => m.id.toLowerCase().includes(t));
+    if (!target) {
+      if (!models.length) {
+        return reply(
+          `当前厂商（**${PROVIDER.label || PROVIDER.id}**）未提供模型清单，\`/model\` 不适用。\n` +
+          `> 原生厂商由 claude 自己决定模型；要指定就改 \`ccapp-providers.json\` 的 \`defaultModel\`。`,
+          "model"
+        );
+      }
+      return reply(
+        `没有模型 \`${arg}\`。\n\n可用：${models.map((m) => "`" + m.id + "`").join("、")}\n\n` +
+        `（${PROVIDER.label || PROVIDER.id} 收到不认识的名字可能静默回落，所以这里挡住，免得你以为切成功了）`,
+        "model"
+      );
+    }
+    SETTINGS.model = target.id;
+    const eff = normEffort(target, SETTINGS.effort);
+    const effChanged = eff !== SETTINGS.effort;
+    SETTINGS.effort = eff;
+    saveSettings();
+    return reply(
+      `已切换到 **${target.id}**${target.name ? "（" + target.name + "）" : ""}\n\n` +
+      `- 上下文窗口：${Math.round((target.context_window || 0) / 1024)}k\n` +
+      `- 输入模态：${(target.input_modalities || []).join(" / ")}\n` +
+      `- effort 档位：${(target.effort?.supported_levels || []).join(" / ")}\n` +
+      (effChanged ? `- ⚠️ 原 effort 该模型不支持，已调为 \`${eff}\`\n` : "") +
+      `\n下一条消息生效。`,
+      "model"
+    );
+  }
+
+  // ── /effort ──
+  if (name === "effort") {
+    const levels = effortLevelsOf(cur);
+    const dflt = cur && cur.effort && cur.effort.default_level;
+    if (!arg) {
+      const lines = levels.map((l) =>
+        `${l === SETTINGS.effort ? "**▸** " : "　　"}\`${l}\`` + (l === dflt ? "　（模型默认）" : "")).join("\n");
+      return reply(
+        `当前模型 **${SETTINGS.model || "默认"}** 的思考强度：**${SETTINGS.effort || "(未设置)"}**\n\n${lines}\n\n` +
+        `用法：\`/effort <level>\`\n\n` +
+        `> 档位越高思考越久、通常质量越好。实测首字延迟：\`low\` ≈ 0.9s，\`max\` ≈ 2.3s。`,
+        "effort"
+      );
+    }
+    const t = arg.toLowerCase().trim();
+    if (levels.includes(t)) {
+      SETTINGS.effort = t;
+      saveSettings();
+      return reply(`思考强度已设为 **${t}**（模型 ${SETTINGS.model || "默认"}）。\n\n下一条消息生效。`, "effort");
+    }
+    // claude 认 low/medium/high/xhigh/max，DeepSeek 只有 low/high/max，做个就近映射
+    const alias = { medium: "high", xhigh: "max", highest: "max", lowest: "low", normal: "high" }[t];
+    if (alias && levels.includes(alias)) {
+      SETTINGS.effort = alias;
+      saveSettings();
+      return reply(`\`${arg}\` 不是 ${SETTINGS.model} 的档位，已就近设为 **${alias}**。\n\n` +
+        `该模型支持：${levels.map((l) => "`" + l + "`").join("、")}`, "effort");
+    }
+    return reply(`\`${arg}\` 不是有效档位。**${SETTINGS.model || "默认模型"}** 支持：${levels.map((l) => "`" + l + "`").join("、")}`, "effort");
+  }
+
+  return reply(`未知命令 /${name}`, name);
+}

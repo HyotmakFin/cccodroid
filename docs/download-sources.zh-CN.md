@@ -17,11 +17,11 @@ cccodroid 要从网上取的东西有八类，大多有不止一个来源。这�
 | 1 | 开发工具包（约 680 MB） | GitHub Release → dl.cccodroid.net/devkit/ | APK 自带的 `devkit-pin.json`（gz 与 tar 的 sha256） | `Installer.java`、`Updater.java` |
 | 2 | APK 更新 | GitHub API → cccodroid.net/dl/releases.json | Android 的 APK 签名（同一把发布钥匙才能覆盖安装）+ 发布列表里的 sha256 | `Updater.java` |
 | 3 | Claude Code | 官方直链 → npmmirror → 腾讯云 npm → npmjs（上次成功的排最前） | Anthropic 官方清单的 sha256（清单本身验 Anthropic 的 PGP 签名）；都拿不到时验 npm 的 ECDSA 签名 | `assets/scripts/install-claude.mjs` |
-| 4 | 组件索引 | GitHub Release → cccodroid.net/components/ | 钉在网关里的 ed25519 公钥 | `server.mjs` `compFetchIndex` |
-| 5 | 组件包 | GitHub Release ⇄ dl.cccodroid.net/components/（轮流试，记住上次成功的） | 签名索引里的 sha256，解包后再按包内 MANIFEST 逐个核对 | `server.mjs` `compRunInstall` |
+| 4 | 组件索引 | GitHub Release → cccodroid.net/components/ | 钉在网关里的 ed25519 公钥 | `gateway/gw/components.mjs` `compFetchIndex` |
+| 5 | 组件包 | GitHub Release ⇄ dl.cccodroid.net/components/（轮流试，记住上次成功的） | 签名索引里的 sha256，解包后再按包内 MANIFEST 逐个核对 | `gateway/gw/components.mjs` `compRunInstall` |
 | 6 | pkg 装软件 | Termux 官方 → packages.termux.dev → grimler.se → 清华/中科大/北外/南大（main、x11） | 钉在 pkg 里的 Termux 自动构建钥，验 `Release.gpg` | `assets/bin/pkg.mjs` |
-| 7 | 自定义组件补 glibc 库 | Termux 官方 glibc 仓库（只此一个） | HTTPS + `Packages` 里的 sha256 | `server.mjs` `customFetchLibs` |
-| 8 | 端侧模型 | 魔搭（仅 Qwen 官方）→ HuggingFace → hf-mirror.com | 目录里钉的 sha256（取自 HF LFS） | `server.mjs` 模型目录 |
+| 7 | 自定义组件补 glibc 库 | Termux 官方 glibc 仓库（只此一个） | HTTPS + `Packages` 里的 sha256 | `gateway/gw/custom.mjs` `customFetchLibs` |
+| 8 | 端侧模型 | 魔搭（仅 Qwen 官方）→ HuggingFace → hf-mirror.com | 目录里钉的 sha256（取自 HF LFS） | `gateway/gw/local.mjs` `LOCAL_CATALOG` |
 
 另外，有的组件首次运行时还会自己下东西，比如 Blender 从 Debian 官方仓库取本体、从 GitHub 取补丁版 Mesa。这部分由组件自己的首次运行脚本负责，按脚本里钉的 sha256 核对，**不在本文的多源机制内**。
 
