@@ -788,7 +788,12 @@ public class MainActivity extends Activity {
         // 网页调试默认关：开着时任何连上 adb 的电脑都能读页面（含网关令牌）。
         // 要调试就在终端里 touch ~/.webdebug，重开应用生效；只有本机终端写得进私有目录
         WebView.setWebContentsDebuggingEnabled(new File(env.home, ".webdebug").exists());
-        web = new WebView(this);
+        web = new WebView(this) {
+            @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) hangCheck();
+                return super.dispatchTouchEvent(e);
+            }
+        };
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -915,6 +920,40 @@ public class MainActivity extends Activity {
     //  2026-10-16 实测：触摸滚动冻住后 location.reload() 和切后台都不好，跳到 127.0.0.2:9 再跳回来就好 ——
     //  卡住的是 WebView 给这个文档的手势状态，换站点才会重建。127.0.0.2:9 是浏览器直接拒绝的端口，不发任何网络请求。
     //  loadUrl 不经过 shouldOverrideUrlLoading，不会被当外链拦掉。跳的那一下先把 WebView 藏起来，免得闪错误页。
+    // ── 页面卡死兜底 ──
+    //  滑动在 WebView 的合成线程上做，点按要页面的 JS 主线程处理。主线程卡住（死循环、或者等一个没显示出来的对话框）时，
+    //  内容照样能滑、什么都点不动，页面里的雪花按钮也救不了。这里在原生层看：手指抬起时问页面一句，
+    //  6 秒没回答（又没有正开着的对话框）就弹原生对话框问要不要重新载入。重新载入走 bounce()，回话在网关那边照常跑。
+    private int jsDialogs = 0;
+    private boolean hangPending = false, hangAsked = false;
+    private void hangCheck() {
+        if (hangPending || hangAsked || web == null || bounceStage != 0 || jsDialogs > 0) return;
+        hangPending = true;
+        final boolean[] alive = { false };
+        web.evaluateJavascript("1", v -> alive[0] = true);
+        ui.postDelayed(() -> {
+            hangPending = false;
+            if (alive[0] || web == null || bounceStage != 0 || jsDialogs > 0 || isFinishing()) return;
+            hangAsked = true;
+            boolean dark = uiDark();
+            try {
+                android.app.AlertDialog d = new android.app.AlertDialog.Builder(this,
+                        dark ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert)
+                    .setMessage(Tr.t("页面没有响应，点什么都没反应？重新载入一下就好，正在进行的回复不受影响。"))
+                    .setPositiveButton(Tr.t("重新载入"), (x, w) -> bounce())
+                    .setNegativeButton(Tr.t("再等等"), null)
+                    .setOnDismissListener(x -> hangAsked = false)
+                    .show();
+                int accent = BrowserPane.pal(this, dark, "accent");
+                d.getWindow().setBackgroundDrawable(roundBg(BrowserPane.pal(this, dark, "card")));
+                for (int k : new int[] { android.app.AlertDialog.BUTTON_POSITIVE, android.app.AlertDialog.BUTTON_NEGATIVE }) {
+                    android.widget.Button bt = d.getButton(k);
+                    if (bt != null) bt.setTextColor(accent);
+                }
+            } catch (Exception e) { hangAsked = false; }
+        }, 6000);
+    }
+
     private int bounceStage = 0;   // 0 没在脱困 · 1 正跳出去 · 2 正跳回来
     private void bounce() {
         if (web == null || bounceStage != 0) return;
@@ -933,13 +972,24 @@ public class MainActivity extends Activity {
         final android.widget.EditText in = def == null ? null : new android.widget.EditText(this);
         if (in != null) in.setText(def);
         boolean dark = uiDark();
+        // 页面的 confirm / alert / prompt 会一直停着等这个结果。对话框要是没回答就没了（分屏、旋转、窗口重建时系统直接收走，
+        // 不走 OnCancel），页面 JS 就永远卡住：内容还能滑，所有按钮和输入框都点不动，连雪花都没用（2026-10-21 群友报）。
+        // 所以只认一次回答，对话框不管怎么消失，没回答就当取消。
+        final boolean[] answered = { false };
+        final Runnable cancel = () -> { if (!answered[0]) { answered[0] = true; r.cancel(); } };
         android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this,
                 dark ? android.R.style.Theme_Material_Dialog_Alert : android.R.style.Theme_Material_Light_Dialog_Alert)
             .setMessage(msg).setCancelable(true)
-            .setOnCancelListener(d -> r.cancel());
+            .setOnCancelListener(d -> cancel.run())
+            .setOnDismissListener(d -> { cancel.run(); jsDialogs--; });
         if (in != null) b.setView(in);
-        b.setPositiveButton(android.R.string.ok, (d, w) -> { if (pr != null) pr.confirm(in.getText().toString()); else r.confirm(); });
-        if (withCancel) b.setNegativeButton(android.R.string.cancel, (d, w) -> r.cancel());
+        b.setPositiveButton(android.R.string.ok, (d, w) -> {
+            if (answered[0]) return;
+            answered[0] = true;
+            if (pr != null) pr.confirm(in.getText().toString()); else r.confirm();
+        });
+        if (withCancel) b.setNegativeButton(android.R.string.cancel, (d, w) -> cancel.run());
+        jsDialogs++;
         try {
             android.app.AlertDialog d = b.show();
             int accent = BrowserPane.pal(this, dark, "accent");
@@ -948,7 +998,7 @@ public class MainActivity extends Activity {
                 android.widget.Button bt = d.getButton(k);
                 if (bt != null) bt.setTextColor(accent);
             }
-        } catch (Exception e) { r.cancel(); }
+        } catch (Exception e) { jsDialogs = 0; cancel.run(); }
     }
     private android.graphics.drawable.Drawable roundBg(int color) {
         android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
