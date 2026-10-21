@@ -1458,4 +1458,7 @@ window.I18N_DICT.en = {
   "开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。": "The developer toolkit is split into modules by purpose — install only what you need. The base module is required; shared libraries are installed and removed automatically with the modules that use them.",
   // ── 工具包模块（0.3.9）
   "主要命令：": "Main commands:",
+  // ── 排队提示：没到并行上限时如实说是这个会话上一轮还没结束（0.3.10）
+  "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} waiting · this conversation's previous turn hasn't fully finished (background tasks running or wrapping up); they'll go out after it ends",
+  "已排队：这个会话的上一轮还没完全结束，结束后发出": "Queued: this conversation's previous turn hasn't fully finished; it will go out after that",
 };

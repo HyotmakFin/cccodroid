@@ -1426,4 +1426,6 @@ window.I18N_DICT["fr"] = {
   "工具包模块": "Modules de la boîte à outils",
   "开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。": "La boîte à outils de développement est découpée en modules selon l’usage : n’installez que ce qui vous sert. Le module de base est obligatoire ; les bibliothèques partagées s’installent et se retirent automatiquement avec les modules qui les utilisent.",
   "主要命令：": "Commandes principales :",
+  "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} en attente · le tour précédent de cette conversation n'est pas tout à fait terminé (tâches en arrière-plan ou finalisation) ; envoi dès qu'il se termine",
+  "已排队：这个会话的上一轮还没完全结束，结束后发出": "En file : le tour précédent de cette conversation n'est pas tout à fait terminé ; envoi dès qu'il se termine",
 };

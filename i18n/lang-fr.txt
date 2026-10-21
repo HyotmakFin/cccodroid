@@ -1423,3 +1423,5 @@
 1423	Modules de la boîte à outils
 1424	La boîte à outils de développement est découpée en modules selon l’usage : n’installez que ce qui vous sert. Le module de base est obligatoire ; les bibliothèques partagées s’installent et se retirent automatiquement avec les modules qui les utilisent.
 1425	Commandes principales :
+1426	{n} en attente · le tour précédent de cette conversation n'est pas tout à fait terminé (tâches en arrière-plan ou finalisation) ; envoi dès qu'il se termine
+1427	En file : le tour précédent de cette conversation n'est pas tout à fait terminé ; envoi dès qu'il se termine

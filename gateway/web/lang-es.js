@@ -1426,4 +1426,6 @@ window.I18N_DICT["es"] = {
   "工具包模块": "Módulos del kit de herramientas",
   "开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。": "El kit de desarrollo está dividido en módulos según su uso: instala solo lo que necesites. El módulo base es obligatorio; las bibliotecas compartidas se instalan y quitan solas con los módulos que las usan.",
   "主要命令：": "Comandos principales:",
+  "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} en espera · el turno anterior de esta conversación aún no ha terminado del todo (tareas en segundo plano o cierre); se enviarán cuando termine",
+  "已排队：这个会话的上一轮还没完全结束，结束后发出": "En cola: el turno anterior de esta conversación aún no ha terminado del todo; se enviará cuando termine",
 };
