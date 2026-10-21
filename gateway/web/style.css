@@ -390,6 +390,7 @@ td{color:var(--fg2)}
 }
 .btn:active{opacity:.85}
 .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg2)}
+.btn.ghost.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,var(--line))}
 .btn.sm{padding:7px 12px;font-size:12.5px;width:auto;margin-top:0}
 .btn.danger{border-color:var(--err-line);color:var(--err-fg)}
 

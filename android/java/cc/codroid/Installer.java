@@ -400,6 +400,8 @@ final class Installer {
             write(new File(dir, ".ok"), "{\"at\":" + System.currentTimeMillis() + "}\n");
         }
         try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
+        // 这一版的 carryOver 已经按相对路径认主了：告诉网关别对这份工具包做「旧版残留」清理（见 gw/orphans.mjs）
+        write(new File(env.files, ".orphans-v1"), "{\"by\":\"installer\",\"at\":" + System.currentTimeMillis() + "}\n");
         write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
         pend.delete();
         if (old.exists()) { ui.step(Tr.t("清理旧版本…")); deleteTree(old); }
@@ -409,6 +411,31 @@ final class Installer {
      * 启动时先调：上次装工具包被打断的话，把目录收拾到一致状态。
      * @return 动过东西（接着装完了，或者退回了旧版）
      */
+    /** 卸载工具包时先换名到这里再删：不能借用 usr.old，那是 recover() 眼里「退回旧版」的信号 */
+    File usrTrash() { return new File(env.files, "usr.trash"); }
+
+    /**
+     * 卸载开发工具包（设置页「卸载」）：整个 usr 连同装在里面的组件、模块、pip / npm -g 装的东西一起删，
+     * 组件记录也删（文件都在 usr 里）。home 里的会话、工作区、登录、设置不动。调用方负责先停网关，删完走首装流程。
+     */
+    void uninstallDevkit() throws IOException {
+        File trash = usrTrash();
+        if (trash.exists()) deleteTree(trash);
+        if (env.usr.exists() && !env.usr.renameTo(trash)) throw new IOException(Tr.t("换名失败: ") + env.usr);
+        ui.step(Tr.t("删除开发工具包文件…"));
+        deleteTree(trash);
+        deleteTree(new File(env.files, "components"));
+        deleteTree(new File(env.files, "devkit-stage"));
+    }
+
+    /** 卸载删到一半被打断留下的 usr.trash：启动时顺手删掉 */
+    void dropTrash() { deleteTree(usrTrash()); }
+
+    /** 卸载 Claude Code：删掉 install-claude.mjs 装的各个版本。~/.claude 里的登录、会话、设置不动 */
+    void uninstallClaude() {
+        deleteTree(new File(env.home, ".local/share/cccodroid/claude"));
+    }
+
     /** 有没有上次中断留下要收拾的东西。只看不动 —— 没有就别去停网关 */
     boolean needsRecovery() {
         File neu = usrNew(), old = usrOld();

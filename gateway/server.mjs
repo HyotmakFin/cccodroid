@@ -55,6 +55,7 @@ import { TERMS, routeTerminal } from "./gw/terminal.mjs";
 import { routeGit } from "./gw/git.mjs";
 import { routeComponents } from "./gw/components.mjs";
 import { routeModules } from "./gw/modules.mjs";
+import { cleanOrphans } from "./gw/orphans.mjs";
 import { customRefresh, routeCustom } from "./gw/custom.mjs";
 import { routeBus } from "./gw/bus.mjs";
 import { routeQueue } from "./gw/queue.mjs";
@@ -133,6 +134,7 @@ server.listen(CFG.port, "127.0.0.1", () => {
   try { reapOrphans(); } catch (e) { log("孤儿进程清理失败: " + e.message); }
   try { expireTrash(); } catch (e) { log("回收站清理失败: " + e.message); }
   try { customRefresh(); } catch (e) { log("自定义组件入口重写失败: " + e.message); }
+  try { cleanOrphans(); } catch (e) { log("旧工具包残留清理失败: " + e.message); }
 });
 
 // 启动后校验一次模型名：不在清单里就落到默认。

@@ -3909,7 +3909,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!confirm(t("将打开 GitHub 的新建 Issue 页面，下面这些会预先填好，提交前还能改：") + "\n\n" + (dev.length > 1500 ? dev.slice(0, 1500) + "…" : dev))) return;
     openExternal(r.url);
   });
-  const LEDGER_KIND = () => ({ verify: t("校验"), repair: t("修复"), install: t("安装"), recover: t("恢复"), "safe-mode": t("安全模式"), logs: t("日志") });
+  const LEDGER_KIND = () => ({ verify: t("校验"), repair: t("修复"), install: t("安装"), uninstall: t("卸载"), recover: t("恢复"), "safe-mode": t("安全模式"), logs: t("日志") });
   $("btn-ledger").addEventListener("click", async () => {
     const box = $("ledger-list");
     if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
@@ -4482,10 +4482,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       // 从本地文件装（离线、或者已经用电脑下好了）：外壳弹系统文件选择器，认身份、替换都在外壳里做
       const localBtn = it.id === "devkit" && !busy && window.CCApp && CCApp.pickDevkit
         ? `<button class="btn sm ghost" data-item="devkit" data-act="local" title="${esc(t("选一个已经下好的工具包文件来安装"))}">${t("本地文件…")}</button>` : "";
+      // 卸载：工具包回到首装（重选来源和模块）、Claude Code 重新下载；外壳做，老外壳没有这个接口就不显示
+      const unBtn = (it.id === "devkit" || it.id === "claude") && it.current && !busy && window.CCApp && CCApp.uninstall
+        ? `<button class="btn sm ghost danger" data-item="${it.id}" data-act="uninstall">${t("卸载")}</button>` : "";
       return `<div class="row-actions" style="justify-content:space-between">
         <div><b>${esc(it.name)}</b> <span class="tiny">${ver}</span><br>
           <span class="prov-state ${cls}" style="margin:0">${UPD_TEXT[it.state] || esc(it.state)}${prog}${it.message ? " · " + esc(it.message) : ""}</span></div>
-        <div class="row-actions">${verifyBtn}${localBtn}${btn ? `<button class="btn sm" data-item="${esc(it.id)}"${act ? ` data-act="${act}"` : ""}>${btn}</button>` : ""}</div></div>`;
+        <div class="row-actions">${verifyBtn}${localBtn}${unBtn}${btn ? `<button class="btn sm" data-item="${esc(it.id)}"${act ? ` data-act="${act}"` : ""}>${btn}</button>` : ""}</div></div>`;
     }).join("");
     const v = st.verify;
     if (v && v.manifest && (v.missing || v.changed) && (v.samples || []).length)
@@ -4500,6 +4503,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const item = e.target.dataset && e.target.dataset.item;
     if (!item) return;
     const act = e.target.dataset.act;
+    if (act === "uninstall") {
+      const msg = item === "devkit"
+        ? t("卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。")
+        : t("卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，随后自动重新下载最新版（约 275 MB）。\n\n登录、会话和设置都保留。");
+      if (!confirm(msg)) return;
+      CCApp.uninstall(item);
+      return;
+    }
     if (act === "local") {
       if (!confirm(t("从本地文件安装开发工具包？\n\n选一个 devkit-cc.codroid.tar.gz（或 .tar），可以在 GitHub 发布页或 cccodroid.net 下载。装之前会核对它是不是已发布的版本；装的时候暂停服务 1–2 分钟。\n你用 pip / npm -g 装进工具包的东西会被保留。"))) return;
       CCApp.pickDevkit();

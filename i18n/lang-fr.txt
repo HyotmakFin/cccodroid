@@ -1425,3 +1425,5 @@
 1425	Commandes principales :
 1426	{n} en attente · le tour précédent de cette conversation n'est pas tout à fait terminé (tâches en arrière-plan ou finalisation) ; envoi dès qu'il se termine
 1427	En file : le tour précédent de cette conversation n'est pas tout à fait terminé ; envoi dès qu'il se termine
+1428	Désinstaller le kit de développement ?\n\nLe kit entier est supprimé, avec les composants installés dedans, les modules ajoutés et tout ce que vous avez installé avec pip / npm -g / pkg, puis l’installation initiale reprend pour choisir à nouveau la source de téléchargement et les modules.\n\nConversations, espace de travail, connexion et réglages sont conservés. Les terminaux ouverts seront fermés.
+1429	Désinstaller Claude Code ?\n\nLe programme Claude Code téléchargé est supprimé, puis la dernière version est retéléchargée aussitôt (environ 275 Mo).\n\nConnexion, conversations et réglages sont conservés.

@@ -1425,3 +1425,5 @@
 1425	Comandos principales:
 1426	{n} en espera · el turno anterior de esta conversación aún no ha terminado del todo (tareas en segundo plano o cierre); se enviarán cuando termine
 1427	En cola: el turno anterior de esta conversación aún no ha terminado del todo; se enviará cuando termine
+1428	¿Desinstalar el kit de desarrollo?\n\nSe borra el kit completo, junto con los componentes instalados en él, los módulos añadidos y todo lo que hayas instalado con pip / npm -g / pkg; después vuelve la instalación inicial para elegir de nuevo el origen de descarga y los módulos.\n\nSe conservan las conversaciones, el espacio de trabajo, la sesión iniciada y los ajustes. Los terminales abiertos se cerrarán.
+1429	¿Desinstalar Claude Code?\n\nSe borra el programa Claude Code descargado y enseguida se vuelve a descargar la última versión (unos 275 MB).\n\nSe conservan la sesión iniciada, las conversaciones y los ajustes.

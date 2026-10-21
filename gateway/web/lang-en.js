@@ -1461,4 +1461,6 @@ window.I18N_DICT.en = {
   // ── 排队提示：没到并行上限时如实说是这个会话上一轮还没结束（0.3.10）
   "待发 {n} 条 · 这个会话的上一轮还没完全结束（后台任务在跑或正在收尾），结束后依次发出": "{n} waiting · this conversation's previous turn hasn't fully finished (background tasks running or wrapping up); they'll go out after it ends",
   "已排队：这个会话的上一轮还没完全结束，结束后发出": "Queued: this conversation's previous turn hasn't fully finished; it will go out after that",
+  "卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。": "Uninstall the development kit?\n\nThis deletes the whole kit, including the components installed in it, any extra modules, and anything you installed with pip / npm -g / pkg, then returns to first-time setup so you can choose the download source and modules again.\n\nConversations, workspace, sign-in and settings are kept. Open terminals will be closed.",
+  "卸载 Claude Code？\n\n删掉已下载的 Claude Code 程序，随后自动重新下载最新版（约 275 MB）。\n\n登录、会话和设置都保留。": "Uninstall Claude Code?\n\nThe downloaded Claude Code program is deleted and the latest version is downloaded again right away (about 275 MB).\n\nSign-in, conversations and settings are kept.",
 };

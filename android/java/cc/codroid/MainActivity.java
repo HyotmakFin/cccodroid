@@ -148,6 +148,7 @@ public class MainActivity extends Activity {
                     } finally { GatewayService.pause(false); }
                 }
                 Updater.get(this).dropStagedIfInstalled();
+                ins.dropTrash();                  // 卸载删到一半被打断的残骸
                 if (!env.devkitReady()) {
                     installFirstDevkit(ins);
                     say(Tr.t("✓ 开发工具包就绪"));
@@ -604,6 +605,45 @@ public class MainActivity extends Activity {
         }, "devkit-local").start();
     }
 
+    /**
+     * 卸载开发工具包 / Claude Code：界面切回安装页、停网关、删掉，再走一遍启动流程 ——
+     * 缺什么装什么，所以卸工具包 = 回到首装（重选来源和模块），卸 Claude Code = 重新下载最新版。
+     * 会话、工作区、登录、设置都在 home 里，不动。
+     */
+    private void uninstallUi(String item) {
+        new Thread(() -> {
+            if (Updater.gatewayBusy() || Updater.get(this).devkitMoving()) {
+                ui.post(() -> android.widget.Toast.makeText(this, Tr.t("有任务正在跑，等它结束再卸载"), android.widget.Toast.LENGTH_LONG).show());
+                return;
+            }
+            CountDownLatch shown = new CountDownLatch(1);
+            ui.post(() -> {
+                if (web != null) { web.destroy(); web = null; }
+                booted = false;
+                buildSetupUi();
+                shown.countDown();
+            });
+            boolean dk = "devkit".equals(item);
+            try {
+                shown.await();
+                Installer ins = new Installer(env, new Installer.Progress() {
+                    public void step(String m) { say(m); }
+                    public void bytes(long d, long t) { progress(d, t); }
+                });
+                say(dk ? Tr.t("卸载开发工具包…") : Tr.t("卸载 Claude Code…"));
+                GatewayService.pause(true);
+                try { if (dk) ins.uninstallDevkit(); else ins.uninstallClaude(); }
+                finally { GatewayService.pause(false); }
+                Ledger.add(env, "uninstall", true, dk ? Tr.t("卸载开发工具包") : Tr.t("卸载 Claude Code"), null);
+                say(dk ? Tr.t("✓ 已卸载。接下来重新安装开发工具包：") : Tr.t("✓ 已卸载。接下来重新下载 Claude Code："));
+            } catch (Exception e) {
+                Ledger.add(env, "uninstall", false, e.getMessage(), null);
+                say("✗ " + e.getMessage());
+            }
+            ui.post(this::boot);
+        }, "uninstall").start();
+    }
+
     /** 替换工具包：网关要停，界面切回进度页，装完再回来 */
     private void applyDevkitUi() {
         Updater upd = Updater.get(this);
@@ -937,6 +977,10 @@ public class MainActivity extends Activity {
             /** 更新卡片的「从本地文件安装」：弹系统文件选择器，选好后由 applyLocalDevkitUi 接手 */
             @android.webkit.JavascriptInterface public void pickDevkit() {
                 ui.post(() -> { pickWait = null; try { startActivityForResult(devkitPickIntent(), REQ_DEVKIT); } catch (Exception ignored) {} });
+            }
+            /** 设置页「卸载」：devkit / claude。确认框在页面里弹过了 */
+            @android.webkit.JavascriptInterface public void uninstall(String item) {
+                if ("devkit".equals(item) || "claude".equals(item)) uninstallUi(item);
             }
             @android.webkit.JavascriptInterface public void unfreeze() { ui.post(() -> bounce()); }
             /** 更新说明（见 WhatsNew）：页面启动时来取，显示出来后调 whatsNewSeen */
