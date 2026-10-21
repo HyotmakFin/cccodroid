@@ -464,6 +464,25 @@ a.weblink{overflow-wrap:anywhere}
 }
 .sheet-item:active{background:var(--bg3)}
 
+/* 模型与思考强度的快速切换（点输入栏下的模型名） */
+#model-chip{cursor:pointer}
+#model-pick{position:fixed;inset:0;z-index:56;background:var(--scrim);display:flex;align-items:flex-end}
+.mp-panel{max-height:min(80%,620px);display:flex;flex-direction:column;max-width:720px;margin:0 auto}
+.mp-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 6px}
+.mp-x{background:none;border:0;color:var(--fg3);font-size:16px;padding:6px 10px}
+.mp-lbl{font-size:11.5px;color:var(--fg3);margin:8px 4px 4px}
+.mp-eff{display:flex;flex-wrap:wrap;gap:6px;padding:0 2px}
+.mp-eff .cur{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mp-q{margin:2px 0 6px}
+.mp-list{overflow-y:auto;overscroll-behavior:contain;min-height:120px;flex:1}
+.mp-sec{font-size:11px;color:var(--fg3);margin:8px 6px 2px}
+.mp-item{display:block;width:100%;text-align:start;background:none;border:0;color:var(--fg);font:inherit;font-size:13.5px;padding:9px 10px;border-radius:9px;word-break:break-all}
+.mp-item small{display:block;color:var(--fg3);font-size:11px;margin-top:1px}
+.mp-item.cur{background:var(--bg3)}
+.mp-item.cur span{color:var(--accent)}
+.mp-item:active{background:var(--bg3)}
+.mp-note{margin:6px 4px 0}
+
 /* toast */
 #toast{
   position:fixed;left:50%;bottom:calc(var(--safe-b) + 88px);transform:translateX(-50%);

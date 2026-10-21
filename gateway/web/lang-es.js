@@ -1373,4 +1373,13 @@ window.I18N_DICT["es"] = {
   "返回 / 主页等按键": "Atrás / inicio y otras teclas",
   "截屏": "Captura de pantalla",
   "默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。": "Desactivado por defecto. Actívalo cuando quieras que Claude pruebe una app que estás creando o envíe a otra app los archivos que genera; mientras está activo, cada turno lleva entre mil y dos mil tokens extra de descripciones de herramientas.",
+  "模型与思考强度": "Modelo y esfuerzo de razonamiento",
+  "思考强度": "Esfuerzo de razonamiento",
+  "搜索模型": "Buscar modelos",
+  "从下一条消息起生效。": "Se aplica a partir del próximo mensaje.",
+  "这个模型没有可选的思考强度": "Este modelo no tiene niveles de esfuerzo",
+  "最近用过": "Usados recientemente",
+  "全部 {n} 个": "Todos ({n})",
+  "没有匹配的模型": "Ningún modelo coincide",
+  "切换模型与思考强度": "Cambiar modelo y esfuerzo de razonamiento",
 };

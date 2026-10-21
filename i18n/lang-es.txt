@@ -1370,3 +1370,12 @@
 1370	Atrás / inicio y otras teclas
 1371	Captura de pantalla
 1372	Desactivado por defecto. Actívalo cuando quieras que Claude pruebe una app que estás creando o envíe a otra app los archivos que genera; mientras está activo, cada turno lleva entre mil y dos mil tokens extra de descripciones de herramientas.
+1373	Modelo y esfuerzo de razonamiento
+1374	Esfuerzo de razonamiento
+1375	Buscar modelos
+1376	Se aplica a partir del próximo mensaje.
+1377	Este modelo no tiene niveles de esfuerzo
+1378	Usados recientemente
+1379	Todos ({n})
+1380	Ningún modelo coincide
+1381	Cambiar modelo y esfuerzo de razonamiento

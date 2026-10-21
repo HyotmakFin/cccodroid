@@ -1403,4 +1403,13 @@ window.I18N_DICT.en = {
   "返回 / 主页等按键": "Back / home and other keys",
   "截屏": "Screenshot",
   "默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。": "Off by default. Turn it on when you want Claude to test an app you're building or send files it made to another app; while on, every turn carries one or two thousand extra tokens of tool descriptions.",
+  "模型与思考强度": "Model & thinking effort",
+  "思考强度": "Thinking effort",
+  "搜索模型": "Search models",
+  "从下一条消息起生效。": "Takes effect from your next message.",
+  "这个模型没有可选的思考强度": "This model has no effort levels to choose from",
+  "最近用过": "Recently used",
+  "全部 {n} 个": "All {n}",
+  "没有匹配的模型": "No matching models",
+  "切换模型与思考强度": "Switch model & thinking effort",
 };

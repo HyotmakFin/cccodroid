@@ -1370,3 +1370,12 @@
 1370	Retour / accueil et autres touches
 1371	Capture d’écran
 1372	Désactivé par défaut. Activez-le quand Claude doit tester une appli que vous développez ou envoyer ses fichiers vers une autre appli ; tant qu’il est actif, chaque tour ajoute un à deux mille jetons de description d’outils.
+1373	Modèle et effort de réflexion
+1374	Effort de réflexion
+1375	Rechercher un modèle
+1376	S’applique à partir du prochain message.
+1377	Ce modèle n’a pas de niveaux d’effort
+1378	Utilisés récemment
+1379	Tous ({n})
+1380	Aucun modèle correspondant
+1381	Changer de modèle et d’effort de réflexion

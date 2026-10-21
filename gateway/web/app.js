@@ -1772,7 +1772,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       case "init": {
         if (!view.runIds.has(ev.runId)) return;
         if (!view.sessionId && ev.sessionId) { view.sessionId = ev.sessionId; saveUiState(); }
-        if (ev.model) { state.model = ev.model; modelEl.textContent = ev.model; }
+        if (ev.model) { state.model = ev.model; paintModel(ev.model); }
         if (ev.permissionMode) setPermChip(ev.permissionMode);
         return;
       }
@@ -4982,6 +4982,91 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
   }
 
+  // ── 模型标签与快速切换（输入栏下面那一行最左边）──
+  // 标签写「模型 · 思考强度」；点它从底部弹面板：上面一排思考强度，下面搜索 + 最近用过 + 全部模型。
+  // 不占输入区的地方。OpenRouter 这类几十上百个模型的，靠搜索框过滤。
+  const RECENT_KEY = "cc.recentModels";
+  function paintModel(name) {
+    state.chipModel = name;
+    const eff = state.settings && state.settings.effort;
+    modelEl.textContent = name + (eff ? " · " + eff : "");
+  }
+  modelEl.setAttribute("role", "button");
+  modelEl.tabIndex = 0;
+  modelEl.addEventListener("click", (e) => { e.stopPropagation(); openModelPicker(); });
+
+  async function openModelPicker() {
+    if ($("model-pick")) return;
+    const m = document.createElement("div");
+    m.id = "model-pick";
+    m.innerHTML = `<div class="sheet-panel mp-panel">
+      <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">✕</button></div>
+      <div class="mp-lbl">${t("思考强度")}</div><div class="mp-eff"></div>
+      <div class="mp-lbl">${t("模型")}</div>
+      <input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}">
+      <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
+      <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
+    document.body.appendChild(m);
+    const close = () => m.remove();
+    m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
+    let info;
+    try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
+    if (!m.isConnected) return;
+    MODELS = info.models || MODELS;
+    const cur = () => (state.settings && state.settings.model) || "";
+
+    const effBox = m.querySelector(".mp-eff");
+    const paintEff = (levels, now) => {
+      const opts = [["", t("默认")], ...levels.map((l) => [l, l])];
+      effBox.innerHTML = levels.length
+        ? opts.map(([v, l]) => `<button type="button" class="btn sm ghost${v === now ? " cur" : ""}" data-eff="${esc(v)}">${esc(l)}</button>`).join("")
+        : `<span class="tiny">${t("这个模型没有可选的思考强度")}</span>`;
+    };
+    paintEff(info.effortLevels || [], info.effort || "");
+    effBox.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-eff]");
+      if (!b) return;
+      await saveSettings({ effort: b.dataset.eff });
+      paintEff(info.effortLevels || [], b.dataset.eff);
+      const se = $("set-effort"); if (se) se.value = b.dataset.eff;
+      paintModel(state.chipModel || cur() || t("默认"));
+    });
+
+    const list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
+    const row = (id, sub) => `<button type="button" class="mp-item${id === cur() ? " cur" : ""}" data-id="${esc(id)}"><span>${esc(id || t("默认"))}</span>${sub ? `<small>${esc(sub)}</small>` : ""}</button>`;
+    const meta = (md) => {
+      const ctx = md.context_window ? Math.round(md.context_window / 1024) + "k" : "";
+      return [md.name && md.name !== md.id ? md.name : "", ctx, (md.input_modalities || []).includes("image") ? "🖼" : ""].filter(Boolean).join(" · ");
+    };
+    const paintList = () => {
+      const kw = q.value.trim().toLowerCase();
+      const all = MODELS.filter((md) => !kw || md.id.toLowerCase().includes(kw) || String(md.name || "").toLowerCase().includes(kw));
+      let html = "";
+      if (!kw) {
+        if (info.nativeModels) html += row("", info.defaultModel ? t("（默认：{model}）", { model: info.defaultModel }) : t("（默认，由 claude 决定）"));
+        const rec = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")).filter((id) => MODELS.some((md) => md.id === id));
+        if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(MODELS.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: MODELS.length })}</div>`;
+      }
+      html += all.slice(0, 300).map((md) => row(md.id, meta(md))).join("");
+      if (!all.length) html += `<div class="tiny">${MODELS.length ? t("没有匹配的模型") : t("（该厂商不提供模型清单）")}</div>`;
+      list.innerHTML = html;
+    };
+    paintList();
+    q.addEventListener("input", paintList);
+    list.addEventListener("click", async (e) => {
+      const b = e.target.closest(".mp-item");
+      if (!b) return;
+      const id = b.dataset.id;
+      if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
+      close();
+      if (id === cur()) return;
+      await saveSettings({ model: id });
+      await loadModels();                                // 换模型后思考强度的档位可能不同
+      const sm = $("set-model"); if (sm) sm.value = id;
+      paintModel(id || state.model || t("默认"));
+    });
+  }
+
   /** 模型与 effort 档位都从厂商的 /models 实时拉 */
   async function loadModels(refresh) {
     try {
@@ -5062,7 +5147,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           `<option value="${esc(o.id)}">${esc(o.id)}${o.desc ? " · " + esc(o.desc) : ""}</option>`).join("");
       $("set-style").value = state.settings.outputStyle || "";
       // 没指定模型时别把顶栏写成 "—"：init 报过的真实模型更有用
-      modelEl.textContent = state.settings.model || state.model || t("默认");
+      paintModel(state.settings.model || state.model || t("默认"));
       setPermChip(state.settings.permissionMode || "default");
       renderPermBar();
       renderDirs();
@@ -5098,7 +5183,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         body: JSON.stringify(patch),
       });
       state.settings = { ...state.settings, ...(r.settings || {}) };
-      modelEl.textContent = state.settings.model || state.model || t("默认");
+      paintModel(state.settings.model || state.model || t("默认"));
       setPermChip(state.settings.permissionMode || "default");
       renderDirs();
             toast(t("已保存"));
@@ -6846,6 +6931,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (a === "attach") return pickFiles();
     if (a === "shot" || a === "shot5") return screenshot(a === "shot5" ? 5 : 0);
     if (a === "browse") return openFiles();
+    if (a === "model" || a === "effort") return openModelPicker();
     send("/" + a);
   });
 
@@ -6869,7 +6955,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("btn-issue").classList.toggle("hidden", s.product !== "cccodroid"); $("issue-hint").classList.toggle("hidden", s.product !== "cccodroid");
       $("share-logs-hint").classList.toggle("hidden", s.product !== "cccodroid");
       $("btn-ledger").classList.toggle("hidden", !s.hasLedger);
-      modelEl.textContent = s.model || "—";
+      paintModel(s.model || "—");
       state.model = s.model;
       $("status-box").textContent =
                 `${t("网关")}     ${s.version} (pid ${s.pid})\n` +

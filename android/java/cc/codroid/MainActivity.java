@@ -209,6 +209,12 @@ public class MainActivity extends Activity {
         if (booted) handle(i); else pending = i;
     }
 
+    @Override public void onWindowFocusChanged(boolean has) {
+        super.onWindowFocusChanged(has);
+        // 只在窗口里谁都没焦点时补：应用内浏览器的地址栏 / 网页正拿着焦点时别抢
+        if (has && web != null && web.getParent() != null && getCurrentFocus() == null) web.requestFocus();
+    }
+
     @Override protected void onResume() { super.onResume(); visible = true; Battery.foreground(true);
         if (pane != null) pane.resume();
         getSystemService(android.app.NotificationManager.class).cancel(41);    // Priv.toFront 的「点此回来」
@@ -893,6 +899,11 @@ public class MainActivity extends Activity {
         root.removeAllViews();
         root.addView(web);
         root.requestApplyInsets();            // 顶部留白交给页面（--safe-t）
+        // 首次启动：安装界面的原生控件刚被整个拿掉，紧接着还可能弹「开启通知」对话框。WebView 没拿到焦点时，
+        // 点输入框键盘起不来 / 字打不进去，只有脱困（整页重载）才好。这里主动要焦点，窗口回到前台时再补一次（onWindowFocusChanged）
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.requestFocus();
     }
 
     // ── 冻结脱困 ─────────────────────────────────────────────────────
