@@ -176,6 +176,27 @@ function baseVersions() {
   }
   return new Map(((l && l.packages) || []).map((p) => [p.name, p.version]));
 }
+/** 模块化工具包（0.4.0 起）：没装的模块里有哪些包（包名 → 模块名）。这些包归模块管，pkg 不另装一份 ——
+ *  不然以后装模块就和 pkg 装的撞了。整包工具包返回空表 */
+function absentModulePkgs() {
+  const m = new Map();
+  const mj = readJson(path.join(PREFIX, "libexec/devkit/modules.json"), null);
+  for (const b of (mj && mj.modules) || []) {
+    if (b.kind === "base" || fs.existsSync(path.join(PREFIX, b.dir, ".ok"))) continue;
+    // 共享层不单独露面：报给用它的模块
+    const name = b.kind === "shared" ? (b.users || []).map((u) => ((mj.modules.find((x) => x.id === u) || {}).name || {}).zh || u).join("、") : (b.name || {}).zh || b.id;
+    for (const p of b.packages || []) if (!m.has(p.name)) m.set(p.name, name);
+  }
+  return m;
+}
+function dieForModules(names) {
+  const mods = absentModulePkgs(), hit = new Map();
+  for (const n of names) if (mods.has(n)) hit.set(mods.get(n), [...(hit.get(mods.get(n)) || []), n]);
+  if (!hit.size) return;
+  die([...hit].map(([mod, ns]) => `${ns.slice(0, 6).join("、")}${ns.length > 6 ? " 等" : ""} 在工具包的「${mod}」模块里`).join("\n") +
+    "\n先到 扩展 → 工具包模块 装上它，再来 pkg install（不另装一份，免得和模块撞）");
+}
+
 /** 盘上所有包（工具包、组件、pkg 装的）：名字来自 var/lib/dpkg/info/*.list */
 function onDisk() {
   const s = new Set();
@@ -633,7 +654,9 @@ function install(names, { unverified = false, auto = false, upgrade = false } = 
     roots.push(real);
   }
   if (!roots.length) return;
+  dieForModules(roots);
   const { order, problems } = solve(roots, { upgrade });
+  dieForModules(order);
   if (problems.length) {
     console.error("依赖有问题：\n  " + problems.join("\n  "));
     if (!unverified) die("没有装（加 --unverified 可以硬装，后果自负）");

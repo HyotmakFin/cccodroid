@@ -11,9 +11,13 @@ t() { # t 名称 命令… —— 每项限时 90 秒，卡住的算失败，不
   if [ $rc -eq 0 ]; then NP=$((NP+1)); [ -z "$Q" ] && echo "PASS $name :: $(echo "$out" | tail -1 | cut -c1-100)"
   else NF=$((NF+1)); echo "FAIL $name (rc=$rc$([ $rc = 124 ] && echo ' 超时')) :: $(echo "$out" | tr '\n' ' ' | cut -c1-300)"; fi
 }
+# 模块化工具包（0.4.0 起）：没装的模块整节跳过（打 SKIP，不算失败 —— 不然 Claude 会以为是这台设备坏了）。整包工具包一律算装了
+has() { [ ! -f "$PREFIX/libexec/devkit/modules.json" ] || [ -f "$PREFIX/libexec/devkit/modules/$1/.ok" ]; }
+skip() { echo "SKIP $1 :: 「$2」模块没装"; }
 echo "== 环境"; echo "PREFIX=$PREFIX TMPDIR=$TMPDIR"; echo "PATH=$PATH"; echo "LD_PRELOAD=${LD_PRELOAD:-（无）}"
 echo "== 工作区"
-t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf 'int main(){return 0;}' > .st.c && cc .st.c -o .st && ./.st && rm -f .st .st.c && echo ok"
+if has build; then t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf 'int main(){return 0;}' > .st.c && cc .st.c -o .st && ./.st && rm -f .st .st.c && echo ok"
+else t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf '#!/system/bin/sh\necho ok\n' > .st.sh && chmod +x .st.sh && ./.st.sh && rm -f .st.sh"; fi
 t "工作区符号链接" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && ln -sf /system .st-ln && rm .st-ln && echo ok"
 echo "== 基础路径"
 for p in /bin/sh /bin/bash /usr/bin/env /usr/bin/python3 /tmp /etc/resolv.conf /etc/ssl/certs; do [ -e $p ] && echo "有 $p" || echo "无 $p"; done
@@ -24,7 +28,8 @@ printf '#!/bin/bash\necho ok-binbash\n' > s3; chmod +x s3; t "shebang /bin/bash"
 printf '#!/usr/bin/env python3\nprint("ok-py")\n' > s4; chmod +x s4; t "shebang env python3" ./s4
 printf '#!/usr/bin/env node\nconsole.log("ok-node")\n' > s5; chmod +x s5; t "shebang env node" ./s5
 echo "== C/C++"
-printf '#include <stdio.h>\nint main(){printf("hi-c\\n");return 0;}\n' > a.c
+printf '#include <stdio.h>\nint main(){printf("hi-c\\n");return 0;}\n' > a.c      # 后面 grep / tar 那几项也用它
+if has build; then
 t "cc" "cc a.c -o a && ./a"
 t "gcc 名字" "gcc --version | head -1"
 printf '#include <iostream>\n#include <ranges>\n#include <vector>\nint main(){std::vector v{1,2,3};for(int x: v|std::views::reverse)std::cout<<x;std::cout<<"\\n";}\n' > b.cpp
@@ -40,6 +45,7 @@ t "autotools 风格 ./configure" "printf '#!/bin/sh\necho configured\n' > config
 t "gdb" "gdb -batch -ex run -ex bt ./a 2>&1 | tail -2"
 t "strace" "strace -c -o /dev/null ./a"
 t "patchelf" "patchelf --print-interpreter ./a"
+else skip C/C++ "C/C++ 构建"; fi
 echo "== Python"
 t "python3" "python3 -c 'import sys,ssl,sqlite3,zlib,ctypes;print(sys.version.split()[0],ssl.OPENSSL_VERSION)'"
 t "python https" "python3 -c 'import urllib.request;print(urllib.request.urlopen(\"https://pypi.org/simple/\",timeout=20).status)'"
@@ -59,6 +65,7 @@ t "npx" "cd np && npx --no-install semver 2.0.0"
 t "npm exec shell" "cd np && npm pkg set scripts.t='echo script-ok' && npm run -s t"
 t "child_process.exec" "node -e 'require(\"child_process\").exec(\"echo cp\",(e,o)=>console.log(e?e.message:o.trim()))'"
 echo "== Java/Android"
+if has android; then
 printf 'public class H{public static void main(String[] a){System.out.println("hi-java");}}\n' > H.java
 t "javac+java" "javac H.java && java H"
 t "java 单文件" "java H.java"
@@ -67,6 +74,7 @@ t "aapt2" "aapt2 version"
 t "d8" "d8 --version"
 t "apksigner" "apksigner --version"
 t "keytool" "keytool -genkeypair -alias a -keyalg RSA -keysize 2048 -dname CN=t -keystore k.p12 -storepass 123456 -validity 1 -storetype pkcs12 >/dev/null && ls k.p12"
+else skip Java/Android "安卓打包"; fi
 echo "== VCS/网络"
 t "git" "git init -q g && cd g && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m x && git log --oneline | wc -l"
 t "git https clone" "git clone -q --depth 1 https://github.com/octocat/Hello-World.git hw && ls hw"
@@ -75,19 +83,25 @@ t "ssh" "ssh -V"
 t "ssh-keygen" "ssh-keygen -q -t ed25519 -N '' -f kk && ls kk.pub"
 t "openssl" "openssl version"
 echo "== CLI"
+if has cli; then
 t "rg" "rg --version | head -1"; t "fd" "fd --version"; t "bat" "bat --version"; t "delta" "delta --version"
 t "hx" "hx --version"; t "yq" "yq --version"; t "jq" "echo '{\"a\":1}' | jq .a"; t "sqlite3" "sqlite3 :memory: 'select 1+1'"
+t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
+else skip "rg/fd/bat/delta/hx/jq/yq/sqlite3/man" "命令行增强"; fi
+if has extra; then
 t "typst" "printf '= Hi\n' > d.typ && typst compile d.typ && ls d.pdf"
 t "duckdb" "duckdb -c 'select 42'"
 t "magick" "magick -size 8x8 xc:red r.png && magick identify r.png"
+else skip "typst/duckdb/magick" "文档与数据"; fi
 t "grep -r" "grep -rc hi-c a.c"; t "find" "find . -maxdepth 1 -name 'a.c'"; t "sed/awk" "echo a | sed s/a/b/ | awk '{print \$1}'"
 t "tar/xz/zstd/zip" "tar cJf x.txz a.c && tar cf - a.c | zstd -q > x.zst && zip -q x.zip a.c && unzip -l x.zip | tail -1"
 t "less/file" "file a"
-t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
 t "pkg（应用自带）" "pkg verified | grep -q '^rust ' && pkg list >/dev/null && echo \"\$(command -v pkg)\""
 t "su/sudo 不应存在" "! command -v sudo"
 echo "== 音视频（ffmpeg）"
-if command -v ffmpeg >/dev/null; then
+if ! has media; then
+  skip ffmpeg "音视频"
+elif command -v ffmpeg >/dev/null; then
   t "ffmpeg" "ffmpeg -hide_banner -version | head -1"
   t "ffmpeg 软编 x264 + ffprobe" "ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=duration=1:size=320x240:rate=15 -c:v libx264 -pix_fmt yuv420p sw.mp4 && ffprobe -v error -count_frames -select_streams v -show_entries stream=codec_name,nb_read_frames -of csv=p=0 sw.mp4"
   # MediaCodec 硬件编码因机型而异（看芯片和厂商驱动）：只报告，不算失败
@@ -100,8 +114,11 @@ else
   echo "INFO ffmpeg :: 工具包较旧，没有 ffmpeg（设置 → 更新开发工具包后再测）"
 fi
 echo "== 残留路径"
+# 下面两项靠 rg（命令行增强模块）
+if has cli; then
 t "残留 com.termux 文本" "n=\$(rg -l --no-messages -uu 'com\\.termux' \$PREFIX/bin \$PREFIX/etc \$PREFIX/lib/python3*/site-packages 2>/dev/null | head -20 | tee /dev/stderr | wc -l); echo \$n 个"
 t "/tmp 硬编码" "rg -l --no-messages -uu '\"/tmp' \$PREFIX/bin 2>/dev/null | head -5 | wc -l"
+fi
 cd /; rm -rf "$W"
 echo "== Claude Code"
 t "claude 命令" "claude --version"

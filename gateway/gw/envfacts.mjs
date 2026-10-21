@@ -6,6 +6,7 @@ import { ensureShell, killTree } from "./claude.mjs";
 import { RUNS } from "./runs.mjs";
 import { termEnv } from "./terminal.mjs";
 import { COMP_DIR, compRecord, devkitIdentity } from "./components.mjs";
+import { modInstalled, modulesInfo } from "./modules.mjs";
 
 // ── 本机实况：TOOLS.md 是打包时在测试机上测的，这里补上「这台设备上实际怎样」 ──
 // 自检（cccodroid-selftest）在本机跑一遍，失败项和 INFO（比如有没有硬件编码器）接在 TOOLS.md 后面；
@@ -14,7 +15,9 @@ export const ENV_FACTS = PREFIX ? path.join(CFG.home, ".cccodroid-env.json") : "
 export function envFactsKey() {
   const dk = devkitIdentity() || {};
   let tag = ""; try { tag = fs.readFileSync(path.join(HERE, "TAG"), "utf8").trim(); } catch {}
-  return `${dk.sha256 || dk.tag || "?"}|${tag}`;
+  // 模块化工具包：装 / 卸模块后也要重测（自检按已装模块跑）
+  const mj = modulesInfo(), mods = mj ? (mj.modules || []).filter((m) => modInstalled(mj, m.id)).map((m) => m.id).join(",") : "";
+  return `${dk.sha256 || dk.tag || "?"}|${tag}${mods ? "|" + mods : ""}`;
 }
 let envFactsJob = null;
 function envFactsRun() {
@@ -53,10 +56,26 @@ function envFactsTick() {
 }
 if (PREFIX) { setTimeout(envFactsTick, 2 * 60e3).unref?.(); setInterval(envFactsTick, 5 * 60e3).unref?.(); }
 
+const pickDesc = (m) => (m.desc && m.desc.zh) || "";
 export function envFacts() {
   const out = [];
   const dk = devkitIdentity();
   if (dk && dk.tag) out.push(`- 工具包：${dk.tag}`);
+  // 模块化工具包：装了哪些模块；没装的模块里的命令现在用不了 —— TOOLS.md 是按全装写的，这里纠正
+  const mj = modulesInfo();
+  if (mj) {
+    const mods = (mj.modules || []).filter((m) => m.kind !== "shared");
+    const on = mods.filter((m) => modInstalled(mj, m.id)), off = mods.filter((m) => !modInstalled(mj, m.id));
+    out.push(`- 工具包模块：已装 ${on.map((m) => m.name.zh || m.id).join("、")}`);
+    if (off.length) {
+      out.push("- **没装的模块**（下面这些命令现在不可用，TOOLS.md 里写到的也一样；用户需要时请他到 扩展 → 工具包模块 安装，别用 pkg 另装一份）：");
+      for (const m of off) {
+        // 先列主要命令（devkit.json 的 key），没有就只说是库
+        const k = m.key && m.key.length ? m.key : [];
+        out.push(`  - ${m.name.zh || m.id}（约 ${Math.round((m.installed || 0) / 1048576)} MB）：${k.length ? k.join(" ") + ((m.commands || []).length > k.length ? ` 等 ${m.commands.length} 个命令` : "") : pickDesc(m)}`);
+      }
+    }
+  }
   // 扩展页装的组件
   try {
     const comps = fs.readdirSync(COMP_DIR).filter((f) => f.endsWith(".json")).map((f) => compRecord(f.slice(0, -5)))

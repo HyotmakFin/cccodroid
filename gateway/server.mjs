@@ -31,6 +31,7 @@
 //    git         git 可视化                             extensions  插件 / 技能 / MCP / Hooks / 官方目录
 //    components  可选组件、gh 登录                      local       端侧小模型与模型下载
 //    custom      自定义组件                             office      Office 文档
+//    modules     模块化工具包（加装 / 卸载单个模块）
 //
 //  每个模块导出一个 routeXxx(req, res, u, p)：认领的请求自己回完；不归它管就返回 NEXT。
 //  模块之间互相导入；ES 模块的导入是只读的，跨模块改状态走对方导出的函数（如 dropModelCache）。
@@ -53,6 +54,7 @@ import { routePreview } from "./gw/preview.mjs";
 import { TERMS, routeTerminal } from "./gw/terminal.mjs";
 import { routeGit } from "./gw/git.mjs";
 import { routeComponents } from "./gw/components.mjs";
+import { routeModules } from "./gw/modules.mjs";
 import { customRefresh, routeCustom } from "./gw/custom.mjs";
 import { routeBus } from "./gw/bus.mjs";
 import { routeQueue } from "./gw/queue.mjs";
@@ -67,7 +69,7 @@ import { routeExtensions } from "./gw/extensions.mjs";
 import { COOKIE, TOKEN, denyLog, denyReason, tokenOk } from "./gw/access.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
-const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun];
+const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeModules, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun];
 
 // ── 路由 ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {

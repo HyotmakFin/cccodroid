@@ -1385,3 +1385,41 @@
 1385	Búsqueda · Seguir al sistema
 1386	Búsqueda · Claro
 1387	Búsqueda · Oscuro
+1388	Claude Code en sí
+1389	Panel de Git
+1390	Inicio de Shizuku con un toque (depuración inalámbrica)
+1391	Claude busca código y revisa diferencias
+1392	Compilar programas nativos
+1393	Crear APK
+1394	Depuración USB
+1395	Componentes de GPU (Blender, navegador…)
+1396	Procesamiento de audio y vídeo
+1397	Maquetación, análisis de tablas, procesamiento de imágenes
+1398	Obligatorio
+1399	Bibliotecas compartidas
+1400	Ocupa {b}
+1401	Lo usa en la app: {list}
+1402	Depende de: {list}
+1403	Lo usan estos módulos: {list}
+1404	Lo están usando: {list}
+1405	{n} comandos, {p} paquetes
+1406	Origen: repositorios oficiales de Termux · instantánea {s}
+1407	Instalar (unos {a})
+1408	{names} lo necesitan; desinstálalos primero
+1409	¿Desinstalar este módulo? Sus comandos se quitan del kit de herramientas; se conservan los archivos que aún usan otros módulos o componentes. Puedes volver a instalarlo cuando quieras.
+1410	También se instalará: {list}. ¿Continuar?
+1411	Primero instala estos módulos del kit: {names} (en «Módulos del kit de herramientas», arriba en Extensiones)
+1412	No existe el módulo: {id}
+1413	El kit de herramientas actual es de un solo bloque; no hay módulos que instalar
+1414	Se está instalando otro módulo; vuelve a intentarlo cuando termine
+1415	El kit se instaló desde un archivo local, así que no se sabe de qué versión descargar los módulos. Actualízalo primero una vez en Ajustes
+1416	No hay espacio suficiente: se necesitan unos {need} MB y solo quedan {free} MB
+1417	Falta un archivo en el paquete del módulo: {file}
+1418	Un archivo del paquete del módulo no superó la verificación: {file}
+1419	El kit de herramientas actual es de un solo bloque; no hay módulos que desinstalar
+1420	El módulo base no se puede desinstalar
+1421	Las bibliotecas compartidas van con los módulos que las usan y no se pueden desinstalar por separado
+1422	Se está instalando un módulo; vuelve a intentarlo cuando termine
+1423	Módulos del kit de herramientas
+1424	El kit de desarrollo está dividido en módulos según su uso: instala solo lo que necesites. El módulo base es obligatorio; las bibliotecas compartidas se instalan y quitan solas con los módulos que las usan.
+1425	Comandos principales:

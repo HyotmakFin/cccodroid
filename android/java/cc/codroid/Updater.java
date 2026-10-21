@@ -69,6 +69,10 @@ final class Updater {
         volatile String url, alt, sha, base, tarSha;
         volatile long size, need;
         volatile File file;
+        // 模块化工具包（0.4.0 起）：modules.json 原文、它的 sha256、要装的模块。file 指向落盘的 modules.json（全部块下完才写，等于「已下好」的记号）
+        volatile byte[] modules;
+        volatile String modSha;
+        volatile java.util.List<String> moduleIds;
         Item(String id, String name) { this.id = id; this.name = name; }   // name 存中文原句，输出时才按当前语言翻（单例建得早，那时界面可能还没报语言）
         JSONObject json() throws Exception {
             return new JSONObject().put("id", id).put("name", Tr.t(name)).put("current", current).put("latest", latest)
@@ -93,6 +97,13 @@ final class Updater {
                 devkit.size = st.getLong("size"); devkit.url = devkit.base + f.getName(); devkit.latest = tagOf(devkit.base);
                 devkit.alt = devkitMirror(devkit.base, f.getName());
                 devkit.tarSha = st.optString("tarSha256", null);
+                if (st.has("modSha")) {
+                    devkit.modules = java.nio.file.Files.readAllBytes(f.toPath());
+                    devkit.modSha = st.getString("modSha");
+                    devkit.moduleIds = new java.util.ArrayList<>();
+                    JSONArray ids = st.optJSONArray("moduleIds");
+                    if (ids != null) for (int i = 0; i < ids.length(); i++) devkit.moduleIds.add(ids.getString(i));
+                }
                 devkit.set("ready", "");
                 dropStagedIfInstalled();
             }
@@ -341,8 +352,44 @@ final class Updater {
         devkit.url = base + gz.getString("file");
         devkit.alt = devkitMirror(base, gz.getString("file"));
         devkit.file = new File(env.files, gz.getString("file"));
+        devkit.modules = null; devkit.modSha = null; devkit.moduleIds = null;
+        planModules(base);
         String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
         devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
+    }
+
+    /**
+     * 这个 Release 有 modules.json（模块化）就改成按块装：要装哪些 = 现在已装的那些（整包用户 = 全部模块，一样不少）；
+     * 下载量 / 占用按这些块重算。取不到 modules.json 就照旧装整包。modules.json 走 GitHub HTTPS，和 devkit.lock.json 同一来源
+     */
+    private void planModules(String base) {
+        try {
+            byte[] b = Installer.httpGetSmall(base + "modules.json");
+            JSONObject mj = new JSONObject(new String(b, StandardCharsets.UTF_8));
+            if (!ctx.getPackageName().equals(mj.optString("target")) || mj.optInt("compat", 1) != DEVKIT_COMPAT) return;
+            java.util.List<String> ids = installedModuleIds(mj);
+            long dl = 0, need = 0;
+            for (JSONObject m : Installer.moduleOrder(mj, ids)) { dl += m.getJSONObject("gz").optLong("bytes"); need += m.getJSONObject("tar").optLong("bytes"); }
+            devkit.modules = b; devkit.modSha = Installer.hex(java.security.MessageDigest.getInstance("SHA-256").digest(b));
+            devkit.moduleIds = ids; devkit.size = dl; devkit.need = need;
+            devkit.file = new File(env.files, "modules-" + tagOf(base) + ".json");
+        } catch (Exception e) { Log.i(TAG, "planModules: 按整包装（" + e + "）"); }
+    }
+
+    /** 现在装着哪些模块：模块化工具包按各块的 .ok；整包工具包 = 新清单里的全部模块（升级后一样不少，不用的再到扩展页卸） */
+    private java.util.List<String> installedModuleIds(JSONObject newMj) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        JSONObject cur = new Installer(env, null).readModules();
+        JSONArray all = newMj.optJSONArray("modules");
+        for (int i = 0; all != null && i < all.length(); i++) {
+            JSONObject m = all.optJSONObject(i);
+            if (m == null || !"module".equals(m.optString("kind"))) continue;
+            String id = m.optString("id");
+            if (cur == null) { ids.add(id); continue; }
+            JSONObject old = Installer.moduleById(cur, id);
+            if (old != null && new File(env.usr, old.optString("dir") + "/.ok").isFile()) ids.add(id);
+        }
+        return ids;
     }
 
     private void checkClaude() throws Exception {
@@ -453,10 +500,15 @@ final class Updater {
                 long free = new StatFs(env.files.getPath()).getAvailableBytes();
                 if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, Tr.t("空间不够：需要约 %.1f GB，只剩 %.1f GB"), need / 1e9, free / 1e9));
             }
-            installer(it).download(it.url, it.alt, it.file, it.size, it.sha);
+            if (it == devkit && it.modules != null) downloadModules(it);
+            else installer(it).download(it.url, it.alt, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
-            if (it == devkit) prefs().edit().putString("devkitStaged", new JSONObject().put("file", it.file.getPath())
-                .put("base", it.base).put("sha256", it.sha).put("size", it.size).put("tarSha256", it.tarSha == null ? "" : it.tarSha).toString()).apply();
+            if (it == devkit) {
+                JSONObject st = new JSONObject().put("file", it.file.getPath())
+                    .put("base", it.base).put("sha256", it.sha).put("size", it.file.length()).put("tarSha256", it.tarSha == null ? "" : it.tarSha);
+                if (it.modules != null) st.put("modSha", it.modSha).put("moduleIds", new JSONArray(it.moduleIds));
+                prefs().edit().putString("devkitStaged", st.toString()).apply();
+            }
             it.set("ready", "");
             if (it == app) { if (user) installApp(); else maybeSilentInstallApp(); }
             else if (user) startDevkitApply();
@@ -466,6 +518,23 @@ final class Updater {
             it.set("error", e.getMessage());
             if (it == devkit) releaseApp();
         }
+    }
+
+    /** 模块化：按依赖顺序逐块下到 files/（断点续传、两个来源互为备用、按 modules.json 的 sha256 核），全部下完才落 modules.json */
+    private void downloadModules(Item it) throws Exception {
+        JSONObject mj = new JSONObject(new String(it.modules, StandardCharsets.UTF_8));
+        long[] before = {0};
+        Installer ins = new Installer(env, new Installer.Progress() {
+            public void step(String m) { Log.i(TAG, "devkit: " + m); if (m.startsWith("  网络中断")) it.message = m.trim(); }
+            public void bytes(long d, long t) { it.done = before[0] + d; it.total = it.size; }
+        });
+        for (JSONObject m : Installer.moduleOrder(mj, it.moduleIds)) {
+            JSONObject gz = m.getJSONObject("gz");
+            String file = gz.getString("file");
+            ins.download(it.base + file, devkitMirror(it.base, file), new File(env.files, file), gz.optLong("bytes"), gz.getString("sha256"));
+            before[0] += gz.optLong("bytes");
+        }
+        Installer.write(it.file, new String(it.modules, StandardCharsets.UTF_8));
     }
 
     /** 下载来的 APK 必须是本应用、同一把签名钥匙。签名不同系统本来也拒装，这里先挡住，免得弹一个必失败的确认框 */
@@ -551,7 +620,7 @@ final class Updater {
         try {
             // 落盘以后可能过了好几天、经历过 APK 升级：装之前再核一遍，坏了就删掉重下，不拿它去换掉能用的旧版
             ins.step(Tr.t("核对已下载的工具包…"));
-            if (devkit.sha != null && !devkit.sha.equals(Installer.sha256(devkit.file))) {
+            if (devkit.modSha != null ? !devkit.modSha.equals(Installer.sha256(devkit.file)) : devkit.sha != null && !devkit.sha.equals(Installer.sha256(devkit.file))) {
                 devkit.file.delete();
                 prefs().edit().remove("devkitStaged").apply();
                 throw new IOException(Tr.t("已下载的工具包校验不通过，已删除；重新检查更新会再下一次"));
@@ -560,7 +629,8 @@ final class Updater {
         GatewayService.pause(true);
         try {
             for (int i = 0; i < 40 && pingGateway(); i++) Thread.sleep(250);
-            ins.installDevkit(devkit.file.getPath(), devkit.base, devkit.sha, devkit.tarSha);
+            if (devkit.modules != null) ins.installModules(devkit.modules, devkit.moduleIds, devkit.base, devkit.sha, false);
+            else ins.installDevkit(devkit.file.getPath(), devkit.base, devkit.sha, devkit.tarSha);
             devkit.file.delete();
             prefs().edit().remove("devkitStaged").apply();
             refreshCurrent();
@@ -662,6 +732,8 @@ final class Updater {
             devkit.url = base + gz.getString("file");
             devkit.alt = devkitMirror(base, gz.getString("file"));
             devkit.file = new File(env.files, gz.getString("file"));
+            devkit.modules = null; devkit.modSha = null; devkit.moduleIds = null;
+            if (new Installer(env, null).readModules() != null) planModules(base);       // 模块化：按已装的块重装
             devkit.set("available", Tr.t("修复：重装 ") + devkit.latest);
             repairing = true;
             Ledger.add(env, "repair", true, Tr.t("开始修复：重新下载 ") + devkit.latest, null);

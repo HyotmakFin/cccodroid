@@ -582,9 +582,24 @@ function loadRecipe(dir) {
 // 上游没变、只改了 skill 或包装脚本时加一就能发新版。预置组件（devkit.json）没有修订号。
 const compVersion = (up) => (RECIPE_DIR ? `${COMP.version || up}-r${COMP.revision || 1}` : COMP.version || up);
 const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
-const idx = await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
+// build --plan：用划分时冻结下来的包记录，不再拉索引。同一个 Release 的整包和各块因此一定出自同一份快照
+// （deb 进了缓存，后面几次打包不再联网；Termux 中途更新也不会让整包和模块对不上）
+const PLAN = cmd === "build" && opt("plan") ? JSON.parse(fs.readFileSync(opt("plan"), "utf8")) : null;
+const FROZEN = PLAN && PLAN.records;
+const idx = FROZEN ? {
+  pkgs: new Map(Object.entries(FROZEN).map(([n, r]) => [n, { name: n, ...r, repo: REPOS.find((x) => (x.name || "main") === r.repo) || REPOS[0] }])),
+  provides: new Map(), date: PLAN.snapshot,
+} : await loadIndex(COMP ? [...REPOS, ...(COMP.repos || []).map((n) => MAN.extraRepos[n])] : REPOS);
 let baseDeps = [];          // 组件依赖链里、由底座提供的包（名字 + 底座里的版本）：市场据此判断换底座后要不要重新真机验证
-let { names, missing } = closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
+let { names, missing } = FROZEN ? { names: Object.keys(FROZEN).sort(), missing: [] } : closure(idx, COMP ? COMP.roots : rootsFor(opt("groups")));
+// 模块化：build --block <id> --plan <modules.plan.json> 只打划分里这一块的包
+const BLOCK = PLAN && opt("block") ? (PLAN.blocks.find((b) => b.id === opt("block")) || (() => { throw new Error("划分里没有这一块: " + opt("block")); })()) : null;
+const EXTRAS = !COMP && (!BLOCK || BLOCK.kind === "base");          // 替身、上游原件、Python 预编译只跟基础走
+if (BLOCK) {
+  const drift = BLOCK.packages.filter((n) => !idx.pkgs.has(n) || (PLAN.versions && idx.pkgs.get(n).version !== PLAN.versions[n]));
+  if (drift.length) throw new Error(`仓库快照和划分时不一样了（${drift.slice(0, 5).join(", ")}…），重跑 modules 再打`);
+  names = BLOCK.packages; missing = [];
+}
 if (COMP) {
   // 底座已经有的包不再打；底座里的版本和仓库现在的不一样时提醒（组件可能要求更新的库）
   const inBase = new Map(BASE.packages.map((p) => [p.name, p.version]));
@@ -609,23 +624,154 @@ if (cmd === "resolve" || (COMP && args.includes("--dry"))) {
   process.exit(0);
 }
 
+// ── 模块划分（见 devkit.json 的 modules）────────────────────────────────
+// 基础模块的闭包先算；其余模块只要超出基础的那部分。被两个以上模块用到、又不小于 sharedMinMB 的包
+// 提成共享层（连同它自己在基础之外的依赖），模块依赖共享层而不各带一份；更小的共用包各模块各带一份
+// （同一快照、内容相同，App 装卸靠共享文件计数）。
+function partition() {
+  const mods = MAN.modules || {}, ids = Object.keys(mods);
+  const baseId = ids.find((id) => mods[id].required);
+  if (!baseId) throw new Error("devkit.json 的 modules 里没有 required 的基础模块");
+  const rootsOf = (id) => mods[id].groups.flatMap((g) => { if (!MAN.groups[g]) throw new Error(`${id}: 没有这个分组 ${g}`); return MAN.groups[g]; });
+  const miss = [];
+  const cl = (roots, who) => { const r = closure(idx, roots); miss.push(...r.missing.map((m) => `${who}: ${m}`)); return r.names; };
+  const base = new Set(cl(rootsOf(baseId), baseId));
+  const own = new Map(ids.filter((id) => id !== baseId).map((id) => [id, new Set(cl(rootsOf(id), id).filter((n) => !base.has(n)))]));
+  const users = new Map();
+  for (const [id, s] of own) for (const n of s) users.set(n, [...(users.get(n) || []), id]);
+  // 共享层：大包 → 它在基础之外的闭包整块进层；用户集合相同的大包合成一层
+  const big = [...users].filter(([n, u]) => u.length >= 2 && idx.pkgs.get(n).isize >= (MAN.sharedMinMB || 50) * 1048576);
+  const layers = new Map();
+  for (const [n, u] of big) {
+    const key = u.join("+");
+    if (!layers.has(key)) layers.set(key, { users: u, roots: [] });
+    layers.get(key).roots.push(n);
+  }
+  const layerList = [...layers.values()].map((l) => ({
+    id: "lib-" + l.roots.slice().sort()[0], users: l.users, roots: l.roots.sort(),
+    names: new Set(cl(l.roots, "共享层").filter((n) => !base.has(n))),
+  }));
+  const out = { baseId, base: [...base].sort(), modules: {}, layers: layerList, missing: miss };
+  for (const [id, s] of own) {
+    const deps = layerList.filter((l) => l.roots.every((r) => s.has(r)));
+    const inLayers = new Set(deps.flatMap((l) => [...l.names]));
+    const names = [...s].filter((n) => !inLayers.has(n)).sort();
+    out.modules[id] = { deps: [baseId, ...deps.map((l) => l.id)], names, dup: names.filter((n) => users.get(n).length >= 2) };
+  }
+  // 自检：每个分组闭包里的包都得落到某处，且全量闭包与各块并集相等
+  const all = new Set(cl(rootsFor(ids.flatMap((id) => mods[id].groups).join(",")), "全部"));
+  const got = new Set([...base, ...layerList.flatMap((l) => [...l.names]), ...Object.values(out.modules).flatMap((m) => m.names)]);
+  const lost = [...all].filter((n) => !got.has(n)), extra = [...got].filter((n) => !all.has(n));
+  if (lost.length || extra.length) throw new Error(`模块划分对不上全量闭包：缺 ${lost.join(",")} 多 ${extra.join(",")}`);
+  return out;
+}
+
+function makePlan() {
+  const P = partition();
+  const sz = (ns) => ns.reduce((a, n) => [a[0] + idx.pkgs.get(n).size, a[1] + idx.pkgs.get(n).isize], [0, 0]);
+  const row = (id, ns, deps, note = "") => { const [d, i] = sz(ns); console.log(`  ${id.padEnd(16)} ${String(ns.length).padStart(4)} 包  下载 ${mb(d).padStart(9)}  解包 ${mb(i).padStart(9)}  依赖 ${deps.join(",") || "—"}${note}`); };
+  console.log("\n模块划分：");
+  row(P.baseId, P.base, []);
+  for (const l of P.layers) row(l.id, [...l.names], [P.baseId], `  （共享层，给 ${l.users.join("、")}）`);
+  for (const [id, m] of Object.entries(P.modules)) {
+    const [dd] = sz(m.dup);
+    row(id, m.names, m.deps, m.dup.length ? `  （其中 ${m.dup.length} 个小包与别的模块共用，下载 ${mb(dd)}）` : "");
+  }
+  // 各模块共用的小包装到手机上是同一份文件（共享计数），只在下载时重复
+  const [ad, ai] = sz(names), blocksDl = [P.base, ...P.layers.map((l) => [...l.names]), ...Object.values(P.modules).map((m) => m.names)].reduce((s, ns) => s + sz(ns)[0], 0);
+  console.log(`  全部装上：占用 ${mb(ai)}，下载 ${mb(blocksDl)}（比整包多下 ${mb(blocksDl - ad)}，是共用小包的重复）`);
+  if (P.missing.length) console.log("⚠ 无法满足: " + [...new Set(P.missing)].join("; "));
+  const plan = {
+    snapshot: idx.date, base: P.baseId, sharedMinMB: MAN.sharedMinMB || 50,
+    records: Object.fromEntries(names.map((n) => { const p = idx.pkgs.get(n);
+      return [n, { version: p.version, file: p.file, sha256: p.sha256, size: p.size, isize: p.isize, source: p.source, homepage: p.homepage, deps: p.deps, repo: p.repo.name || "main" }]; })),
+    blocks: [
+      { id: P.baseId, kind: "base", deps: [], packages: P.base },
+      ...P.layers.map((l) => ({ id: l.id, kind: "shared", deps: [P.baseId], users: l.users, packages: [...l.names].sort() })),
+      ...Object.entries(P.modules).map(([id, m]) => ({ id, kind: "module", deps: m.deps, packages: m.names, sharedSmall: m.dup })),
+    ].map((b) => ({ ...b, download: sz(b.packages)[0], installed: sz(b.packages)[1] })),
+  };
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, "modules.plan.json"), JSON.stringify(plan, null, 2));
+  const planFile = path.join(OUT, "modules.plan.json");
+  console.log(`\n→ ${planFile}`);
+  return { plan, planFile };
+}
+
+if (cmd === "modules") {
+  // --plan：沿用已有的划分（CI 先出划分、按它打整包，再按同一份打各块），不重新求解
+  const { plan, planFile } = opt("plan")
+    ? { plan: JSON.parse(fs.readFileSync(opt("plan"), "utf8")), planFile: path.resolve(opt("plan")) }
+    : makePlan();
+  if (opt("plan")) console.log(`沿用划分 ${planFile}（快照 ${plan.snapshot}）`);
+  if (!args.includes("--build") && !args.includes("--merge")) process.exit(0);
+  const target = opt("target");
+  if (!target) throw new Error("--target <10 字符包名> 必填");
+  // 逐块打包：每块一个子进程（各自的 tar / MANIFEST / first-run / 锁文件），版本按 plan 核对
+  if (args.includes("--build")) for (const b of plan.blocks) {
+    console.log(`\n━━ ${b.id}（${b.kind}，${b.packages.length} 包）`);
+    execFileSync(process.execPath, [new URL(import.meta.url).pathname, "build", "--block", b.id, "--plan", planFile,
+      "--target", target, "--out", OUT, "--cache", CACHE], { stdio: "inherit" });
+  }
+  // 合并：跨块同一路径内容必须相同（共用小包是同一份文件）；alternatives 同组不能两块各给一个
+  const owner = new Map(), alt = new Map(), bad = [];
+  const locks = plan.blocks.map((b) => JSON.parse(fs.readFileSync(path.join(OUT, `module-${b.id}.lock.json`), "utf8")));
+  for (const l of locks) {
+    if (l.target !== target) bad.push(`${l.id} 是给 ${l.target} 打的`);
+    for (const line of fs.readFileSync(path.join(OUT, `MANIFEST-${l.id}`), "utf8").split("\n")) {
+      if (!line) continue;
+      const i = line.indexOf(" "), h = line.slice(0, i), p = line.slice(line.indexOf(" ", i + 1) + 1);       // 路径里可能有空格
+      const o = owner.get(p);
+      if (o && o.h !== h) bad.push(`${p}：${o.id} 与 ${l.id} 内容不同`);
+      if (!o) owner.set(p, { id: l.id, h });
+    }
+    for (const a of l.alternatives) {
+      const o = alt.get(a.group);
+      if (o && o.pkg !== a.pkg) bad.push(`alternatives ${a.group}：${o.id} 给 ${o.pkg}，${l.id} 给 ${a.pkg}`);
+      if (!o) alt.set(a.group, { ...a, id: l.id });
+    }
+  }
+  if (bad.length) { console.error("✗ 模块之间有冲突：\n  " + bad.slice(0, 30).join("\n  ")); process.exit(1); }
+  const def = MAN.modules;
+  const mj = {
+    // format：modules.json 自身的格式版本；compat 同 devkit.lock.json（外壳接口版本）
+    format: 1, compat: 1, target, snapshot: plan.snapshot, base: plan.base, built: new Date().toISOString(),
+    modules: locks.map((l) => ({
+      id: l.id, kind: l.kind, required: !!(def[l.id] || {}).required, deps: l.deps, users: l.users || [],
+      name: (def[l.id] || {}).name || { zh: "共享运行库", en: "Shared libraries" },
+      desc: (def[l.id] || {}).desc || { zh: `被 ${l.users.join("、")} 共用的大库，没有模块用到时自动卸载。`, en: `Large library shared by ${l.users.join(", ")}; removed automatically when no module needs it.` },
+      uses: (def[l.id] || {}).uses || [], dir: l.dir,
+      gz: l.gz, tar: { bytes: l.tar.bytes, sha256: l.tar.sha256 }, installed: l.installed, files: l.files,
+      commands: l.commands, key: ((def[l.id] || {}).key || []).filter((c) => l.commands.includes(c)), firstRun: l.firstRun,
+      packages: l.packages.map((p) => ({ name: p.name, version: p.version, source: p.source })),
+    })),
+  };
+  fs.writeFileSync(path.join(OUT, "modules.json"), JSON.stringify(mj, null, 2));
+  console.log(`\n✓ modules.json：${mj.modules.length} 块，下载合计 ${mb(mj.modules.reduce((s, m) => s + m.gz.bytes, 0))}，共 ${owner.size} 个文件路径，跨块无冲突`);
+  process.exit(0);
+}
+
 if (cmd === "build" || cmd === "component") {
   const target = opt("target");
   // 组件的私有文件放在 libexec/devkit/components/<id>/ 下，和底座的 libexec/devkit/ 分开
-  const LX = COMP ? `usr/libexec/devkit/components/${COMP_ID}` : "usr/libexec/devkit";
+  const LX = COMP ? `usr/libexec/devkit/components/${COMP_ID}` : BLOCK && BLOCK.kind !== "base" ? `usr/libexec/devkit/modules/${BLOCK.id}` : "usr/libexec/devkit";
   if (!target) throw new Error("--target <10 字符包名> 必填");
   const R = relocator(target);
   await bootXz(idx);
   console.log(XZ ? "  解压：原生 xz" : "  解压：JS");
   fs.mkdirSync(OUT, { recursive: true });
-  const tarFile = path.join(OUT, COMP ? `component-${COMP_ID}-${target}.tar` : `devkit-${target}.tar`);
+  const tarFile = path.join(OUT, COMP ? `component-${COMP_ID}-${target}.tar` : BLOCK ? `devkit-${BLOCK.id}-${target}.tar` : `devkit-${target}.tar`);
   const tw = new TarWriter(tarFile + ".part");
   // 逐文件清单（libexec/devkit/MANIFEST）："sha256 大小 相对 usr/ 的路径"。App 装完拿它核对缺没缺、坏没坏。
   // 同名条目以最后写入的为准（tar 解包也是后来的覆盖前面的）；被软链盖掉的不算文件
   const manifest = new Map();
+  const bins = new Set();          // usr/bin 下的命令（文件和软链都算），模块卡片上列出来
+  const paths = new Set();         // 放进 usr/ 的全部非目录路径（含软链）：模块卸载按它删，MANIFEST 不记软链
   const twAdd = tw.add.bind(tw);
   tw.add = (e) => {
     const rel = e.name.startsWith("usr/") ? e.name.slice(4) : null;
+    if (rel && /^bin\/[^/]+$/.test(rel)) { if (e.type === "5") bins.delete(rel.slice(4)); else bins.add(rel.slice(4)); }
+    if (rel) { if (e.type === "5") paths.delete(rel.replace(/\/$/, "")); else paths.add(rel); }
     if (rel) {
       if ((e.type === "0" || e.type === "7") && e.data) manifest.set(rel, [sha256(e.data), e.data.length]);
       else if (e.type === "1") { const t = (e.link || "").replace(/^usr\//, ""); if (manifest.has(t)) manifest.set(rel, manifest.get(t)); }
@@ -691,6 +837,15 @@ if (cmd === "build" || cmd === "component") {
   }
   // alternatives → 绝对路径软链（跟 update-alternatives 的结果一致，省掉它的数据库）
   const usrOf = (p) => R.pathOf(p.replace(/^\//, ""));
+  // 模块：依赖的块（先打好了）已经给了同一组、优先级又不低于这里的，就不写 —— 和整包里按优先级选出来的一样
+  // （例：基础块 pager←less 50，cli 块 pager←bat 10，整包里是 less）
+  if (BLOCK) for (const d of BLOCK.deps || []) {
+    let dl; try { dl = JSON.parse(fs.readFileSync(path.join(OUT, `module-${d}.lock.json`), "utf8")); } catch { throw new Error(`先打 ${d} 再打 ${BLOCK.id}（要看它的 alternatives）`); }
+    for (const a of dl.alternatives || []) {
+      const mine = alts.get(a.group);
+      if (mine && a.prio >= mine.prio) { console.log(`  alternatives ${a.group}：${d} 已给 ${a.pkg}（${a.prio}），这里的 ${mine.pkg}（${mine.prio}）不写`); alts.delete(a.group); }
+    }
+  }
   for (const a of alts.values()) {
     for (const [link, target] of a.links) {
       const name = usrOf(link);
@@ -698,14 +853,14 @@ if (cmd === "build" || cmd === "component") {
     }
   }
   // 替身：pkg/apt 这类在这里用不了的命令，换成说明为什么、该怎么办的小脚本
-  for (const [p, text] of Object.entries(COMP ? {} : MAN.stubs || {})) {
+  for (const [p, text] of Object.entries(EXTRAS ? MAN.stubs || {} : {})) {
     tw.add({ name: p, type: "0", mode: 0o755, mtime: 0, data: Buffer.from("#!" + R.to + "files/usr/bin/sh\n" + text.replace(/\n?$/, "\n")) });
   }
   // 仓库之外的上游原件（如 ensurepip 的 pip wheel）：下载、核对哈希、原样放进去
   // mode 可给（如 755 的可执行文件），source 只是记账用（默认 pypi），和解包体积也会算进 installed
   let fetchedBytes = 0;
-  if (Object.keys((COMP ? COMP.fetch : MAN.fetch) || {}).length) fs.mkdirSync(CACHE, { recursive: true });
-  for (const [p, f] of Object.entries(COMP ? COMP.fetch || {} : MAN.fetch || {})) {
+  if (Object.keys((COMP ? COMP.fetch : EXTRAS ? MAN.fetch : null) || {}).length) fs.mkdirSync(CACHE, { recursive: true });
+  for (const [p, f] of Object.entries((COMP ? COMP.fetch : EXTRAS ? MAN.fetch : null) || {})) {
     // link：只做一个软链（如 libOpenCL.so.1 → libOpenCL.so，库的 SONAME 是 .so.1 时要用）。
     // 目标写相对名即可（App 用真 tar 解包，同目录相对链最稳）；不进 MANIFEST，也不算体积。
     if (f.link) { tw.add({ name: p, type: "2", mode: 0o777, mtime: 0, link: f.link }); continue; }
@@ -835,10 +990,14 @@ if (cmd === "build" || cmd === "component") {
     fr.push(`echo "▸ ${f.pkg}"; "${R.to}files/${p}" configure || echo "  （${f.pkg} 的 postinst 失败，rc=$?）"`);
   }
   const py = R.to + "files/usr/bin/python3";
-  if (!COMP) fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
+  if (EXTRAS) fr.push(`if [ -x "${py}" ]; then echo "▸ 预编译 Python 标准库与 site-packages"; LD_PRELOAD= "${py}" -m compileall -q -j 0 "$(LD_PRELOAD= "${py}" -c "import sysconfig; print(sysconfig.get_path(\x27stdlib\x27))")" >/dev/null 2>&1; fi`);
   tw.add({ name: `${LX}/first-run.sh`, type: "0", mode: 0o755, mtime: 0, data: Buffer.from(fr.join("\n") + "\n") });
   const manText = [...manifest].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([p, [h, n]]) => `${h} ${n} ${p}`).join("\n") + "\n";
   twAdd({ name: `${LX}/MANIFEST`, type: "0", mode: 0o644, mtime: 0, data: Buffer.from(manText) });
+  if (BLOCK) {
+    paths.add(`${LX.slice(4)}/MANIFEST`); paths.add(`${LX.slice(4)}/FILES`);
+    twAdd({ name: `${LX}/FILES`, type: "0", mode: 0o644, mtime: 0, data: Buffer.from([...paths].sort().join("\n") + "\n") });
+  }
   console.log(`  文件清单：${manifest.size} 个文件`);
   console.log(`  alternatives：${[...alts.values()].map((a) => a.group + "←" + a.pkg).join(" ")}`);
   console.log(`  首次运行脚本：${firstRun.map((f) => f.pkg).join(" ") || "无"}`);
@@ -862,6 +1021,25 @@ if (cmd === "build" || cmd === "component") {
       installed: itotal + fetchedBytes, snapshot: idx.date, packages: lock, baseDeps,
     }, null, 2));
     console.log(`\n✓ ${tarFile}  ${mb(tarInfo.bytes)} → .gz ${mb(gzInfo.bytes)}  ${lock.length} 个包  用时 ${((Date.now() - t0) / 1000) | 0}s`);
+    process.exit(0);
+  }
+  if (BLOCK) {
+    // 一块的锁文件 + 逐文件清单另存一份，modules 合并时拿来查跨块冲突、出 modules.json
+    fs.writeFileSync(path.join(OUT, `MANIFEST-${BLOCK.id}`), manText);
+    fs.writeFileSync(path.join(OUT, `module-${BLOCK.id}.lock.json`), JSON.stringify({
+      id: BLOCK.id, kind: BLOCK.kind, deps: BLOCK.deps, users: BLOCK.users,
+      target, compat: 1, prefix: R.to + "files/usr", repos: REPOS, snapshot: idx.date, dir: LX.slice(4),
+      tar: { file: path.basename(tarFile), ...tarInfo },
+      gz: { file: path.basename(tarFile) + ".gz", ...gzInfo },
+      files: manifest.size, installed: [...manifest.values()].reduce((s, [, n]) => s + n, 0),
+      commands: [...bins].sort(), firstRun: firstRun.map((f) => f.pkg),
+      alternatives: [...alts.values()].map((a) => ({ group: a.group, pkg: a.pkg, prio: a.prio })),
+      packages: lock,
+    }, null, 2));
+    fs.writeFileSync(path.join(OUT, `SBOM-${BLOCK.id}.tsv`),
+      "package\tversion\tsource\thomepage\trecipe\tsha256\n" +
+      lock.map((l) => [l.name, l.version, l.source, l.homepage, l.recipe, l.sha256].join("\t")).join("\n") + "\n");
+    console.log(`\n✓ ${BLOCK.id}：${tarFile}  ${mb(tarInfo.bytes)} → .gz ${mb(gzInfo.bytes)}  ${bins.size} 个命令  用时 ${((Date.now() - t0) / 1000) | 0}s`);
     process.exit(0);
   }
   fs.writeFileSync(path.join(OUT, "devkit.lock.json"), JSON.stringify({

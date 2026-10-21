@@ -226,32 +226,128 @@ final class Installer {
     /** 从流解包安装。tarSha 非空时边解边核，对不上整个丢掉、旧工具包不动（读两遍之间文件被换掉也拦得住） */
     void installDevkit(InputStream raw, long total, boolean gzip, String base, String sha, String tarSha) throws IOException {
         ui.step(Tr.t("解包开发工具包…"));
-        Counting in = new Counting(new BufferedInputStream(raw, 1 << 20), total);
-        MessageDigest md;
-        try { md = MessageDigest.getInstance("SHA-256"); } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
-        java.security.DigestInputStream s = new java.security.DigestInputStream(gzip ? new GZIPInputStream(in, 1 << 16) : in, md);
         File tmp = usrNew();
         deleteTree(tmp);
         tmp.mkdirs();
-        try {
-            untar(s, tmp, "usr/");
-            byte[] sink = new byte[1 << 16];
-            while (s.read(sink) > 0) { }            // tar 末尾的填充块也算进校验和
-        } catch (IOException e) {
-            deleteTree(tmp);
-            throw new IOException(Tr.t("解包失败，旧工具包未改动：") + e.getMessage(), e);
-        } finally { s.close(); }
-        String got = hex(md.digest());
-        if (tarSha != null && !tarSha.isEmpty() && !tarSha.equals(got)) {
-            deleteTree(tmp);
-            throw new IOException(Tr.f("解出来的内容与清单不符（tar sha256 期望 {0}…，实得 {1}…），旧工具包未改动", tarSha.substring(0, 12), got.substring(0, 12)));
-        }
+        String got = extractInto(tmp, raw, total, gzip, tarSha);
         JSONObject p = new JSONObject();
         try { p.put("base", base == null ? "" : base).put("sha256", sha == null ? "" : sha).put("tarSha256", got); }
         catch (org.json.JSONException ignored) {}
         write(new File(tmp, PENDING), p + "\n");
         swapIn(tmp);
         finish();
+    }
+
+    /** 解一个 tar(.gz) 到 dir（叠加，不先清空），边解边算 tar 的 sha256；tarSha 非空时对不上就整个删掉 dir、抛错。返回实得的 sha256 */
+    private String extractInto(File dir, InputStream raw, long total, boolean gzip, String tarSha) throws IOException {
+        Counting in = new Counting(new BufferedInputStream(raw, 1 << 20), total);
+        MessageDigest md;
+        try { md = MessageDigest.getInstance("SHA-256"); } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
+        java.security.DigestInputStream s = new java.security.DigestInputStream(gzip ? new GZIPInputStream(in, 1 << 16) : in, md);
+        try {
+            untar(s, dir, "usr/");
+            byte[] sink = new byte[1 << 16];
+            while (s.read(sink) > 0) { }            // tar 末尾的填充块也算进校验和
+        } catch (IOException e) {
+            deleteTree(dir);
+            throw new IOException(Tr.t("解包失败，旧工具包未改动：") + e.getMessage(), e);
+        } finally { s.close(); }
+        String got = hex(md.digest());
+        if (tarSha != null && !tarSha.isEmpty() && !tarSha.equals(got)) {
+            deleteTree(dir);
+            throw new IOException(Tr.f("解出来的内容与清单不符（tar sha256 期望 {0}…，实得 {1}…），旧工具包未改动", tarSha.substring(0, 12), got.substring(0, 12)));
+        }
+        return got;
+    }
+
+    // ── 模块化工具包（0.4.0 起）：基础块 + 选中的模块一起解到 usr.new，全部核过才换上 ──
+    // modules.json 来自 APK 的钉子（首装）或 GitHub Release（更新），里面有每块 gz / tar 的 sha256；下载源不需要被信任。
+    // 每块的 first-run 与 MANIFEST 在它的 dir（基础块是 libexec/devkit，其余 libexec/devkit/modules/<id>）；
+    // 装好的块在 dir 里写 .ok。之后单个模块的加装 / 卸载由网关（gw/modules.mjs）做。
+    static final String MODULES_JSON = "libexec/devkit/modules.json";
+
+    /** 依赖闭包，按依赖顺序（基础块在最前）。不认识的 id 抛错 */
+    static java.util.List<JSONObject> moduleOrder(JSONObject mj, java.util.Collection<String> want) throws IOException {
+        java.util.Map<String, JSONObject> by = new java.util.LinkedHashMap<>();
+        org.json.JSONArray all = mj.optJSONArray("modules");
+        if (all == null) throw new IOException(Tr.t("模块清单坏了"));
+        for (int i = 0; i < all.length(); i++) { JSONObject m = all.optJSONObject(i); if (m != null) by.put(m.optString("id"), m); }
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        java.util.List<String> todo = new java.util.ArrayList<>();
+        for (JSONObject m : by.values()) if (m.optBoolean("required")) todo.add(m.optString("id"));
+        todo.addAll(want);
+        for (String id : todo) addWithDeps(by, id, out, new java.util.HashSet<>());
+        java.util.List<JSONObject> r = new java.util.ArrayList<>();
+        for (String id : out) r.add(by.get(id));
+        return r;
+    }
+    private static void addWithDeps(java.util.Map<String, JSONObject> by, String id, java.util.Set<String> out, java.util.Set<String> path) throws IOException {
+        if (out.contains(id)) return;
+        JSONObject m = by.get(id);
+        if (m == null) throw new IOException(Tr.f("模块清单里没有：{0}", id));
+        if (!path.add(id)) throw new IOException(Tr.f("模块依赖成环：{0}", id));
+        org.json.JSONArray d = m.optJSONArray("deps");
+        if (d != null) for (int i = 0; i < d.length(); i++) addWithDeps(by, d.optString(i), out, path);
+        out.add(id);
+    }
+
+    /**
+     * 装模块化工具包（首装，或整包 / 旧快照换成这一份）。
+     * @param mjBytes modules.json 原文（调用方已核过来源：钉子的 sha256 或 GitHub HTTPS）
+     * @param want 用户勾的模块（基础块和依赖自动带上）
+     * @param base Release 目录（GitHub）；identity 这份快照整包 gz 的 sha256（写进 .devkit-ok，组件按它匹配）
+     * @param mirrorFirst 先走 dl.cccodroid.net 镜像
+     */
+    void installModules(byte[] mjBytes, java.util.Collection<String> want, String base, String identity, boolean mirrorFirst) throws IOException {
+        JSONObject mj;
+        try { mj = new JSONObject(new String(mjBytes, StandardCharsets.UTF_8)); } catch (org.json.JSONException e) { throw new IOException(Tr.t("模块清单坏了"), e); }
+        java.util.List<JSONObject> order = moduleOrder(mj, want);
+        long dl = 0, unpacked = 0;
+        for (JSONObject m : order) {
+            JSONObject gz = m.optJSONObject("gz"), tar = m.optJSONObject("tar");
+            if (gz == null || tar == null) throw new IOException(Tr.t("模块清单坏了"));
+            File have = new File(env.files, gz.optString("file"));
+            if (!have.isFile()) dl += gz.optLong("bytes") - new File(have.getPath() + ".part").length();
+            unpacked += tar.optLong("bytes");
+        }
+        // 峰值：还要下的 + 已下的压缩包（解完一块删一块，按全部算）+ 解开后的全部 + 余量
+        long need = Math.max(0, dl) + unpacked + (400L << 20);
+        long free = new android.os.StatFs(env.files.getPath()).getAvailableBytes();
+        if (free < need) throw new NoSpace(need, free);
+        String tag = base.replaceAll("/+$", ""); tag = tag.substring(tag.lastIndexOf('/') + 1);
+        java.util.List<File> gzs = new java.util.ArrayList<>();
+        for (JSONObject m : order) {
+            JSONObject gz = m.optJSONObject("gz");
+            String file = gz.optString("file"), gh = base + file, mirror = DEVKIT_MIRROR + tag + "/" + file;
+            ui.step(Tr.f("下载模块「{0}」{1} MB…", moduleName(m), String.valueOf(gz.optLong("bytes") >> 20)));
+            gzs.add(download(mirrorFirst ? mirror : gh, mirrorFirst ? gh : mirror, new File(env.files, file), gz.optLong("bytes"), gz.optString("sha256")));
+        }
+        File tmp = usrNew();
+        deleteTree(tmp);
+        tmp.mkdirs();
+        org.json.JSONArray ids = new org.json.JSONArray();
+        for (int i = 0; i < order.size(); i++) {
+            JSONObject m = order.get(i);
+            ui.step(Tr.f("解包「{0}」…", moduleName(m)));
+            File gz = gzs.get(i);
+            extractInto(tmp, new FileInputStream(gz), gz.length(), true, m.optJSONObject("tar").optString("sha256"));
+            ids.put(m.optString("id"));
+        }
+        write(new File(tmp, MODULES_JSON), new String(mjBytes, StandardCharsets.UTF_8));
+        JSONObject p = new JSONObject();
+        try { p.put("base", base).put("sha256", identity == null ? "" : identity).put("modules", ids).put("snapshot", mj.optString("snapshot")); }
+        catch (org.json.JSONException ignored) {}
+        write(new File(tmp, PENDING), p + "\n");
+        swapIn(tmp);
+        finish();
+        for (File gz : gzs) gz.delete();          // 解完就删
+    }
+
+    static String moduleName(JSONObject m) {
+        JSONObject n = m.optJSONObject("name");
+        if (n == null) return m.optString("id");
+        String s = n.optString(Tr.lang().startsWith("zh") ? "zh" : "en", "");
+        return s.isEmpty() ? n.optString("zh", m.optString("id")) : s;
     }
 
     /** 两次换名把新版换上；第二次失败就把旧版换回来 */
@@ -279,10 +375,30 @@ final class Installer {
         ui.step(Tr.t("首次运行配置…"));
         int rc = run(env.bin("bash").getPath(), new File(env.usr, "libexec/devkit/first-run.sh").getPath());
         if (rc != 0) ui.step(Tr.f("（first-run 返回 {0}，不影响使用）", rc));
+        // 模块化：其余各块按依赖顺序跑自己的 first-run，再写 .ok（网关据此认「已装」）
+        java.util.List<File> modDirs = new java.util.ArrayList<>();
+        org.json.JSONArray mods = p.optJSONArray("modules");
+        JSONObject mj = readModules();
+        if (mods != null && mj != null) for (int i = 0; i < mods.length(); i++) {
+            JSONObject m = moduleById(mj, mods.optString(i));
+            if (m == null || "base".equals(m.optString("kind"))) continue;
+            File dir = new File(env.usr, m.optString("dir"));
+            modDirs.add(dir);
+            File fr = new File(dir, "first-run.sh");
+            if (fr.isFile()) {
+                ui.step(Tr.f("「{0}」首次配置…", moduleName(m)));
+                int r2 = run(env.bin("bash").getPath(), fr.getPath());
+                if (r2 != 0) ui.step(Tr.f("（first-run 返回 {0}，不影响使用）", r2));
+            }
+        }
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
         writeResolvConf();
-        pruneManifest(since);
+        pruneManifest(new File(env.usr, MANIFEST), new File(env.usr, LOCAL_MANIFEST), since);
+        for (File dir : modDirs) {
+            pruneManifest(new File(dir, "MANIFEST"), new File(dir, "MANIFEST.local"), since);
+            write(new File(dir, ".ok"), "{\"at\":" + System.currentTimeMillis() + "}\n");
+        }
         try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
         write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
         pend.delete();
@@ -332,8 +448,7 @@ final class Installer {
      * （例如 git-delta 重新生成补全脚本 —— 按改动时间认出来，按实际内容重记）。tar 里的文件保留了打包时的
      * 修改时间，first-run 写过的才是现在的时间，所以拿 since 一比就分得开。
      */
-    private void pruneManifest(long since) {
-        File man = new File(env.usr, MANIFEST);
+    private void pruneManifest(File man, File out, long since) {
         if (!man.isFile()) return;
         try {
             StringBuilder sb = new StringBuilder();
@@ -349,9 +464,20 @@ final class Installer {
                 }
                 sb.append(l).append('\n');
             }
-            write(new File(env.usr, LOCAL_MANIFEST), sb.toString());
+            write(out, sb.toString());
             if (dropped + rebased > 0) ui.step(Tr.f("（首次配置删掉 {0} 个、改写 {1} 个文件，校验基线已按实际情况记下）", dropped, rebased));
         } catch (IOException e) { ui.step(Tr.f("（校验基线没写成：{0}）", e.getMessage())); }
+    }
+
+    /** 已装工具包的 modules.json；整包工具包没有，返回 null */
+    JSONObject readModules() {
+        try { return new JSONObject(new String(java.nio.file.Files.readAllBytes(new File(env.usr, MODULES_JSON).toPath()), StandardCharsets.UTF_8)); }
+        catch (Exception e) { return null; }
+    }
+    static JSONObject moduleById(JSONObject mj, String id) {
+        org.json.JSONArray a = mj.optJSONArray("modules");
+        if (a != null) for (int i = 0; i < a.length(); i++) { JSONObject m = a.optJSONObject(i); if (m != null && id.equals(m.optString("id"))) return m; }
+        return null;
     }
 
     /** 用户可能自己动的地方：配置、pip / npm 装的包。改了不算坏，只有"缺了"才算 */
@@ -369,7 +495,19 @@ final class Installer {
         File man = new File(env.usr, LOCAL_MANIFEST);
         if (!man.isFile()) man = new File(env.usr, MANIFEST);
         if (!man.isFile()) return r.put("manifest", false);
-        java.util.List<String> lines = java.nio.file.Files.readAllLines(man.toPath(), StandardCharsets.UTF_8);
+        java.util.List<String> lines = new java.util.ArrayList<>(java.nio.file.Files.readAllLines(man.toPath(), StandardCharsets.UTF_8));
+        // 模块化：再加上已装各块的清单（first-run 改过的按 MANIFEST.local）
+        JSONObject mj = readModules();
+        org.json.JSONArray all = mj == null ? null : mj.optJSONArray("modules");
+        if (all != null) for (int k = 0; k < all.length(); k++) {
+            JSONObject m = all.optJSONObject(k);
+            if (m == null || "base".equals(m.optString("kind"))) continue;
+            File dir = new File(env.usr, m.optString("dir"));
+            if (!new File(dir, ".ok").isFile()) continue;
+            File mf = new File(dir, "MANIFEST.local");
+            if (!mf.isFile()) mf = new File(dir, "MANIFEST");
+            if (mf.isFile()) lines.addAll(java.nio.file.Files.readAllLines(mf.toPath(), StandardCharsets.UTF_8));
+        }
         int missing = 0, changed = 0, i = 0;
         long bytes = 0, doneBytes = 0;
         for (String l : lines) { String[] f = l.split(" ", 3); if (f.length == 3) bytes += Long.parseLong(f[1]); }

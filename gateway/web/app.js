@@ -2887,7 +2887,82 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ${desc || ""}
       ${acts ? `<div class="it-acts">${acts}</div>` : ""}</div>`;
 
-  function loadExt() { loadComponents(60); loadCustom(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
+  // ── 工具包模块（0.4.0 起）：基础 + 随装随卸的模块；用途、命令、包、大小、依赖、谁在用都摆出来 ──
+  let modTimer = 0;
+  const MOD_USES = () => ({
+    claude: t("Claude Code 本身"), git: t("git 面板"), terminal: t("终端"), shizuku: t("Shizuku 一键启动（无线调试）"), search: t("Claude 搜代码、看差异"),
+    "native-build": t("编译原生程序"), apk: t("打 APK"), "usb-adb": t("USB 调试"), "gpu-components": t("GPU 组件（Blender、浏览器等）"),
+    media: t("音视频处理"), docs: t("排版、表格分析、图片处理"),
+  });
+  async function loadModules() {
+    clearTimeout(modTimer);
+    const r = await api("/api/devkit/modules").catch(() => null);
+    const on = !!(r && r.supported && r.modular);
+    $("mod-field").classList.toggle("hidden", !on);
+    if (!on) return;
+    const items = r.items || [], byId = Object.fromEntries(items.map((m) => [m.id, m]));
+    const nameOf = (id) => esc(pickLang((byId[id] || {}).name) || id);
+    const inst = items.filter((m) => m.state === "ok");
+    $("mod-count").textContent = inst.length + " / " + items.length + " · " + MB(inst.reduce((s, m) => s + m.installed, 0));
+    const btn = (c, id, label, extra = "") => `<button data-c="${c}" data-id="${esc(id)}"${extra}>${label}</button>`;
+    let moving = false;
+    $("mod-list").innerHTML = items.map((m) => {
+      const pr = m.progress;
+      moving ||= !!pr;
+      const st = { absent: t("未安装"), downloading: t("下载中"), verifying: t("校验中"), installing: t("正在装进工具包…"), ok: t("已安装"), error: t("安装失败") }[m.state] || m.state;
+      const kind = m.required ? t("必装") : m.kind === "shared" ? t("共享运行库") : "";
+      const meta = "<span>" + esc(st) + "</span>" + (kind ? "<span>" + kind + "</span>" : "") +
+        "<span>" + (m.state === "ok" ? t("占用 {b}", { b: MB(m.installed) }) : t("下载约 {a}，装好后约 {b}", { a: MB(m.download), b: MB(m.installed) })) + "</span>";
+      let desc = '<div class="tiny ext-desc">' + esc(pickLang(m.desc)) + "</div>";
+      const uses = (m.uses || []).map((u) => MOD_USES()[u] || u);
+      if (uses.length) desc += '<div class="tiny">' + t("App 里用到它的：{list}", { list: esc(listOf(uses)) }) + "</div>";
+      const deps = (m.deps || []).filter((d) => byId[d] && !byId[d].required);
+      if (deps.length) desc += '<div class="tiny">' + t("依赖：{list}", { list: listOf(deps.map(nameOf)) }) + "</div>";
+      if (m.kind === "shared" && (m.users || []).length) desc += '<div class="tiny">' + t("给这些模块用：{list}", { list: listOf(m.users.map(nameOf)) }) + "</div>";
+      const used = [...(m.usedBy.modules || []).map(nameOf), ...(m.usedBy.components || []).map((c) => esc(c))];
+      if (used.length) desc += '<div class="tiny">' + t("正在用它的：{list}", { list: listOf(used) }) + "</div>";
+      if (m.error) desc += '<div class="tiny err">' + esc(m.error) + "</div>";
+      // 命令与包：点开看全部
+      const cmds = m.commands || [];
+      if ((m.key || []).length) desc += '<div class="tiny">' + t("主要命令：") + " " + m.key.map((x) => "<code>" + esc(x) + "</code>").join(" ") + "</div>";
+      desc += '<details class="tiny"><summary>' + t("{n} 个命令、{p} 个包", { n: cmds.length, p: (m.packages || []).length }) + "</summary>" +
+        (cmds.length ? "<div>" + cmds.map((c) => "<code>" + esc(c) + "</code>").join(" ") + "</div>" : "") +
+        '<div class="mono" style="margin-top:4px;color:var(--fg3)">' + (m.packages || []).map(esc).join("<br>") + "</div>" +
+        '<div style="margin-top:4px;color:var(--fg3)">' + t("来源：Termux 官方仓库 · 快照 {s}", { s: esc(r.snapshot || "") }) + (m.sha256 ? "<br>sha256 " + esc(m.sha256) : "") + "</div></details>";
+      let bar = "";
+      if (pr && pr.total) {
+        const pct = Math.min(100, (pr.done / pr.total) * 100).toFixed(1);
+        bar = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + (pr.current && pr.current !== m.id ? nameOf(pr.current) + " · " : "") + MB(pr.done) + " / " + MB(pr.total) + (pr.via ? " · " + t("来自 {src}", { src: esc(pr.via) }) : "") + "</div>";
+      }
+      let acts = "";
+      if (m.required || m.kind === "shared") acts = "";
+      else if (m.state === "absent" || m.state === "error") {
+        // 连同还没装的依赖一起算下载量
+        const chain = [...deps.filter((d) => byId[d].state !== "ok"), m.id];
+        const dl = chain.reduce((s, id) => s + byId[id].download, 0);
+        acts = btn("install", m.id, m.state === "error" ? t("重试") : t("安装（约 {a}）", { a: MB(dl) }), chain.length > 1 ? ` data-chain="${esc(listOf(chain.map(nameOf)))}"` : "");
+      } else if (m.state === "downloading" || m.state === "verifying") acts = btn("cancel", m.id, t("取消"));
+      else if (m.state === "ok") acts = btn("remove", m.id, t("卸载"), used.length ? ' data-usedby="' + listOf(used) + '"' : "");
+      return extItem(esc(pickLang(m.name) || m.id), meta, acts, desc + bar);
+    }).join("");
+    if (moving && !$("tab-ext").classList.contains("hidden")) modTimer = setTimeout(loadModules, 1500);
+  }
+  $("mod-list").addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-c]");
+    if (!b) return;
+    const c = b.dataset.c, id = b.dataset.id;
+    if (c === "remove") {
+      if (b.dataset.usedby) return toast(t("{names} 要用它，先卸载那些", { names: b.dataset.usedby }), true);
+      if (!confirm(t("卸载这个模块？它的命令会从工具包里删掉，别的模块和组件还在用的文件会留下。以后可以随时再装。"))) return;
+    }
+    if (c === "install" && b.dataset.chain && !confirm(t("会一起装上：{list}。继续？", { list: b.dataset.chain }))) return;
+    b.disabled = true;
+    const r = await post("/api/devkit/modules/" + c, { id }).catch((e2) => ({ ok: false, message: e2.message }));
+    if (!r.ok) toast(r.message || t("失败"), true);
+    setTimeout(loadModules, 300);
+  });
+
+  function loadExt() { loadModules(); loadComponents(60); loadCustom(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
 
   // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
   // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面

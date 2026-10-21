@@ -7,6 +7,7 @@ import { claudeEnv, killTree } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";
 import { SKILLS_DIR, skillMeta } from "./extensions.mjs";
+import { modulesMissingFor } from "./modules.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -161,7 +162,11 @@ async function compList(force) {
       license: (e && e.license) || "", homepage: (e && e.homepage) || "", needs: (e && e.needs) || {},
       category: (e && e.category) || "",          // 扩展页分类索引条用（配方的 category）
       // 依赖：requires 了哪些组件、各自装好没有；谁在依赖它（卸载前要先卸那些）；本机能不能用
-      requires: ((e && e.requires) || (rec && rec.requires) || []).map((rid) => ({ id: rid, name: compName(rid, comps), ok: compDepOk(rid, comps, dk) })),
+      requires: [
+        ...((e && e.requires) || (rec && rec.requires) || []).map((rid) => ({ id: rid, name: compName(rid, comps), ok: compDepOk(rid, comps, dk) })),
+        // 模块化工具包：还没装的模块也算没满足的依赖（界面同样置灰安装按钮、写明先装哪个）
+        ...(b ? modulesMissingFor(b.baseDeps).map((m) => ({ id: "module:" + m.id, name: m.name, ok: false })) : []),
+      ],
       usedBy: rec ? compUsers(id).map((rid) => ({ id: rid, name: compName(rid, comps) })) : [],
       unsupported: compUnsupported(e),
     };
@@ -229,7 +234,7 @@ function compPkgFiles(pkg) {
  *  · 再加上它带的每个包「磁盘上现在那一版」的整份文件清单。两个组件带了同一个包、版本却不同时
  *    （浏览器带 mesa 26.2.4、GPU 驱动带 26.2.5），后装的跳过了同名文件、用的是先装那版 —— 而那版还有
  *    文件名带版本号的库（libgallium-26.2.4.so），光按路径比对会把它删掉，留下的同名文件就找不到它了 */
-function compNeeds(id, rec) {
+export function compNeeds(id, rec) {
   const s = new Set([...(rec.files || []), ...(rec.shared || [])]);
   if (!rec.shared) {
     try {
@@ -241,6 +246,19 @@ function compNeeds(id, rec) {
   }
   for (const r of [...s]) { const m = PKG_LIST.exec(r); if (m) for (const f of compPkgFiles(m[1])) s.add(f); }
   return s;
+}
+
+/** 已装组件的记录（id → rec），模块卸载时要知道组件在用哪些文件、哪些底座包 */
+export function compRecords() {
+  const out = new Map();
+  try { for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) { const r = compRecord(f.slice(0, -5)); if (r) out.set(f.slice(0, -5), r); } } catch {}
+  return out;
+}
+/** 组件依赖链里由底座提供的包（索引里这个构建的 baseDeps）；索引没给时为 null（不知道） */
+export function compBaseDeps(id, sha) {
+  const e = compIndexCache.data && compIndexCache.data.components && compIndexCache.data.components[id];
+  const b = e && (e.builds || []).find((x) => x.sha256 === sha);
+  return b && Array.isArray(b.baseDeps) ? b.baseDeps.map((d) => (typeof d === "string" ? d : d.name)) : null;
 }
 
 /** 删掉一个组件放进去的文件。两个组件带了同一个依赖包（浏览器和 GPU 驱动都带 mesa）时，
@@ -296,6 +314,9 @@ async function compInstall(id) {
   if (miss.length) return { ok: false, message: tz("要先装：{names}", { names: miss.map((rid) => compName(rid, ix.data.components).zh || rid).join("、") }) };
   const b0 = compBuildFor(entry, dk), b = b0 && { ...b0, source: entry.source, requires: entry.requires || [] };
   if (!b) return { ok: false, message: tz("这个组件还没有对应当前工具包的版本，先更新工具包或稍后再试") };
+  // 模块化工具包：组件依赖的底座包所在的模块得先装上
+  const needMods = modulesMissingFor(b.baseDeps);
+  if (needMods.length) return { ok: false, needModules: needMods.map((m) => m.id), message: tz("要先装工具包模块：{names}（扩展页上方「工具包模块」）", { names: needMods.map((m) => m.name.zh || m.id).join("、") }) };
   // 空间：压缩包 + 解开后的大小，再留 10%
   try {
     const sf = fs.statfsSync(path.dirname(PREFIX));

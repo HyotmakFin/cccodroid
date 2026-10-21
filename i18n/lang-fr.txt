@@ -1385,3 +1385,41 @@
 1385	Quête · Suivre le système
 1386	Quête · Clair
 1387	Quête · Sombre
+1388	Claude Code lui-même
+1389	Panneau Git
+1390	Démarrage de Shizuku en un geste (débogage sans fil)
+1391	Recherche de code et lecture des diffs par Claude
+1392	Compilation de programmes natifs
+1393	Création d’APK
+1394	Débogage USB
+1395	Composants GPU (Blender, navigateur…)
+1396	Traitement audio et vidéo
+1397	Mise en page, analyse de tableaux, traitement d’images
+1398	Obligatoire
+1399	Bibliothèques partagées
+1400	Occupe {b}
+1401	Utilisé dans l’app par : {list}
+1402	Dépend de : {list}
+1403	Utilisé par ces modules : {list}
+1404	Utilisé actuellement par : {list}
+1405	{n} commandes, {p} paquets
+1406	Source : dépôts officiels Termux · instantané {s}
+1407	Installer (environ {a})
+1408	{names} en a encore besoin — désinstallez-les d’abord
+1409	Désinstaller ce module ? Ses commandes sont retirées de la boîte à outils ; les fichiers encore utilisés par d’autres modules ou composants sont conservés. Vous pourrez le réinstaller à tout moment.
+1410	Seront aussi installés : {list}. Continuer ?
+1411	Installez d’abord ces modules de la boîte à outils : {names} (section « Modules de la boîte à outils » en haut d’Extensions)
+1412	Module introuvable : {id}
+1413	La boîte à outils est en un seul bloc : aucun module à installer
+1414	Un autre module est en cours d’installation ; réessayez quand il aura fini
+1415	La boîte à outils a été installée depuis un fichier local : impossible de savoir de quelle version télécharger les modules. Mettez-la d’abord à jour une fois dans les Paramètres
+1416	Espace insuffisant : environ {need} Mo nécessaires, {free} Mo libres
+1417	Fichier manquant dans le paquet du module : {file}
+1418	Échec de la vérification d’un fichier du paquet du module : {file}
+1419	La boîte à outils est en un seul bloc : aucun module à désinstaller
+1420	Le module de base ne peut pas être désinstallé
+1421	Les bibliothèques partagées suivent les modules qui les utilisent et ne se désinstallent pas seules
+1422	Un module est en cours d’installation ; réessayez quand il aura fini
+1423	Modules de la boîte à outils
+1424	La boîte à outils de développement est découpée en modules selon l’usage : n’installez que ce qui vous sert. Le module de base est obligatoire ; les bibliothèques partagées s’installent et se retirent automatiquement avec les modules qui les utilisent.
+1425	Commandes principales :

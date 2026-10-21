@@ -343,6 +343,17 @@ public class MainActivity extends Activity {
             String c = chooseDevkitSource(pin, local);
             if ("github".equals(c) || "mirror".equals(c)) {
                 boolean m = "mirror".equals(c);
+                // 模块化工具包（钉子里有 modules.json）：取清单、按钉子核 sha256，让用户勾模块，再按块装
+                org.json.JSONObject pm = pin.optJSONObject("modules");
+                if (pm != null) {
+                    String mf = pm.optString("file", "modules.json"), mgh = base + mf, mmir = Updater.devkitMirror(base, mf);
+                    File mj = ins.download(m ? mmir : mgh, m ? mgh : mmir, new File(env.files, mf), pm.optLong("bytes"), pm.optString("sha256"));
+                    byte[] bytes = java.nio.file.Files.readAllBytes(mj.toPath());
+                    java.util.List<String> want = chooseModules(new org.json.JSONObject(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)));
+                    ins.installModules(bytes, want, base, pin.getJSONObject("gz").getString("sha256"), m);
+                    mj.delete();
+                    return;
+                }
                 File gz = ins.downloadDevkit(pin, m ? mirror : gh, m ? gh : mirror);
                 ins.installDevkit(gz.getPath());
                 gz.delete();      // 解完就删，腾出 650 MB
@@ -417,6 +428,72 @@ public class MainActivity extends Activity {
         });
         done.await();
         return pick[0];
+    }
+
+    /** 首装默认勾上的模块：Claude 写代码最常用的两样。其余按需在扩展页加装 */
+    static final java.util.Set<String> DEFAULT_MODULES = new java.util.HashSet<>(java.util.Arrays.asList("cli", "build"));
+
+    /** 首装勾选表：基础必装（灰着），共享运行库按勾选自动带上；底下实时算合计下载 / 占用。返回勾上的模块 id */
+    private java.util.List<String> chooseModules(org.json.JSONObject mj) throws Exception {
+        final java.util.List<String> out = new java.util.ArrayList<>();
+        final java.util.Set<String> on = new java.util.LinkedHashSet<>(DEFAULT_MODULES);
+        CountDownLatch done = new CountDownLatch(1);
+        org.json.JSONArray all = mj.getJSONArray("modules");
+        ui.post(() -> {
+            boolean dark = uiDark();
+            int fg = BrowserPane.pal(MainActivity.this, dark, "fg"), dim = BrowserPane.pal(MainActivity.this, dark, "dim");
+            int line = BrowserPane.pal(MainActivity.this, dark, "line"), accent = BrowserPane.pal(MainActivity.this, dark, "accent");
+            chooser.removeAllViews();
+            TextView q = new TextView(this);
+            q.setTextColor(fg); q.setTextSize(14); q.setPadding(0, dp(4), 0, dp(8));
+            q.setText(Tr.t("开发工具包按用途分成了模块。勾上要装的，以后也可以在「扩展」页随时加装或卸载。"));
+            chooser.addView(q);
+            TextView sum = new TextView(this);
+            Runnable recalc = () -> {
+                long dl = 0, inst = 0;
+                try {
+                    for (org.json.JSONObject b : Installer.moduleOrder(mj, on)) { dl += b.getJSONObject("gz").optLong("bytes"); inst += b.optLong("installed"); }
+                } catch (Exception ignored) {}
+                sum.setText(Tr.f("合计下载约 {0} MB，装好后约 {1} GB", String.valueOf(dl >> 20), String.format(java.util.Locale.ROOT, "%.1f", inst / 1073741824.0)));
+            };
+            for (int i = 0; i < all.length(); i++) {
+                org.json.JSONObject m = all.optJSONObject(i);
+                if (m == null || "shared".equals(m.optString("kind"))) continue;
+                String id = m.optString("id");
+                boolean req = m.optBoolean("required");
+                android.widget.CheckBox cb = new android.widget.CheckBox(this);
+                org.json.JSONObject d = m.optJSONObject("desc");
+                String desc = d == null ? "" : d.optString(Tr.lang().startsWith("zh") ? "zh" : "en", d.optString("zh"));
+                cb.setText(Installer.moduleName(m) + (req ? "  · " + Tr.t("必装") : "") + "  · " + Tr.f("约 {0} MB", String.valueOf(m.optLong("installed") >> 20)) + "\n" + desc);
+                cb.setTextColor(req ? dim : fg);
+                cb.setTextSize(13);
+                cb.setChecked(req || on.contains(id));
+                cb.setEnabled(!req);
+                cb.setPadding(dp(6), dp(6), 0, dp(6));
+                cb.setOnCheckedChangeListener((v, c2) -> { if (c2) on.add(id); else on.remove(id); recalc.run(); });
+                chooser.addView(cb, new LinearLayout.LayoutParams(-1, -2));
+            }
+            sum.setTextColor(dim); sum.setTextSize(12); sum.setPadding(0, dp(8), 0, dp(8));
+            chooser.addView(sum);
+            recalc.run();
+            TextView go = new TextView(this);
+            go.setText(Tr.t("开始安装"));
+            go.setTextColor(accent); go.setTextSize(15); go.setGravity(Gravity.CENTER);
+            go.setPadding(dp(14), dp(10), dp(14), dp(10));
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setCornerRadius(dp(10)); bg.setStroke(dp(1), accent);
+            go.setBackground(bg);
+            go.setOnClickListener(v -> {
+                if (done.getCount() == 0) return;
+                out.addAll(on);
+                chooser.setVisibility(View.GONE);
+                done.countDown();
+            });
+            chooser.addView(go, new LinearLayout.LayoutParams(-1, -2));
+            chooser.setVisibility(View.VISIBLE);
+        });
+        done.await();
+        return out;
     }
 
     private static Intent devkitPickIntent() {

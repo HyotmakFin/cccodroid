@@ -462,6 +462,11 @@
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
     <section id="tab-ext" class="tab-pane hidden">
       <!-- 四节都是折叠容器（展开状态记在本机），每节一条横向滚动的分类索引条：点一下只看那一类 -->
+      <!-- 工具包模块（0.4.0 起）：只有模块化工具包才显示；整包工具包看不到这一节，和以前一样 -->
+      <details class="field ext-sec hidden" id="mod-field" data-sec="mod" open><summary><span data-i18n>工具包模块</span> <span id="mod-count" class="pill"></span></summary>
+        <div class="tiny" data-i18n>开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。</div>
+        <div id="mod-list" class="list"></div>
+      </details>
       <details class="field ext-sec hidden" id="comp-field" data-sec="comp" open><summary><span data-i18n>可选组件</span> <span id="comp-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。</div>
         <div class="ext-idx" id="comp-idx"></div>

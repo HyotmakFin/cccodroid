@@ -42,6 +42,22 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 分组见 `devkit.json`：不加 `--groups` 时**全部分组都打进去**（`base` 字段目前只是说明）。包括 `graphics`（Mesa、Vulkan 加载器等 9 个公共图形包，2026-10-15 并入，GPU 与浏览器组件共用）和 `media`（ffmpeg，2026-10-15 夜并入：+30 包，下载 +21 MB，解开后 +87 MB；带 MediaCodec 硬件编码）。共约 244 个包，下载约 423 MB，解包后约 1.8 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
+## 模块（`modules`，cccodroid 0.4.0 起）
+
+工具包按 `devkit.json` 的 `modules` 拆成基础模块 + 若干可选模块，App 里随装随卸：
+
+```sh
+node devkit.mjs modules [--out DIR]                      # 出划分 modules.plan.json（并冻结这一刻每个包的下载记录）
+node devkit.mjs build --target <包名> --plan <plan>       # 按冻结记录打整包（不再拉索引）
+node devkit.mjs modules --plan <plan> --build --target <包名> --out DIR   # 逐块打包，合并出 modules.json
+```
+
+- 基础模块（`required`）必装；其余模块只含超出基础的包。被两个以上模块用到、又不小于 `sharedMinMB` 的包自动提成**共享层**（目前是 libllvm），跟着用它的模块自动装卸。更小的共用包各模块各带一份（装到手机上是同一份文件）。
+- 每块一个 `devkit-<id>-<包名>.tar.gz`，带自己的 `MANIFEST`（逐文件 sha256）、`FILES`（全部路径含软链，卸载按它删）、`first-run.sh`；基础块在 `libexec/devkit/`，其余在 `libexec/devkit/modules/<id>/`。
+- 合并时检查：同一路径在两块里内容必须相同；alternatives 同组不能两块各给一个（依赖块已给、优先级不低的，打包时就跳过）。
+- CI 按「划分 → 整包 → 各块」走，同一个 Release 里整包（旧 App 用）和模块（新 App 用）出自同一份快照。
+- adb 单独成组并进基础模块：Shizuku 的无线调试自启动要用它。
+
 ## 组件（`component`）
 
 工具包之外的选装件（市场配方、预置组件）用这个子命令打：
