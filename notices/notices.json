@@ -1,5 +1,26 @@
 {
  "v": 1,
- "updated": "2026-10-22T07:08:17.651Z",
- "notices": []
+ "updated": "2026-10-22T07:14:49.040Z",
+ "notices": [
+  {
+   "id": "test-20261022",
+   "level": "warn",
+   "from": "2026-10-22",
+   "title": {
+    "zh": "测试通知",
+    "en": "Test notice"
+   },
+   "body": {
+    "zh": "这是应用内通知的真机测试，只有 0.3.12 及以上能看到，今天就过期。",
+    "en": "This is a device test of in-app notices. Only 0.3.12+ sees it, and it expires today."
+   },
+   "until": "2026-10-22",
+   "minVer": "0.3.12",
+   "link": "https://cccodroid.net/zh/known-issues/",
+   "linkText": {
+    "zh": "看已知问题",
+    "en": "Known issues"
+   }
+  }
+ ]
 }
