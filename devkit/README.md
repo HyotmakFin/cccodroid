@@ -39,7 +39,7 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 - `devkit.lock.json`：每个包的版本、文件名、SHA256、配方链接，加上仓库快照时间
 - `SBOM.tsv`：同上，表格形式
 
-分组见 `devkit.json`：不加 `--groups` 时**全部分组都打进去**，即整包；按模块分块打见下面「模块」一节。包括 `graphics`（Mesa、Vulkan 加载器等 9 个公共图形包，2026-10-15 并入，GPU 与浏览器组件共用）和 `media`（ffmpeg，2026-10-15 夜并入：+30 包，下载 +21 MB，解开后 +87 MB；带 MediaCodec 硬件编码）。共 255 个包（devkit-2026.10.22.1；10.22.1 给基础模块补了 which、patch、ed、dos2unix、lsof、nano、inetutils、net-tools、tree），从 Termux 仓库下载约 447 MB，整包 gz 约 680 MB，解包后约 1.9 GB。
+分组见 `devkit.json`：不加 `--groups` 时**全部分组都打进去**，即整包；按模块分块打见下面「模块」一节。包括 `graphics`（Mesa、Vulkan 加载器等 9 个公共图形包，2026-10-15 并入，GPU 与浏览器组件共用）和 `media`（ffmpeg，2026-10-15 夜并入：+30 包，下载 +21 MB，解开后 +87 MB；带 MediaCodec 硬件编码）。共 255 个包（devkit-2026.10.22.2；10.22.1 起基础模块补了 which、patch、ed、dos2unix、lsof、nano、inetutils、net-tools、tree），从 Termux 仓库下载约 447 MB，整包 gz 约 680 MB（10.22.2 修了 venv 用的 ensurepip pip wheel），解包后约 1.9 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
 ## 模块（`modules`，cccodroid 0.3.9 起）
