@@ -156,7 +156,8 @@ public class MainActivity extends Activity {
                 }
                 deployAssets();
                 if (!env.claudeReady() && !env.claudeOff()) {      // 用户自己卸的不装回，等他在设置里选版本
-                    ins.installClaude(new File(env.app, "scripts/install-claude.sh"));
+                    Updater u0 = Updater.get(this);
+                    ins.installClaude(new File(env.app, "scripts/install-claude.sh"), u0.pinned() ? u0.pinVer() : "latest".equals(u0.channel()) ? "latest" : "stable");
                     say(Tr.t("✓ Claude Code 就绪"));
                 }
                 // 上次自动下好的工具包更新：趁现在（刚打开、没有任务）装上

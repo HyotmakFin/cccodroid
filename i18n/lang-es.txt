@@ -1434,3 +1434,23 @@
 1434	Instalar…
 1435	¿Qué versión instalar?\nEscribe stable, latest o un número de versión concreto (p. ej. {v}).
 1436	Claude Code no está instalado. Ve a Ajustes → Actualizaciones y toca «Instalar…» para elegir una versión.
+1437	CLI: fijada {v}
+1438	CLI: fijar una versión…
+1439	Versión…
+1440	Versión de Claude Code
+1441	Seguir un canal (la actualización automática lo sigue)
+1442	Fijar una versión (la actualización automática no la toca)
+1443	Buscar versión
+1444	El inicio de sesión, las sesiones y los ajustes se conservan; las versiones antiguas pueden carecer de funciones nuevas.
+1445	Seguir {ch}
+1446	Canal estable oficial
+1447	La publicación más reciente: más nueva que stable, quizá menos estable
+1448	Instalada
+1449	Fijada
+1450	Ninguna versión coincide
+1451	No se pudo obtener la lista de versiones
+1452	Ya está así
+1453	Fijada en {v}, cambiando
+1454	Ahora sigue {ch}
+1455	La versión de desarrollo no puede fijar versiones (solo stable / latest)
+1456	No se pudo obtener la lista de versiones: {err}

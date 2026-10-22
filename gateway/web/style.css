@@ -467,7 +467,7 @@ a.weblink{overflow-wrap:anywhere}
 
 /* 模型与思考强度的快速切换（点输入栏下的模型名） */
 #model-chip{cursor:pointer}
-#model-pick{position:fixed;inset:0;z-index:56;background:var(--scrim);display:flex;align-items:flex-end}
+#model-pick,#ccv-pick{position:fixed;inset:0;z-index:56;background:var(--scrim);display:flex;align-items:flex-end}
 .mp-panel{max-height:min(80%,620px);display:flex;flex-direction:column;max-width:720px;margin:0 auto}
 .mp-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 6px}
 .mp-x{background:none;border:0;color:var(--fg3);font-size:16px;padding:6px 10px}

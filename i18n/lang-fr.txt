@@ -1434,3 +1434,23 @@
 1434	Installer…
 1435	Quelle version installer ?\nIndiquez stable, latest ou un numéro de version précis (par ex. {v}).
 1436	Claude Code n’est pas installé. Allez dans Réglages → Mises à jour et touchez « Installer… » pour choisir une version.
+1437	CLI : épinglée {v}
+1438	CLI : épingler une version…
+1439	Version…
+1440	Version de Claude Code
+1441	Suivre un canal (la mise à jour auto le suit)
+1442	Épingler une version (la mise à jour auto n'y touche plus)
+1443	Rechercher une version
+1444	Connexion, sessions et réglages sont conservés ; une version ancienne peut manquer de fonctions récentes.
+1445	Suivre {ch}
+1446	Canal stable officiel
+1447	Dernière publication, plus récente que stable, parfois moins stable
+1448	Installée
+1449	Épinglée
+1450	Aucune version correspondante
+1451	Impossible d'obtenir la liste des versions
+1452	Déjà réglé ainsi
+1453	Épinglée sur {v}, changement en cours
+1454	Suit désormais {ch}
+1455	La version de développement ne peut pas épingler (stable / latest seulement)
+1456	Impossible d'obtenir la liste des versions : {err}

@@ -121,7 +121,10 @@ final class Updater {
 
     SharedPreferences prefs() { return ctx.getSharedPreferences("upd", Context.MODE_PRIVATE); }
     boolean auto() { return prefs().getBoolean("auto", true); }
+    /** stable / latest = 跟随官方渠道；pinned = 固定在 pinVer()，自动更新、检查更新都不动它（用户 10-22 定：不能强制绑最新） */
     String channel() { return prefs().getString("channel", "stable"); }
+    String pinVer() { return prefs().getString("pin", ""); }
+    boolean pinned() { return "pinned".equals(channel()) && !pinVer().isEmpty(); }
 
     // ── 状态 ───────────────────────────────────────────────────────────
     JSONObject status() throws Exception {
@@ -130,7 +133,7 @@ final class Updater {
         if (!checking && "unknown".equals(app.state) && "unknown".equals(claude.state)) checkAsync(true);
         JSONArray a = new JSONArray();
         for (Item i : new Item[]{app, devkit, claude}) a.put(i.json());
-        return new JSONObject().put("ok", true).put("auto", auto()).put("channel", channel())
+        return new JSONObject().put("ok", true).put("auto", auto()).put("channel", channel()).put("pin", pinVer())
             .put("lastCheck", prefs().getLong("lastCheck", 0)).put("checking", checking).put("error", lastError).put("items", a)
             .put("verify", lastVerify == null ? JSONObject.NULL : lastVerify);
     }
@@ -138,8 +141,12 @@ final class Updater {
     void set(JSONObject req) {
         SharedPreferences.Editor e = prefs().edit();
         if (req.has("auto")) e.putBoolean("auto", req.optBoolean("auto", true));
-        String ch = req.optString("channel", "");
+        String ch = req.optString("channel", ""), pv = req.optString("version", "").trim();
         boolean switched = (ch.equals("stable") || ch.equals("latest")) && !ch.equals(channel());
+        // 固定版本：换到 pinned、或换固定的版本号都算「明说要这一版」
+        if (ch.equals("pinned") && pv.matches("\\d+\\.\\d+\\.\\d+[\\w.+-]*") && (!"pinned".equals(channel()) || !pv.equals(pinVer()))) {
+            e.putString("pin", pv); switched = true;
+        }
         if (switched) e.putString("channel", ch);
         e.apply();
         // 换渠道是用户明说要哪个版本：马上按新渠道查，版本对不上就直接换（切回 stable 也会换回 stable 的版本）
@@ -400,16 +407,29 @@ final class Updater {
         // 版本号：官方 → cccodroid.net 镜像 → npm 镜像的 dist-tags（Anthropic 在 npm 上用同名的 stable / latest 标签）。
         // 这里只是「有没有新版」；真正下载时 install-claude.mjs 会按官方清单的 sha256 或 npm 签名校验
         String v = null, why = "";
-        String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + channel(), "https://cccodroid.net/claude-code/" + channel(), "https://dl.cccodroid.net/claude-code/" + channel(),
+        // 固定版本时只顺带查 stable 到了哪一版（提示用），查不到也不算错
+        final String ch = pinned() ? "stable" : channel();
+        String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + ch, "https://cccodroid.net/claude-code/" + ch, "https://dl.cccodroid.net/claude-code/" + ch,
             "https://registry.npmmirror.com/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags",
             "https://registry.npmjs.org/-/package/@anthropic-ai%2fclaude-code-linux-arm64/dist-tags" };
         for (String u : urls) {
             try {
                 String t = new String(Installer.httpGetSmall(u), StandardCharsets.UTF_8).trim();
-                if (t.startsWith("{")) t = new JSONObject(t).optString(channel(), "");
+                if (t.startsWith("{")) t = new JSONObject(t).optString(ch, "");
                 if (t.matches("\\d+\\.\\d+\\.\\d+.*")) { v = t; break; }
                 why = Tr.t("版本号不对：") + t;
             } catch (Exception ex) { if (why.isEmpty()) why = ex.getMessage(); }
+        }
+        if (pinned()) {
+            String pin = pinVer();
+            claude.latest = pin;
+            if (env.claudeOff() && !env.claudeReady()) { if (!"installing".equals(claude.state)) claude.set("missing", ""); return; }
+            if (!"installing".equals(claude.state)) {
+                String info = v != null && cmpVer(v, pin) != 0 ? Tr.f("已固定 {0} · stable 已到 {1}", pin, v) : Tr.f("已固定 {0}", pin);
+                if (pin.equals(claude.current)) claude.set("uptodate", info);
+                else claude.set("available", Tr.f("固定到 {0}", pin));
+            }
+            return;
         }
         if (v == null) throw new IOException(why);
         claude.latest = v;

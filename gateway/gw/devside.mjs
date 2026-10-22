@@ -165,6 +165,7 @@ async function devApp(op, b) {
   }
   if (op === "upd_check") { devUpdCheck(); await new Promise((r) => setTimeout(r, 200)); return devUpdStatus(); }
   if (op === "upd_set") {
+    if (b.channel === "pinned") return { ok: false, message: tz("开发端不支持固定版本（只跟随 stable / latest）") };
     if (typeof b.auto === "boolean") devUpd.auto = b.auto;
     // 换渠道 = 明说要那个渠道的版本：查完对不上就直接换（自动更新关着也换）
     if ((b.channel === "stable" || b.channel === "latest") && b.channel !== devUpd.channel) {
@@ -183,8 +184,38 @@ async function devApp(op, b) {
   return { ok: false, message: tz("开发端不支持：{op}", { op }) };
 }
 
+// ── Claude Code 版本选单：有哪些版本 + 官方 stable / latest 各是哪一版 ─────────────────────────
+// 版本列表取 npm 镜像（Anthropic 每一版都发到 npm）；stable / latest 以官方为准（含 cccodroid.net 对官方的镜像），
+// 官方和两个镜像都取不到时留空，不拿 npm 的 dist-tags 顶（两边是否始终同步没核实过）。
+// 装哪一版都由 install-claude.mjs 按官方清单 / PGP / npm 签名把关
+let ccVersions = { at: 0, data: null };
+async function claudeVersions(force) {
+  if (!force && ccVersions.data && Date.now() - ccVersions.at < 600e3) return ccVersions.data;
+  const get = async (u, ms = 12000) => { const r = await fetch(u, { signal: AbortSignal.timeout(ms), headers: { Accept: "application/vnd.npm.install-v1+json" } }); if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); };
+  const channel = async (ch) => {
+    for (const b of ["https://downloads.claude.ai/claude-code-releases", "https://cccodroid.net/claude-code", "https://dl.cccodroid.net/claude-code"]) {
+      try { const v = (await get(`${b}/${ch}`, 8000)).trim(); if (/^\d+\.\d+\.\d+/.test(v)) return v; } catch {}
+    }
+    return "";
+  };
+  let versions = [], err = "";
+  for (const reg of ["https://registry.npmmirror.com", "https://registry.npmjs.org"]) {
+    try {
+      const j = JSON.parse(await get(`${reg}/@anthropic-ai%2fclaude-code-linux-arm64`, 20000));
+      versions = Object.keys(j.versions || {}).filter((v) => /^\d+\.\d+\.\d+$/.test(v));
+      if (versions.length) break;
+    } catch (e) { err = e.message; }
+  }
+  versions.sort((a, b) => cmpVer(b, a));
+  const [stable, latest] = await Promise.all([channel("stable"), channel("latest")]);
+  const data = { ok: versions.length > 0 || !!stable, versions, stable, latest, message: versions.length ? "" : tz("取不到版本列表：{err}", { err }) };
+  if (data.ok) ccVersions = { at: Date.now(), data };
+  return data;
+}
+
 // ── 路由：/api/mem/status /api/mem/clear /api/priv/status /api/priv/request /api/priv/open /api/priv/audit /api/priv/keepalive /api/app/ ──
 export async function routeDevside(req, res, u, p) {
+  if (req.method === "GET" && p === "/api/claude/versions") return sendJson(res, 200, await claudeVersions(u.searchParams.get("refresh") === "1"));
   if (req.method === "GET" && p === "/api/mem/status") return sendJson(res, 200, await ccMem(["status", "--json"]));
   if (req.method === "POST" && p === "/api/mem/clear") {
     const b = JSON.parse((await readBody(req)) || "{}");

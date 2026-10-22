@@ -612,9 +612,10 @@ final class Installer {
     }
 
     // ── 官方 Claude Code ───────────────────────────────────────────────
-    void installClaude(File script) throws IOException {
+    /** ver：stable / latest / 具体版本号 —— 按设置里选的装，别先装个 stable 再让自动更新换掉（白下一次约 275 MB） */
+    void installClaude(File script, String ver) throws IOException {
         ui.step(Tr.t("从官方渠道下载 Claude Code…"));
-        int rc = run(env.bin("bash").getPath(), script.getPath());
+        int rc = run(env.bin("bash").getPath(), script.getPath(), ver);
         if (rc != 0 || !env.claudeReady()) throw new IOException(Tr.f("Claude Code 安装失败（rc={0}）", rc));
     }
 

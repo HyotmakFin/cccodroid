@@ -4484,7 +4484,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     lastUpd = st;
     $("upd-field").classList.remove("hidden");
     $("upd-auto").checked = !!st.auto;
-    $("upd-channel").value = st.channel || "stable";
+    $("upd-channel").value = st.channel === "pinned" ? "pinned" : st.channel || "stable";
+    $("upd-channel").querySelector("option[value=pinned]").textContent = st.channel === "pinned" && st.pin ? t("CLI：固定 {v}", { v: st.pin }) : t("CLI：固定版本…");
     let moving = st.checking;
     $("upd-items").innerHTML = st.items.map((it) => {
       const busy = it.state === "downloading" || it.state === "installing" || it.state === "verifying";
@@ -4505,10 +4506,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       // 卸载：工具包回到首装（重选来源和模块）、Claude Code 重新下载；外壳做，老外壳没有这个接口就不显示
       const unBtn = (it.id === "devkit" || it.id === "claude") && it.current && !busy && window.CCApp && CCApp.uninstall
         ? `<button class="btn sm ghost danger" data-item="${it.id}" data-act="uninstall">${t("卸载")}</button>` : "";
+      const verBtn = it.id === "claude" && it.current && !busy
+        ? `<button class="btn sm ghost" data-item="claude" data-act="versions">${t("版本…")}</button>` : "";
       return `<div class="row-actions" style="justify-content:space-between">
         <div><b>${esc(it.name)}</b> <span class="tiny">${ver}</span><br>
           <span class="prov-state ${cls}" style="margin:0">${UPD_TEXT[it.state] || esc(it.state)}${prog}${it.message ? " · " + esc(it.message) : ""}</span></div>
-        <div class="row-actions">${verifyBtn}${localBtn}${unBtn}${btn ? `<button class="btn sm" data-item="${esc(it.id)}"${act ? ` data-act="${act}"` : ""}>${btn}</button>` : ""}</div></div>`;
+        <div class="row-actions">${verifyBtn}${localBtn}${verBtn}${unBtn}${btn ? `<button class="btn sm" data-item="${esc(it.id)}"${act ? ` data-act="${act}"` : ""}>${btn}</button>` : ""}</div></div>`;
     }).join("");
     const v = st.verify;
     if (v && v.manifest && (v.missing || v.changed) && (v.samples || []).length)
@@ -4520,20 +4523,58 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 点完按钮 / 换完渠道后的一小段时间也接着刷：后台的检查、换版本要过一会儿才开始，只看「正在进行」会漏掉结果
     if ((moving || st.checking || Date.now() < updFollowUntil) && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
   }
+  /** Claude Code 版本选单：跟随 stable / latest，或固定到某一版（固定后自动更新、检查更新都不动它） */
+  async function openClaudeVersions() {
+    if ($("ccv-pick")) return;
+    const it = ((lastUpd && lastUpd.items) || []).find((x) => x.id === "claude") || {};
+    const mode = (lastUpd && lastUpd.channel) || "stable", pin = (lastUpd && lastUpd.pin) || "";
+    const m = document.createElement("div");
+    m.id = "ccv-pick";
+    m.innerHTML = `<div class="sheet-panel mp-panel">
+      <div class="mp-head"><b>${t("Claude Code 版本")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">✕</button></div>
+      <div class="mp-lbl">${t("跟随渠道（自动更新跟着它走）")}</div><div class="ccv-ch"><div class="tiny">${t("读取中…")}</div></div>
+      <div class="mp-lbl">${t("固定到某一版（自动更新不再改它）")}</div>
+      <input class="mp-q" type="search" inputmode="decimal" autocomplete="off" placeholder="${t("搜索版本号")}">
+      <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
+      <div class="tiny mp-note">${t("登录、会话和设置不受影响；版本越旧，越可能缺新功能。")}</div></div>`;
+    document.body.appendChild(m);
+    const close = () => m.remove();
+    m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
+    let info;
+    try { info = await api("/api/claude/versions"); } catch (e) { info = { ok: false, message: e.message, versions: [] }; }
+    if (!m.isConnected) return;
+    const chBox = m.querySelector(".ccv-ch"), list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
+    const chRow = (ch, v, sub) => `<button type="button" class="mp-item${mode === ch ? " cur" : ""}" data-ch="${ch}"><span>${t("跟随 {ch}", { ch })}${v ? " · " + esc(v) : ""}</span><small>${esc(sub)}</small></button>`;
+    chBox.innerHTML = chRow("stable", info.stable, t("官方稳定渠道")) + chRow("latest", info.latest, t("最新发布，比 stable 新，也可能没那么稳"));
+    const tags = (v) => [v === info.stable ? "stable" : "", v === info.latest ? "latest" : "", v === it.current ? t("当前装的") : "", mode === "pinned" && v === pin ? t("已固定") : ""].filter(Boolean).join(" · ");
+    const paint = () => {
+      const kw = q.value.trim();
+      const vs = (info.versions || []).filter((v) => !kw || v.includes(kw));
+      list.innerHTML = vs.slice(0, 200).map((v) => `<button type="button" class="mp-item${mode === "pinned" && v === pin ? " cur" : ""}" data-v="${esc(v)}"><span>${esc(v)}</span>${tags(v) ? `<small>${esc(tags(v))}</small>` : ""}</button>`).join("")
+        || `<div class="tiny">${info.versions && info.versions.length ? t("没有匹配的版本") : esc(info.message || t("取不到版本列表"))}</div>`;
+    };
+    paint();
+    q.addEventListener("input", paint);
+    m.querySelector(".mp-panel").addEventListener("click", async (e) => {
+      const b = e.target.closest(".mp-item");
+      if (!b) return;
+      const ch = b.dataset.ch || "pinned", v = b.dataset.v || "";
+      if (ch === mode && (ch !== "pinned" || v === pin) && it.state !== "missing") { close(); toast(t("已经是这个设置")); return; }
+      close();
+      const r = await post("/api/app/upd_set", ch === "pinned" ? { channel: ch, version: v } : { channel: ch }).catch((e2) => ({ ok: false, message: e2.message }));
+      // 卸载过（未安装）：改设置不会自动装回，要再明说装一次
+      if (it.state === "missing" && r.ok !== false) {
+        const r2 = await post("/api/app/upd_apply", { item: "claude", version: ch === "pinned" ? v : ch }).catch((e2) => ({ ok: false, message: e2.message }));
+        toast(r2.message || (r2.ok ? t("开始") : t("失败")), !r2.ok);
+      } else toast(r.ok === false ? (r.message || t("失败")) : ch === "pinned" ? t("已固定到 {v}，正在切换", { v }) : t("已改为跟随 {ch}", { ch }), r.ok === false);
+      followUpd(); setTimeout(loadUpd, 500);
+    });
+  }
   $("upd-items").addEventListener("click", async (e) => {
     const item = e.target.dataset && e.target.dataset.item;
     if (!item) return;
     const act = e.target.dataset.act;
-    if (act === "pick") {
-      // 卸载后重装：用户自己定版本（stable / latest / 具体版本号），默认当前渠道查到的最新版
-      const it = (lastUpd.items || []).find((x) => x.id === item) || {};
-      const v = prompt(t("装哪个版本？\n填 stable、latest，或具体版本号（如 {v}）。", { v: it.latest || "2.1.100" }), it.latest || "stable");
-      if (v === null || !v.trim()) return;
-      const r = await post("/api/app/upd_apply", { item, version: v.trim() }).catch((e2) => ({ ok: false, message: e2.message }));
-      toast(r.message || (r.ok ? t("开始") : t("失败")), !r.ok);
-      followUpd(); setTimeout(loadUpd, 500);
-      return;
-    }
+    if (act === "pick" || act === "versions") { openClaudeVersions(); return; }   // 卸载后重装、平时换版本：都走版本选单
     if (act === "uninstall") {
       const msg = item === "devkit"
         ? t("卸载开发工具包？\n\n会删掉整个工具包，连同装在里面的组件、加装的模块、你用 pip / npm -g / pkg 装的东西，然后回到首次安装，重新选下载来源和模块。\n\n会话、工作区、登录和设置都保留。正在跑的终端会被关掉。")
@@ -4627,7 +4668,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     followUpd(); setTimeout(loadUpd, 300);
   });
   $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch(() => {}));
-  $("upd-channel").addEventListener("change", (e) => { followUpd(); post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {}); });
+  $("upd-channel").addEventListener("change", (e) => {
+    // 固定版本要先挑一版：开选单，下拉框先退回原样，挑完 loadUpd 会刷新成「固定 x.y.z」
+    if (e.target.value === "pinned") { e.target.value = (lastUpd && lastUpd.channel) || "stable"; openClaudeVersions(); return; }
+    followUpd(); post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {});
+  });
   $("priv-ka").addEventListener("change", async (e) => {
     const on = e.target.checked;
     if (on && !confirm(t("开启后台保活增强？\n\n会改几项系统设置：幽灵进程上限（影响所有应用）、本应用的电池白名单与后台运行限制。关掉开关会恢复前两项。"))) {
