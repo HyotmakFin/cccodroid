@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
-import { SID_RE, TRASH_KEEP_DAYS, exportSessions, forkSession, importSessions, listTrash, locateUserTurn, purgeTrash, realWorkspace, restoreSession, rewindFiles, rewindFixup, trashSession } from "./sessionops.mjs";
+import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, importSessions, listTrash, locateUserTurn, purgeTrash, realWorkspace, restoreSession, rewindFiles, rewindFixup, trashSession, undoDelete } from "./sessionops.mjs";
 import { goalStateOf, tasksOf } from "./goal.mjs";
 import { agentFilesOf, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { runOfSession } from "./runs.mjs";
@@ -366,6 +366,15 @@ export async function routeSessions(req, res, u, p) {
         if (!fork.ok) return sendJson(res, fork.status || 400, { error: "fork", message: fork.message, files: fx });
       }
       return sendJson(res, 200, { ok: true, files: fx, fork });
+    }
+
+    // 删一条消息（which: user = 这一轮的提问；bot = 这一轮 Claude 的整条回复），可撤销最近一次
+    if (req.method === "POST" && (action === "delmsg" || action === "undodel")) {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      let r;
+      try { r = action === "delmsg" ? deleteMessage(id, String(b.userText || ""), Number(b.after) || 0, b.which === "user" ? "user" : "bot") : undoDelete(id, String(b.undo || "")); }
+      catch (e) { r = { ok: false, status: 500, message: e.message }; }
+      return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: action, message: tr(LAST_LANG, r.message) });
     }
 
     if (req.method === "POST" && action === "fork") {

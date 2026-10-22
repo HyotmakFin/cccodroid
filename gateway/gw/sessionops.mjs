@@ -83,6 +83,67 @@ export function forkSession(id, userText, after, { before = false } = {}) {
   return { ok: true, id: nid, title: NAMES[nid], kept: best + 1, total: users.length };
 }
 
+// ── 删一条消息：用户的一条提问，或 Claude 的一整条回复（含它的工具调用和结果） ──
+// 原地改 transcript：删掉的行从文件里拿走，后面挂在它们身上的行（parentUuid）顺着链接到最近一个没删的祖先，
+// claude 下一轮 --resume 沿 parentUuid 回溯时就看不到它们了。改前整份抄进回收站的 .edits/（留 30 天），撤销就是抄回来。
+// 文件检查点（file-history-snapshot）、摘要这些不在对话链上的行不动。
+const EDITS_DIR = path.join(TRASH_DIR, ".edits");
+const UNDO = new Map();   // 会话号 → 最近一次删消息的 { backup, size, mtime }：撤销前核对文件没再变过
+const CHAIN_TYPES = new Set(["user", "assistant", "system", "progress", "attachment"]);
+export function deleteMessage(id, userText, after, which) {
+  if (runOfSession(id)) return { ok: false, status: 409, message: tz("这个会话正在生成中，等它答完再删。") };
+  const loc = locateUserTurn(id, userText, after);
+  if (!loc.ok) return loc;
+  const { found, lines, users, best } = loc;
+  const from = users[best].i, to = best + 1 < users.length ? users[best + 1].i : lines.length;
+  const drop = new Set();
+  if (which === "user") drop.add(from);
+  else for (let i = from + 1; i < to; i++) {
+    const l = lines[i]; if (!l.trim()) continue;
+    try { const ev = JSON.parse(l); if (CHAIN_TYPES.has(ev.type) && !ev.isSidechain) drop.add(i); } catch {}
+  }
+  if (!drop.size) return { ok: false, status: 409, message: tz("这条消息在会话记录里没有可删的内容。") };
+  const parentOf = new Map();
+  for (const i of drop) { try { const ev = JSON.parse(lines[i]); if (ev.uuid) parentOf.set(ev.uuid, ev.parentUuid ?? null); } catch {} }
+  const up = (u) => { let n = 0; while (u && parentOf.has(u) && n++ < 100000) u = parentOf.get(u); return u; };
+  const out = [];
+  lines.forEach((l, i) => {
+    if (drop.has(i) || !l.trim()) return;
+    if (!parentOf.size || !l.includes("arentUuid")) return out.push(l);
+    let ev; try { ev = JSON.parse(l); } catch { return out.push(l); }
+    let ch = false;
+    for (const k of ["parentUuid", "logicalParentUuid"]) if (ev[k] && parentOf.has(ev[k])) { ev[k] = up(ev[k]); ch = true; }
+    out.push(ch ? JSON.stringify(ev) : l);
+  });
+  const bdir = EDITS_DIR;
+  fs.mkdirSync(bdir, { recursive: true });
+  const backup = id + "." + Date.now() + ".jsonl";
+  fs.copyFileSync(found.file, path.join(bdir, backup));
+  const tmp = found.file + ".tmp-del";
+  fs.writeFileSync(tmp, out.join("\n") + "\n");
+  fs.renameSync(tmp, found.file);
+  PEEK_CACHE.delete(found.file);
+  const st = fs.statSync(found.file);
+  UNDO.set(id, { backup, size: st.size, mtime: st.mtimeMs });
+  log(`删消息 ${id.slice(0, 8)}：第 ${best + 1} 轮的${which === "user" ? "提问" : "回复"}，${drop.size} 行`);
+  return { ok: true, removed: drop.size, undo: backup };
+}
+/** 撤销删消息：把备份抄回去。只认这次网关运行里最近一次删除，且之后会话文件没再变过（免得吞掉新的一轮） */
+export function undoDelete(id, backup) {
+  const u = UNDO.get(id);
+  if (!u || u.backup !== backup) return { ok: false, status: 409, message: tz("只能撤销最近一次删除。") };
+  if (runOfSession(id)) return { ok: false, status: 409, message: tz("这个会话正在生成中。") };
+  const found = findSessionFile(id), src = path.join(EDITS_DIR, backup);
+  if (!found || !fs.existsSync(src)) return { ok: false, status: 404, message: tz("备份已经不在了。") };
+  const st = fs.statSync(found.file);
+  if (st.size !== u.size || st.mtimeMs !== u.mtime) return { ok: false, status: 409, message: tz("删除之后会话又有了新内容，没法撤销。") };
+  fs.copyFileSync(src, found.file);
+  PEEK_CACHE.delete(found.file);
+  UNDO.delete(id);
+  log(`撤销删消息 ${id.slice(0, 8)}`);
+  return { ok: true };
+}
+
 /** 把 Claude 改过的文件退回到某条用户消息之前（claude 的文件检查点，只覆盖 Edit / Write / NotebookEdit，命令改的不算）。
  *  每轮一个进程也没关系：检查点记在会话记录里，--resume 起来就能用（2026-10-19 实测）。dryRun 只算会动哪些文件。 */
 export function rewindFiles(sid, userUuid, dryRun) {
@@ -224,6 +285,8 @@ export function expireTrash() {
   const cut = Date.now() - TRASH_KEEP_DAYS * 86400000;
   const old = listTrash().filter((m) => m.deletedAt < cut).map((m) => m.id);
   if (old.length) log(`回收站：清掉 ${purgeTrash(old)} 个放满 ${TRASH_KEEP_DAYS} 天的会话`);
+  // 删消息留的备份也一样
+  try { for (const f of fs.readdirSync(EDITS_DIR)) { const p = path.join(EDITS_DIR, f); if (fs.statSync(p).mtimeMs < cut) fs.rmSync(p, { force: true }); } } catch {}
 }
 
 /** claude 给 cwd 起项目目录名的规则：非字母数字一律换成 -。

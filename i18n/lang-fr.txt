@@ -1487,3 +1487,18 @@
 1487	Supprimez-le dans Extensions → Composants personnalisés puis réimportez-le
 1488	Le programme ou les bibliothèques du composant personnalisé « {id} » ont disparu
 1489	Vérifier les enregistrements
+1490	Cette session n'est pas encore enregistrée. Supprimez après une réponse complète
+1491	Génération en cours. Attendez la fin pour supprimer
+1492	Aucun message de votre part avant cette réponse : impossible de la supprimer seule
+1493	Supprimer ce message ? Claude ne le verra plus (sa réponse reste).
+1494	Supprimer cette réponse ? Ses appels d'outils et résultats partent avec, et Claude ne les verra plus.
+1495	Entrée envoie
+1496	Entrée ajoute une ligne. Ctrl + Entrée ou le bouton d'envoi envoie
+1497	Cette session est en cours de génération. Attendez la fin pour supprimer.
+1498	Rien à supprimer pour ce message dans l'historique de la session.
+1499	Seule la dernière suppression peut être annulée.
+1500	La sauvegarde n'existe plus.
+1501	La session a du nouveau contenu depuis la suppression : annulation impossible.
+1502	Touche Entrée
+1503	Envoyer (Maj + Entrée pour une nouvelle ligne)
+1504	Nouvelle ligne (Ctrl + Entrée ou bouton d'envoi pour envoyer)

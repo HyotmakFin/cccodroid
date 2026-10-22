@@ -1487,3 +1487,18 @@
 1487	Elimínalo en Extensiones → Componentes personalizados e impórtalo de nuevo
 1488	Han desaparecido el programa o las bibliotecas del componente personalizado «{id}»
 1489	Comprobar registros
+1490	Esta sesión aún no se ha guardado. Borra después de una respuesta completa
+1491	Generando. Espera a que termine para borrar
+1492	No hay un mensaje tuyo antes de esta respuesta, así que no se puede borrar sola
+1493	¿Borrar este mensaje? Claude ya no lo verá (su respuesta se queda).
+1494	¿Borrar esta respuesta? Sus llamadas a herramientas y resultados se van con ella, y Claude ya no los verá.
+1495	Intro envía
+1496	Intro añade una línea. Ctrl + Intro o el botón de enviar envía
+1497	Esta sesión está generando. Espera a que termine para borrar.
+1498	No hay nada que borrar de este mensaje en el registro de la sesión.
+1499	Solo se puede deshacer el borrado más reciente.
+1500	La copia de seguridad ya no está.
+1501	La sesión tiene contenido nuevo desde el borrado, así que no se puede deshacer.
+1502	Tecla Intro
+1503	Enviar (Mayús + Intro para nueva línea)
+1504	Nueva línea (Ctrl + Intro o botón de enviar para enviar)

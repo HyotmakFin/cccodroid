@@ -75,6 +75,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastEl.classList.add("hidden"), isErr ? 4200 : 3200);
   }
+  // 带一个按钮的提示条（撤销之类），多停几秒
+  function toastAct(msg, label, fn) {
+    toastEl.textContent = msg + " ";
+    const b = document.createElement("button");
+    b.className = "toast-act"; b.textContent = label;
+    b.onclick = () => { toastEl.classList.add("hidden"); fn(); };
+    toastEl.appendChild(b);
+    toastEl.className = "";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.add("hidden"), 7000);
+  }
   // ── 保存到（A4）：外壳有 CCApp.saveAs 时，下载 / 导出一律走系统「保存到」面板 ──
   //  不要存储权限，也不会把文件落进用户打不开的私有目录。结果由外壳回调 __ccSaved
   const canSaveAs = () => !!(window.CCApp && window.CCApp.saveAs);
@@ -491,6 +502,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     resend: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>',
     fork: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9c0 5-7 4-11.2 8.6"/>',
     rewind: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
+    del: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
   };
   const userTextOf = new WeakMap();   // 用户气泡 → 原文（分叉时拿它在 transcript 里认出是哪一轮）
   const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
@@ -500,12 +512,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     setHtml(b, renderMd(text));
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里"));
+    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("del", t("删除"));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a;
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
       if (a === "rewind") rewindTo(b.parentElement);
+      if (a === "del") deleteMsg(b.parentElement, "user");
     });
     b.parentElement.appendChild(acts);
     return b;
@@ -1187,7 +1200,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const acts = document.createElement("div");
     acts.className = "msg-acts";
     acts.innerHTML = actBtn("copy", t("复制")) + (canShareText() ? actBtn("share", t("转发")) : "") +
-      (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")));
+      (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")) + actBtn("del", t("删除")));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a, text = getText();
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
@@ -1196,8 +1209,37 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         else navigator.share({ text }).catch(() => {});
       }
       if (a === "fork") forkFrom(msgEl);
+      if (a === "del") deleteMsg(msgEl, "bot");
     });
     msgEl.appendChild(acts);
+  }
+
+  // 删一条消息：提问只删这一条；回复删整条（连同它的工具调用和结果）。改的是会话记录本身，Claude 下一轮就看不到了。
+  // 删完直接从界面上拿掉（不重载，滚动位置不跳）；提示条上能撤销最近一次
+  async function deleteMsg(msgEl, which) {
+    const sid = view.sessionId;
+    if (!sid) return toast(t("这个会话还没存下来，答完一轮再删"), true);
+    if (isBusy()) return toast(t("正在生成，等它答完再删"), true);
+    const users = [...chatEl.querySelectorAll(".msg.user")].filter((u) => userTextOf.has(u));
+    let turn = which === "user" ? msgEl : null;
+    if (!turn) for (const u of users) if (u.compareDocumentPosition(msgEl) & Node.DOCUMENT_POSITION_FOLLOWING) turn = u;
+    const after = users.length - 1 - users.indexOf(turn);
+    if (!turn) return toast(t("这条回复前面没有你的消息，没法单独删"), true);
+    if (!confirm(which === "user" ? t("删掉这条提问？Claude 之后就看不到它了（它的回复保留）。") : t("删掉这条回复？连同它的工具调用和结果一起删，Claude 之后就看不到了。"))) return;
+    try {
+      const r = await api("/api/session/" + encodeURIComponent(sid) + "/delmsg", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userText: userTextOf.get(turn), after, which }),
+      });
+      if (which === "user") { userTextOf.delete(msgEl); msgEl.remove(); } else msgEl.remove();
+      toastAct(t("已删除"), t("撤销"), async () => {
+        try {
+          await api("/api/session/" + encodeURIComponent(sid) + "/undodel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ undo: r.undo }) });
+          if (view.sessionId === sid) openSession(sid);
+          toast(t("已恢复"));
+        } catch (e) { toast(e.message, true); }
+      });
+    } catch (e) { toast(e.message, true); }
   }
 
   // 分叉：保留到这条回复为止的对话，另起一个会话接着聊；原会话不动。
@@ -2286,8 +2328,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (e.key === "Escape") { hidePopup(); return; }
     }
     if (e.key === "ArrowUp" && !inputEl.value && draftStash) { e.preventDefault(); draftRestore(); return; }
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (enterSends() || e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
   });
+  // 回车键：默认发送；手机软键盘没有 Shift，想多行输入的可以改成回车换行（Ctrl + 回车或发送键发出）
+  const enterSends = () => localStorage.getItem("cc.enterKey") !== "newline";
+  function applyEnterKey() { inputEl.enterKeyHint = enterSends() ? "send" : "enter"; $("set-enter").value = enterSends() ? "send" : "newline"; }
+  $("set-enter").addEventListener("change", (e) => {
+    localStorage.setItem("cc.enterKey", e.target.value);
+    applyEnterKey();
+    toast(enterSends() ? t("回车直接发送") : t("回车换行，Ctrl + 回车或点发送键发出"));
+  });
+  applyEnterKey();
 
   // 粘贴：剪贴板里是图片就直接落盘成路径
   inputEl.addEventListener("paste", async (e) => {

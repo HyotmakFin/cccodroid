@@ -21,7 +21,8 @@
   const NAMES = { files: tk("文件"), viewer: tk("查看"), git: tk("版本"), term: tk("终端"), browser: tk("浏览器") };
   // 浏览器窗格是外壳的原生视图，永远浮在页面上面 —— 这些浮层开着时得先把它藏起来，不然会被它挡住
   const COVERS = ["lightbox", "sheet", "popup", "drawer", "dropzone"];
-  const LS_RATIO = "cc_lay_ratio", LS_DOCK = "cc_lay_dock";
+  const LS_RATIO = "cc_lay_ratio", LS_DOCK = "cc_lay_dock", LS_LW = "cc_lay_lw";
+  const MIN_SIDE = 240, MAX_SIDE = 560;
   const root = document.documentElement;
   const $ = (id) => document.getElementById(id);
   const tr = (s) => (window.I18N && I18N.t ? I18N.t(s) : s);
@@ -32,7 +33,13 @@
   const rtl = () => root.getAttribute("dir") === "rtl";
   const docked = () => tier >= 3 && localStorage.getItem(LS_DOCK) !== "0";
 
-  function leftWidth() { return docked() ? Math.round(Math.min(420, Math.max(300, innerWidth * 0.28))) : 0; }
+  // 常驻侧栏宽度：拖过就用拖的（像素），没拖过按窗口宽度给个默认；总要给对话留够 MIN_CHAT
+  function leftWidth() {
+    if (!docked()) return 0;
+    const saved = parseFloat(localStorage.getItem(LS_LW));
+    const w = saved > 0 ? saved : Math.min(420, Math.max(300, innerWidth * 0.28));
+    return Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, innerWidth - MIN_CHAT, w)));
+  }
 
   function rightWidth() {
     const lw = leftWidth(), avail = innerWidth - lw;
@@ -154,12 +161,36 @@
     s.addEventListener("dblclick", () => { localStorage.removeItem(LS_RATIO); apply(); });
   }
 
+  // 侧栏右边缘的拖拽条：拖动改常驻侧栏宽度，记在 localStorage；双击回到默认
+  function sideSplitter() {
+    const s = document.createElement("div");
+    s.id = "side-split";
+    s.setAttribute("role", "separator");
+    s.setAttribute("aria-orientation", "vertical");
+    document.body.appendChild(s);
+    let drag = false;
+    s.addEventListener("pointerdown", (e) => { drag = true; try { s.setPointerCapture(e.pointerId); } catch {} root.classList.add("side-drag"); e.preventDefault(); });
+    s.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      let lw = rtl() ? innerWidth - e.clientX : e.clientX;
+      const rw = root.classList.contains("has-right") ? MIN_PANE : 0;
+      lw = Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, innerWidth - MIN_CHAT - rw, lw)));
+      localStorage.setItem(LS_LW, String(lw));
+      root.style.setProperty("--lw", lw + "px");
+      placeBrowser();
+    });
+    const end = () => { if (!drag) return; drag = false; root.classList.remove("side-drag"); apply(); };
+    s.addEventListener("pointerup", end);
+    s.addEventListener("pointercancel", end);
+    s.addEventListener("dblclick", () => { localStorage.removeItem(LS_LW); apply(); });
+  }
+
   let busy = false, raf = 0;
   addEventListener("resize", () => { if (busy) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(apply); });
 
   window.CCLayout = {
     // app.js 启动时交过来：openDrawer() 展开侧栏并加载数据，closeDrawer(force) 收起
-    init(h) { hooks = h || {}; watch(); splitter(); apply(); },
+    init(h) { hooks = h || {}; watch(); splitter(); sideSplitter(); apply(); },
     tier: () => tier,
     docked,
     // 宽屏下处于停靠状态的右侧窗格，按"最近打开在后"排；返回手势先关最后一个

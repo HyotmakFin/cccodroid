@@ -492,6 +492,7 @@ a.weblink{overflow-wrap:anywhere}
   box-shadow:0 6px 26px var(--shadow);animation:fade .18s;max-width:86vw;text-align:center;
 }
 #toast.err{border-color:var(--err-line);color:var(--err-fg)}
+#toast .toast-act{margin-inline-start:10px;color:var(--accent);font-weight:600;background:none;border:0;padding:2px 4px;font-size:inherit;cursor:pointer}
 
 /* ═══════════════════════════════════════════════════════════════════
    家具三件套：递进来 / 拿出去 / 看得见
@@ -897,6 +898,18 @@ html.has-right #ws-split::after{
   border-radius:2px;background:var(--line);
 }
 html.ws-drag #ws-split::after{background:var(--accent)}
+/* 常驻侧栏的拉宽条：贴在侧栏右边缘，平时只是一根细线，按住时变成强调色 */
+#side-split{display:none}
+html.dock-l #side-split{
+  display:block;position:fixed;top:0;bottom:0;inset-inline-start:calc(var(--lw) - 5px);width:10px;
+  z-index:45;cursor:col-resize;touch-action:none;
+}
+html.dock-l #side-split::after{
+  content:"";position:absolute;top:0;bottom:0;left:4px;width:2px;background:transparent;transition:background .15s;
+}
+html.dock-l #side-split:hover::after{background:var(--line)}
+html.side-drag #side-split::after{background:var(--accent)}
+html.side-drag,html.ws-drag{user-select:none;-webkit-user-select:none}
 html.ws-drag body{user-select:none}
 #browser{position:fixed;inset:0;z-index:72;background:var(--bg);display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
 #browser-slot{flex:1;min-height:0}
