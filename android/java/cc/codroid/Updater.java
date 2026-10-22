@@ -285,7 +285,8 @@ final class Updater {
             // GitHub 不通：应用本身改看镜像的发布列表；工具包没有镜像，如实说查不了（别报成"已是最新"）
             try { rels = new JSONArray(new String(Installer.httpGetSmall(MIRROR + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; }
             catch (Exception e2) { app.set("error", lastError); }
-            devkit.set("error", lastError);
+            if (pinnedInstalled()) devkit.set("uptodate", Tr.t("已是本应用配套的版本（GitHub 连不上，暂时查不了更新的）"));
+            else devkit.set("error", lastError);
         }
         if (rels != null) {
             try { checkApp(rels); if (mirror && !"error".equals(app.state)) app.message = app.message.isEmpty() ? Tr.t("来自 cccodroid.net 镜像") : app.message + Tr.t(" · 来自 cccodroid.net 镜像"); }
@@ -340,7 +341,16 @@ final class Updater {
         if ("verifying".equals(st0)) { recheckDevkit = true; return; }   // 校验完再补查（见 verifyAsync）
         if ("downloading".equals(st0) || "installing".equals(st0) || "ready".equals(st0)) return;
         String base = "https://github.com/" + REPO + "/releases/download/" + best + "/";
-        JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
+        // 最新的就是 APK 钉的那版（常态：新工具包跟着新 APK 走）：校验值用 APK 自带的，不联网 ——
+        // 国内连不上 github.com 时，以前这里取 devkit.lock.json 失败，整行报错（群友 10-22）
+        JSONObject pin = devkitPin(ctx), lock;
+        boolean lockFromMirror = false;
+        if (pin != null && best.equals(pin.optString("tag")) && pin.optJSONObject("gz") != null) lock = pin;
+        else {
+            byte[][] got = new byte[1][];
+            lockFromMirror = fetchDevkitFile(base, "devkit.lock.json", got);
+            lock = new JSONObject(new String(got[0], StandardCharsets.UTF_8));
+        }
         if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT) {
             devkit.set("uptodate", Tr.f("{0} 需要更新版本的 cccodroid", best)); return;
         }
@@ -361,8 +371,27 @@ final class Updater {
         devkit.file = new File(env.files, gz.getString("file"));
         devkit.modules = null; devkit.modSha = null; devkit.moduleIds = null;
         planModules(base);
+        // 镜像来的 devkit.lock.json 没有签名：只有按块装（modules.json 验过签）时才用它，整包装要 GitHub 上那份
+        if (lockFromMirror && devkit.modules == null) throw new IOException(Tr.f("连不上 GitHub，{0} 的整包清单没法核实；过会儿再检查更新", best));
         String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
         devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
+    }
+
+    /** 工具包 Release 里的小文件：先 GitHub，连不上换 dl.cccodroid.net（同一份文件）。返回 true = 来自镜像 */
+    private static boolean fetchDevkitFile(String base, String name, byte[][] out) throws IOException {
+        try { out[0] = Installer.httpGetSmall(base + name); return false; }
+        catch (IOException e) {
+            try { out[0] = Installer.httpGetSmall(devkitMirror(base, name)); return true; }
+            catch (IOException e2) { throw new IOException(Tr.t("GitHub 和 cccodroid.net 镜像都连不上：") + e.getMessage()); }
+        }
+    }
+
+    /** 装着的工具包就是本 APK 钉的那一版 */
+    private boolean pinnedInstalled() {
+        JSONObject pin = devkitPin(ctx);
+        JSONObject gz = pin == null ? null : pin.optJSONObject("gz");
+        String have = installedDevkitSha();
+        return gz != null && !have.isEmpty() && have.equals(gz.optString("sha256"));
     }
 
     /**
@@ -373,8 +402,11 @@ final class Updater {
      */
     private void planModules(String base) {
         try {
-            byte[] b = Installer.httpGetSmall(base + "modules.json");
-            String sig = new String(Installer.httpGetSmall(base + "modules.json.sig"), StandardCharsets.UTF_8);
+            byte[][] got = new byte[1][];
+            fetchDevkitFile(base, "modules.json", got);
+            byte[] b = got[0];
+            fetchDevkitFile(base, "modules.json.sig", got);
+            String sig = new String(got[0], StandardCharsets.UTF_8);
             if (!Ed25519.verifyIndex(b, sig)) { Log.w(TAG, "planModules: modules.json 签名对不上，按整包装"); return; }
             JSONObject mj = new JSONObject(new String(b, StandardCharsets.UTF_8));
             if (!ctx.getPackageName().equals(mj.optString("target")) || mj.optInt("compat", 1) != DEVKIT_COMPAT) return;
