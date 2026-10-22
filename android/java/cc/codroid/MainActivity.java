@@ -72,7 +72,8 @@ public class MainActivity extends Activity {
     /** 安装失败时露出来；点了从头再走 boot（每一步都会跳过已经完成的部分） */
     private android.widget.Button retry, stuck;
     /** 首装时「工具包从哪装」的选择面板（安装页上，平时藏着） */
-    private LinearLayout chooser;
+    private LinearLayout chooser, chooserFoot;
+    private ScrollView chooserScroll;
     static final int REQ_DEVKIT = 10;
     /** 首装选本地文件时，boot 线程在这等系统文件选择器回来；null = 是更新卡片发起的 */
     private volatile CountDownLatch pickWait;
@@ -380,6 +381,7 @@ public class MainActivity extends Activity {
             int fg = BrowserPane.pal(MainActivity.this, dark, "fg"), dim = BrowserPane.pal(MainActivity.this, dark, "dim");
             int line = BrowserPane.pal(MainActivity.this, dark, "line"), accent = BrowserPane.pal(MainActivity.this, dark, "accent");
             chooser.removeAllViews();
+            chooserFoot.removeAllViews();
             TextView q = new TextView(this);
             q.setTextColor(fg);
             q.setTextSize(14);
@@ -419,17 +421,26 @@ public class MainActivity extends Activity {
                     if (pick[0] != null) return;
                     pick[0] = o[0];
                     sp.edit().putString("devkitSrc", o[0]).apply();
-                    chooser.setVisibility(View.GONE);
+                    showChooser(false);
                     done.countDown();
                 });
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
                 lp.bottomMargin = dp(8);
                 chooser.addView(card, lp);
             }
-            chooser.setVisibility(View.VISIBLE);
+            showChooser(true);
         });
         done.await();
         return pick[0];
+    }
+
+    /** 选项和日志区二选一占剩余高度；选完回到日志 */
+    private void showChooser(boolean on) {
+        chooser.setVisibility(on ? View.VISIBLE : View.GONE);
+        chooserScroll.setVisibility(on ? View.VISIBLE : View.GONE);
+        chooserFoot.setVisibility(on && chooserFoot.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        logScroll.setVisibility(on ? View.GONE : View.VISIBLE);
+        if (on) chooserScroll.scrollTo(0, 0);
     }
 
     /** 首装默认勾上的模块：Claude 写代码最常用的两样。其余按需在扩展页加装 */
@@ -446,6 +457,7 @@ public class MainActivity extends Activity {
             int fg = BrowserPane.pal(MainActivity.this, dark, "fg"), dim = BrowserPane.pal(MainActivity.this, dark, "dim");
             int line = BrowserPane.pal(MainActivity.this, dark, "line"), accent = BrowserPane.pal(MainActivity.this, dark, "accent");
             chooser.removeAllViews();
+            chooserFoot.removeAllViews();
             TextView q = new TextView(this);
             q.setTextColor(fg); q.setTextSize(14); q.setPadding(0, dp(4), 0, dp(8));
             q.setText(Tr.t("开发工具包按用途分成了模块。勾上要装的，以后也可以在「扩展」页随时加装或卸载。"));
@@ -476,7 +488,7 @@ public class MainActivity extends Activity {
                 chooser.addView(cb, new LinearLayout.LayoutParams(-1, -2));
             }
             sum.setTextColor(dim); sum.setTextSize(12); sum.setPadding(0, dp(8), 0, dp(8));
-            chooser.addView(sum);
+            chooserFoot.addView(sum);
             recalc.run();
             TextView go = new TextView(this);
             go.setText(Tr.t("开始安装"));
@@ -488,11 +500,11 @@ public class MainActivity extends Activity {
             go.setOnClickListener(v -> {
                 if (done.getCount() == 0) return;
                 out.addAll(on);
-                chooser.setVisibility(View.GONE);
+                showChooser(false);
                 done.countDown();
             });
-            chooser.addView(go, new LinearLayout.LayoutParams(-1, -2));
-            chooser.setVisibility(View.VISIBLE);
+            chooserFoot.addView(go, new LinearLayout.LayoutParams(-1, -2));
+            showChooser(true);
         });
         done.await();
         return out;
@@ -865,10 +877,18 @@ public class MainActivity extends Activity {
         chooser = new LinearLayout(this);
         chooser.setOrientation(LinearLayout.VERTICAL);
         chooser.setVisibility(View.GONE);
-        // 套一层 ScrollView：手机竖屏放不下 8 个模块 +「开始安装」，不套的话按钮被挤出屏幕、也划不动
-        ScrollView chooserScroll = new ScrollView(this);
+        // 选项放 ScrollView 并占满剩余高度（权重 1，选的时候日志区收起）；「开始安装」钉在下面的 chooserFoot，不进滚动区。
+        // 0.3.10 那版给 ScrollView 用 wrap_content：前面的日志区带权重时，竖排 LinearLayout 量它不扣已用高度，
+        // 它就有整屏高、底边落在屏幕外，按钮看不见也划不到（手机竖屏，群友真机）
+        chooserScroll = new ScrollView(this);
         chooserScroll.addView(chooser);
-        col.addView(chooserScroll, new LinearLayout.LayoutParams(-1, -2));
+        chooserScroll.setVisibility(View.GONE);
+        col.addView(chooserScroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        chooserFoot = new LinearLayout(this);
+        chooserFoot.setOrientation(LinearLayout.VERTICAL);
+        chooserFoot.setPadding(0, dp(8), 0, 0);
+        chooserFoot.setVisibility(View.GONE);
+        col.addView(chooserFoot, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout acts = new LinearLayout(this);
         acts.addView(retry, new LinearLayout.LayoutParams(-2, -2));
         acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
