@@ -359,7 +359,7 @@ td{color:var(--fg2)}
 #drawer{position:fixed;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(2px)}
 /* 侧栏从左边滑出（菜单键在左上角）；内容自上而下：标题 / 新对话 / 去哪 / 对话列表，账户行贴底 */
 .drawer-panel{
-  position:absolute;top:0;inset-inline-start:0;bottom:0;width:min(340px,86vw);
+  position:absolute;top:0;inset-inline-start:0;bottom:0;width:var(--dw,min(340px,86vw));
   background:var(--bg2);border-inline-end:1px solid var(--line);
   padding:calc(var(--safe-t) + 10px) 10px 0;display:flex;flex-direction:column;
   overflow:hidden;animation:slide .2s ease;
@@ -2420,3 +2420,10 @@ html.wel-narrow .wl-hero{gap:var(--g2)}
 .prof-av{width:40px;height:40px;font-size:17px;border:0;cursor:pointer;padding:0;position:relative}
 .prof-av:hover{box-shadow:0 0 0 2px var(--accent-dim)}
 #prof-name{width:12em;max-width:40vw}
+/* 浮层侧栏（竖屏 / 窄屏）右边缘的拉宽条：和常驻侧栏同款，平时是细线，按住变强调色；常驻时用 #side-split，这条藏起来 */
+.drawer-split{position:absolute;top:0;bottom:0;inset-inline-end:0;width:12px;z-index:2;cursor:col-resize;touch-action:none}
+.drawer-split::after{content:"";position:absolute;top:0;bottom:0;inset-inline-end:0;width:2px;background:transparent;transition:background .15s}
+.drawer-split:hover::after{background:var(--line)}
+html.side-drag .drawer-split::after{background:var(--accent)}
+html.dock-l .drawer-split{display:none}
+html.side-drag .drawer-panel{animation:none;transition:none}
