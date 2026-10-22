@@ -11,6 +11,7 @@ t() { # t 名称 命令… —— 每项限时 90 秒，卡住的算失败，不
   if [ $rc -eq 0 ]; then NP=$((NP+1)); [ -z "$Q" ] && echo "PASS $name :: $(echo "$out" | tail -1 | cut -c1-100)"
   else NF=$((NF+1)); echo "FAIL $name (rc=$rc$([ $rc = 124 ] && echo ' 超时')) :: $(echo "$out" | tr '\n' ' ' | cut -c1-300)"; fi
 }
+# 注意：命令里带管道时退出码是最后一段的，前面的命令不存在也会算 PASS —— 要么加 set -o pipefail，要么别让管道收尾
 # 模块化工具包（0.3.9 起）：没装的模块整节跳过（打 SKIP，不算失败 —— 不然 Claude 会以为是这台设备坏了）。整包工具包一律算装了
 has() { [ ! -f "$PREFIX/libexec/devkit/modules.json" ] || [ -f "$PREFIX/libexec/devkit/modules/$1/.ok" ]; }
 skip() { echo "SKIP $1 :: 「$2」模块没装"; }
@@ -31,7 +32,7 @@ echo "== C/C++"
 printf '#include <stdio.h>\nint main(){printf("hi-c\\n");return 0;}\n' > a.c      # 后面 grep / tar 那几项也用它
 if has build; then
 t "cc" "cc a.c -o a && ./a"
-t "gcc 名字" "gcc --version | head -1"
+t "gcc 名字" "set -o pipefail; gcc --version | head -1"
 printf '#include <iostream>\n#include <ranges>\n#include <vector>\nint main(){std::vector v{1,2,3};for(int x: v|std::views::reverse)std::cout<<x;std::cout<<"\\n";}\n' > b.cpp
 t "c++20" "c++ -std=c++20 b.cpp -o b && ./b"
 t "-static 不可用（预期：没有静态 libc，只能动态链接）" "! cc a.c -static -o as 2>/dev/null && echo 如预期"
@@ -42,15 +43,15 @@ t "cmake+ninja" "cmake -S cm -B cm/b -G Ninja >/dev/null && ninja -C cm/b >/dev/
 t "cmake 默认生成器" "cmake -S cm -B cm/b2 >/dev/null && make -C cm/b2 >/dev/null && ./cm/b2/t"
 t "pkg-config" "pkg-config --libs zlib openssl"
 t "autotools 风格 ./configure" "printf '#!/bin/sh\necho configured\n' > configure && chmod +x configure && ./configure"
-t "gdb" "gdb -batch -ex run -ex bt ./a 2>&1 | tail -2"
+t "gdb" "gdb -batch -ex run -ex bt ./a > g.out 2>&1; grep -q hi-c g.out && tail -2 g.out"
 t "strace" "strace -c -o /dev/null ./a"
 t "patchelf" "patchelf --print-interpreter ./a"
 else skip C/C++ "C/C++ 构建"; fi
 echo "== 基础命令"
 # 10.22.1 起补进基础模块（以前漏了：没有 which、patch）
-t "which" "which bash"
+t "which" "w=\$(command -v which); [ \"\$w\" = \"\$PREFIX/bin/which\" ] || { echo \"which 不是工具包带的：\${w:-没有}\"; exit 1; }; which bash"
 t "patch" "printf 'a\\n' > p1 && printf 'b\\n' > p2 && { diff -u p1 p2 > p.diff; true; } && patch -s p1 p.diff && cat p1"
-t "tree" "tree -L 1 . | tail -1"
+t "tree" "tree --version"
 t "其余基础命令" "for c in ed dos2unix lsof nano hostname ifconfig netstat; do command -v \$c >/dev/null || { echo 缺 \$c; exit 1; }; done; echo 都在"
 echo "== Python"
 t "python3" "python3 -c 'import sys,ssl,sqlite3,zlib,ctypes;print(sys.version.split()[0],ssl.OPENSSL_VERSION)'"
@@ -90,17 +91,17 @@ t "ssh-keygen" "ssh-keygen -q -t ed25519 -N '' -f kk && ls kk.pub"
 t "openssl" "openssl version"
 echo "== CLI"
 if has cli; then
-t "rg" "rg --version | head -1"; t "fd" "fd --version"; t "bat" "bat --version"; t "delta" "delta --version"
-t "hx" "hx --version"; t "yq" "yq --version"; t "jq" "echo '{\"a\":1}' | jq .a"; t "sqlite3" "sqlite3 :memory: 'select 1+1'"
-t "man" "man -P cat ls 2>/dev/null | head -3 | tail -1"
+t "rg" "set -o pipefail; rg --version | head -1"; t "fd" "fd --version"; t "bat" "bat --version"; t "delta" "delta --version"
+t "hx" "hx --version"; t "yq" "yq --version"; t "jq" "set -o pipefail; echo '{\"a\":1}' | jq .a"; t "sqlite3" "sqlite3 :memory: 'select 1+1'"
+t "man" "man ls > m.txt 2>&1; grep -qi 'list directory' m.txt && echo ls 手册在"
 else skip "rg/fd/bat/delta/hx/jq/yq/sqlite3/man" "命令行增强"; fi
 if has extra; then
 t "typst" "printf '= Hi\n' > d.typ && typst compile d.typ && ls d.pdf"
 t "duckdb" "duckdb -c 'select 42'"
 t "magick" "magick -size 8x8 xc:red r.png && magick identify r.png"
 else skip "typst/duckdb/magick" "文档与数据"; fi
-t "grep -r" "grep -rc hi-c a.c"; t "find" "find . -maxdepth 1 -name 'a.c'"; t "sed/awk" "echo a | sed s/a/b/ | awk '{print \$1}'"
-t "tar/xz/zstd/zip" "tar cJf x.txz a.c && tar cf - a.c | zstd -q > x.zst && zip -q x.zip a.c && unzip -l x.zip | tail -1"
+t "grep -r" "grep -rc hi-c a.c"; t "find" "find . -maxdepth 1 -name 'a.c'"; t "sed/awk" "set -o pipefail; echo a | sed s/a/b/ | awk '{print \$1}'"
+t "tar/xz/zstd/zip" "set -o pipefail; tar cJf x.txz a.c && tar cf - a.c | zstd -q > x.zst && zip -q x.zip a.c && unzip -l x.zip | tail -1"
 t "less/file" "file a"
 t "pkg（应用自带）" "pkg verified | grep -q '^rust ' && pkg list >/dev/null && echo \"\$(command -v pkg)\""
 t "su/sudo 不应存在" "! command -v sudo"

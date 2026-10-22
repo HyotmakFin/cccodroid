@@ -799,6 +799,7 @@ if (cmd === "build" || cmd === "component") {
   const alts = new Map();          // 组名 → 优先级最高的那组链接
   const firstRun = [];             // 除 alternatives 外仍要在设备上跑的 postinst
   let patchedFiles = 0, patchedHits = 0, t0 = Date.now();
+  let ensurepipVer = null;            // python 的 ensurepip 要哪一版 pip（下面 fetch 的 wheel 必须是这一版，不然 python -m venv 建不出 pip）
 
   for (const [i, n] of names.entries()) {
     const p = idx.pkgs.get(n);
@@ -837,6 +838,7 @@ if (cmd === "build" || cmd === "component") {
       // zip 类归档要下潜到压缩条目内部再改一遍，flat 替换在里面找不到模式
       const [data, k] = looksLikeZip(clean) ? rewriteZip(e.data, R.swap) : R.swap(e.data);
       if (k) { hit += k; patchedFiles++; }
+      if (/\/ensurepip\/__init__\.py$/.test(clean)) ensurepipVer = (/^_PIP_VERSION = "([^"]+)"/m.exec(data.toString("utf8")) || [])[1] || null;
       tw.add({ name: clean, type: "0", mode: e.mode, mtime: e.mtime, data });
       files++;
     }
@@ -880,6 +882,8 @@ if (cmd === "build" || cmd === "component") {
     // link：只做一个软链（如 libOpenCL.so.1 → libOpenCL.so，库的 SONAME 是 .so.1 时要用）。
     // 目标写相对名即可（App 用真 tar 解包，同目录相对链最稳）；不进 MANIFEST，也不算体积。
     if (f.link) { tw.add({ name: p, type: "2", mode: 0o777, mtime: 0, link: f.link }); continue; }
+    const ep = /\/ensurepip\/_bundled\/pip-([^-]+)-/.exec(p);
+    if (ep && ensurepipVer && ep[1] !== ensurepipVer) throw new Error(`${p}: python 的 ensurepip 要 pip ${ensurepipVer}，这里给的是 ${ep[1]}（python 升级了：到 PyPI 换成 pip-${ensurepipVer}-py3-none-any.whl，填新的 url 与 sha256）`);
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {

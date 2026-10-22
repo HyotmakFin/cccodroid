@@ -348,10 +348,10 @@
     "usr/libexec/termux/command-not-found": "# 命令没找到（bash.bashrc 的 command_not_found_handle 调它）：模块化工具包（cccodroid 0.3.9 起）里，\n# 看看这个命令是不是在还没装的模块里，告诉用户去哪装。整包工具包没有 modules.json，就只报找不到\nu=$(cd \"$(dirname \"$0\")/../..\" && pwd)\nif [ -f \"$u/libexec/devkit/modules.json\" ] && [ -x \"$u/bin/node\" ]; then\n  \"$u/bin/node\" -e '\nconst [f, cmd] = process.argv.slice(1), u = require(\"path\").dirname(require(\"path\").dirname(require(\"path\").dirname(f)));\nconst mj = JSON.parse(require(\"fs\").readFileSync(f, \"utf8\"));\nconst m = (mj.modules || []).find((x) => x.kind === \"module\" && (x.commands || []).includes(cmd) && !require(\"fs\").existsSync(u + \"/\" + x.dir + \"/.ok\"));\nif (!m) process.exit(1);\n// 连同还没装的依赖（共享层）一起算\nconst ok = (x) => x.kind === \"base\" || require(\"fs\").existsSync(u + \"/\" + x.dir + \"/.ok\");\nconst mb = Math.round([m, ...(m.deps || []).map((d) => mj.modules.find((x) => x.id === d)).filter((x) => x && !ok(x))].reduce((s, x) => s + (x.installed || 0), 0) / 1048576);\nconsole.error(cmd + \"：在工具包的「\" + m.name.zh + \"」模块里，还没装。到 扩展 → 工具包模块 装上即可（约 \" + mb + \" MB）。\");\nconsole.error(cmd + \": part of the \\u201c\" + m.name.en + \"\\u201d toolkit module, which is not installed. Install it under Extensions \\u2192 Toolkit modules (about \" + mb + \" MB).\");\n' \"$u/libexec/devkit/modules.json\" \"$1\" && exit 127\nfi\necho \"$1: command not found\" >&2\nexit 127"
   },
   "fetch": {
-    "usr/lib/python3.14/ensurepip/_bundled/pip-26.1.2-py3-none-any.whl": {
-      "url": "https://files.pythonhosted.org/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl",
-      "sha256": "382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab",
-      "why": "Termux 的 python 删了 ensurepip 自带的 wheel（指望 pkg 装 python-pip），没有它 python -m venv 建不出带 pip 的环境。版本须与 ensurepip/__init__.py 的 _PIP_VERSION 一致"
+    "usr/lib/python3.14/ensurepip/_bundled/pip-26.2.1-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl",
+      "sha256": "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e",
+      "why": "Termux 的 python 删了 ensurepip 自带的 wheel（指望 pkg 装 python-pip），没有它 python -m venv 建不出带 pip 的环境。版本须与 ensurepip/__init__.py 的 _PIP_VERSION 一致（devkit.mjs 构建时核对，对不上直接失败；python 升级后照报错换 wheel）"
     }
   },
   "_doc_fetch": "fetch：仓库之外的上游原件，按哈希核对后放进包里",
