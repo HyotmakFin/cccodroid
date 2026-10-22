@@ -80,6 +80,36 @@
   });
   document.addEventListener("DOMContentLoaded", apply);
 
-  window.Theme = { pref, set, system, apply, get current() { return document.documentElement.dataset.theme; } };
+  // ── 字体与正文字号：和配色一样同步生效，避免先闪一下系统字体 ──
+  //   界面字体  ccapp.uifont   cc（默认：自带 Inter + 思源黑体）| system（跟随系统）
+  //   回复字体  ccapp.readfont serif（默认：自带 Spectral + 思源宋体）| sans
+  //   正文字号  ccapp.fs       s | m（默认）| l
+  //   结果写到 <html data-uifont data-readfont data-fs>，样式只认这三个属性
+  const TYPE = { uifont: ["cc", "system"], readfont: ["serif", "sans"], fs: ["m", "s", "l"] };
+  const typePref = {};
+  for (const k in TYPE) { let v = null; try { v = localStorage.getItem("ccapp." + k); } catch {} typePref[k] = TYPE[k].includes(v) ? v : TYPE[k][0]; }
+  function applyType() {
+    const root = document.documentElement;
+    for (const k in TYPE) if (root.dataset[k] !== typePref[k]) root.dataset[k] = typePref[k];
+    document.querySelectorAll("#seg-uifont [data-uf]").forEach((b) => b.classList.toggle("on", b.dataset.uf === typePref.uifont));
+    document.querySelectorAll("#seg-readfont [data-rf]").forEach((b) => b.classList.toggle("on", b.dataset.rf === typePref.readfont));
+    document.querySelectorAll("#seg-fs [data-fs]").forEach((b) => b.classList.toggle("on", b.dataset.fs === typePref.fs));
+  }
+  function setType(k, v) {
+    if (!TYPE[k] || !TYPE[k].includes(v)) return;
+    typePref[k] = v;
+    try { localStorage.setItem("ccapp." + k, v); } catch {}
+    applyType();
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf], #seg-readfont [data-rf], #seg-fs [data-fs]"); if (!b) return;
+    if (b.dataset.uf) setType("uifont", b.dataset.uf);
+    else if (b.dataset.rf) setType("readfont", b.dataset.rf);
+    else setType("fs", b.dataset.fs);
+  });
+  document.addEventListener("DOMContentLoaded", applyType);
+  applyType();
+
+  window.Theme = { pref, set, system, apply, setType, type: typePref, get current() { return document.documentElement.dataset.theme; } };
   apply();
 })();

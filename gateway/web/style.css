@@ -2188,10 +2188,6 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 #hint-row #proj-chip{display:inline-flex;align-items:center;gap:4px;color:var(--accent);border-color:var(--accent-dim);background:var(--active-bg);cursor:pointer;max-width:12em;overflow:hidden;text-overflow:ellipsis}
 #hint-row #proj-chip.hidden{display:none}
 #proj-chip .pj-fold svg.ei{width:13px;height:13px}
-.welcome-proj .welcome-ex{flex-direction:row;flex-wrap:wrap}
-.welcome-proj .btn{display:inline-flex;align-items:center;gap:5px}
-.welcome-proj .btn .pj-fold svg.ei{width:14px;height:14px}
-.welcome-proj .btn.on{border-color:var(--accent);color:var(--accent);background:var(--active-bg)}
 
 /* 弹层：宽屏居中卡片（宽 560，高不超过 宽×φ 和屏高），窄屏整页推入 */
 .pj-ov{position:fixed;inset:0;z-index:85;display:flex;align-items:center;justify-content:center;background:var(--scrim,rgba(0,0,0,.4));animation:fade .15s}
@@ -2288,9 +2284,9 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 #hint-row .chip,#hint-row #perm-chip,#hint-row #draft-chip,#hint-row #proj-chip{border:0;border-radius:0;padding:0;background:none;font-size:inherit;line-height:inherit}
 #hint-row #model-chip{color:var(--accent);cursor:pointer}
 #hint-row #model-chip .chip{color:inherit}
-#hint-row #model-chip .chip + .chip::before{content:" · "}
+#hint-row #model-chip .chip + .chip::before{content:"·";margin:0 .45em;color:var(--fg3)}
 #hint-row #perm-chip{color:var(--fg3);cursor:pointer}
-#hint-row #perm-chip > :not(svg),#hint-row #perm-chip{text-decoration:underline dotted;text-underline-offset:3px}
+#hint-row #perm-chip,#hint-row #perm-chip *{text-decoration:none}
 #hint-row #perm-chip.danger{color:var(--err);font-weight:600;background:none}
 #hint-row #proj-chip{color:var(--accent);background:none}
 #hint-row #stat-chip{font-size:11px}
@@ -2313,3 +2309,98 @@ html.has-right #files,html.has-right #viewer,html.has-right #git,html.has-right 
 }
 /* 窄屏抽出来的侧栏：外侧两角也收圆 */
 html:not(.dock-l) .drawer-panel{border-start-end-radius:var(--g4);border-end-end-radius:var(--g4)}
+/* 设置卡片是模态：遮罩盖住整个窗口（侧栏、右侧窗格一起压暗），卡片浮在所有窗格之上、居中；
+   之前 z 56 低于窗格的 70，宽屏开着终端时卡片被窗格切掉一截 */
+#set-ov{z-index:80}
+.pj-card{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+
+/* ── 字体（自带，不受系统字体主题影响）──────────────────────────────
+   界面：Inter（西文）+ 思源黑体（中文，改名 CC Hei）；回复正文：Spectral（西文）+ 思源宋体（CC Song）。
+   西文字体只含拉丁字符，中文自然落到后一个字体上；都是 OFL，授权见 fonts/OFL-*.txt。
+   设置 → 通用里可以改成跟随系统 / 回复用无衬线，正文字号分小中大（theme.js 写 html 的 data-* 属性） */
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-700.woff2") format("woff2");font-weight:600 700;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-700.woff2") format("woff2");font-weight:600 700;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400i.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-600.woff2") format("woff2");font-weight:600 700;font-display:swap}
+@font-face{font-family:"CC Song";src:url("/fonts/song-400.woff2") format("woff2");font-weight:400 500;font-display:swap}
+@font-face{font-family:"CC Song";src:url("/fonts/song-600.woff2") format("woff2");font-weight:600 700;font-display:swap}
+:root{
+  --font-sans:"CC Inter","CC Hei",sans-serif;
+  --font-serif:"CC Spectral","CC Song",serif;
+  --font-ui:var(--font-sans);
+  --font-read:var(--font-serif);
+  --fs-chat:14.5px;
+}
+html[data-uifont="system"]{--font-ui:sans-serif;--font-sans:sans-serif}
+html[data-readfont="sans"]{--font-read:var(--font-ui)}
+html[data-fs="s"]{--fs-chat:13.5px}
+html[data-fs="l"]{--fs-chat:16px}
+body{font-family:var(--font-ui)}
+button,input,select,textarea,optgroup{font-family:inherit}
+/* 正文字号只管对话和输入框（同网页版的 Transcript text size），界面控件不跟着变 */
+#chat{font-size:var(--fs-chat)}
+#input{font-size:calc(var(--fs-chat) + .5px)}
+.bubble h1{font-size:1.27em} .bubble h2{font-size:1.17em} .bubble h3{font-size:1.07em} .bubble h4{font-size:1em}
+/* Claude 的回复用回复字体；代码、工具卡仍是等宽 */
+.msg.bot .bubble{font-family:var(--font-read)}
+html:not([data-readfont="sans"]) .msg.bot .bubble{line-height:1.78;letter-spacing:.01em}
+html:not([data-readfont="sans"]) .msg.bot .bubble :is(h1,h2,h3,h4,strong){font-weight:600}
+/* 设置里的两个分段按钮用各自的字体写，选之前就看得出差别 */
+#seg-readfont [data-rf="serif"]{font-family:var(--font-serif)}
+#seg-readfont [data-rf="sans"]{font-family:var(--font-sans)}
+#seg-uifont [data-uf="system"]{font-family:sans-serif}
+
+/* ── 新会话首屏（html.wel，app.js 的 welSync 切换）──────────────────
+   上：问候语沉到会话区底部；中：输入框；下：示例与使用提示。上下两块按 φ : 1 分剩余高度，
+   输入框落在屏幕中线略偏下，和网页版一个位置 */
+#wl-below{display:none}
+html.wel #chat{display:flex;flex-direction:column;justify-content:flex-end;flex:1.618 1 0;min-height:0}
+html.wel #composer{border-top-color:transparent;background:none;position:static}
+html.wel #wl-below{display:block;flex:1 1 0;min-height:0;overflow:auto;padding:var(--g3) 12px calc(var(--safe-b) + var(--g4))}
+html.wel .msg.welcome{width:100%;margin-bottom:var(--g4)}
+html.wel .msg.welcome .who,html.wel .msg.welcome + .msg-acts,html.wel .msg.welcome .msg-acts{display:none}
+.wl-hero{display:flex;align-items:center;justify-content:center;gap:var(--g3);text-align:center;flex-wrap:wrap}
+.wl-mark{width:40px;height:40px;flex:none;fill:none;stroke:var(--accent);stroke-width:3.4;stroke-linecap:round}
+.wl-greet{margin:0;font-family:var(--font-serif);font-weight:400;font-size:clamp(26px,3.4vw,38px);line-height:1.3;letter-spacing:.01em;color:var(--fg)}
+html.wel .msg.welcome .setup-guide{text-align:start;margin-top:var(--g4)}
+/* 首屏的输入框更舒展：两行高，像一张卡片 */
+html.wel #composer-inner{border-radius:20px;padding:var(--g2) var(--g2) var(--g2) var(--g3);box-shadow:0 2px 14px var(--shadow)}
+html.wel #input{min-height:calc(2 * 1.45em + 16px)}
+/* 输入框下面那行：左边项目，右边型号与权限 */
+html.wel #hint-row{justify-content:flex-start;margin-top:var(--g2);padding:0 var(--g2)}
+html.wel #hint-row #proj-chip{margin-inline-end:auto;color:var(--fg2)}
+html.wel #hint-row #proj-chip:not(.empty){color:var(--accent)}
+html.wel #hint-row #model-chip::before{display:none !important}
+#hint-row #proj-chip .pj-chev{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-inline-start:2px}
+#hint-row #proj-chip .pj-fold svg{width:14px;height:14px}
+/* 示例：输入框下方一排小卡片，宽度跟输入框一致 */
+.wl-ex{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--g2);max-width:var(--col);margin:0 auto}
+.wl-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:none;color:var(--fg2);border-radius:999px;padding:6px 14px;font-size:13px;line-height:1.45;text-align:start;cursor:pointer;max-width:100%}
+.wl-chip:hover,.wl-chip:active{background:var(--bg2);color:var(--fg);border-color:var(--accent-dim)}
+.wl-chip svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.wl-tips{color:var(--fg3)}
+/* 手机横屏太矮：不居中，照常贴底 */
+html.short.wel #chat{flex:1 1 auto}
+html.short.wel #wl-below{display:none}
+.msg.welcome .bubble .wl-greet{font-size:clamp(26px,3.4vw,38px);margin:0;font-weight:400;line-height:1.3}
+/* 首屏输入框：第一行整行写字，第二行左边 ＋、右边发送（同网页版） */
+html.wel #composer-inner{flex-wrap:wrap;align-items:center;row-gap:2px}
+html.wel #input{order:-1;flex:1 1 100%;padding:6px var(--g1) 4px}
+html.wel #btn-send{margin-inline-start:auto}
+html.wel #hint-row #model-chip > .chip:first-child{margin-inline-start:auto}
+html.wel #hint-row #proj-chip:not(.hidden) ~ #model-chip > .chip:first-child{margin-inline-start:0}
+/* 你发出的附件：气泡上方一排缩略图 / 文件卡片，不再把「@路径」露在正文里 */
+.u-refs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--g1);max-width:min(85%,680px);margin-bottom:var(--g1)}
+.u-ref{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg2);color:var(--fg2);border-radius:12px;padding:7px 11px;font-size:12.5px;line-height:1.3;cursor:pointer;max-width:240px}
+.u-ref span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.u-ref svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.u-ref.img{padding:0;overflow:hidden;border-radius:13px}
+.u-ref.img img{display:block;width:89px;height:89px;object-fit:cover;background:var(--bg3)}
+.u-refs:has(.u-ref.img:nth-child(4)) .u-ref.img img{width:68px;height:68px}
+.wl-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

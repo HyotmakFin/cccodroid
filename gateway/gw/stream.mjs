@@ -6,6 +6,7 @@ import { isLoginMode, learnWindow } from "./models.mjs";
 import { currentModelInfo } from "./claude.mjs";
 import { AUTH_CACHE, authStatus } from "./login.mjs";
 import { envFacts } from "./envfacts.mjs";
+import { publish } from "./bus.mjs";
 
 // ── 系统提示补充、claude 流事件翻译、订阅额度 ─────────────────────────
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
@@ -234,6 +235,7 @@ function noteRateLimit(info) {
     fiveHour: win(w.five_hour), sevenDay: win(w.seven_day),
   };
   saveRateLimits();
+  publish({ type: "quota" });       // 前端看得见额度的地方即时重画，不用切页面
   // 账户缓存是冷的就补查一次，把这份额度钉到账户上（换账户后不显示旧数）
   if (!RATE_LIMITS.email) authStatus().then((v) => { if (RATE_LIMITS && v.email) { RATE_LIMITS.email = v.email; saveRateLimits(); } }).catch(() => {});
 }

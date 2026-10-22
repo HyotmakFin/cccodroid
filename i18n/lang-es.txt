@@ -1897,3 +1897,22 @@
 1897	Compactar contexto
 1898	Coste
 1899	Configuración
+1900	Noche cerrada, buena hora para ideas
+1901	Buenos días. ¿Qué hacemos hoy?
+1902	Mediodía. ¿Qué tienes en mente?
+1903	Buenas tardes. Sigamos
+1904	Buenas noches. ¿Queda algo para hoy?
+1905	Consejos
+1906	¿En qué puedo ayudarte?
+1907	Escribe / para habilidades y comandos
+1908	Fuente de la interfaz
+1909	Por defecto usa Inter y Source Han Sans incluidas, sin que les afecten los temas de fuente del sistema
+1910	Fuente de las respuestas
+1911	La fuente de las respuestas de Claude
+1912	Serif
+1913	Sans serif
+1914	Tamaño del texto
+1915	Conversación y cuadro de entrada
+1916	Pequeño
+1917	Mediano
+1918	Grande

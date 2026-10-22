@@ -524,10 +524,33 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const uiI = (n, cls) => `<svg class="ui-i${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true">${UI_I[n]}</svg>`;
   const userTextOf = new WeakMap();   // 用户气泡 → 原文（分叉时拿它在 transcript 里认出是哪一轮）
   const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
+  // 发送时附件以「@路径」接在末尾（claude 靠它读文件）。气泡里不露这串前缀：末尾那段纯 @路径 拆出来，
+  // 图片画成缩略图、别的文件画成小卡片；复制 / 重发仍用原文
+  const IMG_RE = /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i;
+  function splitRefs(text) {
+    const m = /@\/\S+(?:\s+@\/\S+)*\s*$/.exec(text || "");
+    if (!m) return [text, []];
+    return [text.slice(0, m.index).trimEnd(), m[0].trim().split(/\s+/).map((r) => r.slice(1))];
+  }
+  function refsHtml(refs) {
+    const FILE = '<svg class="ui-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+    return `<div class="u-refs">${refs.map((p) => IMG_RE.test(p)
+      ? `<button class="u-ref img" data-p="${esc(p)}"><img src="${fileUrl(p)}" alt="" loading="lazy"></button>`
+      : `<button class="u-ref" data-p="${esc(p)}">${FILE}<span>${esc(p.split("/").pop())}</span></button>`).join("")}</div>`;
+  }
   function renderUser(text, parent) {
     const b = mkMsg("user", null, parent);
     userTextOf.set(b.parentElement, text);
-    setHtml(b, renderMd(text));
+    const [body, refs] = splitRefs(text);
+    setHtml(b, body ? renderMd(body) : "");
+    if (refs.length) {
+      b.insertAdjacentHTML("beforebegin", refsHtml(refs));
+      if (!body) b.classList.add("hidden");
+      b.parentElement.querySelector(".u-refs").addEventListener("click", (e) => {
+        const r = e.target.closest(".u-ref"); if (!r) return;
+        r.classList.contains("img") ? openLightbox(r.dataset.p) : openPath(r.dataset.p);
+      });
+    }
     const acts = document.createElement("div");
     acts.className = "msg-acts";
     acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("del", t("删除"));
@@ -1686,39 +1709,63 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (chatEl.scrollTop < 240 && view.cursor && !view.loading && histEl.childElementCount) loadOlder(false);
   });
 
+  // ── 新会话首屏（照网页版的布局）：问候语居中，输入框紧跟在下面，示例和使用提示在输入框下方；
+  //    输入框下面那行左边是项目、右边是型号与权限。发出第一条（或会话里出现任何别的东西）就退回平常的布局。
+  //    html.wel 只看 #hist / #live 的直接子节点，流式输出不会触发
+  const WL_MARK = (() => {
+    let d = "";
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 - Math.PI / 2, r1 = 6.5, r2 = i % 2 ? 17 : 21;
+      const f = (n) => (24 + n).toFixed(2);
+      d += `M${f(Math.cos(a) * r1)} ${f(Math.sin(a) * r1)}L${f(Math.cos(a) * r2)} ${f(Math.sin(a) * r2)}`;
+    }
+    return `<svg class="wl-mark" viewBox="0 0 48 48" aria-hidden="true"><path d="${d}"/></svg>`;
+  })();
+  function greeting() {
+    const h = new Date().getHours();
+    return h >= 23 || h < 5 ? t("夜深了，灵感正好")
+      : h < 11 ? t("早上好，今天做点什么？")
+      : h < 14 ? t("中午好，想做点什么？")
+      : h < 18 ? t("下午好，接着干活吧")
+      : t("晚上好，今天还有什么要做？");
+  }
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
-    // 图标照顶栏 / 输入栏上的原样画（界面里不用 emoji）
-    const G = (d) => `<svg viewBox="0 0 24 24" class="wt-ico">${d}</svg>`;
-    const tips = [
-      [G('<path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/>'), t("附加图片或文件，也可以直接粘贴、拖进来")],
-      ['<span class="wt-txt">/ @</span>', t("输入 / 唤起斜杠命令，@ 引用文件路径")],
-      [G('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>') + G('<path d="M4 17l6-5-6-5M12 19h8"/>') + G('<path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/>'), t("顶栏：文件浏览器、终端、命令面板")],
-      [G('<path d="M3 6h18M3 12h18M3 18h18"/>'), t("左上角菜单：新对话和历史对话；扩展、能力、用量、帮助在「更多」里，设置在侧栏最下面")],
-      [G('<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>'), t("页面滑不动、像卡住了：点顶栏的雪花就能恢复，不用重开应用")],
-      [G('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'), t("输入框下方的权限标签：Claude 改文件、跑命令前要不要先问你，点一下就能换")],
-      [G('<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/>'), t("生成中可以接着发：回车排队，闪电键插话（不打断，并进当前这一轮）")],
-    ];
-    // 第一次不知道问什么：点一下填进输入框，自己看过、改过再发
+    b.parentElement.classList.add("welcome");
+    b.innerHTML = `<div class="wl-hero">${WL_MARK}<h1 class="wl-greet">${esc(greeting())}</h1></div><div class="setup-guide hidden"></div>`;
+    fillSetupGuide(b.querySelector(".setup-guide"));
+    paintWelBelow();
+  }
+  // 输入框下方：三个示例（点一下只填进输入框，不直接发）+ 使用提示（进帮助页）
+  const wlBelow = document.createElement("div");
+  wlBelow.id = "wl-below";
+  $("composer").after(wlBelow);
+  function paintWelBelow() {
     const examples = [
       t("看看这台设备上装了哪些开发工具，挑三个各演示一下"),
       t("用 Python 统计工作区里各类文件的数量和总大小，整理成表格"),
       t("写一个单文件的贪吃蛇网页小游戏，做好后在浏览器里打开给我看"),
     ];
-    b.innerHTML =
-      t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
-      `<ul class="welcome-tips">${tips.map(([k, v]) => `<li><span class="wt-k">${k}</span><span>${esc(v)}</span></li>`).join("")}</ul>
-       ${welcomeProjHtml()}
-       <p class="welcome-ex-h">${esc(t("不知道从哪开始？点一个试试（只填进输入框，不会直接发）："))}</p>
-       <div class="welcome-ex">${examples.map((x) => `<button class="btn ghost sm">${esc(x)}</button>`).join("")}</div>
-       <div class="setup-guide hidden"></div>`;
-    fillSetupGuide(b.querySelector(".setup-guide"));
-    b.querySelector(".welcome-ex:not(.welcome-proj .welcome-ex)")?.addEventListener("click", (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-      inputEl.value = btn.textContent;
-      autoGrow(); syncInterject(); inputEl.focus();
-    });
+    wlBelow.innerHTML = `<div class="wl-ex">${examples.map((x) => `<button class="wl-chip" data-ex><span>${esc(x)}</span></button>`).join("")}
+      <button class="wl-chip wl-tips" data-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6M12 17v.01"/></svg>${esc(t("使用提示"))}</button></div>`;
+  }
+  wlBelow.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.help != null) return openPage("help");
+    inputEl.value = b.textContent.trim();
+    autoGrow(); syncInterject(); inputEl.focus();
+  });
+  function welSync() {
+    const w = histEl.childElementCount === 1 && !!histEl.querySelector(":scope > .msg.welcome") && !liveEl.childElementCount;
+    if (document.documentElement.classList.contains("wel") === w) return;
+    document.documentElement.classList.toggle("wel", w);
+    syncPlaceholder(); paintProjChip();
+  }
+  new MutationObserver(welSync).observe(histEl, { childList: true });
+  new MutationObserver(welSync).observe(liveEl, { childList: true });
+  // 输入框里的一行提示：首屏问「有什么可以帮你」，会话里提示斜杠命令
+  function syncPlaceholder() {
+    inputEl.placeholder = document.documentElement.classList.contains("wel") ? t("有什么可以帮你？") : t("输入 / 调用技能和命令");
   }
 
   /** 还没接上模型（没登录、没填 Key）：欢迎页里把两条路并排摆出来，不替用户选 */
@@ -1892,7 +1939,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (ev.permissionMode) setPermChip(ev.permissionMode);
         return;
       }
-      case "run_end": return onRunEnd(ev);
+      case "run_end": refreshQuota(); return onRunEnd(ev);
+      case "quota": return refreshQuota();
       case "perm_mode":
         state.settings.permissionMode = ev.mode;
         setPermChip(ev.mode);
@@ -2013,7 +2061,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     pickViewRun();
     const busy = isBusy();
     sendEl.classList.toggle("busy", busy && !hasDraft());
-    inputEl.placeholder = "";          // 用户定：输入框里不预置任何文字
+    syncPlaceholder();
     syncInterject();
     renderQueue();
     // 别的窗口（或网关那边）已经答掉的，这里也收起来
@@ -2395,9 +2443,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   attachStrip.id = "attach-strip";
   attachStrip.className = "hidden";
   $("composer").insertBefore(attachStrip, $("composer-inner"));
+  setTimeout(() => { if (state.attachments.length) renderAttachments(); });
 
+  // 附件栏记在 sessionStorage：冻结脱困 / 重新载入后照原样恢复（文件已经在设备上，只记路径）
+  const ATT_KEY = "cc.att";
+  try { const a = JSON.parse(sessionStorage.getItem(ATT_KEY) || "[]"); if (Array.isArray(a) && a.length) state.attachments = a.filter((x) => x && x.path); } catch {}
   function renderAttachments() {
     const list = state.attachments;
+    try { list.length ? sessionStorage.setItem(ATT_KEY, JSON.stringify(list)) : sessionStorage.removeItem(ATT_KEY); } catch {}
     attachStrip.classList.toggle("hidden", !list.length);
     attachStrip.innerHTML = list.map((a, i) => `
       <div class="att" data-i="${i}">
@@ -4405,10 +4458,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <span class="quota-bar"><i class="${cls}" style="width:${pct}%"></i></span><span class="q-r">${reset}</span></div>`;
     };
     $("quota-tiles").innerHTML = tile(t("5 小时"), l.fiveHour) + tile(t("每周"), l.sevenDay);
+    const lq = $("login-state") && $("login-state").querySelector(".quota");   // 设置里登录卡片上的那两条
+    if (lq) lq.outerHTML = quotaHtml(l);
     usDash.quota = l.sevenDay || null; usPaint(); paintSetUsage();
     const ago = Math.max(0, Math.round((Date.now() - l.at) / 60000));
     $("quota-note").textContent = ago < 1 ? t("额度刚刚更新") : t("额度更新于 {n} 分钟前（每轮对话后刷新）", { n: ago });
   }
+  // 额度看得见的地方（用量页、设置里的用量行 / 登录卡片、第三方的余额卡片）只在打开时拉过一次，
+  // 之后要切页面才更新。现在：网关记下新额度时推 quota、每轮跑完、回到前台，都把看得见的那几处重画一遍
+  let quotaT = 0, billAt = 0;
+  function refreshQuota() {
+    clearTimeout(quotaT);
+    quotaT = setTimeout(() => {
+      if (document.hidden) return;
+      const usageOpen = curPage === "usage" && !$("pages").classList.contains("hidden");
+      if (setOpen || usageOpen) loadQuota().catch(() => {});
+      const rb = setOpen && $("pc-bill") && $("pc-bill").querySelector('[data-bill="refresh"]');
+      if (rb && Date.now() - billAt > 30e3) { billAt = Date.now(); rb.click(); }   // 厂商余额接口别打太勤
+    }, 800);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshQuota(); });
   /** 交给系统浏览器：安卓壳把非本机地址都转给外部浏览器（WebView 里登录会被 Google 等拦） */
   function openExternal(url) {
     if (window.CCApp && window.CCApp.openUrl) return window.CCApp.openUrl(url);
@@ -5593,7 +5662,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const eff = state.settings && state.settings.effort;
     // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度
     const pretty = prettyModel(name);
-    modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(t("思考 {e}", { e: eff }))}</span>` : ""}`;
+    modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(eff)}</span>` : ""}`;
     modelEl.title = name;
   }
   modelEl.setAttribute("role", "button");
@@ -6456,6 +6525,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       catch (err) { toast(err.message, true); }
     }
   });
+  // 长按项目卡片（安卓长按 = contextmenu）：重命名、换颜色、打开目录、删除，和详情页的 ⋯ 是同一份菜单
+  $("tab-projects").addEventListener("contextmenu", (e) => {
+    const c = e.target.closest(".pj-card[data-pj]"); if (!c) return;
+    const p = PJ.list.find((x) => x.id === c.dataset.pj); if (!p) return;
+    e.preventDefault(); projMenu(p, c);
+  });
   $("tab-projects").addEventListener("change", async (e) => {
     const k = e.target.dataset.def; const p = PJ.detail && PJ.detail.project; if (!k || !p) return;
     try { const r = await jsend("/api/projects/" + encodeURIComponent(p.id), { [k]: e.target.value }, "PATCH"); Object.assign(p, r.project); toast(t("已保存")); loadProjects(); }
@@ -6555,29 +6630,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function curProject() { return view.sessionId ? pjOfSession(view.sessionId) : pjById(view.projectId); }
   function paintProjChip() {
     const el = $("proj-chip"); if (!el) return;
-    const p = curProject();
-    el.classList.toggle("hidden", !p);
-    if (p) el.innerHTML = `<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}`;
-    document.querySelectorAll(".welcome-proj button").forEach((b) => b.classList.toggle("on", (b.dataset.pj || "") === (view.projectId || "")));
+    const p = curProject(), wel = document.documentElement.classList.contains("wel") && !view.sessionId && PJ.list.length > 0;
+    el.classList.toggle("hidden", !p && !wel);
+    el.classList.toggle("empty", !p);
+    const CHEV = '<svg class="pj-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
+    if (p) el.innerHTML = `<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}${wel ? CHEV : ""}`;
+    else if (wel) el.innerHTML = `<span class="pj-fold">${pi("folder")}</span>${esc(t("项目"))}${CHEV}`;
   }
   $("proj-chip")?.addEventListener("click", (e) => {
-    const p = curProject(); if (!p) return;
-    if (view.sessionId) return openProject(p.id);
+    const p = curProject();
+    if (view.sessionId) return p && openProject(p.id);
     popMenu(e.currentTarget, [{ label: t("不放进项目"), icon: view.projectId ? "" : PI.check, fn: () => { view.projectId = null; paintProjChip(); } },
       ...PJ.list.map((x) => ({ label: x.name, icon: x.id === view.projectId ? PI.check : PI.folder, fn: () => { view.projectId = x.id; paintProjChip(); } }))], "up");
   });
-  /** 欢迎页：放进哪个项目？（只有建过项目才出现） */
-  function welcomeProjHtml() {
-    if (!PJ.list.length) return "";
-    return `<div class="welcome-proj"><p class="welcome-ex-h">${esc(t("放进哪个项目？（在项目目录里跑，带上它的指令和默认设置）"))}</p>
-      <div class="welcome-ex">${[["", t("不放进项目")], ...PJ.list.map((p) => [p.id, p.name])].map(([id, n]) => `<button class="btn ghost sm${(view.projectId || "") === id ? " on" : ""}" data-pj="${esc(id)}">${id ? `<span class="pj-fold" style="color:${esc(pjById(id).color)}">${pi("folder")}</span>` : ""}${esc(n)}</button>`).join("")}</div></div>`;
-  }
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest(".welcome-proj button[data-pj]"); if (!b) return;
-    if (view.sessionId) return;
-    view.projectId = b.dataset.pj || null; paintProjChip();
-  });
-
   // ── 会话：移到项目 ──
   function moveToProject(id, anchor) {
     const cur = pjOfSession(id);
@@ -6886,7 +6951,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("set-ov").classList.remove("hidden");
     setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general");
     loadQuota().catch(() => {});
-    paintSetCats(); setTimeout(paintSetCats, 900);
+    paintSetCats();
     renderSideNav();
     closeDrawer();
     loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false);
@@ -6945,6 +7010,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 设置分类：宽屏左栏分类 + 右边一类的内容；窄屏先是分类列表，点进去才是内容 ──
   var setCatOpen = null;
   const pagesNarrow = () => innerWidth < 680;
+  // 各类内容是异步填的：有行显示 / 隐藏就在下一帧重画分类（代替原来打开后固定等 900ms 再画一次）
+  let setCatRaf = 0;
+  new MutationObserver(() => { if (!setOpen || setCatRaf) return; setCatRaf = requestAnimationFrame(() => { setCatRaf = 0; paintSetCats(); }); })
+    .observe($("tab-settings"), { subtree: true, attributes: true, attributeFilter: ["class"] });
   function paintSetCats() {
     paintSetUsage();
     const narrow = pagesNarrow(), cats = [...document.querySelectorAll("#set-cats [data-cat]")];
@@ -8892,6 +8961,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
     setInterval(refreshStatus, 45000);
+    // 设置里有几类（设备与权限、更新、通知、用量……）要等接口回话才显示：开机空下来先拉一遍，
+    // 打开设置时就是现成的，不再一项项往外冒（打开时照旧再刷一次）
+    setTimeout(() => { if (!setOpen) { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadQuota().catch(() => {}); } }, 2500);
     if (showWhatsNew()) noticeHold = true;     // 刚弹了更新说明：通知等下一次打开 / 切回来
     else loadNotices();
   })();

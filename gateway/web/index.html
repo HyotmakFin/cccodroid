@@ -388,6 +388,19 @@
               </select>
             </div>
           </div>
+          <!-- 字体与正文字号（theme.js 读写，结果在 html 的 data-uifont / data-readfont / data-fs 上） -->
+          <div class="srow">
+            <div class="sl"><b data-i18n>界面字体</b><p data-i18n>默认用应用自带的 Inter 与思源黑体，不受系统字体主题影响</p></div>
+            <div class="sc"><span class="seg" id="seg-uifont"><button data-uf="cc" data-i18n>默认</button><button data-uf="system" data-i18n>跟随系统</button></span></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>回复字体</b><p data-i18n>Claude 回复正文的字体</p></div>
+            <div class="sc"><span class="seg" id="seg-readfont"><button data-rf="serif" data-i18n>衬线</button><button data-rf="sans" data-i18n>无衬线</button></span></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>正文字号</b><p data-i18n>对话和输入框里的字</p></div>
+            <div class="sc"><span class="seg" id="seg-fs"><button data-fs="s" data-i18n>小</button><button data-fs="m" data-i18n>中</button><button data-fs="l" data-i18n>大</button></span></div>
+          </div>
           <div class="srow">
             <div class="sl"><b data-i18n>回车键</b><p data-i18n>手机键盘没有 Shift，想多行输入就选换行</p></div>
             <div class="sc">

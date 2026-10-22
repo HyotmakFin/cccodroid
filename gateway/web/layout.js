@@ -20,7 +20,7 @@
   const tk = (s) => s;   // 词条键：先登记（扫描器认它），显示时 tr()
   const NAMES = { files: tk("文件"), viewer: tk("查看"), git: tk("版本"), term: tk("终端"), browser: tk("浏览器") };
   // 浏览器窗格是外壳的原生视图，永远浮在页面上面 —— 这些浮层开着时得先把它藏起来，不然会被它挡住
-  const COVERS = ["lightbox", "sheet", "popup", "drawer", "dropzone"];
+  const COVERS = ["lightbox", "sheet", "popup", "drawer", "dropzone", "set-ov"];   // set-ov：设置卡片是模态，盖在窗格上面
   const LS_RATIO = "cc_lay_ratio", LS_DOCK = "cc_lay_dock", LS_LW = "cc_lay_lw";
   const MIN_SIDE = 240, MAX_SIDE = 560;
   const root = document.documentElement;

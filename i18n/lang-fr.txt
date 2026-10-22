@@ -1897,3 +1897,22 @@
 1897	Compacter le contexte
 1898	Coût
 1899	Configuration
+1900	Tard dans la nuit, l'heure des idées
+1901	Bonjour. On fait quoi aujourd'hui ?
+1902	Midi. Une idée en tête ?
+1903	Bon après-midi. On continue
+1904	Bonsoir. Il reste quelque chose pour aujourd'hui ?
+1905	Astuces
+1906	Comment puis-je vous aider ?
+1907	Tapez / pour les compétences et commandes
+1908	Police de l'interface
+1909	Par défaut : Inter et Source Han Sans intégrées, insensibles aux thèmes de police du système
+1910	Police des réponses
+1911	La police des réponses de Claude
+1912	Serif
+1913	Sans serif
+1914	Taille du texte
+1915	Conversation et zone de saisie
+1916	Petite
+1917	Moyenne
+1918	Grande
