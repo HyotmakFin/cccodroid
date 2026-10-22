@@ -955,6 +955,8 @@ public class MainActivity extends Activity {
                     if (url == null || !url.startsWith("http://127.0.0.1:")) { if (bounceStage == 1) bounceBack(); return; }
                     bounceStage = 0; web.setVisibility(View.VISIBLE);
                 }
+                // 网关页面落地就清历史：脱困跳转、看门狗重载留下的条目都没有回去的意义
+                if (url != null && url.startsWith("http://127.0.0.1:")) v.clearHistory();
                 pushInsets();
             }
         });
@@ -1314,8 +1316,9 @@ public class MainActivity extends Activity {
         // 先让页面关最上层的浮层（侧栏 / 查看器 / 终端 / 弹窗…，见 app.js __ccBack），都没开才退
         web.evaluateJavascript("window.__ccBack?__ccBack():false", v -> {
             if ("true".equals(v)) return;
-            if (web != null && web.canGoBack()) web.goBack();
-            else moveTaskToBack(true);   // 返回键不结束界面，网关本来也不靠界面活着
+            // 不走 WebView 的历史：页面是单页（只用 replaceState），历史里只会有整页重载和冻结脱困跳出去的
+            // 127.0.0.2:9 —— 退回去就是「找不到网页」，再退一次整页重载，看着像网关重建了（用户 10-22 报）
+            moveTaskToBack(true);   // 返回键不结束界面，网关本来也不靠界面活着
         });
     }
 
