@@ -134,10 +134,9 @@
 
   // ── 设置页的语言下拉框（index.html 的 #set-lang）──
   // 「切过去切不回来」是这里唯一不能出的错，所以：
-  //   · 选项由这里按注册表生成，名字永远用各语言自己的写法、不翻译；区块带 data-i18n-skip；
+  //   · 选项由这里按注册表生成，各语言名字用自己的写法（谁都认得出自己的语言）；
   //   · 用 document 上的事件委托，不依赖某个具体的元素对象 —— 设置页哪天被重新渲染也不会失效；
   //   · 每次显示前把选中值对齐到真实设置（聚焦 / 指到时），不会显示一个和实际不符的值；
-  //   · 非中文界面下脚本一旦出错（可能就是翻译引起的），浮出一个不依赖 app.js 的「中文」按钮。
   function fillSel() {
     const s = document.getElementById("set-lang");
     if (!s) return;
@@ -155,20 +154,4 @@
   document.addEventListener("pointerdown", (e) => { if (e.target && e.target.id === "set-lang") fillSel(); }, true);
   fillSel();
 
-  if (lang !== SRC) {
-    let shown = false;
-    const rescue = () => {
-      if (shown || !document.body) return;
-      shown = true;
-      const b = document.createElement("button");
-      b.id = "i18n-rescue";
-      b.textContent = "中文 / 切回中文";
-      b.style.cssText = "position:fixed;right:12px;bottom:96px;z-index:2147483647;padding:8px 14px;border-radius:18px;" +
-        "border:1px solid #f0883e;background:#161b22;color:#f0f6fc;font-size:14px";
-      b.onclick = () => setLang(SRC);
-      document.body.appendChild(b);
-    };
-    window.addEventListener("error", rescue);
-    window.addEventListener("unhandledrejection", rescue);
-  }
 })();

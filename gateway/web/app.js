@@ -20,10 +20,21 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // 出错要看得见：脚本一挂界面就是死的，把原因写到顶栏副标题上，
   // 而不是让人对着一个不动的东西猜。
-  window.addEventListener("error", (e) => {
+  const showErr = (msg) => {
     const el = document.getElementById("sub-title");
-    if (el) { el.textContent = t("界面脚本出错：{msg}", { msg: e.message || String(e.error) }); el.className = "err"; }
+    if (el) { el.textContent = t("界面脚本出错：{msg}", { msg }); el.className = "err"; }
+  };
+  window.addEventListener("error", (e) => {
+    // 光秃秃的「Script error.」没有文件和行号：是外壳 evaluateJavascript 注入的那几行出的错，WebView 把细节抹了。
+    // 写在顶栏上谁也看不懂，只进控制台；外壳会调的入口都用 guardHook 包着，真错在那里按原文报
+    if (!e.filename && /^Script error\.?$/.test(e.message || "")) { console.warn("[cc] 外壳注入的脚本出错（细节被 WebView 隐去）"); return; }
+    showErr(e.message || String(e.error));
   });
+  // 外壳（MainActivity）直接调用的入口：在页面自己的代码里接住错误，按原文报，不让它变成「Script error.」
+  const guardHook = (name, fn) => function () {
+    try { return fn.apply(this, arguments); }
+    catch (err) { console.error("[cc] " + name, err); showErr(name + "：" + (err && err.message || err)); return false; }
+  };
   window.addEventListener("unhandledrejection", (e) => {
     const el = document.getElementById("sub-title");
     if (el) { el.textContent = t("界面脚本出错：{msg}", { msg: e.reason?.message || String(e.reason) }); el.className = "err"; }
@@ -94,11 +105,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const canSaveAs = () => !!(window.CCApp && window.CCApp.saveAs);
   const canShare = () => !!(state.serverStatus && state.serverStatus.product === "cccodroid");
   function saveAs(path, mime) { window.CCApp.saveAs(path, path.split("/").pop(), mime || ""); }
-  window.__ccSaved = (ok, msg) => {
+  window.__ccSaved = guardHook("__ccSaved", (ok, msg) => {
     if (ok) return toast(t("已保存：{name}", { name: msg }));
     if (msg === "cancel") return;
     toast(t("保存失败：{msg}", { msg: msg === "missing" ? t("文件不存在") : msg === "nopicker" ? t("系统里没有可用的文件面板") : msg }), true);
-  };
+  });
   // 页面里所有指向 /api/file 的下载链接（文件浏览器的 ⤓、查看器的「下载」）：WebView 自己不会处理下载
   document.addEventListener("click", (e) => {
     const a = e.target.closest && e.target.closest("a[download]");
@@ -432,7 +443,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     browserEl.classList.add("hidden");
     if (window.CCApp && CCApp.paneClose) CCApp.paneClose();
   }
-  window.__ccBrowserClosed = () => browserEl.classList.add("hidden");    // 窗格自己的 ✕
+  window.__ccBrowserClosed = guardHook("__ccBrowserClosed", () => browserEl.classList.add("hidden"));    // 窗格自己的 ✕
   const onWebLink = (e) => {
     const a = e.target.closest("a.weblink");
     if (!a || !hasBrowser()) return;
@@ -9020,7 +9031,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
-  window.__ccBack = () => {
+  window.__ccBack = guardHook("__ccBack", () => {
     const open = (id) => !$(id).classList.contains("hidden");
     if (document.querySelector(".pop-menu")) { closeMenu(); return true; }
     const ov = document.querySelector(".pj-ov"); if (ov) { ov.remove(); return true; }
@@ -9053,7 +9064,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (open(id)) { close(); return true; }
     }
     return false;
-  };
+  });
   if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
   window.__cc = { view, srv, state, send, abort, openSession, newConversation, openPage,
     openGit, openViewer, openFiles, openDrawer, showWhatsNew, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };

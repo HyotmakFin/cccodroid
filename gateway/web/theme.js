@@ -64,7 +64,8 @@
   }
 
   /** 壳在系统切换夜间模式时调用 */
-  function system(dark) { sysDark = !!dark; if (pref.endsWith("auto")) apply(); }
+  // 外壳 evaluateJavascript 直接调它：自己接住错误，免得变成看不懂的「Script error.」
+  function system(dark) { try { sysDark = !!dark; if (pref.endsWith("auto")) apply(); } catch (e) { console.error("[cc] Theme.system", e); } }
 
   if (mq) {
     const on = () => { if (sysDark == null && !app() && pref.endsWith("auto")) apply(); };
