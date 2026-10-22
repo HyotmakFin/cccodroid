@@ -42,6 +42,11 @@ node devkit.mjs build --target <10字符包名> [--groups ...]     # 产出 out/
 分组见 `devkit.json`：不加 `--groups` 时**全部分组都打进去**，即整包；按模块分块打见下面「模块」一节。包括 `graphics`（Mesa、Vulkan 加载器等 9 个公共图形包，2026-10-15 并入，GPU 与浏览器组件共用）和 `media`（ffmpeg，2026-10-15 夜并入：+30 包，下载 +21 MB，解开后 +87 MB；带 MediaCodec 硬件编码）。共 256 个包（devkit-2026.10.22.3；10.22.1 起基础模块补了 patch、ed、dos2unix、lsof、nano、inetutils、net-tools、tree，10.22.3 补上单独的 which 包），从 Termux 仓库下载约 447 MB，整包 gz 约 680 MB（10.22.2 修了 venv 用的 ensurepip pip wheel），解包后约 1.9 GB。
 `extra` 组（typst、duckdb、imagemagick）依赖很重，作为选装。
 
+## 发一版
+
+`node scripts/publish-devkit.mjs devkit-YYYY.MM.DD[.n] --why "这版改了什么"`：打 tag → 等 CI → 验签并核对 Release（每个 gz 都在、大小对；`devkit.json` 点名的包都进了清单；和上一版比少了包就停）→ 改钉 App（`devkit-sources.txt`、`devkit-pin.json`、本文的包数）→ 市场 `bases.json` 加一行并等组件重打 → 重打预置浏览器、签索引、上传 → 等镜像同步并逐字节核对 → 打预览包 → main 合到 test → 全链对账。
+中途失败再跑同一条命令，从没做完的那步接着来；`--check` 只对账不改东西。`devkit.json` 的分组里要写实际的包名，不写虚包（`man` 要写成提供它的 `mandoc`），否则对账认不出。
+
 ## 模块（`modules`，cccodroid 0.3.9 起）
 
 工具包按 `devkit.json` 的 `modules` 拆成基础模块 + 若干可选模块，App 里随装随卸：

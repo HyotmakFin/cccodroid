@@ -71,7 +71,7 @@
       "yq",
       "jq",
       "sqlite",
-      "man",
+      "mandoc",
       "bash-completion"
     ],
     "graphics": [
