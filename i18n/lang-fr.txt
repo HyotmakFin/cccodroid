@@ -1502,3 +1502,12 @@
 1502	Touche Entrée
 1503	Envoyer (Maj + Entrée pour une nouvelle ligne)
 1504	Nouvelle ligne (Ctrl + Entrée ou bouton d'envoi pour envoyer)
+1505	Utilisation
+1506	Choisir les éléments épinglés…
+1507	Replier la barre latérale
+1508	Nouvelle discussion
+1509	Discussions
+1510	Gérer les discussions
+1511	Retour à la discussion
+1512	Menu en haut à gauche : nouvelle discussion et discussions passées ; Extensions, Capacités, Utilisation et Aide sont dans « Plus », les Réglages en bas de la barre latérale
+1513	Continuez à écrire pendant la génération : Entrée met en file, le bouton éclair intervient (sans interrompre, rejoint le tour en cours)

@@ -1505,4 +1505,13 @@ window.I18N_DICT["fr"] = {
   "回车键": "Touche Entrée",
   "发送（Shift + 回车换行）": "Envoyer (Maj + Entrée pour une nouvelle ligne)",
   "换行（Ctrl + 回车或点发送键发出）": "Nouvelle ligne (Ctrl + Entrée ou bouton d'envoi pour envoyer)",
+  "用量": "Utilisation",
+  "自定常驻项…": "Choisir les éléments épinglés…",
+  "收起侧栏": "Replier la barre latérale",
+  "新对话": "Nouvelle discussion",
+  "对话": "Discussions",
+  "管理对话": "Gérer les discussions",
+  "回到对话": "Retour à la discussion",
+  "左上角菜单：新对话和历史对话；扩展、能力、用量、帮助在「更多」里，设置在侧栏最下面": "Menu en haut à gauche : nouvelle discussion et discussions passées ; Extensions, Capacités, Utilisation et Aide sont dans « Plus », les Réglages en bas de la barre latérale",
+  "生成中可以接着发：回车排队，闪电键插话（不打断，并进当前这一轮）": "Continuez à écrire pendant la génération : Entrée met en file, le bouton éclair intervient (sans interrompre, rejoint le tour en cours)",
 };

@@ -1538,4 +1538,13 @@ window.I18N_DICT.en = {
   "回车键": "Enter key",
   "发送（Shift + 回车换行）": "Send (Shift + Enter for new line)",
   "换行（Ctrl + 回车或点发送键发出）": "New line (Ctrl + Enter or send button sends)",
+  "用量": "Usage",
+  "自定常驻项…": "Customize pinned items…",
+  "收起侧栏": "Collapse sidebar",
+  "新对话": "New chat",
+  "对话": "Chats",
+  "管理对话": "Manage chats",
+  "回到对话": "Back to chat",
+  "左上角菜单：新对话和历史对话；扩展、能力、用量、帮助在「更多」里，设置在侧栏最下面": "Top-left menu: new chat and past chats; Extensions, Capabilities, Usage and Help are under More, Settings is at the bottom of the sidebar",
+  "生成中可以接着发：回车排队，闪电键插话（不打断，并进当前这一轮）": "Keep typing while it works: Enter queues, the lightning button interjects (no interruption, joins the current turn)",
 };

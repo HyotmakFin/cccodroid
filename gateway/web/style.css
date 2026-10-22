@@ -353,13 +353,68 @@ td{color:var(--fg2)}
 
 /* ── 抽屉 ── */
 #drawer{position:fixed;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(2px)}
+/* 侧栏从左边滑出（菜单键在左上角）；内容自上而下：标题 / 新对话 / 去哪 / 对话列表，账户行贴底 */
 .drawer-panel{
-    position:absolute;top:0;inset-inline-end:0;bottom:0;width:min(440px,92vw);
-  background:var(--bg2);border-inline-start:1px solid var(--line);
-  padding:calc(var(--safe-t) + 12px) 16px calc(var(--safe-b) + 16px);
-  overflow-y:auto;-webkit-overflow-scrolling:touch;animation:slide .2s ease;
+  position:absolute;top:0;inset-inline-start:0;bottom:0;width:min(340px,86vw);
+  background:var(--bg2);border-inline-end:1px solid var(--line);
+  padding:calc(var(--safe-t) + 10px) 10px 0;display:flex;flex-direction:column;
+  overflow:hidden;animation:slide .2s ease;
 }
-@keyframes slide{from{transform:translateX(100%)}to{transform:none}}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:none}}
+html[dir="rtl"] .drawer-panel{animation-name:slide-rtl}
+@keyframes slide-rtl{from{transform:translateX(100%)}to{transform:none}}
+.side-head{display:flex;align-items:center;gap:8px;padding:0 4px 8px}
+.side-brand{flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;letter-spacing:.2px}
+.side-brand span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drawer-panel svg,#pages .page-head svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.side-logo{width:22px;height:22px;color:var(--accent);stroke-width:1.8}
+.side-new{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;margin-bottom:6px;border-radius:11px;
+  background:var(--bg);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
+.side-new:hover{border-color:var(--accent-dim)}
+.side-new svg{width:18px;height:18px;color:var(--accent);stroke-width:2.2}
+.side-nav{display:flex;flex-direction:column;gap:1px;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.nav-item{display:flex;align-items:center;gap:11px;width:100%;padding:7px 12px;border-radius:9px;background:none;border:0;
+  color:var(--fg2);font:inherit;font-size:14px;text-align:start;cursor:pointer}
+.nav-item:hover{background:var(--bg3);color:var(--fg)}
+.nav-item.on{background:var(--active-bg);color:var(--accent);font-weight:500}
+.nav-item svg{width:18px;height:18px;flex:none;stroke-width:1.9}
+.nav-item span{flex:1;min-width:0}
+.nav-item .caret{width:15px;height:15px;transition:transform .15s;color:var(--fg3)}
+.nav-more.open .caret{transform:rotate(180deg)}
+.nav-sub{display:flex;flex-direction:column;gap:1px;padding-inline-start:10px;margin-inline-start:20px;border-inline-start:1px solid var(--line)}
+.nav-sub input{width:auto;margin:0}
+.nav-edit{align-self:flex-start;background:none;border:0;color:var(--fg3);font:inherit;font-size:12.5px;padding:5px 12px;cursor:pointer}
+.nav-edit:hover{color:var(--accent)}
+.side-sec{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px 12px;font-size:12px;color:var(--fg3);font-weight:600;letter-spacing:.4px}
+.icon-btn.sm{width:28px;height:28px;flex:0 0 28px}
+.icon-btn.sm svg{width:17px;height:17px}
+/* 只有对话列表滚动：标题、新对话、导航、账户行都钉住 */
+.side-head,.side-new,.side-nav,.side-acct{flex:none}
+#tab-sessions{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -10px;padding:0 10px}
+html.dock-l #tab-sessions{margin:0 -12px;padding:0 12px}
+.side-acct{position:static}
+#sess-manage{padding:0 4px 6px}
+.side-acct{position:sticky;bottom:0;display:flex;align-items:center;gap:10px;margin:8px -10px 0;padding:10px 14px calc(var(--safe-b) + 10px);
+  background:var(--bg2);border:0;border-top:1px solid var(--line);color:var(--fg2);font:inherit;text-align:start;cursor:pointer}
+.side-acct:hover,.side-acct.on{color:var(--fg)}
+.side-acct.on .acct-av{box-shadow:0 0 0 2px var(--accent)}
+.side-acct>svg{width:18px;height:18px;flex:none}
+.acct-av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
+.acct-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.acct-txt b{font-weight:500;font-size:14px;color:var(--fg)}
+.acct-txt small{font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── 整页：主区域里的设置 / 能力 / 扩展 / 用量 / 帮助 ──
+   顶栏照旧在上面（六个快捷键随时能点），整页从顶栏下沿铺到底；宽屏让开左侧栏和右侧工作区 */
+#pages{position:fixed;top:var(--tbh,56px);bottom:0;inset-inline:0;z-index:30;background:var(--bg);display:flex;flex-direction:column}
+html.dock-l #pages{inset-inline-start:var(--lw)}
+html.has-right #pages{inset-inline-end:var(--rw)}
+.page-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bar-bg)}
+.page-head h2{margin:0;font-size:16px;font-weight:600;letter-spacing:.2px}
+#page-sub{color:var(--fg3);font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px calc(var(--safe-b) + 28px)}
+#page-body > .tab-pane{max-width:760px;margin:0 auto}
+#page-body > #tab-ext,#page-body > #tab-help{max-width:900px}
 .drawer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px}
 .tabs{display:flex;gap:4px;background:var(--bg);border-radius:10px;padding:3px}
 .tab{
@@ -855,8 +910,10 @@ code a.fpath{border-bottom-style:dotted}
 .gh-acc button + button{margin-left:0}
 /* 欢迎页 */
 .welcome-tips{color:var(--fg2);font-size:13.5px;padding-inline-start:0;list-style:none}
-.welcome-tips li{margin:4px 0}
-.welcome-tips strong{display:inline-block;min-width:3.6em;color:var(--fg)}
+.welcome-tips li{margin:6px 0;display:flex;gap:12px;align-items:flex-start}
+.welcome-tips .wt-k{flex:0 0 4.6em;display:inline-flex;gap:4px;align-items:center;color:var(--fg);min-height:1.6em}
+.wt-ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wt-txt{font-family:var(--mono);font-weight:600;font-size:13px}
 .welcome-ex-h{margin:10px 0 6px;color:var(--fg2);font-size:13px}
 .welcome-ex{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
 .welcome-ex .btn{white-space:normal;text-align:start;height:auto;line-height:1.4;padding:6px 10px}
@@ -932,6 +989,7 @@ html.short #hint-row > :not(#draft-chip){display:none}
 .tab,.row-actions .btn{white-space:nowrap}
 .row-actions{flex-wrap:wrap}
 html.dock-l .drawer-panel{padding-inline:12px}
+html.dock-l .side-acct{margin-inline:-12px}
 html.dock-l .tab{padding:6px 10px}
 /* 抽屉只许竖着滚：标签一多（加了「帮助」）就横向溢出，窄侧栏里一拖整块内容跑偏。标签条自己横滑，其余内容限宽 */
 .drawer-panel{overflow-x:hidden}

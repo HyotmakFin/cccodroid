@@ -1563,6 +1563,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   /** 打开某个会话（null = 新会话）。重连事件流：网关会把正在跑的那一轮从头重放过来 */
   function openSession(id, jumpQ) {
+    closePage();
     resetView(id);
     view.jumpQ = id && jumpQ ? jumpQ : "";   // 从搜索结果点进来：历史加载完后跳到命中的那条
     view.jumpPages = 0;
@@ -1664,14 +1665,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
+    // 图标照顶栏 / 输入栏上的原样画（界面里不用 emoji）
+    const G = (d) => `<svg viewBox="0 0 24 24" class="wt-ico">${d}</svg>`;
     const tips = [
-      ["📎", t("附加图片或文件，也可以直接粘贴、拖进来")],
-      ["/ @", t("输入 / 唤起斜杠命令，@ 引用文件路径")],
-      ["📁 >_ ‹›", t("顶栏：文件浏览器、终端、命令面板")],
-      ["☰", t("左上角：历史会话、设置、能力清单、扩展")],
-      ["❄", t("页面滑不动、像卡住了：点顶栏的雪花就能恢复，不用重开应用")],
-      ["🔒", t("输入框下方的权限标签：Claude 改文件、跑命令前要不要先问你，点一下就能换")],
-      ["⚡", t("生成中可以接着发：回车排队，⚡ 插话（不打断，并进当前这一轮）")],
+      [G('<path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/>'), t("附加图片或文件，也可以直接粘贴、拖进来")],
+      ['<span class="wt-txt">/ @</span>', t("输入 / 唤起斜杠命令，@ 引用文件路径")],
+      [G('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>') + G('<path d="M4 17l6-5-6-5M12 19h8"/>') + G('<path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/>'), t("顶栏：文件浏览器、终端、命令面板")],
+      [G('<path d="M3 6h18M3 12h18M3 18h18"/>'), t("左上角菜单：新对话和历史对话；扩展、能力、用量、帮助在「更多」里，设置在侧栏最下面")],
+      [G('<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>'), t("页面滑不动、像卡住了：点顶栏的雪花就能恢复，不用重开应用")],
+      [G('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'), t("输入框下方的权限标签：Claude 改文件、跑命令前要不要先问你，点一下就能换")],
+      [G('<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/>'), t("生成中可以接着发：回车排队，闪电键插话（不打断，并进当前这一轮）")],
     ];
     // 第一次不知道问什么：点一下填进输入框，自己看过、改过再发
     const examples = [
@@ -1681,7 +1684,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     ];
     b.innerHTML =
       t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
-      `<ul class="welcome-tips">${tips.map(([k, v]) => `<li><strong>${esc(k)}</strong> ${esc(v)}</li>`).join("")}</ul>
+      `<ul class="welcome-tips">${tips.map(([k, v]) => `<li><span class="wt-k">${k}</span><span>${esc(v)}</span></li>`).join("")}</ul>
        <p class="welcome-ex-h">${esc(t("不知道从哪开始？点一个试试（只填进输入框，不会直接发）："))}</p>
        <div class="welcome-ex">${examples.map((x) => `<button class="btn ghost sm">${esc(x)}</button>`).join("")}</div>
        <div class="setup-guide hidden"></div>`;
@@ -5600,29 +5603,104 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch (e) { chips($("caps-mcp"), [t("查询失败：{msg}", { msg: e.message })]); }
   });
 
-  // ── 抽屉 / 面板 ───────────────────────────────────────────────────
+  // ── 侧栏 / 整页 ───────────────────────────────────────────────────
+  // 侧栏（#drawer）只放：新对话、去哪（导航）、对话列表、账户行。设置 / 能力 / 扩展 / 用量 / 帮助是主区域的整页（#pages），
+  // 宽屏时侧栏和右侧窗格都留着、整页只占对话那一块；窄屏整页盖住对话，返回键回到对话。
   function openDrawer(tab) {
+    if (tab && tab !== "sessions") return openPage(tab);
     drawerEl.classList.remove("hidden");
-    if (tab) switchTab(tab);
     refreshStatus();
-    if (!tab) { loadSessions(); loadCaps(); }
+    loadSessions();
+    if (!tab) loadCaps();
+    renderSideNav();
   }
-  // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点 ✕ / 菜单键（force）才收
+  // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点收起 / 菜单键（force）才收
   function closeDrawer(force) { if (!force && window.CCLayout && CCLayout.docked()) return; drawerEl.classList.add("hidden"); }
-  // 切到哪个标签就加载哪个的数据 —— 点标签和 openDrawer 都走这里
-  // （以前加载只写在 openDrawer 里，点"设置"标签进去 Shizuku / 更新几块永远不出来）
-  function switchTab(name) {
-    const cur = document.querySelector(".tab.active")?.dataset.tab;
-    if (cur && cur !== name) { const pn = document.querySelector(".drawer-panel"); if (pn) pn.scrollTop = 0; }   // 换标签从顶上看起
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
-    document.querySelectorAll(".tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
-    if (name === "sessions") loadSessions();
+
+  const PAGES = {
+    settings: { name: tk("设置"), icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>' },
+    ext: { name: tk("扩展"), icon: '<path d="M10 3h4v4a2 2 0 1 0 4 0h3v4h-4a2 2 0 1 0 0 4h4v6H3V3z"/>' },
+    caps: { name: tk("能力"), icon: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>' },
+    usage: { name: tk("用量"), icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
+    help: { name: tk("帮助"), icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>' },
+  };
+  const NAV_ITEMS = ["ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
+  var curPage = null;   // var：openSession 在启动早期就会调 closePage，别撞上 let 的暂时性死区
+  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["ext", "caps"]; };
+  var navEdit = false;
+  function renderSideNav() {
+    const nav = $("side-nav"); if (!nav) return;
+    const pins = navPins(), more = localStorage.getItem("cc.navMore") === "1";
+    const ico = (k) => `<svg viewBox="0 0 24 24">${PAGES[k].icon}</svg>`;
+    const item = (k) => `<button class="nav-item${curPage === k ? " on" : ""}" data-page="${k}">${ico(k)}<span>${esc(t(PAGES[k].name))}</span></button>`;
+    let h = pins.map(item).join("");
+    const rest = NAV_ITEMS.filter((k) => !pins.includes(k));
+    h += `<button class="nav-item nav-more${more ? " open" : ""}" data-nav="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg><span>${esc(t("更多"))}</span><svg viewBox="0 0 24 24" class="caret"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    if (more) {
+      h += '<div class="nav-sub">';
+      if (navEdit) h += NAV_ITEMS.map((k) => `<label class="nav-item">${ico(k)}<span>${esc(t(PAGES[k].name))}</span><input type="checkbox" data-pin="${k}"${pins.includes(k) ? " checked" : ""}></label>`).join("") + `<button class="nav-edit" data-nav="done">${esc(t("完成"))}</button>`;
+      else h += rest.map(item).join("") + `<button class="nav-edit" data-nav="edit">${esc(t("自定常驻项…"))}</button>`;
+      h += "</div>";
+    }
+    nav.innerHTML = h;
+    $("side-acct")?.classList.toggle("on", curPage === "settings");
+  }
+  $("side-nav").addEventListener("click", (e) => {
+    const p = e.target.closest("[data-page]"); if (p) return openPage(p.dataset.page);
+    const n = e.target.closest("[data-nav]")?.dataset.nav;
+    if (n === "more") { localStorage.setItem("cc.navMore", localStorage.getItem("cc.navMore") === "1" ? "0" : "1"); navEdit = false; }
+    if (n === "edit") navEdit = true;
+    if (n === "done") navEdit = false;
+    if (n) renderSideNav();
+  });
+  $("side-nav").addEventListener("change", (e) => {
+    const k = e.target.dataset.pin; if (!k) return;
+    const pins = navPins().filter((x) => x !== k);
+    if (e.target.checked) pins.push(k);
+    localStorage.setItem("cc.navPins", JSON.stringify(pins));
+    renderSideNav();
+  });
+  $("side-new").addEventListener("click", () => { closePage(); closeDrawer(); newConversation(); });
+  $("side-acct").addEventListener("click", () => openPage("settings"));
+  $("btn-sess-more").addEventListener("click", () => $("sess-manage").classList.toggle("hidden"));
+  // 账户行：哪家接口 + 型号；首字母当头像
+  function paintAcct(s) {
+    if (!s) return;
+    const label = s.providerLabel || s.provider || "";
+    $("acct-av").textContent = (label.trim()[0] || "C").toUpperCase();
+    $("acct-sub").textContent = [label, s.model].filter(Boolean).join(" · ");
+    if (s.product) $("side-title").textContent = s.product;
+  }
+
+  /** 打开整页：窄屏收起侧栏、盖住对话；宽屏侧栏照旧常驻，高亮当前项 */
+  function openPage(name) {
+    if (!PAGES[name]) name = "settings";
+    const prev = curPage;
+    curPage = name;
+    $("pages").classList.remove("hidden");
+    $("page-title").textContent = t(PAGES[name].name);
+    $("page-sub").textContent = "";
+    document.querySelectorAll("#page-body > .tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
+    if (prev !== name) $("page-body").scrollTop = 0;    // 换页从顶上看起
+    closeDrawer();
+    renderSideNav();
+    refreshStatus();
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
     if (name === "help") loadHelp();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadEnergy(); loadUsage(); loadReconcile(false); }
+    if (name === "usage") { loadEnergy(); loadUsage(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); }
   }
-  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  function closePage() {
+    if (!curPage) return;
+    curPage = null;
+    $("pages").classList.add("hidden");
+    renderSideNav();
+  }
+  $("page-back").addEventListener("click", closePage);
+  // 整页从顶栏下沿开始：顶栏高度随安全区 / 手机横屏压缩而变，量出来给 CSS
+  new ResizeObserver(() => document.documentElement.style.setProperty("--tbh", $("topbar").offsetHeight + "px")).observe($("topbar"));
+
 
   // ── 交流群与参与：帮助页最后一节、更新说明卡片底部共用。群号为主，二维码点开才显示 ──
   const COMMUNITY = { qq: "1062538743", repo: "https://github.com/greyoak111/cccodroid" };
@@ -7264,6 +7342,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (s.uiTag) uiTag = s.uiTag;
       if (s.product) { const t = document.getElementById("app-title"); if (t && t.textContent !== s.product) { t.textContent = s.product; document.title = s.product; } }
       state.serverStatus = s;
+      paintAcct(s);
       paintSafeMode(s.safeMode);
       // 日志分享靠安卓壳（cccodroid）打包、弹分享面板；旧版应用没有
       $("btn-share-logs").classList.toggle("hidden", s.product !== "cccodroid");
@@ -7397,6 +7476,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["popup", hidePopup],
       ["sheet", () => $("sheet").classList.add("hidden")],
       ["drawer", closeDrawer],
+      ["pages", closePage],
     ];
     // 宽屏：文件 / 查看器 / 终端并排停在右边，先关最近打开的那个，而不是按 z-index；常驻的侧栏不算浮层
     const L = window.CCLayout;

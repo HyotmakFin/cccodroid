@@ -1505,4 +1505,13 @@ window.I18N_DICT["es"] = {
   "回车键": "Tecla Intro",
   "发送（Shift + 回车换行）": "Enviar (Mayús + Intro para nueva línea)",
   "换行（Ctrl + 回车或点发送键发出）": "Nueva línea (Ctrl + Intro o botón de enviar para enviar)",
+  "用量": "Uso",
+  "自定常驻项…": "Elegir elementos fijados…",
+  "收起侧栏": "Contraer barra lateral",
+  "新对话": "Nuevo chat",
+  "对话": "Chats",
+  "管理对话": "Gestionar chats",
+  "回到对话": "Volver al chat",
+  "左上角菜单：新对话和历史对话；扩展、能力、用量、帮助在「更多」里，设置在侧栏最下面": "Menú arriba a la izquierda: chat nuevo y chats anteriores; Extensiones, Capacidades, Uso y Ayuda están en «Más», Ajustes al final de la barra lateral",
+  "生成中可以接着发：回车排队，闪电键插话（不打断，并进当前这一轮）": "Sigue escribiendo mientras trabaja: Intro pone en cola, el botón del rayo interviene (sin interrumpir, se une al turno actual)",
 };

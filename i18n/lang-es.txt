@@ -1502,3 +1502,12 @@
 1502	Tecla Intro
 1503	Enviar (Mayús + Intro para nueva línea)
 1504	Nueva línea (Ctrl + Intro o botón de enviar para enviar)
+1505	Uso
+1506	Elegir elementos fijados…
+1507	Contraer barra lateral
+1508	Nuevo chat
+1509	Chats
+1510	Gestionar chats
+1511	Volver al chat
+1512	Menú arriba a la izquierda: chat nuevo y chats anteriores; Extensiones, Capacidades, Uso y Ayuda están en «Más», Ajustes al final de la barra lateral
+1513	Sigue escribiendo mientras trabaja: Intro pone en cola, el botón del rayo interviene (sin interrumpir, se une al turno actual)
