@@ -1890,3 +1890,10 @@
 1890	Manquée ; pas rattrapée
 1891	Tâche introuvable
 1892	Les outils volumineux ne sont pas installés avec l'appli ; la désinstallation ne supprime que les fichiers du composant. Ceux marqués d'un bouclier ont été vérifiés sur un vrai appareil avec cette version de la boîte à outils.
+1893	Joindre des fichiers
+1894	Capture dans 5 s
+1895	Parcourir les fichiers
+1896	Contexte utilisé
+1897	Compacter le contexte
+1898	Coût
+1899	Configuration

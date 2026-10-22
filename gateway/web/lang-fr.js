@@ -1893,4 +1893,11 @@ window.I18N_DICT["fr"] = {
   "错过了，没补跑": "Manquée ; pas rattrapée",
   "任务不存在": "Tâche introuvable",
   "体积大的工具不随应用安装；卸载只删组件自己的文件。带盾牌的是在真机上验证过这一版工具包的。": "Les outils volumineux ne sont pas installés avec l'appli ; la désinstallation ne supprime que les fichiers du composant. Ceux marqués d'un bouclier ont été vérifiés sur un vrai appareil avec cette version de la boîte à outils.",
+  "附加文件": "Joindre des fichiers",
+  "5 秒后截屏": "Capture dans 5 s",
+  "浏览文件": "Parcourir les fichiers",
+  "上下文占用": "Contexte utilisé",
+  "压缩上下文": "Compacter le contexte",
+  "花费": "Coût",
+  "配置": "Configuration",
 };

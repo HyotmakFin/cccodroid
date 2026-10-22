@@ -1927,4 +1927,11 @@ window.I18N_DICT.en = {
   "错过了，没补跑": "Missed; not made up",
   "任务不存在": "Task not found",
   "体积大的工具不随应用安装；卸载只删组件自己的文件。带盾牌的是在真机上验证过这一版工具包的。": "Large tools aren't installed with the app; uninstalling removes only the component's own files. Components with a shield have been verified on a real device with this toolkit version.",
+  "附加文件": "Attach files",
+  "5 秒后截屏": "Screenshot in 5 s",
+  "浏览文件": "Browse files",
+  "上下文占用": "Context usage",
+  "压缩上下文": "Compact context",
+  "花费": "Cost",
+  "配置": "Config",
 };

@@ -1893,4 +1893,11 @@ window.I18N_DICT["es"] = {
   "错过了，没补跑": "Perdida; no se recuperó",
   "任务不存在": "Tarea no encontrada",
   "体积大的工具不随应用安装；卸载只删组件自己的文件。带盾牌的是在真机上验证过这一版工具包的。": "Las herramientas grandes no se instalan con la app; al desinstalar solo se borran los archivos del propio componente. Las que llevan escudo se han verificado en un dispositivo real con esta versión del kit.",
+  "附加文件": "Adjuntar archivos",
+  "5 秒后截屏": "Captura en 5 s",
+  "浏览文件": "Explorar archivos",
+  "上下文占用": "Uso del contexto",
+  "压缩上下文": "Compactar contexto",
+  "花费": "Coste",
+  "配置": "Configuración",
 };

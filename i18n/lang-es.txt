@@ -1890,3 +1890,10 @@
 1890	Perdida; no se recuperó
 1891	Tarea no encontrada
 1892	Las herramientas grandes no se instalan con la app; al desinstalar solo se borran los archivos del propio componente. Las que llevan escudo se han verificado en un dispositivo real con esta versión del kit.
+1893	Adjuntar archivos
+1894	Captura en 5 s
+1895	Explorar archivos
+1896	Uso del contexto
+1897	Compactar contexto
+1898	Coste
+1899	Configuración

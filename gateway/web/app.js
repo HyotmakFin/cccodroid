@@ -2013,9 +2013,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     pickViewRun();
     const busy = isBusy();
     sendEl.classList.toggle("busy", busy && !hasDraft());
-    inputEl.placeholder = busy
-      ? t("生成中 · 回车 = 排队 · ⚡ = 插话（不打断）")
-      : t("给 Claude 发消息，/ 命令，@ 引用文件…");
+    inputEl.placeholder = "";          // 用户定：输入框里不预置任何文字
     syncInterject();
     renderQueue();
     // 别的窗口（或网关那边）已经答掉的，这里也收起来
@@ -6107,7 +6105,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
     m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; closeMenu(); items[+b.dataset.i].fn(); });
-    setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { closeMenu(); removeEventListener("pointerdown", off, true); } }, true));
+    // 点菜单外面收起；点的是这个下拉框本身就留给 click 去切换（否则这里先关、click 又开，永远收不回去）
+    setTimeout(() => addEventListener("pointerdown", function off(e) {
+      if (!m.isConnected) return removeEventListener("pointerdown", off, true);
+      if (m.contains(e.target) || sel.contains(e.target)) return;
+      closeMenu(); removeEventListener("pointerdown", off, true);
+    }, true));
     return m;
   }
   // 下拉框不用系统弹出的选择器（深色、和主题不搭），换成同一套菜单：当前项打勾，optgroup 成小标题，
@@ -6126,6 +6129,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     const m = document.createElement("div");
     m.className = "pop-menu sel-menu";
+    m._sel = sel;     // 记住是哪个下拉框开的：再点它本身就是收起
     m.innerHTML = items.map((it, i) => it.head != null ? `<div class="pm-head">${esc(it.head)}</div>`
       : `<button type="button" data-i="${i}" class="${it.selected ? "on" : ""}"${it.disabled ? " disabled" : ""}>`
         + (it.selected ? `<svg viewBox="0 0 24 24">${CHECK}</svg>` : '<span class="pm-pad"></span>')
@@ -6149,7 +6153,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       sel.dispatchEvent(new Event("input", { bubbles: true }));
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { closeMenu(); removeEventListener("pointerdown", off, true); } }, true));
+    // 点外面收起；按在自己这个下拉框上不算（交给下面的 click：同一个 = 收起）
+    setTimeout(() => addEventListener("pointerdown", function off(e) {
+      if (!m.isConnected) return removeEventListener("pointerdown", off, true);
+      if (m.contains(e.target) || sel.contains(e.target)) return;
+      closeMenu(); removeEventListener("pointerdown", off, true);
+    }, true));
   }
   // 捕获阶段拦住：mousedown / 触摸的 pointerdown 不让系统选择器弹出，click 打开我们的菜单；回车 / 空格同样打开。
   // 带 data-native 的保留系统选择器
@@ -6160,7 +6169,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   addEventListener("click", (e) => {
     const s = selOf(e); if (!selOk(s)) return;
     e.preventDefault();
-    if (document.querySelector(".sel-menu")) { closeMenu(); return; }
+    const open = document.querySelector(".sel-menu");
+    if (open) { const same = open._sel === s; closeMenu(); if (same) return; }   // 点同一个：收起；点另一个：换成它的
     selMenu(s);
   }, true);
   addEventListener("keydown", (e) => {
@@ -8662,15 +8672,29 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ＋ 快捷面板
   const sheetEl = $("sheet");
-  $("btn-plus").addEventListener("click", () => sheetEl.classList.remove("hidden"));
+  // 宽屏：浮在 ＋ 上方的小卡片（宽 360，高不过 宽×φ 和上方剩余空间）；窄屏：底部弹层
+  function openSheet() {
+    const p = sheetEl.querySelector(".sheet-panel"), wide = innerWidth >= 700;
+    sheetEl.classList.toggle("pop", wide);
+    p.style.cssText = "";
+    sheetEl.classList.remove("hidden");
+    if (!wide) return;
+    const ar = $("btn-plus").getBoundingClientRect(), w = Math.min(360, innerWidth - 32);
+    p.style.width = w + "px";
+    p.style.left = Math.max(16, Math.min(ar.left - 6, innerWidth - w - 16)) + "px";
+    p.style.bottom = (innerHeight - ar.top + 10) + "px";
+    p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 10 - 16) + "px";
+  }
+  $("btn-plus").addEventListener("click", openSheet);
+  addEventListener("resize", () => { if (!sheetEl.classList.contains("hidden") && sheetEl.classList.contains("pop")) sheetEl.classList.add("hidden"); });
   sheetEl.addEventListener("click", (e) => {
     if (e.target === sheetEl) { sheetEl.classList.add("hidden"); return; }
-    const it = e.target.closest(".sheet-item");
+    const it = e.target.closest(".sheet-item, .sheet-tile");
     if (!it) return;
     sheetEl.classList.add("hidden");
     const a = it.dataset.act;
     if (a === "new") return $("btn-new").click();
-    if (a === "caps") return openDrawer("caps");
+    if (a === "caps") return openPage("caps");
     if (a === "attach") return pickFiles();
     if (a === "shot" || a === "shot5") return screenshot(a === "shot5" ? 5 : 0);
     if (a === "browse") return openFiles();

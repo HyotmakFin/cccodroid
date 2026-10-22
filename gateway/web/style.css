@@ -2252,3 +2252,64 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 #toast{z-index:96}
 #pages .panel > .row select{min-width:9.5em}
 .pj-sfoot .btn.pj-try{margin-inline-end:auto}
+/* 插件 / MCP 搜索框在 .field 里：别被 .field>label 的块级和 .field input 的边框底色覆盖 */
+.field > label.searchbox{display:flex;font-size:inherit;font-weight:400;color:var(--fg3);margin:var(--g2) 0}
+.field .searchbox input{width:auto;flex:1;min-width:0;border:0;border-radius:0;background:none;padding:0;box-shadow:none}
+/* 横屏设置卡片：两栏要撑满卡片高度，右边内容区才会出滚动（原先 align-items:start，内容区按内容长高、被卡片裁掉） */
+#set-ov:not(.narrow) #tab-settings .set-wrap{align-items:stretch}
+#set-ov:not(.narrow) #tab-settings .set-cats,#set-ov:not(.narrow) #tab-settings .set-main{align-self:stretch;min-height:0;max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+/* 对话阅读栏：宽屏收起侧栏时别铺满。栏宽 = 视口 ÷ φ（最窄 640、最宽 860），消息、输入框、上方状态条同宽居中 */
+:root{--col:clamp(640px,61.8vw,860px)}
+.msg,#hint-row,#perm-bar,#run-strip,#composer-inner{max-width:var(--col)}
+
+/* ＋ 面板（改版）：四格 + 一列常用操作；宽屏浮卡、窄屏底部弹层 */
+#sheet .sheet-panel{box-sizing:border-box;padding:var(--g1) var(--g2) calc(var(--safe-b) + var(--g3));background:var(--panel)}
+#sheet .sheet-grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:var(--g1) auto var(--g2)}
+#sheet .sheet-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--g2);padding:0 var(--g1) var(--g2);border-bottom:1px solid var(--line);margin-bottom:var(--g1)}
+#sheet .sheet-tile{display:flex;flex-direction:column;align-items:center;gap:6px;border:0;background:none;color:var(--fg2);font:inherit;font-size:12px;line-height:1.3;padding:var(--g2) 2px;border-radius:12px;cursor:pointer;text-align:center}
+#sheet .sheet-tile svg{width:22px;height:22px;padding:11px;box-sizing:content-box;border-radius:14px;background:var(--bg3);color:var(--fg);fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#sheet .sheet-tile:active svg,#sheet .sheet-tile:hover svg{background:var(--active-bg);color:var(--accent)}
+#sheet .sheet-list{display:grid;grid-template-columns:minmax(0,1fr)}
+#sheet .sheet-item{display:flex;align-items:center;gap:var(--g3);padding:10px var(--g2);font-size:14.5px;border-radius:10px;cursor:pointer}
+#sheet .sheet-item:hover{background:var(--bg2)}
+#sheet .sheet-item svg{width:18px;height:18px;flex:none;color:var(--fg3);fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#sheet .sheet-item span{flex:1;min-width:0}
+#sheet .sheet-item code{font-family:var(--mono);font-size:12px;color:var(--fg3);background:none;padding:0}
+/* 宽屏浮卡：不压暗，点外面收起 */
+#sheet.pop{background:transparent;display:block}
+#sheet.pop .sheet-panel{position:fixed;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px var(--shadow);padding:var(--g2);animation:fade .12s ease}
+#sheet.pop .sheet-grab{display:none}
+#sheet.pop .sheet-item{padding:8px var(--g2);font-size:14px}
+/* 窄屏底部弹层也别太高：最多到屏高 ÷ φ 附近，列表内滚 */
+#sheet:not(.pop) .sheet-panel{max-height:min(calc(100% - var(--safe-t, 0px)),80vh)}
+/* 输入框下面一行：回到老版的无框样式（用户定）——纯文字，型号强调色，权限虚线下划线，各项之间隔一个点 */
+#hint-row{gap:0;font-size:11.5px;line-height:1.6;margin-top:var(--g1)}
+#hint-row > *:not(.hidden):not(:empty) ~ *:not(.hidden):not(:empty)::before{content:"·";color:var(--fg3);margin:0 7px;display:inline-block;text-decoration:none}
+#hint-row .chip,#hint-row #perm-chip,#hint-row #draft-chip,#hint-row #proj-chip{border:0;border-radius:0;padding:0;background:none;font-size:inherit;line-height:inherit}
+#hint-row #model-chip{color:var(--accent);cursor:pointer}
+#hint-row #model-chip .chip{color:inherit}
+#hint-row #model-chip .chip + .chip::before{content:" · "}
+#hint-row #perm-chip{color:var(--fg3);cursor:pointer}
+#hint-row #perm-chip > :not(svg),#hint-row #perm-chip{text-decoration:underline dotted;text-underline-offset:3px}
+#hint-row #perm-chip.danger{color:var(--err);font-weight:600;background:none}
+#hint-row #proj-chip{color:var(--accent);background:none}
+#hint-row #stat-chip{font-size:11px}
+/* 月报卡片下面的「保存图片 / 分享」别贴着卡片 */
+#us-actions{margin-top:var(--g4)}
+#us-actions > .row-actions{margin-bottom:var(--g3)}
+/* 交界处的圆角（细微）：常驻侧栏的底色在会话区上下两角各包进一个 g3 的内凹圆角，侧栏竖线顺势弯过去，
+   会话区（以及开在它上面的设置等页面）就像嵌在侧栏旁的一张圆角卡片。挂在 #drawer 上，侧栏收起时自然消失 */
+html.dock-l #drawer::before,html.dock-l #drawer::after{
+  content:"";position:absolute;inset-inline-start:calc(100% - 1px);width:var(--g3);height:var(--g3);pointer-events:none;
+  --cc-fil:transparent calc(var(--g3) - 1.5px),var(--line) calc(var(--g3) - 1px),var(--line) calc(var(--g3) - .5px),var(--bg2) var(--g3);
+}
+html.dock-l #drawer::before{top:0;background:radial-gradient(circle at 100% 100%,var(--cc-fil))}
+html.dock-l #drawer::after{bottom:0;background:radial-gradient(circle at 100% 0,var(--cc-fil))}
+html.dock-l[dir=rtl] #drawer::before{background:radial-gradient(circle at 0 100%,var(--cc-fil))}
+html.dock-l[dir=rtl] #drawer::after{background:radial-gradient(circle at 0 0,var(--cc-fil))}
+/* 右侧工作区（文件 / 查看 / 版本 / 终端 / 浏览器）：和会话同底色，只让交界竖线在两端弯一下 */
+html.has-right #files,html.has-right #viewer,html.has-right #git,html.has-right #term,html.has-right #term-textview,html.has-right #browser{
+  border-start-start-radius:var(--g3);border-end-start-radius:var(--g3);
+}
+/* 窄屏抽出来的侧栏：外侧两角也收圆 */
+html:not(.dock-l) .drawer-panel{border-start-end-radius:var(--g4);border-end-end-radius:var(--g4)}

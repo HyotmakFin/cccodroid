@@ -59,10 +59,10 @@
         <button id="btn-plus" class="mini-btn" aria-label="更多" data-i18n-attr="aria-label">
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
     </button>
-        <button id="btn-attach" class="mini-btn" aria-label="附加图片或文件" title="附加图片或文件" data-i18n-attr="aria-label,title">
+        <button id="btn-attach" class="mini-btn hidden" aria-label="附加图片或文件" title="附加图片或文件" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg>
     </button>
-    <textarea id="input" rows="1" dir="auto" placeholder="给 Claude 发消息，/ 命令，@ 引用文件…" data-i18n-attr="placeholder" autocomplete="off" spellcheck="false"></textarea>
+    <textarea id="input" rows="1" dir="auto" placeholder="" autocomplete="off" spellcheck="false"></textarea>
     <!-- 忙碌且输入框有字时才出现：打断当前 + 立刻发这条 -->
         <button id="btn-interject" class="hidden" aria-label="插话" title="插话：递进正在跑的这一轮，不打断" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/></svg>
@@ -782,21 +782,28 @@
 
 <!-- ── 快捷面板（＋ 按钮）── -->
 <div id="sheet" class="hidden">
+  <!-- ＋ 面板：上面四格是「给 Claude 东西」（附件已并进来，输入框里不再单独放回形针），下面是常用操作。
+       宽屏是浮在 ＋ 上方的小卡片（app.js 定位），窄屏是底部弹层 -->
   <div class="sheet-panel">
-        <button class="sheet-item" data-act="attach" data-i18n>附加图片 / 文件</button>
-    <button class="sheet-item" data-act="shot" data-i18n>截屏给 Claude</button>
-    <button class="sheet-item" data-act="shot5" data-i18n>5 秒后截屏（先切到要截的应用）</button>
-    <button class="sheet-item" data-act="browse" data-i18n>浏览文件…</button>
-    <button class="sheet-item" data-act="new" data-i18n>新建会话</button>
-    <button class="sheet-item" data-act="model" data-i18n>切换模型与思考强度</button>
-    <button class="sheet-item" data-act="context" data-i18n>查看上下文占用 /context</button>
-    <button class="sheet-item" data-act="cost" data-i18n>查看花费 /cost</button>
-    <button class="sheet-item" data-act="compact" data-i18n>压缩上下文 /compact</button>
-    <button class="sheet-item" data-act="config" data-i18n>查看配置 /config</button>
-    <button class="sheet-item" data-act="usage" data-i18n>用量 /usage</button>
-    <button class="sheet-item" data-act="mcp" data-i18n>MCP 服务器 /mcp</button>
-    <button class="sheet-item" data-act="agents" data-i18n>子代理 /agents</button>
-    <button class="sheet-item" data-act="caps" data-i18n>打开能力面板</button>
+    <div class="sheet-grab"></div>
+    <div class="sheet-tiles">
+      <button class="sheet-tile" data-act="attach"><svg viewBox="0 0 24 24"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg><span data-i18n>附加文件</span></button>
+      <button class="sheet-tile" data-act="shot"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9h18"/><circle cx="12" cy="14" r="2.4"/></svg><span data-i18n>截屏</span></button>
+      <button class="sheet-tile" data-act="shot5"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg><span data-i18n>5 秒后截屏</span></button>
+      <button class="sheet-tile" data-act="browse"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i18n>浏览文件</span></button>
+    </div>
+    <div class="sheet-list">
+      <button class="sheet-item" data-act="model"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span data-i18n>模型与思考强度</span></button>
+      <button class="sheet-item" data-act="new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n>新建会话</span></button>
+      <button class="sheet-item" data-act="context"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5V12l6 6"/></svg><span data-i18n>上下文占用</span><code>/context</code></button>
+      <button class="sheet-item" data-act="compact"><svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4l3 3 3-3M9 20l3-3 3 3"/></svg><span data-i18n>压缩上下文</span><code>/compact</code></button>
+      <button class="sheet-item" data-act="cost"><svg viewBox="0 0 24 24"><path d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.4 4.5 3.3-2 3.2-4.5 3.2-4.5-1.4-4.5-3.2"/></svg><span data-i18n>花费</span><code>/cost</code></button>
+      <button class="sheet-item" data-act="usage"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span data-i18n>用量</span><code>/usage</code></button>
+      <button class="sheet-item" data-act="config"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span data-i18n>配置</span><code>/config</code></button>
+      <button class="sheet-item" data-act="mcp"><svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg><span data-i18n>MCP 服务器</span><code>/mcp</code></button>
+      <button class="sheet-item" data-act="agents"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/></svg><span data-i18n>子代理</span><code>/agents</code></button>
+      <button class="sheet-item" data-act="caps"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/></svg><span data-i18n>能力</span></button>
+    </div>
   </div>
 </div>
 
