@@ -1764,8 +1764,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const w = histEl.childElementCount === 1 && !!histEl.querySelector(":scope > .msg.welcome") && !liveEl.childElementCount;
     if (document.documentElement.classList.contains("wel") === w) return;
     document.documentElement.classList.toggle("wel", w);
-    syncPlaceholder(); paintProjChip();
+    syncPlaceholder(); paintProjChip(); welNarrow();
   }
+  // 对话栏窄（开着右侧窗格、分屏）：示例只留两条，免得把使用提示挤出屏幕
+  function welNarrow() { document.documentElement.classList.toggle("wel-narrow", colRect().width < 600); }
+  addEventListener("resize", welNarrow);
   new MutationObserver(welSync).observe(histEl, { childList: true });
   new MutationObserver(welSync).observe(liveEl, { childList: true });
   // 输入框里的一行提示：首屏问「有什么可以帮你」，会话里提示斜杠命令
@@ -5701,7 +5704,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
       <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
     document.body.appendChild(m);
-    const close = () => { m.remove(); removeEventListener("resize", close); };
+    const w0 = innerWidth;
+    const close = () => { m.remove(); removeEventListener("resize", onRz); };
+    const onRz = () => { if (innerWidth !== w0) close(); };   // 布局补发的假 resize 不算
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
     // 宽屏：卡片宽 420、最高 宽×φ，对齐输入栏下的型号按钮，底边落在按钮上方 8px；都只在对话这一栏里摆
     const col = colRect();
@@ -5716,7 +5721,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       p.style.left = Math.max(col.left + 16, Math.min(x0, col.right - w - 16)) + "px";
       p.style.bottom = (innerHeight - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
-      addEventListener("resize", close);
+      addEventListener("resize", onRz);
     }
     let info;
     try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
@@ -6198,7 +6203,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     document.body.appendChild(m);
     const ar = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
     let x, y;
-    if (place === "up") { m.classList.add("up"); x = ar.left + 8; m.style.width = (ar.width - 16) + "px"; y = ar.top - m.offsetHeight - 6; }   // 上弹的收在按钮里面，不溢出侧栏
+    if (place === "up") {
+      // 宽按钮（侧栏底部账户行）：菜单收在按钮里，不溢出侧栏；窄按钮（项目标签）：照常按内容宽，左对齐按钮
+      if (ar.width >= 200) { m.classList.add("up"); x = ar.left + 8; m.style.width = (ar.width - 16) + "px"; } else x = ar.left;
+      y = ar.top - m.offsetHeight - 6;
+    }
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
     m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; closeMenu(); items[+b.dataset.i].fn(); });
@@ -8770,20 +8779,24 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ＋ 快捷面板
   const sheetEl = $("sheet");
   // 宽屏：浮在 ＋ 上方的小卡片（宽 360，高不过 宽×φ 和上方剩余空间）；窄屏：底部弹层
+  //   都只在对话这一栏里摆（右侧可能是浏览器 / 终端窗格）
+  let sheetW = 0;
   function openSheet() {
-    const p = sheetEl.querySelector(".sheet-panel"), wide = innerWidth >= 700;
+    const p = sheetEl.querySelector(".sheet-panel"), col = colRect(), wide = col.width >= 560;
     sheetEl.classList.toggle("pop", wide);
-    p.style.cssText = "";
+    p.style.cssText = ""; sheetEl.style.left = sheetEl.style.right = "";
     sheetEl.classList.remove("hidden");
-    if (!wide) return;
-    const ar = $("btn-plus").getBoundingClientRect(), w = Math.min(360, innerWidth - 32);
+    sheetW = innerWidth;
+    if (!wide) { sheetEl.style.left = col.left + "px"; sheetEl.style.right = (innerWidth - col.right) + "px"; return; }
+    const ar = $("btn-plus").getBoundingClientRect(), w = Math.min(360, col.width - 32);
     p.style.width = w + "px";
-    p.style.left = Math.max(16, Math.min(ar.left - 6, innerWidth - w - 16)) + "px";
+    p.style.left = Math.max(col.left + 16, Math.min(ar.left - 6, col.right - w - 16)) + "px";
     p.style.bottom = (innerHeight - ar.top + 10) + "px";
     p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 10 - 16) + "px";
   }
   $("btn-plus").addEventListener("click", openSheet);
-  addEventListener("resize", () => { if (!sheetEl.classList.contains("hidden") && sheetEl.classList.contains("pop")) sheetEl.classList.add("hidden"); });
+  // 布局（layout.js）在浮层开合后会补发一次 resize，窗口其实没变 —— 只有宽度真变了才收，不然一开就闪没
+  addEventListener("resize", () => { if (!sheetEl.classList.contains("hidden") && sheetEl.classList.contains("pop") && innerWidth !== sheetW) sheetEl.classList.add("hidden"); });
   sheetEl.addEventListener("click", (e) => {
     if (e.target === sheetEl) { sheetEl.classList.add("hidden"); return; }
     const it = e.target.closest(".sheet-item, .sheet-tile");
