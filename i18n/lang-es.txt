@@ -1454,3 +1454,4 @@
 1454	Ahora sigue {ch}
 1455	La versión de desarrollo no puede fijar versiones (solo stable / latest)
 1456	No se pudo obtener la lista de versiones: {err}
+1457	Ver detalles

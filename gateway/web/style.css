@@ -1193,7 +1193,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .rw-acts button{padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:14px}
 .rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 /* 更新说明：更新后第一次打开时主窗口正中的卡片；内容长时卡片内部滚动 */
-#whatsnew{position:fixed;inset:0;z-index:210;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
+#whatsnew,#notice-pop{position:fixed;inset:0;z-index:210;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
 .wn-card{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);width:100%;max-width:560px;max-height:min(80vh,100%);display:flex;flex-direction:column;box-shadow:0 12px 40px var(--shadow);overflow:hidden}
 .wn-head{padding:14px 18px 10px;font-size:17px;font-weight:600;border-bottom:1px solid var(--line)}
 .wn-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 18px 8px}
@@ -1203,6 +1203,11 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .wn-md h1,.wn-md h2,.wn-md h3{font-size:15px;margin:10px 0 4px}
 .wn-foot{padding:10px 18px 14px;display:flex;justify-content:flex-end;border-top:1px solid var(--line)}
 .wn-foot .btn{min-width:96px}
+/* 维护者通知卡片（与更新说明同款） */
+.np-title{font-size:15px;font-weight:600;margin:2px 0 4px}
+.np-warn .np-title{color:var(--warn)}
+.np-body{font-size:14.5px;line-height:1.55;white-space:pre-wrap;color:var(--fg2);margin-bottom:6px}
+#notice-pop section .btn{margin:2px 0 8px}
 
 /* 自定义组件：导入向导 */
 .cu-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }

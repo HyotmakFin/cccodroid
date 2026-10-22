@@ -1712,6 +1712,39 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!document.hidden && (!es || es.readyState !== 1)) connectBus(true);
   });
 
+  // ── 维护者通知（经 cccodroid.net，网关验过签；见 gw/notices.mjs）：和更新说明同样的居中卡片 ──
+  // 什么时候弹（用户 10-22 定）：正在用的时候不弹；打开应用、或从后台切回来时才看一眼。
+  // 这次打开弹了更新说明，通知就顺延到下一次打开 / 切回来，两张卡片不叠在一起。
+  // 内容是纯文本；链接只认 https（网关已筛）。点「知道了」= 卡片里这几条都记为看过。
+  let noticeHold = false;
+  async function loadNotices() {
+    if (noticeHold || document.getElementById("whatsnew") || document.getElementById("notice-pop")) return;
+    let r;
+    try { r = await api("/api/notices?lang=" + encodeURIComponent(I18N.lang || "zh")); } catch { return; }
+    const list = r.items || [];
+    if (!list.length || noticeHold || document.hidden || document.getElementById("whatsnew") || document.getElementById("notice-pop")) return;
+    const el = document.createElement("div");
+    el.id = "notice-pop";
+    el.innerHTML = `<div class="wn-card" role="dialog" aria-modal="true" aria-labelledby="np-title">
+      <div class="wn-head" id="np-title">${esc(t("通知"))}</div>
+      <div class="wn-body">${list.map((n, i) => `<section class="np-${n.level === "warn" ? "warn" : "info"}">
+        <div class="wn-ver">${esc(n.date)}</div><div class="np-title">${esc(n.title)}</div>
+        ${n.body ? `<div class="np-body">${esc(n.body)}</div>` : ""}
+        ${n.link ? `<button class="btn sm" data-open="${i}">${esc(n.linkText || t("查看详情"))}</button>` : ""}</section>`).join("")}</div>
+      <div class="wn-foot"><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
+    el.addEventListener("click", async (e) => {
+      const o = e.target.closest("[data-open]");
+      if (o) return openExternal(list[+o.dataset.open].link);
+      if (!e.target.closest("[data-act=ok]")) return;
+      el.remove();
+      for (const n of list) {
+        try { await api("/api/notices/dismiss", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: n.id }) }); } catch {}
+      }
+    });
+    document.body.appendChild(el);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { noticeHold = false; loadNotices(); } });
+
   function belongs(ev) {
     if (view.runIds.has(ev.runId)) return true;
     if (ev.cid && view.cids.has(ev.cid)) return true;
@@ -7325,17 +7358,18 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
     setInterval(refreshStatus, 45000);
-    showWhatsNew();
+    if (showWhatsNew()) noticeHold = true;     // 刚弹了更新说明：通知等下一次打开 / 切回来
+    else loadNotices();
   })();
 
   /** 更新说明：更新后第一次打开时，主窗口正中弹一张卡片（外壳决定显示哪几版，见 WhatsNew.java；
    *  全新安装、开发端外壳没有这个接口时什么都不做）。显示出来就记为看过 */
   function showWhatsNew() {
     const A = window.CCApp;
-    if (!A || typeof A.whatsNew !== "function") return;
+    if (!A || typeof A.whatsNew !== "function") return false;
     let list = [];
-    try { list = JSON.parse(A.whatsNew(isZh() ? "zh" : ((window.I18N && I18N.lang) || "en")) || "[]"); } catch { return; }
-    if (!Array.isArray(list) || !list.length) return;
+    try { list = JSON.parse(A.whatsNew(isZh() ? "zh" : ((window.I18N && I18N.lang) || "en")) || "[]"); } catch { return false; }
+    if (!Array.isArray(list) || !list.length) return false;
     const el = document.createElement("div");
     el.id = "whatsnew";
     el.innerHTML = `<div class="wn-card" role="dialog" aria-modal="true" aria-labelledby="wn-title">
@@ -7352,5 +7386,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }));
     document.body.appendChild(el);
     try { A.whatsNewSeen(); } catch {}
+    return true;
   }
 })();

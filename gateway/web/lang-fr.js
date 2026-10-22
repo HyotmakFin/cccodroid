@@ -1457,4 +1457,5 @@ window.I18N_DICT["fr"] = {
   "已改为跟随 {ch}": "Suit désormais {ch}",
   "开发端不支持固定版本（只跟随 stable / latest）": "La version de développement ne peut pas épingler (stable / latest seulement)",
   "取不到版本列表：{err}": "Impossible d'obtenir la liste des versions : {err}",
+  "查看详情": "Voir le détail",
 };

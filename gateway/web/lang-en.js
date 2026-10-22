@@ -1490,4 +1490,5 @@ window.I18N_DICT.en = {
   "已改为跟随 {ch}": "Now following {ch}",
   "开发端不支持固定版本（只跟随 stable / latest）": "The dev build can't pin a version (stable / latest only)",
   "取不到版本列表：{err}": "Couldn't get the version list: {err}",
+  "查看详情": "Details",
 };

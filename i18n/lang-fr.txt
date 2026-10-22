@@ -1454,3 +1454,4 @@
 1454	Suit désormais {ch}
 1455	La version de développement ne peut pas épingler (stable / latest seulement)
 1456	Impossible d'obtenir la liste des versions : {err}
+1457	Voir le détail
