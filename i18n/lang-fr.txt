@@ -1455,3 +1455,35 @@
 1455	La version de développement ne peut pas épingler (stable / latest seulement)
 1456	Impossible d'obtenir la liste des versions : {err}
 1457	Voir le détail
+1458	Les enregistrements et le disque divergent à {n} endroits :
+1459	Les enregistrements correspondent au disque
+1460	Que faire : 
+1461	Vérification…
+1462	Échec de la vérification
+1463	Pas de boîte à outils ici, rien à vérifier
+1464	Le marqueur d'installation de la boîte à outils (.devkit-ok) est absent ; l'installation n'est peut-être pas terminée
+1465	Paramètres → Mettre à jour : réparer la boîte à outils
+1466	Programme Claude Code introuvable
+1467	Paramètres → Mettre à jour : réinstaller Claude Code
+1468	Impossible de lire l'enregistrement d'installation du composant « {id} »
+1469	Réinstallez ce composant depuis la page Extensions
+1470	Le composant « {id} » n'a pas fini de s'installer la dernière fois
+1471	Désinstallez-le puis réinstallez-le depuis la page Extensions
+1472	Le composant « {id} » a été installé sur une ancienne boîte à outils ; ses fichiers ont disparu au changement
+1473	Réinstallez-le depuis la page Extensions (ou plus tard, quand vous en aurez besoin)
+1474	L'enregistrement du composant « {id} » contient {n} chemins mal formés
+1475	Envoyez un paquet de diagnostic au développeur
+1476	Les commandes du composant « {id} » ont disparu : {cmds}
+1477	Il manque {n} des {total} fichiers du composant « {id} »
+1478	{n} entrées de listes de paquets pointent hors de cette appli
+1479	{n} paquets sont incomplets ({m} fichiers manquants)
+1480	Le module « {name} » est marqué installé mais n'a pas de manifeste
+1481	Désinstallez-le puis réinstallez-le dans Extensions → Modules de la boîte à outils
+1482	Le module « {name} » n'a pas fini de s'installer la dernière fois
+1483	Réinstallez-le dans Extensions → Modules de la boîte à outils
+1484	Le module « {name} » n'a pas de liste de fichiers (FILES) ; le désinstaller laisserait des fichiers
+1485	Il manque {n} des {total} fichiers du module « {name} »
+1486	Impossible de lire l'enregistrement du composant personnalisé « {id} »
+1487	Supprimez-le dans Extensions → Composants personnalisés puis réimportez-le
+1488	Le programme ou les bibliothèques du composant personnalisé « {id} » ont disparu
+1489	Vérifier les enregistrements

@@ -3942,6 +3942,31 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!confirm(t("将打开 GitHub 的新建 Issue 页面，下面这些会预先填好，提交前还能改：") + "\n\n" + (dev.length > 1500 ? dev.slice(0, 1500) + "…" : dev))) return;
     openExternal(r.url);
   });
+  // 状态对账：组件 / 模块 / 包清单 / 自定义组件的记录和磁盘对一遍（网关启动后自动核过一次，这里看结果或再核）
+  function paintReconcile(r, always) {
+    const box = $("reconcile-box"), bad = (r.findings || []).filter((f) => f.level !== "info");
+    if (!r.supported || (!always && !bad.length)) return box.classList.add("hidden");
+    const head = r.at ? `<div class="tiny">${esc(bad.length ? t("记录和磁盘有 {n} 处对不上：", { n: bad.length }) : t("记录和磁盘一致"))} · ${esc(new Date(r.at).toLocaleString())}</div>` : "";
+    box.innerHTML = head + (r.findings || []).map((f) => `<div class="item ledger ${f.level === "info" ? "" : "bad"}">
+        <div class="it-title wrap">${f.level === "error" ? "✗" : f.level === "warn" ? "⚠" : "ℹ"} ${esc(f.msg)}</div>
+        ${f.fix ? `<div class="tiny">${esc(t("怎么办："))}${esc(f.fix)}</div>` : ""}
+        ${f.samples.length ? `<div class="tiny mono">${f.samples.slice(0, 5).map(esc).join("<br>")}</div>` : ""}
+      </div>`).join("");
+    box.classList.remove("hidden");
+  }
+  async function loadReconcile(run) {
+    const r = await api("/api/reconcile" + (run ? "?run=1" : "")).catch(() => null);
+    if (r) paintReconcile(r, run);
+    return r;
+  }
+  $("btn-reconcile").addEventListener("click", async () => {
+    const box = $("reconcile-box");
+    if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+    toast(t("正在核对…"));
+    const r = await loadReconcile(true);
+    if (!r) toast(t("核对失败"), true);
+    else if (!r.supported) toast(t("这里没有工具包，不用核对"));
+  });
   const LEDGER_KIND = () => ({ verify: t("校验"), repair: t("修复"), install: t("安装"), uninstall: t("卸载"), recover: t("恢复"), "safe-mode": t("安全模式"), logs: t("日志") });
   $("btn-ledger").addEventListener("click", async () => {
     const box = $("ledger-list");
@@ -5544,7 +5569,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
     if (name === "help") loadHelp();
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadEnergy(); loadUsage(); }
+    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadEnergy(); loadUsage(); loadReconcile(false); }
   }
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 

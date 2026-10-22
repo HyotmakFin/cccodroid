@@ -7,6 +7,7 @@ import { RUNS } from "./runs.mjs";
 import { termEnv } from "./terminal.mjs";
 import { COMP_DIR, compRecord, devkitIdentity } from "./components.mjs";
 import { modInstalled, modulesInfo } from "./modules.mjs";
+import { reconcileFacts } from "./reconcile.mjs";
 
 // ── 本机实况：TOOLS.md 是打包时在测试机上测的，这里补上「这台设备上实际怎样」 ──
 // 自检（cccodroid-selftest）在本机跑一遍，失败项和 INFO（比如有没有硬件编码器）接在 TOOLS.md 后面；
@@ -30,7 +31,7 @@ function envFactsRun() {
   const argv = fs.existsSync(nice) ? [nice, "-n", "10", sh, st] : [sh, st];
   let out = "";
   log("[env] 本机自检开始（工具包或应用换了版本）");
-  envFactsJob = spawn(argv[0], argv.slice(1), { env: termEnv(), cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  envFactsJob = spawn(argv[0], argv.slice(1), { env: { ...termEnv(), CCAPP_ENVFACTS: "1" }, cwd: CFG.home, detached: true, stdio: ["ignore", "pipe", "pipe"] });
   envFactsJob.stdout.setEncoding("utf8"); envFactsJob.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
   envFactsJob.stdout.on("data", (d) => { if (out.length < 1 << 20) out += d; });
   envFactsJob.stderr.on("data", () => {});
@@ -91,6 +92,7 @@ export function envFacts() {
     if (ok.length) out.push(`- 用 pkg 装过：${ok.join("、")}`);
     if (lost.length) out.push(`- 工具包更新后这些 pkg 包已不在：${lost.join("、")}（要用就先 \`pkg restore\`）`);
   } catch {}
+  out.push(...reconcileFacts());
   let r = null; try { r = JSON.parse(fs.readFileSync(ENV_FACTS, "utf8")); } catch {}
   if (r) {
     const stale = r.key !== envFactsKey() ? "（工具包或应用更新前测的）" : "";

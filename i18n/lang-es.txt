@@ -1455,3 +1455,35 @@
 1455	La versión de desarrollo no puede fijar versiones (solo stable / latest)
 1456	No se pudo obtener la lista de versiones: {err}
 1457	Ver detalles
+1458	Los registros y el disco no coinciden en {n} puntos:
+1459	Los registros coinciden con el disco
+1460	Qué hacer: 
+1461	Comprobando…
+1462	La comprobación falló
+1463	Aquí no hay kit de herramientas; nada que comprobar
+1464	Falta la marca de instalación del kit de herramientas (.devkit-ok); puede que no terminara de instalarse
+1465	Ajustes → Actualizar: reparar el kit de herramientas
+1466	No se encuentra el programa Claude Code
+1467	Ajustes → Actualizar: reinstalar Claude Code
+1468	No se puede leer el registro de instalación del componente «{id}»
+1469	Reinstala este componente en la página Extensiones
+1470	El componente «{id}» no terminó de instalarse la última vez
+1471	Desinstálalo y vuelve a instalarlo en la página Extensiones
+1472	El componente «{id}» se instaló sobre un kit anterior; sus archivos desaparecieron al cambiar el kit
+1473	Reinstálalo en la página Extensiones (o más tarde, cuando lo necesites)
+1474	El registro del componente «{id}» tiene {n} rutas mal formadas
+1475	Envía un paquete de diagnóstico al desarrollador
+1476	Han desaparecido comandos del componente «{id}»: {cmds}
+1477	Faltan {n} de los {total} archivos del componente «{id}»
+1478	{n} entradas de listas de paquetes apuntan fuera de esta app
+1479	{n} paquetes están incompletos (faltan {m} archivos)
+1480	El módulo «{name}» figura como instalado pero no tiene manifiesto
+1481	Desinstálalo y vuelve a instalarlo en Extensiones → Módulos del kit de herramientas
+1482	El módulo «{name}» no terminó de instalarse la última vez
+1483	Reinstálalo en Extensiones → Módulos del kit de herramientas
+1484	El módulo «{name}» no tiene lista de archivos (FILES); al desinstalarlo quedarían restos
+1485	Faltan {n} de los {total} archivos del módulo «{name}»
+1486	No se puede leer el registro del componente personalizado «{id}»
+1487	Elimínalo en Extensiones → Componentes personalizados e impórtalo de nuevo
+1488	Han desaparecido el programa o las bibliotecas del componente personalizado «{id}»
+1489	Comprobar registros

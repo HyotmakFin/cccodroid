@@ -129,5 +129,13 @@ fi
 cd /; rm -rf "$W"
 echo "== Claude Code"
 t "claude 命令" "claude --version"
+# 记录 vs 磁盘（组件记录、包清单、模块、自定义组件）由网关核：它有全部记录。网关自己起的自检不再问（本机实况另外报）
+TF=${CCAPP_TOKEN_FILE:-$HOME/.gateway-token}
+if [ -z "$CCAPP_ENVFACTS" ] && [ -r "$TF" ]; then
+  echo "== 状态对账"
+  out=$(curl -fsS --max-time 60 -H "X-CC-Token: $(cat "$TF")" "http://127.0.0.1:${CCAPP_PORT:-8791}/api/reconcile?run=1&format=selftest" 2>&1)
+  if [ $? -ne 0 ]; then NF=$((NF+1)); echo "FAIL 状态对账 :: 问网关失败：$(echo "$out" | head -1 | cut -c1-160)"
+  else while IFS= read -r l; do case "$l" in PASS*) NP=$((NP+1)); [ -z "$Q" ] && echo "$l";; FAIL*) NF=$((NF+1)); echo "$l";; esac; done <<< "$out"; fi
+fi
 echo "== 完：通过 $NP 项，失败 $NF 项"
 [ $NF -eq 0 ]
