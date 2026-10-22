@@ -49,6 +49,9 @@
     if (a && typeof a.themePref === "function") { try { a.themePref(mode); } catch {} }
     const s = document.getElementById("set-theme");
     if (s && s.value !== pref) s.value = pref;
+    // 设置里的两组分段（外观 / 深浅）是 pref 的两半
+    document.querySelectorAll("#seg-skin [data-sk]").forEach((b) => b.classList.toggle("on", b.dataset.sk === skin));
+    document.querySelectorAll("#seg-mode [data-md]").forEach((b) => b.classList.toggle("on", b.dataset.md === mode));
     return name;
   }
 
@@ -70,6 +73,11 @@
 
   // 设置页的下拉框（index.html 的 #set-theme），事件委托：设置页重新渲染也不失效
   document.addEventListener("change", (e) => { if (e.target && e.target.id === "set-theme") set(e.target.value); }, true);
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("#seg-skin [data-sk], #seg-mode [data-md]"); if (!b) return;
+    const skin = b.dataset.sk || (pref.startsWith("qs-") ? "qiusuo" : "native"), mode = b.dataset.md || pref.replace(/^qs-/, "");
+    set((skin === "qiusuo" ? "qs-" : "") + mode);
+  });
   document.addEventListener("DOMContentLoaded", apply);
 
   window.Theme = { pref, set, system, apply, get current() { return document.documentElement.dataset.theme; } };

@@ -1536,3 +1536,357 @@
 1536	Cuota de suscripción
 1537	Buscar comandos, herramientas, habilidades…
 1538	Buscar en la ayuda…
+1539	No hay función de compartir del sistema — copiado al portapapeles
+1540	En curso
+1541	Seleccionar varios
+1542	Importar chats (.zip)
+1543	Desconectar el chat actual
+1544	{n} módulos
+1545	{n} componentes
+1546	Kit de desarrollo
+1547	Componentes
+1548	libre
+1549	Requiere GPU Mali
+1550	Requiere Snapdragon
+1551	Actualización disponible
+1552	No instalado
+1553	Aún no hay versión compatible
+1554	No disponible en este dispositivo
+1555	Verificado en dispositivo
+1556	En uso: {name}
+1557	Contraer
+1558	Detalles
+1559	Suficiente al ritmo actual
+1560	A este ritmo se agotará antes
+1561	Cuota semanal · cuenta Claude
+1562	tokens · {n} turnos
+1563	tokens · {n} chats
+1564	Aciertos de caché
+1565	Este mes · cuanto más alto, más ahorro
+1566	Cuota semanal {p}%
+1567	Hoy {n} tokens
+1568	Fecha
+1569	Turnos
+1570	Sin uso
+1571	(chat eliminado)
+1572	Aún no hay registros este mes
+1573	CPU de la app
+1574	La batería es cuánto bajó todo el dispositivo hoy; la CPU es el tiempo que esta app (incluidos Claude y sus comandos) trabajó realmente.
+1575	Esta versión no tiene capa nativa: solo registra tiempo de CPU (batería y pantalla requieren cccodroid).
+1576	Mensajes
+1577	Turnos de respuesta
+1578	Tokens de entrada
+1579	Tokens de salida
+1580	Tokens leídos de caché
+1581	Razonamiento {e}
+1582	Preguntar
+1583	Por regla
+1584	Claude Code {ver} · disponible en este turno
+1585	Lo que Claude puede usar en este turno
+1586	Modo de permisos: {m} · {n} reglas
+1587	No conectado
+1588	Mantén pulsado un chat: fijar, renombrar, exportar, eliminar
+1589	Seleccionar, importar, papelera, actualizar y desconectar están en el ⋯ junto al título; para un chat, toca su ⋯ o mantenlo pulsado.
+1590	Uso diario
+1591	Últimos 14 días · tokens
+1592	Gráfico
+1593	Tabla
+1594	Por modelo
+1595	Proporción de tokens este mes
+1596	Chats más costosos
+1597	Desglose
+1598	Generar imagen del informe mensual
+1599	Exportar CSV
+1600	Desglose de energía
+1601	Informe mensual
+1602	Todo lo que Claude puede usar en este turno (del informe init al iniciar). Toca un comando slash para insertarlo; permitir / preguntar / denegar sigue el modo de permisos y las reglas.
+1603	Editar reglas
+1604	MCP
+1605	Instalar/quitar en Extensiones → MCP
+1606	Atrás
+1607	Uso y energía
+1608	Nativo
+1609	Qiusuo
+1610	Claro / oscuro
+1611	Claro
+1612	Oscuro
+1613	Predeterminado para chats nuevos; cámbialo bajo la barra de entrada
+1614	Compactar cuando el contexto llegue a estos tokens
+1615	Directorios adicionales
+1616	--add-dir: permite a claude leer y escribir fuera del espacio de trabajo
+1617	No carga CLAUDE.md, habilidades, plugins, hooks ni MCP
+1618	Cada uno extra usa unos cientos de MB de RAM
+1619	Cuota semanal
+1620	Por día / por modelo / informe mensual
+1621	Tiempo de CPU de la app y descarga de batería del dispositivo
+1622	Preguntarme
+1623	Aceptar ediciones
+1624	Plan
+1625	Auto
+1626	Denegar sin preguntar
+1627	Fuera de proyectos
+1628	Tareas programadas
+1629	Se comprobaron las actualizaciones de componentes
+1630	Proyectos
+1631	Entiende imágenes
+1632	Borrar
+1633	Mover a un proyecto…
+1634	Hoy {t}
+1635	Mañana {t}
+1636	Ayer {t}
+1637	Cada día {t}
+1638	Entre semana {t}
+1639	Cada {d} {t}
+1640	Último día de cada mes {t}
+1641	El día {d} de cada mes {t}
+1642	Cada {h} h ({a}–{b})
+1643	Una vez · {d} {t}
+1644	{n} s
+1645	{m} min {s} s
+1646	{n} conversaciones
+1647	La carpeta ya no existe
+1648	Nuevo proyecto
+1649	Un proyecto = una carpeta de trabajo con sus propias instrucciones (CLAUDE.md), modelo y permisos por defecto. Las conversaciones iniciadas en un proyecto se ejecutan en esa carpeta.
+1650	Aún no hay proyectos. Crea uno o incorpora una carpeta que ya tengas.
+1651	Seguir el ajuste global
+1652	Aún no hay conversaciones
+1653	Instrucciones · CLAUDE.md
+1654	Se incluyen en cada conversación
+1655	Qué es este proyecto, cómo se compila, normas de la casa…
+1656	Revertir
+1657	Ajustes por defecto
+1658	(solo para conversaciones nuevas en este proyecto)
+1659	Modelo
+1660	El .mcp.json propio del proyecto: {list}
+1661	Sin .mcp.json; se usan los servidores globales
+1662	Abrir en el explorador de archivos
+1663	Memoria
+1664	{n} elementos
+1665	Lo que Claude ha anotado en este proyecto
+1666	Nuevo
+1667	Activado
+1668	Desactivado
+1669	Ninguna
+1670	Nombre del proyecto
+1671	Cambiar color
+1672	Abrir la carpeta en el explorador
+1673	Abrir esta carpeta en la terminal
+1674	Eliminar proyecto…
+1675	Nuevo proyecto
+1676	Crear en el espacio de trabajo
+1677	Usar una carpeta existente
+1678	Las conversaciones iniciadas antes en esta carpeta se añaden automáticamente
+1679	Clonar desde git
+1680	Escribe la dirección del repositorio; se clona en el espacio de trabajo
+1681	Instrucciones (se escriben en CLAUDE.md, opcional)
+1682	Crear
+1683	El nombre del proyecto no puede estar vacío
+1684	Clonando…
+1685	Creando…
+1686	Proyecto creado
+1687	Eliminar el proyecto «{n}»
+1688	Eliminar solo el proyecto; conservar la carpeta y las conversaciones
+1689	Las conversaciones vuelven a «Fuera de proyectos»; la carpeta sigue en {p}
+1690	Eliminar también la carpeta
+1691	Las conversaciones van a la papelera (recuperables); la carpeta se borra para siempre
+1692	La carpeta {p} se borrará para siempre. ¿Continuar?
+1693	Proyecto eliminado
+1694	Sin proyecto
+1695	¿En qué proyecto? (se ejecuta en la carpeta del proyecto con sus instrucciones y ajustes)
+1696	Esta conversación sigue en marcha; muévela cuando se detenga
+1697	Mover a un proyecto (el registro de la conversación pasa a la carpeta del proyecto)
+1698	Movida a «{n}»
+1699	Quitada del proyecto
+1700	{n} activadas
+1701	Próxima {w}
+1702	Se perdió una vez: 
+1703	Ejecutar ahora
+1704	Dejarlo
+1705	Nunca ejecutada
+1706	No volverá a ejecutarse
+1707	Desactivada
+1708	Activar/desactivar
+1709	A la hora fijada, Claude se ejecuta una vez en este dispositivo en la carpeta elegida; te avisa según el ajuste y el resultado se guarda como conversación. Nadie está mirando: cualquier acción que necesite tu aprobación se rechaza. Las ejecuciones perdidas nunca se recuperan a escondidas; decide el ajuste de cada tarea.
+1710	Activadas
+1711	Desactivadas
+1712	Aún no hay tareas programadas. Por ejemplo, que revise la CI cada mañana.
+1713	Coste y presupuesto
+1714	Hoy {a} / límite diario {b}
+1715	Hoy {a} · sin límite diario
+1716	Al llegar al límite se omiten las tareas restantes del día y se te avisa. La mayoría de las API de terceros no informan del coste, así que cuenta como 0.
+1717	Cambiar límite
+1718	Este mes {c} · {n} ejecuciones
+1719	Correctas {a} · fallidas {b} · omitidas {c}
+1720	Despertar
+1721	Se ejecuta a su hora mientras la app esté viva
+1722	El temporizador está en la pasarela: las tareas se ejecutan a su hora mientras la app esté abierta o en segundo plano. Si el sistema la cierra o el dispositivo está apagado, la ejecución se pierde y se trata según el ajuste «Si se pierde» la próxima vez que abras la app.
+1723	Para terminar con la pantalla bloqueada, permite la ejecución en segundo plano y evita que la optimización de batería la congele
+1724	Ir a ajustes
+1725	Sí
+1726	No
+1727	Dónde
+1728	Continuar la misma conversación (conserva el contexto anterior)
+1729	Una conversación nueva cada vez
+1730	Seguir proyecto / global
+1731	Permisos
+1732	Puede editar archivos en la carpeta del proyecto
+1733	Solo permitir: {l}
+1734	Solo lectura
+1735	; cualquier acción que necesite tu aprobación se rechaza
+1736	Condiciones
+1737	Solo con Wi-Fi
+1738	Solo cargando
+1739	Omitir con batería por debajo del {p} %
+1740	Se ejecuta si hay conexión
+1741	Si hay otra conversación en marcha
+1742	Esperar su turno
+1743	Omitir esta vez
+1744	Ejecutar igualmente (ocupa un hueco paralelo)
+1745	Límites
+1746	Sin límite de coste
+1747	{n} min
+1748	Reintentar {n} veces
+1749	Sin reintentos
+1750	Si se pierde
+1751	Preguntarme la próxima vez que abra la app
+1752	Ejecutar una vez justo al arrancar
+1753	Omitir
+1754	Avisar siempre
+1755	Solo si falla
+1756	Solo si encuentra algo (la respuesta no es «{q}»)
+1757	No avisar
+1758	Guardar el resultado como conversación
+1759	Vigencia
+1760	Se desactiva tras ejecutarse
+1761	Hasta el {d}
+1762	Se desactiva tras {n} ejecuciones ({m} hasta ahora)
+1763	Sin fecha de fin
+1764	Activada
+1765	Desactivada
+1766	No se ejecuta sola
+1767	Pausar un tiempo
+1768	En pausa hasta {w}; se reanuda sola
+1769	Se reanuda sola
+1770	No pausar
+1771	Saltar la próxima
+1772	Pausar 1 día
+1773	Pausar 1 semana
+1774	En pausa
+1775	Qué hacer
+1776	Cómo se ejecuta
+1777	Historial
+1778	Fallidas
+1779	Ejecutando…
+1780	Ejecutar ahora
+1781	Prueba
+1782	Reintento {n}
+1783	Aún no se ha ejecutado
+1784	Límite diario (USD, 0 = ninguno). Cuando las tareas programadas lo alcanzan en el día, se omiten las demás.
+1785	Recuperación iniciada
+1786	Omitida esta vez
+1787	Activada: {f}
+1788	Desactivada
+1789	No se pudo iniciar (condiciones no cumplidas o presupuesto del día agotado; mira el historial)
+1790	Prueba iniciada: no se registra; el resultado está en una conversación nueva
+1791	Iniciada: la conversación aparece en Recientes; te avisará según el ajuste
+1792	Duplicar
+1793	(copia)
+1794	Exportar JSON (copiar al portapapeles)
+1795	¿Eliminar la tarea programada «{n}»? Su historial se conserva y las conversaciones guardadas no se ven afectadas.
+1796	Cada día a las {time}
+1797	esos días a las {time}
+1798	Cada mes el {day} a las {time}
+1799	día {n}
+1800	último día
+1801	Cada {h} horas, solo entre {a} y {b}
+1802	Se desactiva tras ejecutarse.
+1803	Cron estándar de cinco campos: minuto hora día mes día-de-semana.
+1804	p. ej. Revisar la CI cada mañana
+1805	Qué debe hacer Claude
+1806	Di con claridad qué hacer y cómo informar. No habrá nadie: no puede hacerte preguntas.
+1807	¿Quieres «no me molestes si no pasa nada»? Pídele que responda una frase fija cuando no encuentre nada (p. ej. «Todo en verde») y elige abajo «Solo si encuentra algo».
+1808	Dónde se ejecuta
+1809	Proyecto: {n}
+1810	Cuándo
+1811	Cada pocas horas
+1812	Una vez
+1813	Independientes; un resultado por ejecución, fácil de revisar
+1814	Continuar la misma conversación
+1815	Conserva el contexto anterior (útil para «qué cambió desde la última vez»); crece con el tiempo y se compacta sola
+1816	Puede leer archivos y ejecutar comandos de consulta; no cambia nada (pruébalo así unos días)
+1817	Escribir fuera de la carpeta, instalar software, borrar, etc. se rechaza siempre
+1818	Elegir herramientas permitidas
+1819	p. ej. solo Bash(git *) y WebFetch; todo lo demás se rechaza
+1820	Más ajustes
+1821	Condiciones (si no se cumplen, esta ejecución se omite y se anota)
+1822	Omitir si la batería está por debajo de
+1823	Da igual
+1824	Si a esa hora hay otra conversación en marcha
+1825	Ejecutar igualmente
+1826	«Ejecutar igualmente» ocupa un hueco paralelo (Ajustes → Segundo plano y paralelo). La espera dura como mucho 30 minutos; después se omite.
+1827	Límites
+1828	Coste máximo por ejecución
+1829	Sin límite
+1830	Se detiene si lo supera y cuenta como fallo; la mayoría de las API de terceros no informan del coste
+1831	Duración máxima por ejecución
+1832	{n} h
+1833	Si falla
+1834	Reintentar 1 vez
+1835	Reintentar 2 veces
+1836	Corte de red, error de API, límite superado
+1837	Si se pierde
+1838	Dispositivo apagado, congelado por el sistema, sin red
+1839	Al terminar
+1840	Solo si encuentra algo
+1841	La frase que responde cuando no encuentra nada
+1842	Sin aviso si la respuesta es exactamente esta
+1843	Todo en verde
+1844	Marcada con un reloj en la lista; si se desactiva, solo queda en el historial
+1845	Incluir el resultado anterior
+1846	Le recuerda lo que dijo la última vez (solo con «Una conversación nueva cada vez»)
+1847	Hasta una fecha
+1848	Desactivar tras N ejecuciones
+1849	Editar tarea programada
+1850	Nueva tarea programada
+1851	Hacer una prueba
+1852	No se entiende: {e}
+1853	Próxima {a}
+1854	; después {b}
+1855	No se puede calcular la próxima ejecución (¿la hora ya pasó?)
+1856	Hacen falta el nombre y la tarea
+1857	Elige al menos un día
+1858	«Solo si encuentra algo» necesita la frase que responde cuando no encuentra nada
+1859	Creada: {f}
+1860	Tiempo de clonado agotado (5 minutos)
+1861	Conversación no encontrada
+1862	Proyecto no encontrado
+1863	La carpeta no existe: {d}
+1864	La dirección del repositorio debe empezar por https:// o git@
+1865	Error al clonar: {msg}
+1866	Esta carpeta ya es un proyecto
+1867	Esta carpeta no se puede eliminar
+1868	El cron necesita cinco campos: minuto hora día mes día-de-semana
+1869	Vigencia vencida; tarea desactivada
+1870	Ejecución omitida según el ajuste
+1871	El gasto de hoy ha llegado al límite
+1872	Tarea programada omitida
+1873	«{n}»: el gasto de hoy ha llegado al límite
+1874	Sin Wi-Fi
+1875	No está cargando
+1876	Batería al {b} %, por debajo del {m} %
+1877	Hay una conversación en marcha
+1878	Hay una conversación en marcha; tras 30 minutos aún no es su turno
+1879	(Resultado anterior, como referencia)
+1880	(sin respuesta)
+1881	Superó el límite de {m} minutos; detenida
+1882	Detenida
+1883	Algo salió mal
+1884	El coste ${c} superó el límite por ejecución ${m}
+1885	(se rechazaron {n} acciones que necesitaban aprobación)
+1886	Prueba terminada
+1887	Tarea programada completada: {n}
+1888	Tarea programada fallida: {n}
+1889	Perdida (la app no estaba en marcha); omitida según el ajuste
+1890	Perdida; no se recuperó
+1891	Tarea no encontrada
+1892	Las herramientas grandes no se instalan con la app; al desinstalar solo se borran los archivos del propio componente. Las que llevan escudo se han verificado en un dispositivo real con esta versión del kit.

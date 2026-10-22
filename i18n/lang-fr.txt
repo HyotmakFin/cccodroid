@@ -1536,3 +1536,357 @@
 1536	Quota d'abonnement
 1537	Rechercher commandes, outils, compétences…
 1538	Rechercher dans l'aide…
+1539	Pas de partage système ici — copié dans le presse-papiers
+1540	En cours
+1541	Sélection multiple
+1542	Importer des conversations (.zip)
+1543	Déconnecter la conversation actuelle
+1544	{n} modules
+1545	{n} composants
+1546	Kit de dév.
+1547	Composants
+1548	libre
+1549	Nécessite un GPU Mali
+1550	Nécessite Snapdragon
+1551	Mise à jour dispo
+1552	Non installé
+1553	Pas encore de version compatible
+1554	Inutilisable sur cet appareil
+1555	Vérifié sur appareil
+1556	Utilisé : {name}
+1557	Réduire
+1558	Détails
+1559	Suffisant au rythme actuel
+1560	À ce rythme, épuisé avant la fin
+1561	Quota hebdo · compte Claude
+1562	tokens · {n} tours
+1563	tokens · {n} conversations
+1564	Succès du cache
+1565	Ce mois · plus c'est haut, plus on économise
+1566	Quota hebdo {p} %
+1567	Aujourd'hui {n} tokens
+1568	Date
+1569	Tours
+1570	Non utilisé
+1571	(conversation supprimée)
+1572	Rien d'enregistré ce mois-ci
+1573	CPU de l'app
+1574	La batterie indique la baisse de tout l'appareil aujourd'hui ; le CPU est le temps de travail réel de l'app (Claude et ses commandes compris).
+1575	Cette version n'a pas de couche native : seul le temps CPU est enregistré (batterie et écran allumé nécessitent cccodroid).
+1576	Messages
+1577	Tours de réponse
+1578	Tokens d'entrée
+1579	Tokens de sortie
+1580	Tokens lus du cache
+1581	Réflexion {e}
+1582	Demander
+1583	Par règle
+1584	Claude Code {ver} · disponible pour ce tour
+1585	Ce que Claude peut utiliser ce tour
+1586	Mode d'autorisation : {m} · {n} règles
+1587	Non connecté
+1588	Appui long sur une conversation : épingler, renommer, exporter, supprimer
+1589	Sélection, import, corbeille, actualiser et déconnecter sont dans le ⋯ à côté du titre ; pour une conversation, touchez son ⋯ ou appui long.
+1590	Usage quotidien
+1591	14 derniers jours · tokens
+1592	Graphique
+1593	Tableau
+1594	Par modèle
+1595	Part des tokens ce mois
+1596	Conversations les plus coûteuses
+1597	Détail
+1598	Créer l'image du rapport mensuel
+1599	Exporter en CSV
+1600	Détail de la consommation
+1601	Rapport mensuel
+1602	Tout ce que Claude peut utiliser ce tour (d'après le rapport init au démarrage). Touchez une commande slash pour l'insérer ; autoriser / demander / refuser suit le mode d'autorisation et les règles.
+1603	Modifier les règles
+1604	MCP
+1605	Installer/retirer dans Extensions → MCP
+1606	Retour
+1607	Usage et énergie
+1608	Natif
+1609	Qiusuo
+1610	Clair / sombre
+1611	Clair
+1612	Sombre
+1613	Par défaut pour les nouvelles conversations ; modifiable sous la zone de saisie
+1614	Compacter quand le contexte atteint ce nombre de tokens
+1615	Répertoires supplémentaires
+1616	--add-dir : permet à claude de lire et écrire hors de l'espace de travail
+1617	Ne charge ni CLAUDE.md, ni compétences, plugins, hooks ou MCP
+1618	Chacune en plus utilise quelques centaines de Mo de RAM
+1619	Quota hebdomadaire
+1620	Par jour / par modèle / rapport mensuel
+1621	Temps CPU de l'app et baisse de batterie de l'appareil
+1622	Me demander
+1623	Accepter les modifs
+1624	Plan
+1625	Auto
+1626	Refuser sans demander
+1627	Hors projet
+1628	Tâches planifiées
+1629	Mises à jour des composants vérifiées
+1630	Projets
+1631	Comprend les images
+1632	Effacer
+1633	Déplacer vers un projet…
+1634	Aujourd'hui {t}
+1635	Demain {t}
+1636	Hier {t}
+1637	Tous les jours {t}
+1638	En semaine {t}
+1639	Chaque {d} {t}
+1640	Dernier jour du mois {t}
+1641	Le {d} de chaque mois {t}
+1642	Toutes les {h} h ({a}–{b})
+1643	Une fois · {d} {t}
+1644	{n} s
+1645	{m} min {s} s
+1646	{n} conversations
+1647	Dossier introuvable
+1648	Nouveau projet
+1649	Un projet = un dossier de travail avec ses propres instructions (CLAUDE.md), son modèle et ses permissions par défaut. Les conversations lancées dans un projet s'exécutent dans ce dossier.
+1650	Aucun projet pour l'instant. Créez-en un ou ajoutez un dossier existant.
+1651	Suivre le réglage global
+1652	Aucune conversation pour l'instant
+1653	Instructions · CLAUDE.md
+1654	Incluses dans chaque conversation
+1655	Ce qu'est ce projet, comment le compiler, les règles maison…
+1656	Annuler les modifications
+1657	Réglages par défaut
+1658	(uniquement pour les nouvelles conversations de ce projet)
+1659	Modèle
+1660	Le .mcp.json propre au projet : {list}
+1661	Pas de .mcp.json ; serveurs globaux utilisés
+1662	Ouvrir dans l'explorateur de fichiers
+1663	Mémoire
+1664	{n} éléments
+1665	Ce que Claude a noté dans ce projet
+1666	Nouveau
+1667	Activé
+1668	Désactivé
+1669	Aucune
+1670	Nom du projet
+1671	Changer la couleur
+1672	Ouvrir le dossier dans l'explorateur
+1673	Ouvrir ce dossier dans le terminal
+1674	Supprimer le projet…
+1675	Nouveau projet
+1676	Créer dans l'espace de travail
+1677	Utiliser un dossier existant
+1678	Les conversations déjà lancées dans ce dossier y sont ajoutées automatiquement
+1679	Cloner depuis git
+1680	Saisissez l'adresse du dépôt ; il sera cloné dans l'espace de travail
+1681	Instructions (écrites dans CLAUDE.md, facultatif)
+1682	Créer
+1683	Le nom du projet ne peut pas être vide
+1684	Clonage…
+1685	Création…
+1686	Projet créé
+1687	Supprimer le projet « {n} »
+1688	Supprimer seulement le projet ; garder le dossier et les conversations
+1689	Les conversations reviennent dans « Hors projet » ; le dossier reste dans {p}
+1690	Supprimer aussi le dossier
+1691	Les conversations vont à la corbeille (récupérables) ; le dossier est supprimé définitivement
+1692	Le dossier {p} sera supprimé définitivement. Continuer ?
+1693	Projet supprimé
+1694	Aucun projet
+1695	Dans quel projet ? (s'exécute dans le dossier du projet avec ses instructions et réglages)
+1696	Cette conversation est encore en cours ; déplacez-la quand elle s'arrête
+1697	Déplacer vers un projet (l'historique de la conversation va dans le dossier du projet)
+1698	Déplacée vers « {n} »
+1699	Retirée du projet
+1700	{n} activées
+1701	Prochaine {w}
+1702	Manquée une fois : 
+1703	Lancer maintenant
+1704	Laisser tomber
+1705	Jamais lancée
+1706	Ne sera plus lancée
+1707	Désactivée
+1708	Activer/désactiver
+1709	À l'heure prévue, Claude s'exécute une fois sur cet appareil dans le dossier choisi ; vous êtes averti selon le réglage et le résultat est enregistré comme conversation. Personne ne surveille : toute action demandant votre accord est refusée. Les exécutions manquées ne sont jamais rattrapées en douce ; le réglage de chaque tâche décide.
+1710	Activées
+1711	Désactivées
+1712	Aucune tâche planifiée. Par exemple, faites-lui vérifier la CI chaque matin.
+1713	Coût et budget
+1714	Aujourd'hui {a} / limite quotidienne {b}
+1715	Aujourd'hui {a} · sans limite quotidienne
+1716	Une fois la limite atteinte, les tâches restantes de la journée sont ignorées et vous êtes averti. La plupart des API tierces ne renvoient pas le coût : il compte pour 0.
+1717	Modifier la limite
+1718	Ce mois-ci {c} · {n} exécutions
+1719	Réussies {a} · échouées {b} · ignorées {c}
+1720	Réveil
+1721	S'exécute à l'heure tant que l'appli tourne
+1722	Le minuteur est dans la passerelle : les tâches s'exécutent à l'heure tant que l'appli est ouverte ou tourne en arrière-plan. Si le système la ferme ou si l'appareil est éteint, l'exécution est manquée et gérée selon le réglage « Si manquée » à la prochaine ouverture.
+1723	Pour finir écran verrouillé, autorisez l'exécution en arrière-plan et évitez le blocage par l'optimisation de batterie
+1724	Réglages
+1725	Oui
+1726	Non
+1727	Où
+1728	Continuer la même conversation (garde le contexte précédent)
+1729	Nouvelle conversation à chaque fois
+1730	Suivre le projet / global
+1731	Permissions
+1732	Peut modifier les fichiers du dossier du projet
+1733	Autoriser seulement : {l}
+1734	Lecture seule
+1735	 ; toute action demandant votre accord est refusée
+1736	Conditions
+1737	Uniquement en Wi-Fi
+1738	Uniquement en charge
+1739	Ignorer sous {p} % de batterie
+1740	S'exécute dès qu'il y a du réseau
+1741	Si une autre conversation tourne
+1742	Attendre son tour
+1743	Ignorer cette fois
+1744	Lancer quand même (occupe un emplacement parallèle)
+1745	Limites
+1746	Coût illimité
+1747	{n} min
+1748	Réessayer {n} fois
+1749	Pas de nouvel essai
+1750	Si manquée
+1751	Me demander à la prochaine ouverture
+1752	Lancer une fois juste après le démarrage
+1753	Ignorer
+1754	Avertir à chaque fois
+1755	Seulement en cas d'échec
+1756	Seulement si quelque chose est trouvé (réponse différente de « {q} »)
+1757	Ne pas avertir
+1758	Enregistrer le résultat comme conversation
+1759	Validité
+1760	Se désactive après exécution
+1761	Jusqu'au {d}
+1762	Se désactive après {n} exécutions ({m} pour l'instant)
+1763	Sans fin
+1764	Activée
+1765	Désactivée
+1766	Ne s'exécute pas d'elle-même
+1767	Mettre en pause
+1768	En pause jusqu'à {w} ; reprend automatiquement
+1769	Reprend automatiquement
+1770	Pas de pause
+1771	Sauter la prochaine
+1772	Pause 1 jour
+1773	Pause 1 semaine
+1774	En pause
+1775	À faire
+1776	Comment ça s'exécute
+1777	Historique
+1778	Échecs
+1779	En cours…
+1780	Lancer maintenant
+1781	Essai
+1782	Nouvel essai n° {n}
+1783	Pas encore exécutée
+1784	Limite quotidienne (USD, 0 = aucune). Quand les tâches planifiées l'atteignent dans la journée, les suivantes sont ignorées.
+1785	Rattrapage lancé
+1786	Ignorée cette fois
+1787	Activée : {f}
+1788	Désactivée
+1789	Impossible de lancer (conditions non remplies ou budget du jour épuisé ; voir l'historique)
+1790	Essai lancé : non enregistré ; le résultat est dans une nouvelle conversation
+1791	Lancée : la conversation apparaît dans Récents ; vous serez averti selon le réglage
+1792	Dupliquer
+1793	(copie)
+1794	Exporter en JSON (copier dans le presse-papiers)
+1795	Supprimer la tâche planifiée « {n} » ? Son historique reste et les conversations enregistrées ne sont pas touchées.
+1796	Tous les jours à {time}
+1797	ces jours-là à {time}
+1798	Chaque mois le {day} à {time}
+1799	le {n}
+1800	dernier jour
+1801	Toutes les {h} heures, seulement entre {a} et {b}
+1802	Se désactive après son exécution.
+1803	Cron standard à cinq champs : minute heure jour mois jour-de-semaine.
+1804	p. ex. Vérifier la CI chaque matin
+1805	Que doit faire Claude
+1806	Dites clairement quoi faire et comment rendre compte. Personne n'est là : il ne peut pas vous poser de questions.
+1807	Pour « ne me dérange que s'il y a quelque chose » : demandez-lui de répondre une phrase fixe quand il ne trouve rien (p. ex. « Tout est vert ») et choisissez ci-dessous « Seulement si quelque chose est trouvé ».
+1808	Où s'exécuter
+1809	Projet : {n}
+1810	Quand
+1811	Toutes les quelques heures
+1812	Une fois
+1813	Indépendantes ; un résultat par exécution, facile à parcourir
+1814	Continuer la même conversation
+1815	Garde le contexte précédent (utile pour « qu'est-ce qui a changé depuis la dernière fois ») ; s'allonge et est compactée automatiquement
+1816	Peut lire les fichiers et lancer des commandes de consultation ; ne modifie rien (essayez ainsi quelques jours)
+1817	Écritures hors du dossier, installations, suppressions, etc. sont toutes refusées
+1818	Choisir les outils autorisés
+1819	p. ex. seulement Bash(git *) et WebFetch ; tout le reste est refusé
+1820	Plus de réglages
+1821	Conditions (si non remplies, l'exécution est ignorée et notée)
+1822	Ignorer si la batterie est sous
+1823	Peu importe
+1824	Si une autre conversation tourne à ce moment
+1825	Lancer quand même
+1826	« Lancer quand même » occupe un emplacement parallèle (Réglages → Arrière-plan et parallélisme). L'attente dure 30 minutes au plus, ensuite l'exécution est ignorée.
+1827	Limites
+1828	Coût max par exécution
+1829	Illimité
+1830	S'arrête en cas de dépassement et compte comme échec ; la plupart des API tierces ne renvoient pas le coût
+1831	Durée max par exécution
+1832	{n} h
+1833	En cas d'échec
+1834	Réessayer une fois
+1835	Réessayer deux fois
+1836	Réseau coupé, erreur d'API, limite dépassée
+1837	Si manquée
+1838	Appareil éteint, gelé par le système, pas de réseau
+1839	Après exécution
+1840	Seulement si quelque chose est trouvé
+1841	La phrase qu'il répond quand il ne trouve rien
+1842	Pas d'avertissement si la réponse est exactement celle-ci
+1843	Tout est vert
+1844	Marquée d'une horloge dans la liste ; désactivé, seul l'historique la garde
+1845	Inclure le résultat précédent
+1846	Lui rappelle ce qu'il a dit la dernière fois (uniquement pour « Nouvelle conversation à chaque fois »)
+1847	Jusqu'à une date
+1848	Désactiver après N exécutions
+1849	Modifier la tâche planifiée
+1850	Nouvelle tâche planifiée
+1851	Faire un essai
+1852	Incompréhensible : {e}
+1853	Prochaine {a}
+1854	, puis {b}
+1855	Impossible de calculer la prochaine exécution (l'heure est-elle déjà passée ?)
+1856	Le nom et la tâche sont tous deux obligatoires
+1857	Choisissez au moins un jour
+1858	« Seulement si quelque chose est trouvé » demande la phrase qu'il répond quand il ne trouve rien
+1859	Créée : {f}
+1860	Clonage expiré (5 minutes)
+1861	Conversation introuvable
+1862	Projet introuvable
+1863	Le dossier n'existe pas : {d}
+1864	L'adresse du dépôt doit commencer par https:// ou git@
+1865	Échec du clonage : {msg}
+1866	Ce dossier est déjà un projet
+1867	Ce dossier ne peut pas être supprimé
+1868	Le cron demande cinq champs : minute heure jour mois jour-de-semaine
+1869	Date de fin dépassée ; tâche désactivée
+1870	Exécution ignorée selon le réglage
+1871	Les dépenses du jour ont atteint la limite
+1872	Tâche planifiée ignorée
+1873	« {n} » : les dépenses du jour ont atteint la limite
+1874	Pas en Wi-Fi
+1875	Pas en charge
+1876	Batterie {b} %, sous {m} %
+1877	Une conversation est en cours
+1878	Une conversation est en cours ; toujours pas son tour après 30 minutes
+1879	(Résultat précédent, pour référence)
+1880	(pas de réponse)
+1881	Limite de {m} minutes dépassée ; arrêtée
+1882	Arrêtée
+1883	Une erreur s'est produite
+1884	Coût ${c} au-delà de la limite par exécution ${m}
+1885	({n} actions demandant un accord refusées)
+1886	Essai terminé
+1887	Tâche planifiée terminée : {n}
+1888	Tâche planifiée échouée : {n}
+1889	Manquée (l'appli ne tournait pas) ; ignorée selon le réglage
+1890	Manquée ; pas rattrapée
+1891	Tâche introuvable
+1892	Les outils volumineux ne sont pas installés avec l'appli ; la désinstallation ne supprime que les fichiers du composant. Ceux marqués d'un bouclier ont été vérifiés sur un vrai appareil avec cette version de la boîte à outils.

@@ -14,6 +14,17 @@ import { handleLocalCommand } from "./modelcmd.mjs";
 import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
+import { findSessionFile, peekSession } from "./sessions.mjs";
+import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
+
+/** 这一轮在哪个目录跑：显式指定 → 接着的会话当初的 cwd（--resume 只在同一 cwd 下找得到）→ 项目目录 → 工作区 */
+const isDirSync = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
+function cwdOf(item, sessionId) {
+  if (item.cwd && isDirSync(item.cwd)) return item.cwd;
+  if (sessionId) { const f = findSessionFile(String(sessionId)); const c = f && peekSession(f.file).cwd; if (c && isDirSync(c)) return c; }
+  if (item.projectId) { const p = projectById(item.projectId); if (p && isDirSync(p.path)) return p.path; }
+  return fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home;
+}
 
 // ── 跑一轮 ────────────────────────────────────────────────────────────
 // 和 HTTP 请求完全脱钩：前端断了也接着跑，结果照样落进 transcript、照样广播。
@@ -30,6 +41,8 @@ export async function startRun(item) {
     child: null, aborted: false, ended: false,
     provider: PROVIDER.id,             // 记 token 用：开跑时的厂商（跑着的时候不许切）
     log: [], pend: null, pendTimer: null,
+    sched: item.sched || null,         // 定时任务跑的：{ taskId, runKey }（结束时 sched.mjs 记运行记录）
+    unattended: !!item.unattended,     // 没人看着：要确认的一律拒绝
   };
   run.lane = laneOfItem(item);
   RUNS.set(run.id, run);                 // 同步占槽，中间不许有 await
@@ -66,6 +79,12 @@ export async function startRun(item) {
   }
   if (run.aborted) return endRun(run, { failed: true });   // 等桥的时候就被停了
 
+  const cwd = cwdOf(item, run.sessionId);
+  run.cwd = cwd;
+  const pdef = projectDefaults(item.projectId ? projectById(item.projectId) : projectOfDir(cwd));
+  if (!item.model && pdef.model) item.model = pdef.model;
+  if (!item.permissionMode && pdef.perm) item.permissionMode = pdef.perm;
+  const effort = item.effort || pdef.effort || SETTINGS.effort;
   // 模型三级取：本次请求指定 → 设置里存的 → 该厂商自己的默认。
   // ⚠️ 不能回落到 CFG.model：那是全局兜底（deepseek-flash），只有内置厂商能碰。
   let model = (item.model || SETTINGS.model || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
@@ -122,29 +141,32 @@ export async function startRun(item) {
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
   argv.push(...settingsArgs());
-  if (SETTINGS.effort) argv.push("--effort", SETTINGS.effort);
-  if (SETTINGS.allowedTools?.length) argv.push("--allowedTools", SETTINGS.allowedTools.join(","));
-  if (SETTINGS.disallowedTools?.length) argv.push("--disallowedTools", SETTINGS.disallowedTools.join(","));
+  if (effort) argv.push("--effort", effort);
+  const allowed = [...(SETTINGS.allowedTools || []), ...(Array.isArray(item.allowedTools) ? item.allowedTools : [])];
+  if (allowed.length) argv.push("--allowedTools", allowed.join(","));
+  const disallowed = [...(SETTINGS.disallowedTools || []), ...(Array.isArray(item.disallowedTools) ? item.disallowedTools : [])];
+  if (disallowed.length) argv.push("--disallowedTools", disallowed.join(","));
 
   const dirs = new Set();
-  if (fs.existsSync(CFG.workspace)) dirs.add(CFG.workspace);
+  if (fs.existsSync(CFG.workspace) && cwd !== CFG.workspace) dirs.add(CFG.workspace);
   if (process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED)) dirs.add(process.env.CCAPP_SHARED);
   for (const d of SETTINGS.addDirs || []) if (fs.existsSync(d)) dirs.add(d);
   for (const d of item.addDirs || []) if (typeof d === "string" && fs.existsSync(d)) dirs.add(d);
   for (const d of dirs) argv.push("--add-dir", d);
 
   const isCmd = message.trim().startsWith("/");
-  log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${SETTINGS.effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
+  log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
   const t0 = Date.now();
 
   const [cmd0, args0] = claudeCmd(argv);
   const child = spawn(cmd0, args0, {
-    cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home,
+    cwd,
     env: claudeEnv(),
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,            // 当进程组长，中断时好整组带走（见 killTree）
   });
   run.child = child;
+  if (item.timeoutMs > 0) run.limitTimer = setTimeout(() => { run.timedOut = true; log(`⏱ 超过时长上限 ${Math.round(item.timeoutMs / 60000)} 分钟，停止`); abortRun(run); }, item.timeoutMs);
   child.stdin.on("error", () => {});
   const writeUser = (text) => child.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
   writeUser(message);
@@ -209,6 +231,13 @@ export async function startRun(item) {
         interactive: !!r.requires_user_interaction, agentId: r.agent_id || null, at: Date.now(),
         runId: run.id, sessionId: run.sessionId || null,   // 并行时通知要知道是哪个会话的
       };
+      if (run.unattended) {
+        log(`✗ 无人值守，自动拒绝 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
+        (run.denied = run.denied || []).push(p.tool);
+        writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: { behavior: "deny",
+          message: "This is an unattended scheduled run: nobody can approve this action, so it is denied. Do not retry it; finish with what you can do and say what was blocked." } } });
+        return;
+      }
       run.perms.set(id, p);
       log(`⏸ 等确认 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
       emit({ type: "perm_request", ...p });
@@ -254,7 +283,7 @@ export async function startRun(item) {
   };
   const onResult = (r) => {
     lastResult = r;
-    if (!isCmd && r.usage) usageAdd({ t: 1, i: promptTokens(r.usage), o: r.usage.output_tokens || 0 }, run.sessionId, run.usageModel);
+    if (!isCmd && r.usage) usageAdd({ t: 1, i: promptTokens(r.usage), o: r.usage.output_tokens || 0, c: r.usage.cache_read_input_tokens || 0 }, run.sessionId, run.usageModel);
     if (run.pendingInject.length) return;
     if (!run.bgTasks) return closeInput();
     // 答完了，只是后台任务（本地服务之类）还在跑：界面上算这一轮结束，进程和 stdin 留着等任务回报
@@ -364,6 +393,7 @@ export async function startRun(item) {
         // 本地命令（/context /cost …）的结果正文在这里
         localCommand: localCmd,
         resultText: localCmd ? String(lastResult.result || "") : "",
+        ...(run.sched ? { finalText: String(lastResult.result || "").slice(0, 4000), costRaw: Number(lastResult.total_cost_usd || 0) } : {}),
       });
     }
     const hint = code !== 0 ? `生成失败（退出码 ${code}）` : "生成结束但没有返回结果";

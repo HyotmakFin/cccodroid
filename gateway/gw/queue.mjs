@@ -143,13 +143,17 @@ function record(run, ev) {
   else run.log.push({ ...ev });
 }
 
+/** 一轮结束时要知道的模块（定时任务记运行记录）在这里挂；钩子出错不影响收尾 */
+export const END_HOOKS = [];
 export function endRun(run, fields = {}) {
   if (run.ended) return;
+  if (run.limitTimer) clearTimeout(run.limitTimer);
+  for (const h of END_HOOKS) { try { h(run, fields); } catch (e) { log("结束钩子出错: " + e.message); } }
   flushPend(run);
   run.ended = true;
   RUNS.delete(run.id);
   if (!RUNS.size) runFlag(false);
-  publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...(run.auto ? { auto: run.auto } : {}), ...fields });
+  publish({ type: "run_end", runId: run.id, sessionId: run.sessionId, aborted: !!run.aborted, ...(run.auto ? { auto: run.auto } : {}), ...(run.sched ? { sched: true } : {}), ...fields });
   goalCheck(run.sessionId);
   tasksCheck(run.sessionId);
   run.log = [];
@@ -230,7 +234,7 @@ export function pump() {
   }
 }
 
-function enqueue(body) {
+export function enqueue(body) {
   const item = {
     id: newRunId(),
     message: String(body.message || ""),
@@ -240,7 +244,11 @@ function enqueue(body) {
     model: body.model || null,
     permissionMode: body.permissionMode || null,
     addDirs: Array.isArray(body.addDirs) ? body.addDirs : [],
+    projectId: body.projectId ? String(body.projectId) : null,
     at: Date.now(),
+    // 只有网关自己（定时任务）会带的：前端发来的 /api/chat 不许设这些
+    ...(body.internal ? { cwd: body.cwd || null, effort: body.effort || null, sched: body.sched || null, unattended: !!body.unattended,
+      allowedTools: body.allowedTools || null, disallowedTools: body.disallowedTools || null, timeoutMs: body.timeoutMs || 0 } : {}),
     ...(body.auto ? { auto: body.auto } : {}),
   };
   // 插话（"inject"，旧前端叫 "interrupt"）：不打断。消息直接写进正在跑的 claude 的 stdin，
@@ -279,7 +287,7 @@ export async function routeQueue(req, res, u, p) {
       });
     }
     if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });
-    const item = enqueue(b);
+    const item = enqueue({ ...b, internal: false });
     return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: RUNS.has(item.id) });
   }
   if (req.method === "POST" && p === "/api/interrupted/dismiss") {

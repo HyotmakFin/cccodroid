@@ -30,6 +30,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   const $ = (id) => document.getElementById(id);
+  // 项目 / 定时任务的状态（模块在 openPage 前；这两个要在启动早期就可用）
+  var PJ = { list: [], colors: [], ws: "", cur: null, detail: null, loaded: false, effLevels: [] };
+  var SC = { data: null, cur: null, detail: null, flt: "all", rflt: "all" };
   const chatEl = $("chat"), inputEl = $("input"), sendEl = $("btn-send");
   const interjectEl = $("btn-interject");
   const subEl = $("sub-title"), statEl = $("stat-chip"), modelEl = $("model-chip");
@@ -107,7 +110,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     saveAs(p);
   }, true);
 
-  function setStatus(text, cls) { subEl.textContent = text; subEl.className = cls || ""; }
+  function setStatus(text, cls) { chatStatus = [text, cls || ""]; if (!curPage) { subEl.textContent = text; subEl.className = cls || ""; } }
 
   // ── 跨刷新要记住的东西 ────────────────────────────────────────────
   //  界面代码一变网关就会让前端自动 reload（uiTag 机制）。要是会话号只存在内存里，
@@ -504,6 +507,21 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     rewind: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
     del: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
   };
+  const UI_I = {
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    list: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10l2 2 4-4M8 16h8"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>',
+    hourglass: '<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>',
+    pause: '<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+    chevDown: '<path d="M6 9l6 6 6-6"/>',
+    ring: '<circle cx="12" cy="12" r="6.5"/>',
+    half: '<circle cx="12" cy="12" r="6.5"/><path d="M12 5.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" stroke="none"/>',
+    warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.01"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>',
+    clip: '<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>',
+  };
+  const uiI = (n, cls) => `<svg class="ui-i${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true">${UI_I[n]}</svg>`;
   const userTextOf = new WeakMap();   // 用户气泡 → 原文（分叉时拿它在 transcript 里认出是哪一轮）
   const actBtn = (a, label) => `<button data-a="${a}" title="${esc(label)}" aria-label="${esc(label)}"><svg viewBox="0 0 24 24">${ICONS[a]}</svg></button>`;
   function renderUser(text, parent) {
@@ -833,7 +851,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function setPermChip(m) {
     if (!m) return;
     state.permissionMode = m;
-    permEl.textContent = (m === "bypassPermissions" ? "⚠ " : "🔒 ") + modeLabel(m);
+    permEl.innerHTML = (m === "bypassPermissions" ? '<svg class="ei" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.01"/></svg>' : "") + esc(modeLabel(m));
     permEl.classList.toggle("danger", m === "bypassPermissions");
   }
 
@@ -915,7 +933,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     el.dataset.id = p.id;
     const kind = p.tool === "ExitPlanMode" ? t("计划待批准") : p.tool === "AskUserQuestion" ? t("Claude 想问你") : t("需要确认");
     el.innerHTML = `
-      <div class="perm-head"><span class="perm-kind">⏸ ${kind}</span><span class="perm-tool">${esc(p.tool)}</span>${p.agentId ? `<span class="perm-sub">${t("子代理")}</span>` : ""}</div>
+      <div class="perm-head"><span class="perm-kind">${uiI("pause")}${kind}</span><span class="perm-tool">${esc(p.tool)}</span>${p.agentId ? `<span class="perm-sub">${t("子代理")}</span>` : ""}</div>
       <div class="perm-body">${permPreview(p)}</div>
       <div class="perm-acts">${permActions(p)}</div>
       <div class="perm-deny hidden">
@@ -1033,13 +1051,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const cur = l.find((x) => x.status === "in_progress") || l.find((x) => x.status !== "completed");
     const pct = Math.round(done / l.length * 100);
     const head = `<div class="rs-row rs-thead" role="button" tabindex="0" aria-expanded="${tasksOpen}">
-      <span class="rs-ico">${all ? "✓" : "☑"}</span>
+      <span class="rs-ico">${uiI(all ? "check" : "list")}</span>
       <span class="rs-tcount">${all ? t("清单完成") : t("清单")} ${done}/${l.length}</span>
       <span class="rs-tbar"><i style="width:${pct}%"></i></span>
       <span class="rs-txt">${!tasksOpen && cur ? taskLabel(cur) : ""}</span>
-      ${all ? `<button class="rs-tx" aria-label="${t("关闭")}">✕</button>` : `<span class="rs-chev">${tasksOpen ? "▴" : "▾"}</span>`}</div>`;
+      ${all ? `<button class="rs-tx" aria-label="${t("关闭")}">${uiI("x")}</button>` : `<span class="rs-chev${tasksOpen ? " up" : ""}">${uiI("chevDown")}</span>`}</div>`;
     const rows = !tasksOpen ? "" : `<div class="rs-tlist">${l.map((x) => `<div class="rs-trow ${esc(x.status)}">
-      <span class="rs-tico">${x.status === "completed" ? "✓" : x.status === "in_progress" ? "◐" : "○"}</span>
+      <span class="rs-tico">${uiI(x.status === "completed" ? "check" : x.status === "in_progress" ? "half" : "ring")}</span>
       <span class="rs-ttxt">${taskLabel(x)}</span>
       ${x.blocked && x.status !== "completed" ? `<span class="rs-meta">${t("等 {ids}", { ids: x.blocked.map((b) => "#" + esc(b)).join(" ") })}</span>` : ""}</div>`).join("")}</div>`;
     return `<div class="rs-tasks${all ? " ok" : ""}">${head}${rows}</div>`;
@@ -1050,22 +1068,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     let html = tasksHtml();
     if (g && g.active) {
       const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
-      html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">🎯</span>
+      html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">${uiI("target")}</span>
         <span class="rs-txt">${t("目标")} · ${esc(g.condition)}</span>
         <span class="rs-meta">${[g.checks ? t("已检查 {n} 次", { n: g.checks }) : "", el ? t("已用 {d}", { d: el }) : ""].filter(Boolean).join(" · ")}</span>
         <button class="rs-goal-stop">${t("放弃")}</button></div>
         ${g.reason ? `<div class="rs-sub">${t("还差：")}${esc(g.reason)}</div>` : ""}</div>`;
     } else if (g && g.done) {
       const bits = [g.iterations != null ? t("{n} 轮", { n: g.iterations }) : "", g.durationMs != null ? fmtDur(g.durationMs) : "", g.tokens != null ? g.tokens.toLocaleString() + " tokens" : ""].filter(Boolean).join(" · ");
-      html += `<div class="rs-goal ${g.met ? "ok" : "bad"}"><div class="rs-row"><span class="rs-ico">${g.met ? "✓" : "✗"}</span>
+      html += `<div class="rs-goal ${g.met ? "ok" : "bad"}"><div class="rs-row"><span class="rs-ico">${uiI(g.met ? "check" : "x")}</span>
         <span class="rs-txt">${g.met ? t("目标达成") : t("目标无法达成")} · ${esc(g.condition)}</span>
-        <span class="rs-meta">${g.met ? bits : ""}</span><button class="rs-x" aria-label="${t("关闭")}">✕</button></div>
+        <span class="rs-meta">${g.met ? bits : ""}</span><button class="rs-x" aria-label="${t("关闭")}">${uiI("x")}</button></div>
         ${!g.met && g.reason ? `<div class="rs-sub">${esc(g.reason)}</div>` : ""}</div>`;
     }
     if (bg.length) {
       const rows = bg.slice(0, 4).map((x) => `<div class="rs-row rs-bg"><span class="rs-kind">${esc(BG_KIND(x.type))}</span>
         <span class="rs-txt">${esc(x.desc || x.id)}</span><button class="rs-stop" data-task="${esc(x.id)}">${t("停止")}</button></div>`).join("");
-      html += `<div class="rs-bgs"><div class="rs-head">⏳ ${t("后台在跑 {n} 个", { n: bg.length })}${bg.length > 4 ? " · " + t("还有 {n} 个", { n: bg.length - 4 }) : ""}</div>${rows}</div>`;
+      html += `<div class="rs-bgs"><div class="rs-head">${uiI("hourglass")}${t("后台在跑 {n} 个", { n: bg.length })}${bg.length > 4 ? " · " + t("还有 {n} 个", { n: bg.length - 4 }) : ""}</div>${rows}</div>`;
     }
     runStrip.innerHTML = html;
     runStrip.classList.toggle("hidden", !html);
@@ -1112,8 +1130,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!list.length) {
       permBar.innerHTML = state.settings.permNotice ? `
         <div class="pb-note"><span>${t("权限模式已改为「逐项确认」，与官方一致：改文件、跑命令前会先问你。想恢复全部放行，点下方的权限标签。")}</span>
-        <button class="pb-x" aria-label="${t("关闭")}">✕</button></div>` : "";
-      if (permWaiting && isBusy()) setStatus(t("生成中…"), "warn");
+        <button class="pb-x" aria-label="${t("关闭")}">${uiI("x")}</button></div>` : "";
+      if (permWaiting && isBusy()) setStatus(t("生成中…"), "live");
       permWaiting = false;
       return;
     }
@@ -1122,7 +1140,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     permBar.innerHTML = `
       <div class="pb-main">
         ${list.length > 1 ? `<span class="pb-n">${t("第 {i}/{n} 个", { i: 1, n: list.length })}</span>` : ""}
-        <span class="pb-txt">⏸ ${f.tool === "ExitPlanMode" ? t("计划待批准") : f.tool === "AskUserQuestion" ? t("Claude 想问你") : t("Claude 在等你确认") + " · "}${simple(list[0]) ? `<b>${esc(f.tool)}</b> <span class="mono">${esc(String(what || "").slice(0, 80))}</span>` : ""}</span>
+        <span class="pb-txt">${uiI("pause")}${f.tool === "ExitPlanMode" ? t("计划待批准") : f.tool === "AskUserQuestion" ? t("Claude 想问你") : t("Claude 在等你确认") + " · "}${simple(list[0]) ? `<b>${esc(f.tool)}</b> <span class="mono">${esc(String(what || "").slice(0, 80))}</span>` : ""}</span>
         ${simple(list[0]) ? `<button class="pb-allow primary">${t("允许")}</button>` : ""}
         <button class="pb-view">${t("查看")}</button>
       </div>
@@ -1193,20 +1211,21 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   // 回复底下的「复制 / 转发」：只取正文（Markdown 原文，多段之间空一行），思考和工具调用不算。
-  // 转发走外壳的系统分享面板（CCApp.shareText）；外壳没有这个接口时退回 Web Share，都没有就不显示。
-  const canShareText = () => !!((window.CCApp && CCApp.shareText) || navigator.share);
+  // 转发走外壳的系统分享面板（CCApp.shareText）；外壳没有这个接口时退回 Web Share，都没有就复制并说明。
+  // 提问和回复底下一律四个键（提问：复制 / 重发 / 回退 / 删除；回复：复制 / 转发 / 分叉 / 删除），别因为环境不同少一个
   function replyActs(msgEl, getText) {
     if (!getText() || msgEl.querySelector(":scope > .msg-acts")) return;
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = actBtn("copy", t("复制")) + (canShareText() ? actBtn("share", t("转发")) : "") +
+    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("share", t("转发")) +
       (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")) + actBtn("del", t("删除")));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a, text = getText();
       if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
       if (a === "share") {
         if (window.CCApp && CCApp.shareText) CCApp.shareText(text);
-        else navigator.share({ text }).catch(() => {});
+        else if (navigator.share) navigator.share({ text }).catch(() => {});
+        else { navigator.clipboard?.writeText(text); toast(t("这里没有系统分享，已复制到剪贴板")); }
       }
       if (a === "fork") forkFrom(msgEl);
       if (a === "del") deleteMsg(msgEl, "bot");
@@ -1541,7 +1560,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     view.runIds = new Set();
     view.cids = new Set();
     view.lastRunId = null;
+    view.projectId = null;
     view.title = "";
+    paintTitle();
     view.goal = null;
     const hid = stripHidden()[view.sessionId] || {};
     view.goalHide = hid.g || 0;
@@ -1557,6 +1578,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     olderEl.classList.add("hidden");
     statEl.textContent = "";
     pickViewRun();                     // 换了会话：「本会话在不在跑」要重新算
+    paintProjChip();
     syncInterject();
     saveUiState();
   }
@@ -1620,7 +1642,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       histEl.innerHTML = "";
       histEl.appendChild(page);
       if (r.contextTokens != null) updateCtx(r.contextTokens, state.ctxTotal);
-      setStatus(view.title ? t("会话：{title}", { title: view.title.slice(0, 40) }) : t("就绪"), "ok");
+      paintTitle();
+      setStatus(t("就绪"), "ok");
       scrollDown(true);
     } else {
       const h0 = chatEl.scrollHeight, t0 = chatEl.scrollTop;
@@ -1685,11 +1708,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     b.innerHTML =
       t("<p>你好，我是跑在这台设备上的 <strong>Claude Code CLI</strong>。</p>") +
       `<ul class="welcome-tips">${tips.map(([k, v]) => `<li><span class="wt-k">${k}</span><span>${esc(v)}</span></li>`).join("")}</ul>
+       ${welcomeProjHtml()}
        <p class="welcome-ex-h">${esc(t("不知道从哪开始？点一个试试（只填进输入框，不会直接发）："))}</p>
        <div class="welcome-ex">${examples.map((x) => `<button class="btn ghost sm">${esc(x)}</button>`).join("")}</div>
        <div class="setup-guide hidden"></div>`;
     fillSetupGuide(b.querySelector(".setup-guide"));
-    b.querySelector(".welcome-ex").addEventListener("click", (e) => {
+    b.querySelector(".welcome-ex:not(.welcome-proj .welcome-ex)")?.addEventListener("click", (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
       inputEl.value = btn.textContent;
@@ -1808,6 +1832,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; renderRunStrip(); }
         return;
       case "state": return applyState(ev);
+      case "sched": case "sched_note": return onSchedEvent(ev);
       case "sync": return;
       case "run_start": {
         if (!belongs(ev)) return;
@@ -1932,8 +1957,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       saveUiState();
     }
     const keepRuns = new Set(view.runIds), keepCids = new Set(view.cids);
-    const sid = view.sessionId;
+    const sid = view.sessionId, keepProj = view.projectId;   // 重连会重置视图：新会话已挑的项目留着
     resetView(sid);
+    if (!sid && keepProj) { view.projectId = keepProj; paintProjChip(); }
     view.runIds = keepRuns; view.cids = keepCids;
     pickViewRun();
     renderSessions();
@@ -1995,7 +2021,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 别的窗口（或网关那边）已经答掉的，这里也收起来
     const livePerms = new Set((srv.run?.perms || []).map((p) => p.id));
     for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !livePerms.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");
-    if (busy) setStatus(t("生成中…"), "warn");
+    if (busy) setStatus(t("生成中…"), "live");
     else if (srv.run?.idle) setStatus(t("就绪 · 后台任务在跑（{n} 个）", { n: srv.run.bg || 0 }), "ok");
     else if (srv.runs.some((r) => !r.idle)) setStatus(t("另有 {n} 个会话在生成", { n: srv.runs.filter((r) => !r.idle).length }), "ok");
     // 别的会话在等你确认：当前视图看不到它的卡片，状态栏和会话列表里提醒
@@ -2157,6 +2183,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           sessionId: view.sessionId,
           // 新会话还没拿到会话号时连发：告诉网关"跟在上一条后面"，它会接到同一个会话里
           follow: view.sessionId ? null : view.lastRunId,
+          projectId: view.sessionId ? null : view.projectId || null,     // 新会话：在项目目录里跑
           cid,
           mode: mode || "auto",
         }),
@@ -2380,7 +2407,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           ? `<img src="${fileUrl(a.path)}" alt="">`
           : `<span class="att-ico">${esc((a.name.split(".").pop() || "?").slice(0, 4))}</span>`}
         <span class="att-name">${esc(a.name)}</span>
-        <button class="att-x" aria-label="${t("移除")}">✕</button>
+        <button class="att-x" aria-label="${t("移除")}">${uiI("x")}</button>
       </div>`).join("");
     syncInterject();
     attachStrip.querySelectorAll(".att").forEach((el) => {
@@ -2477,7 +2504,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   // ── 文件浏览器 ────────────────────────────────────────────────────
-  const KIND_ICON = { dir: "📁", image: "🖼", video: "🎬", audio: "🎵", pdf: "📕", text: "📄", docx: "📘", sheet: "📗", office: "📙", other: "📦" };
+  const DOC = '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>';
+  const KIND_SVG = {
+    dir: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    image: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l4.5-4.5 3 3 2.5-2.5L19 17"/>',
+    video: '<rect x="3.5" y="6" width="12" height="12" rx="2"/><path d="M15.5 10.5l5-3v9l-5-3"/>',
+    audio: '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
+    pdf: DOC + '<path d="M9 13h6M9 17h4"/>',
+    text: DOC + '<path d="M9 12h6M9 15h6M9 18h4"/>',
+    docx: DOC + '<path d="M9 12l1 5 2-3.5 2 3.5 1-5"/>',
+    sheet: DOC + '<path d="M9 12h6v6H9zM9 15h6M12 12v6"/>',
+    office: DOC + '<path d="M9 13h6v4H9z"/>',
+    other: '<path d="M4 8l8-4.5L20 8v8l-8 4.5L4 16z"/><path d="M4 8l8 4.5L20 8M12 12.5V20"/>',
+  };
+  const kindIcon = (k) => `<svg class="ui-i k-${KIND_SVG[k] ? k : "other"}" viewBox="0 0 24 24" aria-hidden="true">${KIND_SVG[k] || KIND_SVG.other}</svg>`;
 
   function crumbs(p) {
     const parts = String(p).split("/").filter(Boolean);
@@ -2524,7 +2564,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("fs-list").innerHTML = list.length ? list.map((e, i) => `
       <div class="item fs-item ${state.fs.sel === e.name ? "active" : ""}" data-i="${i}">
         <div class="fs-row">
-          <span class="fs-ico">${KIND_ICON[e.kind] || "📦"}</span>
+          <span class="fs-ico">${kindIcon(e.kind)}</span>
           <span class="it-title">${esc(e.name)}${e.dir ? "/" : ""}</span>
           <span class="fs-meta">${e.dir ? "" : fmtSize(e.size)}</span>
         </div>
@@ -2677,7 +2717,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // 会话页三种视图：普通列表 / 多选（导出、批量删除）/ 回收站
   // q：搜索词；hits：网关返回的内容命中（null = 还没回来）；fold：各分组折叠状态（pin / today / week / month / m:年-月）
-  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30, q: "", hits: null, fold: loadSessFold() };
+  const sess = { mode: "list", sel: new Set(), trash: [], keepDays: 30, q: "", hits: null, fold: loadSessFold(), flt: "all" };
   function loadSessFold() {
     let f = {};
     try { f = JSON.parse(localStorage.getItem("cc.sessFold") || "{}") || {}; } catch {}
@@ -2720,6 +2760,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const box = $("session-list");
     renderSessBar();
     $("sess-qbox").classList.toggle("hidden", sess.mode === "trash");
+    $("sess-h").textContent = sess.mode === "trash" ? t("回收站") : t("对话");
+    if (sess.mode === "trash") $("sess-flt-wrap").classList.add("hidden");
     if (sess.mode === "trash") return renderTrash(box);
     const q = sess.q.trim();
     if (!q && !state.sessions.length) {
@@ -2731,6 +2773,20 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const idleSids = new Set(srv.runs.filter((r) => r.idle).map((r) => r.sessionId).filter(Boolean));
     const askSids = new Set(srv.runs.filter((r) => r.perms && r.perms.length).map((r) => r.sessionId).filter(Boolean));
     const picking = sess.mode === "select";
+    // 筛选条（照设计稿）：全部 / 在跑 / 置顶 / 当前项目；项目功能上线后换成按项目分
+    const isLive = (s) => liveSids.has(s.id) || idleSids.has(s.id) || askSids.has(s.id);
+    const sids = schedSids();
+    const FLT = { all: [t("全部"), () => true], live: [t("在跑"), isLive], pin: [t("置顶"), (s) => s.pinned] };
+    if (PJ.list.length) { FLT.none = [t("不在项目里"), (s) => !pjOfCwd(s.cwd)]; for (const p of PJ.list) FLT["p:" + p.id] = [p.name, (s) => { const q = pjOfCwd(s.cwd); return !!q && q.id === p.id; }]; }
+    FLT.sched = [t("定时任务"), (s) => sids.has(s.id)];
+    if (!FLT[sess.flt]) sess.flt = "all";
+    if (sess.flt !== "all" && !state.sessions.some(FLT[sess.flt][1])) sess.flt = "all";
+    $("sess-flt").innerHTML = Object.entries(FLT).filter(([k, f]) => k === "all" || state.sessions.some(f[1]))
+      .map(([k, f]) => `<button data-f="${k}" class="${sess.flt === k ? "on" : ""}">${esc(f[0])}</button>`).join("");
+    $("sess-flt-wrap").classList.toggle("hidden", $("sess-flt").children.length < 2);
+    const keep = FLT[sess.flt][1];
+    const nLive = state.sessions.filter(isLive).length;
+    setPageSub("sessions", t("{n} 个", { n: state.sessions.length }) + (nLive ? " · " + t("{n} 个在跑", { n: nLive }) : ""));
     // 一行一个：标题 + 等宽的时间/大小；点整行打开，「⋯」里是置顶、改名、导出、删除（和侧栏长按同一份菜单）
     const item = (s) => {
       const st = askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : idleSids.has(s.id) ? `<span class="badge">${t("后台任务在跑")}</span>` : "";
@@ -2738,13 +2794,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="item srow-sess ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
         ${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}>` : ""}
         <div class="ss-main">
-          <div class="it-title">${s.pinned ? `<svg class="pin-ic" viewBox="0 0 24 24">${SM.pin}</svg>` : ""}${markHit(s.title, q)}</div>
+          <div class="it-title">${s.pinned ? `<svg class="pin-ic" viewBox="0 0 24 24">${SM.pin}</svg>` : ""}${sids.has(s.id) ? pi("clock", "pj-ic") : ""}${markHit(s.title, q)}</div>
           ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
           <div class="it-meta">
             <span title="${esc(t("更新 {time}", { time: new Date(s.mtime).toLocaleString() }) + (s.created ? " · " + t("创建 {time}", { time: new Date(s.created).toLocaleString() }) : ""))}">${fmtStamp(s.mtime)}</span>
             <span>${fmtSize(s.sizeKb * 1024)}</span>
             ${st}
-            ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
+            ${pjOfCwd(s.cwd) ? pjMark(pjOfCwd(s.cwd)) : ""}
             ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
           </div>
         </div>
@@ -2753,16 +2809,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     };
     if (q) {
       // 标题先在本地筛，内容命中等网关回来再补上
-      const list = sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()));
+      const list = (sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))).filter((h) => { const s = state.sessions.find((x) => x.id === h.id); return !s || keep(s); });
       box.innerHTML = (sess.hits ? "" : `<div class="tiny">${t("正在搜索对话内容…")}</div>`)
         + (list.length ? list.map(item).join("") : sess.hits ? `<div class="tiny">${t("没有找到包含「{q}」的会话。", { q: esc(q) })}</div>` : "");
       return;
     }
     // 分组：置顶在最前，其余按时间；每组标题可点击折叠，收起时仍露出当前会话
     const groups = [];
-    const pins = state.sessions.filter((s) => s.pinned);
+    const shown = state.sessions.filter(keep);
+    const pins = shown.filter((s) => s.pinned);
     if (pins.length) groups.push({ key: "pin", label: t("置顶"), list: pins });
-    for (const s of state.sessions) {
+    for (const s of shown) {
       if (s.pinned) continue;
       const g = sessGroup(s.mtime), top = groups[groups.length - 1];
       if (top && top.key === g.key) top.list.push(s); else groups.push({ ...g, list: [s] });
@@ -2805,7 +2862,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       bar.innerHTML = `<button class="btn ghost sm" data-b="all">${all ? t("全不选") : t("全选")}</button>
         <span class="tiny">${t("已选 {n} 个", { n })}</span>
         <button class="btn sm" data-b="export" ${n ? "" : "disabled"}>${t("导出所选")}</button>
-        <button class="btn ghost sm danger" data-b="trash" ${n ? "" : "disabled"}>${t("删除所选")}</button>`;
+        <button class="btn ghost sm danger" data-b="trash" ${n ? "" : "disabled"}>${t("删除所选")}</button>
+        <button class="btn ghost sm" data-b="cancel">${t("取消选择")}</button>`;
     } else if (sess.mode === "exported") {
       const r = sess.exported;
       bar.innerHTML = `<span class="tiny">${t("已导出 {n} 个会话", { n: r.count })}</span>
@@ -2815,7 +2873,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         ${canSaveAs() || canShare() ? "" : `<div class="tiny">${esc(r.file)}</div>`}`;
     } else if (sess.mode === "trash") {
       bar.innerHTML = `<span class="tiny">${t("删除的会话在这里保留 {n} 天，之后自动清除。", { n: sess.keepDays })}</span>
-        ${sess.trash.length ? `<button class="btn ghost sm danger" data-b="empty">${t("清空回收站")}</button>` : ""}`;
+        ${sess.trash.length ? `<button class="btn ghost sm danger" data-b="empty">${t("清空回收站")}</button>` : ""}
+        <button class="btn ghost sm" data-b="back">${t("返回会话")}</button>`;
     }
     bar.classList.toggle("hidden", sess.mode === "list");
   }
@@ -2854,6 +2913,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     sess.mode = "trash"; loadTrash();
   });
   $("btn-sess-import").addEventListener("click", () => $("sess-import-file").click());
+  $("sess-flt").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (!b) return; sess.flt = b.dataset.f; renderSessions(); });
+  // 页面标题旁的 ⋯：原来那排按钮的活
+  $("sess-kebab").addEventListener("click", (e) => {
+    const cl = (id) => () => $(id).click();
+    popMenu(e.currentTarget, [
+      { label: sess.mode === "select" ? t("取消选择") : t("选择多个"), icon: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>', fn: cl("btn-sess-select") },
+      { label: t("导入对话（.zip）"), icon: '<path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>', fn: cl("btn-sess-import") },
+      { label: sess.mode === "trash" ? t("返回会话") : t("回收站"), icon: SM.trash, fn: cl("btn-sess-trash") },
+      { label: t("刷新列表"), icon: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', fn: cl("btn-refresh-sessions") },
+      "hr",
+      { label: t("断开当前会话"), icon: '<path d="M9 7 4 12l5 5M4 12h11M15 4h4v16h-4"/>', fn: cl("btn-close-session") },
+    ]);
+  });
   $("sess-import-file").addEventListener("change", async (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -2874,6 +2946,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   $("sess-bar").addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
     const act = b.dataset.b;
+    if (act === "cancel") return $("btn-sess-select").click();
+    if (act === "back") return $("btn-sess-trash").click();
     if (act === "all") {
       if (sess.sel.size === state.sessions.length) sess.sel.clear();
       else state.sessions.forEach((s) => sess.sel.add(s.id));
@@ -2980,6 +3054,32 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 扩展：插件 / 技能 / MCP ──────────────────────────────────────────
   const ext = { q: "", offset: 0, busy: false };
+  // 设计稿的行：左名称 + 一行等宽小字，右边大小 / 状态 / 按钮；说明、依赖这些点一下行才展开（.it-more），进度条一直在
+  const EI = {
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+    cube: '<path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
+    book: '<path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6a3 3 0 0 0-3 3"/><path d="M20 4v14h-7"/>',
+    gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/>',
+    bolt: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>',
+    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+    tool: '<path d="M4 20l7-7M14 4l6 6-3 3-6-6zM10 8l6 6"/>',
+    play: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    puzzle: '<path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z"/>',
+  };
+  const ei = (n) => `<svg class="ei" viewBox="0 0 24 24">${EI[n]}</svg>`;
+  const sdot = (st, label) => `<span class="sdot ${st}"><i></i>${esc(label)}</span>`;
+  const rowItem = (title, sub, right, o = {}) => `<div class="item xrow${o.cls ? " " + o.cls : ""}"${o.tags ? ` data-tags="${esc(o.tags.join(" "))}"` : ""}>
+      <div class="xr-l"><div class="it-title">${title}</div>${sub ? `<div class="xr-sub">${sub}</div>` : ""}</div>
+      <div class="xr-r">${right || ""}</div>${o.extra || ""}${o.more ? `<div class="it-more">${o.more}</div>` : ""}</div>`;
+  // 点行（不是点按钮、链接、输入框）展开 / 收起说明
+  $("tab-ext").addEventListener("click", (e) => {
+    if (e.target.closest("button, a, input, select, textarea, label, summary, details, .gh-auth, .llm-dl")) return;
+    const r = e.target.closest(".xrow, .ccard"); if (r && r.querySelector(".it-more")) r.classList.toggle("open");
+  });
   const extItem = (title, meta, acts, desc, tags) => `<div class="item"${tags ? ` data-tags="${esc(tags.join(" "))}"` : ""}>
       <div class="it-title">${title}</div>
       ${meta ? `<div class="it-meta">${meta}</div>` : ""}
@@ -3002,7 +3102,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const items = r.items || [], byId = Object.fromEntries(items.map((m) => [m.id, m]));
     const nameOf = (id) => esc(pickLang((byId[id] || {}).name) || id);
     const inst = items.filter((m) => m.state === "ok");
-    $("mod-count").textContent = inst.length + " / " + items.length + " · " + MB(inst.reduce((s, m) => s + m.installed, 0));
+    $("mod-count").textContent = inst.length + "/" + items.length;
+    ext.nMod = items.length; extSub();
+    ext.modBytes = inst.reduce((s, m) => s + m.installed, 0); ext.free = r.free; paintStorage();
     const btn = (c, id, label, extra = "") => `<button data-c="${c}" data-id="${esc(id)}"${extra}>${label}</button>`;
     let moving = false;
     $("mod-list").innerHTML = items.map((m) => {
@@ -3033,16 +3135,18 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         const pct = Math.min(100, (pr.done / pr.total) * 100).toFixed(1);
         bar = '<div class="comp-bar"><i style="width:' + pct + '%"></i></div><div class="tiny">' + (pr.current && pr.current !== m.id ? nameOf(pr.current) + " · " : "") + MB(pr.done) + " / " + MB(pr.total) + (pr.via ? " · " + t("来自 {src}", { src: esc(pr.via) }) : "") + "</div>";
       }
-      let acts = "";
-      if (m.required || m.kind === "shared") acts = "";
+      let acts = "", size = MB(m.state === "ok" ? m.installed : m.download);
+      if (m.required || m.kind === "shared") acts = m.state === "ok" ? sdot("ok", t("已装")) : sdot("", st);
       else if (m.state === "absent" || m.state === "error") {
         // 连同还没装的依赖一起算下载量
         const chain = [...deps.filter((d) => byId[d].state !== "ok"), m.id];
-        const dl = chain.reduce((s, id) => s + byId[id].download, 0);
-        acts = btn("install", m.id, m.state === "error" ? t("重试") : t("安装（约 {a}）", { a: MB(dl) }), chain.length > 1 ? ` data-chain="${esc(listOf(chain.map(nameOf)))}"` : "");
-      } else if (m.state === "downloading" || m.state === "verifying") acts = btn("cancel", m.id, t("取消"));
-      else if (m.state === "ok") acts = btn("remove", m.id, t("卸载"), used.length ? ' data-usedby="' + listOf(used) + '"' : "");
-      return extItem(esc(pickLang(m.name) || m.id), meta, acts, desc + bar);
+        size = MB(chain.reduce((s, id) => s + byId[id].download, 0));
+        acts = (m.state === "error" ? sdot("err", st) : "") + btn("install", m.id, ei("download") + (m.state === "error" ? t("重试") : t("安装")), ' class="btn sm"' + (chain.length > 1 ? ` data-chain="${esc(listOf(chain.map(nameOf)))}"` : ""));
+      } else if (m.state === "downloading" || m.state === "verifying" || m.state === "installing") acts = sdot("warn", st) + (m.state === "installing" ? "" : btn("cancel", m.id, t("取消"), ' class="btn sm ghost"'));
+      else if (m.state === "ok") acts = btn("remove", m.id, t("卸载"), ' class="btn sm ghost"' + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
+      const tag = m.required ? `<span class="tag">${ei("lock")}${t("必装")}</span>` : m.kind === "shared" ? `<span class="tag">${t("共享运行库")}</span>` : "";
+      return rowItem(esc(pickLang(m.name) || m.id) + tag, '<span class="mono">' + (m.key || []).map(esc).join(" ") + "</span>",
+        '<span class="num">' + size + "</span>" + acts, { more: desc, extra: bar });
     }).join("");
     if (moving && pageOn("ext")) modTimer = setTimeout(loadModules, 1500);
   }
@@ -3082,18 +3186,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const cur = extPick[sec] || "";
     bar.classList.toggle("hidden", chips.length < 2 && !cur);      // 只有一类时没什么可切的
     bar.innerHTML = [["", t("全部"), items.length], ...chips.map(([g, l]) => [g, l, count.get(g)])]
-      .map(([g, l, n]) => `<button class="idx-chip${g === cur ? " on" : ""}" data-sec="${sec}" data-idx="${esc(g)}">${esc(l)}<span>${n}</span></button>`).join("");
+      .map(([g, l, n]) => `<button class="idx-chip${g === cur ? " on" : ""}" data-sec="${sec}" data-idx="${esc(g)}">${esc(l)}${g ? `<span>${n}</span>` : ""}</button>`).join("");
     for (const it of items) it.classList.toggle("hidden", !!cur && !it.dataset.tags.split(" ").includes(cur));
   }
   $("tab-ext").addEventListener("click", (e) => {
     const c = e.target.closest(".idx-chip"); if (!c) return;
     extPick[c.dataset.sec] = c.dataset.idx; renderIdx(c.dataset.sec);
   });
-  // 折叠状态记在本机：收起的下次还是收起
-  const extOpen = (() => { try { return JSON.parse(localStorage.getItem("cc.extOpen") || "{}"); } catch { return {}; } })();
+  // 节头照设计稿：图标块 + 标题，下面一句说明（原来是节里第一行小字，挪进标题里）；节不再折叠，靠顶上的分区导航跳
   for (const d of document.querySelectorAll("#tab-ext details.ext-sec")) {
-    if (extOpen[d.dataset.sec] === false) d.open = false;
-    d.addEventListener("toggle", () => { extOpen[d.dataset.sec] = d.open; try { localStorage.setItem("cc.extOpen", JSON.stringify(extOpen)); } catch {} });
+    d.open = true;
+    const sum = d.querySelector(":scope > summary"), tip = sum.nextElementSibling;
+    if (tip && tip.classList.contains("tiny")) { tip.classList.add("sec-desc"); sum.appendChild(tip); }
+    sum.addEventListener("click", (e) => e.preventDefault());
   }
 
   // ── 可选组件（浏览器组件 = 无头 Chromium）：下载 → 校验 → 换进工具包，进度靠轮询 ──
@@ -3103,6 +3208,23 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const MB = (n) => Math.max(1, Math.round((n || 0) / 1048576)) + " MB";
   // 「A、B 和 C」这种并列按当前语言的习惯拼
   const listOf = (a) => { try { return new Intl.ListFormat((window.I18N && I18N.lang) || "zh", { type: "conjunction" }).format(a); } catch { return a.join(", "); } };
+  // 顶栏副标题：几个模块 · 几个组件
+  function extSub() { setPageSub("ext", [ext.nMod ? t("{n} 个模块", { n: ext.nMod }) : "", ext.nComp ? t("{n} 个组件", { n: ext.nComp }) : ""].filter(Boolean).join(" · ")); }
+  // 分类的颜色和图标（卡片左上角）
+  const CAT_LOOK = { gpu: ["#c96442", "cube"], cad: ["#c96442", "cube"], media: ["#b5532f", "play"], office: ["#2f6aa8", "book"], science: ["#7650c0", "gauge"],
+    eda: ["#9a6a00", "bolt"], ai: ["#3d7a2a", "spark"], dev: ["#5d594f", "tool"], net: ["#2f6aa8", "globe"], other: ["#5d594f", "puzzle"] };
+  // 存储条：工具包模块 + 组件占多少，盘里还剩多少
+  function paintStorage() {
+    const el = $("ext-storage"); if (!el) return;
+    const a = ext.modBytes || 0, b = ext.compBytes || 0, all = a + b + (ext.free || 0);
+    el.classList.toggle("hidden", !a && !b);
+    if (!all) return;
+    const GB = (n) => n >= 1073741824 ? (n / 1073741824).toFixed(n >= 107374182400 ? 0 : 1) + " GB" : MB(n);
+    el.innerHTML = `<div class="st-bar"><i style="width:${(a / all * 100).toFixed(2)}%;background:#c96442"></i><i style="width:${(b / all * 100).toFixed(2)}%;background:#2f6aa8"></i></div>
+      <div class="st-leg"><span><b class="sw" style="background:#c96442"></b>${t("工具包")} <span class="num">${GB(a)}</span></span><span><b class="sw" style="background:#2f6aa8"></b>${t("组件")} <span class="num">${GB(b)}</span></span>${ext.free != null ? `<span class="muted">${t("剩余")} <span class="num">${GB(ext.free)}</span></span>` : ""}</div>`;
+  }
+  // 组件节头的「检查更新」：强制重拉组件索引
+  $("comp-check").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); loadComponents(true).then(() => toast(t("已检查组件更新"))); });
   async function loadComponents(refresh) {
     clearTimeout(compTimer);
     const r = await api("/api/components" + (refresh ? "?refresh=" + (refresh === true ? 1 : refresh) : "")).catch((e) => ({ supported: true, items: [], indexError: e.message }));
@@ -3152,17 +3274,39 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
       if (c.id === "llama-cpp" && c.state === "ok") desc += '<details class="llm-dl" id="llm-dl"' + (llmDl.open ? " open" : "") + "><summary>" + t("下载模型") + '</summary><div id="llm-dl-body">' + llmDl.html + "</div></details>";
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
-      const tags = ["cat:" + (c.category && CAT()[c.category] ? c.category : "other")];
+      const cat = c.category && CAT()[c.category] ? c.category : "other";
+      const tags = ["cat:" + cat];
       if (c.state === "ok") tags.push("inst");
       if (["update", "outdated", "damaged", "error"].includes(c.state)) tags.push("upd");
-      return extItem(name, meta, acts, desc + bar, tags)
-        .replace("<button data-c=\"install\"", "<button data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
-        .replace("<button data-c=\"remove\"", "<button data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
+      // 设计稿的卡片：分类色图标 + 名称 + 「版本 · 大小」，验证过的带盾牌；底下一条虚线隔开状态和按钮
+      const [cc, ci] = CAT_LOOK[cat] || CAT_LOOK.other;
+      const dotSt = { ok: "ok", update: "warn", downloading: "warn", verifying: "warn", installing: "warn", outdated: "err", damaged: "err", error: "err" }[c.state] || "";
+      const dotL = c.unsupported ? (gpuOnly === "mali" ? t("需要 Mali GPU") : t("需要骁龙")) : { ok: t("已装"), update: t("可更新"), absent: c.available ? t("未装") : t("暂无适配版本") }[c.state] || st;
+      let cbtn = "";
+      if (c.unsupported && c.state !== "ok") cbtn = '<span class="muted">' + t("本机用不了") + "</span>";
+      else if (c.state === "absent" && c.available) cbtn = btn("install", c.id, ei("download") + MB(c.bytes)).replace("<button ", '<button class="btn sm ghost" ');
+      else if (c.state === "downloading" || c.state === "verifying") cbtn = btn("cancel", c.id, t("取消")).replace("<button ", '<button class="btn sm ghost" ');
+      else if (c.state === "ok") cbtn = btn("remove", c.id, t("卸载")).replace("<button ", '<button class="btn sm ghost" ');
+      else if (["update", "outdated", "damaged", "error"].includes(c.state)) {
+        if (c.available) cbtn += btn("install", c.id, ei("download") + (c.state === "update" ? t("更新") : t("重新安装"))).replace("<button ", '<button class="btn sm" ');
+        if (c.installedVersion) cbtn += btn("remove", c.id, t("卸载")).replace("<button ", '<button class="btn sm ghost" ');
+      }
+      const live = (c.id === "gh" && c.state === "ok") || (c.id === "llama-cpp" && c.state === "ok") ? desc.slice(desc.indexOf(c.id === "gh" ? '<div class="gh-auth"' : '<details class="llm-dl"')) : "";
+      const more = (live ? desc.slice(0, desc.length - live.length) : desc) + '<div class="it-meta">' + meta + "</div>";
+      const warn = (c.error ? '<div class="tiny err">' + esc(c.error) + "</div>" : "") + (miss.length && c.state !== "ok" ? '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>" : "");
+      return (`<div class="item ccard${c.unsupported && c.state !== "ok" ? " dim" : ""}" data-tags="${esc(tags.join(" "))}">
+        <div class="cc-top"><span class="icobox" style="--c:${cc}">${ei(ci)}</span><div class="grow"><b>${name}</b><div class="mono muted">${esc(ver || "")}${ver ? " · " : ""}${MB(c.state === "ok" ? c.installed : c.bytes)}</div></div>${c.verified ? `<span class="vmark" title="${esc(t("真机验证过"))}">${ei("shield")}</span>` : ""}</div>
+        ${warn}${bar}${live}<div class="it-more">${more}</div>
+        <div class="cc-foot">${sdot(dotSt, dotL)}<span class="cc-btns">${cbtn}</span></div></div>`)
+        .replace(" data-c=\"install\"", " data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
+        .replace(" data-c=\"remove\"", " data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
     box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
       (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "") +
       (r.indexError ? '<div class="it-acts"><button class="btn ghost sm" data-c="reindex">' + t("重试") + "</button></div>" : "");
     $("comp-count").textContent = (r.items || []).length || "";
+    ext.nComp = (r.items || []).length; extSub();
+    ext.compBytes = (r.items || []).filter((c) => c.installedVersion || c.state === "ok").reduce((s, c) => s + (c.installed || 0), 0); paintStorage();
     renderIdx("comp", [["inst", t("已装")], ["upd", t("要更新")], ...Object.entries(CAT()).map(([k, v]) => ["cat:" + k, v])]);
     if ($("gh-auth")) loadGhAuth(refresh);
     if ($("llm-dl")) {
@@ -4010,7 +4154,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!r.supported || (!always && !bad.length)) return box.classList.add("hidden");
     const head = r.at ? `<div class="tiny">${esc(bad.length ? t("记录和磁盘有 {n} 处对不上：", { n: bad.length }) : t("记录和磁盘一致"))} · ${esc(new Date(r.at).toLocaleString())}</div>` : "";
     box.innerHTML = head + (r.findings || []).map((f) => `<div class="item ledger ${f.level === "info" ? "" : "bad"}">
-        <div class="it-title wrap">${f.level === "error" ? "✗" : f.level === "warn" ? "⚠" : "ℹ"} ${esc(f.msg)}</div>
+        <div class="it-title wrap">${uiI(f.level === "error" ? "x" : f.level === "warn" ? "warn" : "info", "lv-" + f.level)}${esc(f.msg)}</div>
         ${f.fix ? `<div class="tiny">${esc(t("怎么办："))}${esc(f.fix)}</div>` : ""}
         ${f.samples.length ? `<div class="tiny mono">${f.samples.slice(0, 5).map(esc).join("<br>")}</div>` : ""}
       </div>`).join("");
@@ -4081,16 +4225,28 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       sel.value = state.provView;
       $("provider-count").textContent = t("{n} 个", { n: state.providers.length });
       const cur = state.providers.find((p) => p.id === r.active) || {};
-      $("provider-info").innerHTML = t("当前在用：<b>{name}</b>　<code>{url}</code>", { name: esc(pLabel(cur) || r.active), url: esc(cur.baseUrl || "") });
+      $("provider-info").textContent = t("当前在用：{name}", { name: pLabel(cur) || r.active });
+      $("provider-info").title = cur.baseUrl || "";
       renderProvCard();
     } catch (e) {
       $("provider-info").textContent = t("读取接口清单失败：{msg}", { msg: e.message });
     }
   }
 
+  // 照稿收起接口卡：正在用、而且已经配好的那一家默认只露一行；看别家 / 没配好时自动展开
+  let provOpen = null;
+  function foldProvCard() {
+    const id = state.provView, p = (state.providers || []).find((x) => x.id === id);
+    const auto = !(p && p.active && (p.login || p.local || p.hasKey));
+    const open = provOpen == null ? auto : provOpen;
+    $("prov-card").classList.toggle("hidden", !open);
+    $("prov-more").textContent = open ? t("收起") : t("详情");
+  }
+  $("prov-more").addEventListener("click", () => { provOpen = $("prov-card").classList.contains("hidden"); foldProvCard(); });
   function renderProvCard() {
     const box = $("prov-card");
     const id = state.provView;
+    foldProvCard();
     // 卡片容器是复用的：密钥卡 / 自定义卡会在它上面挂 onclick（闭包里记着那一家）。
     // 换卡前必须摘掉，否则旧处理还在 —— 在登录卡上点「使用这个接口」，冒泡上来又把接口切回上一家
     // （实测：同一毫秒发出 provider=anthropic 和 provider=deepseek，后者赢）。
@@ -4251,6 +4407,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         <span class="quota-bar"><i class="${cls}" style="width:${pct}%"></i></span><span class="q-r">${reset}</span></div>`;
     };
     $("quota-tiles").innerHTML = tile(t("5 小时"), l.fiveHour) + tile(t("每周"), l.sevenDay);
+    usDash.quota = l.sevenDay || null; usPaint(); paintSetUsage();
     const ago = Math.max(0, Math.round((Date.now() - l.at) / 60000));
     $("quota-note").textContent = ago < 1 ? t("额度刚刚更新") : t("额度更新于 {n} 分钟前（每轮对话后刷新）", { n: ago });
   }
@@ -4673,10 +4830,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const m = document.createElement("div");
     m.id = "ccv-pick";
     m.innerHTML = `<div class="sheet-panel mp-panel">
-      <div class="mp-head"><b>${t("Claude Code 版本")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">✕</button></div>
+      <div class="mp-head"><b>${t("Claude Code 版本")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">${uiI("x")}</button></div>
       <div class="mp-lbl">${t("跟随渠道（自动更新跟着它走）")}</div><div class="ccv-ch"><div class="tiny">${t("读取中…")}</div></div>
       <div class="mp-lbl">${t("固定到某一版（自动更新不再改它）")}</div>
-      <input class="mp-q" type="search" inputmode="decimal" autocomplete="off" placeholder="${t("搜索版本号")}">
+      <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input class="mp-q" type="search" inputmode="decimal" autocomplete="off" placeholder="${t("搜索版本号")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
       <div class="tiny mp-note">${t("登录、会话和设置不受影响；版本越旧，越可能缺新功能。")}</div></div>`;
     document.body.appendChild(m);
@@ -4985,11 +5142,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const usMonthKey = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
   const usNum = (n) => Number(n || 0).toLocaleString(I18N.lang);
   const usCompact = (n) => { try { return new Intl.NumberFormat(I18N.lang, { notation: "compact", maximumFractionDigits: 1 }).format(n || 0); } catch { return usNum(n); } };
-  function usEmpty() { return { m: 0, t: 0, tl: 0, i: 0, o: 0, s: new Set(), md: {}, hr: new Array(24).fill(0) }; }
+  function usEmpty() { return { m: 0, t: 0, tl: 0, i: 0, o: 0, c: 0, s: new Set(), md: {}, mt: {}, st: {}, hr: new Array(24).fill(0) }; }
   function usMerge(a, b, hour) {
-    for (const k of ["m", "t", "tl", "i", "o"]) a[k] += b[k] || 0;
+    for (const k of ["m", "t", "tl", "i", "o", "c"]) a[k] += b[k] || 0;
     for (const x of b.s || []) a.s.add(x);
-    for (const [k, v] of Object.entries(b.md || {})) a.md[k] = (a.md[k] || 0) + v;
+    for (const f of ["md", "mt", "st"]) for (const [k, v] of Object.entries(b[f] || {})) a[f][k] = (a[f][k] || 0) + v;
     if (hour != null) a.hr[hour] += b.m || 0; else if (b.hr) b.hr.forEach((v, i) => { a.hr[i] += v; });
     return a;
   }
@@ -5180,11 +5337,105 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("us-off").checked = !r.off;
     $("us-share").classList.toggle("hidden", !canShare() && !navigator.canShare);
   }
+  // ── 用量看板（照设计稿）：数字一排 / 14 天柱状图 / 型号占比 / 最费的对话 / 今天耗电 ──
+  // token 数一律 1.24M / 380k 这种写法（照稿；中文的「亿 / 万」在图上反而难对齐）
+  const usTok = (n) => { try { return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: n >= 1e6 ? 2 : 1 }).format(n || 0); } catch { return String(n || 0); } };
+  const usDash = { view: "chart", quota: null, energy: null };
+  const MODEL_COLORS = ["#c96442", "#2f6aa8", "#d6a84a"];      // 按出现顺序固定分配；第 4 个起并进「其他」
+  function usPaint() {
+    const now = new Date(), d0 = usDay0(now), m0 = usMonth0(now.getFullYear(), now.getMonth());
+    const today = us.raw ? usSum(d0, usAddDays(d0, 1)) : usEmpty(), month = us.raw ? usSum(m0, usAddDays(d0, 1)) : usEmpty();
+    // 数字一排：额度（官方账户才有）、今天、本月、缓存命中
+    const q = usDash.quota, kpi = [];
+    if (q) {
+      const pct = Math.round(Math.max(0, Math.min(100, q.used)));
+      const left = q.resetsAt ? q.resetsAt * 1000 - Date.now() : 0, gone = 1 - Math.max(0, Math.min(1, left / (7 * 86400e3)));
+      const pace = !q.resetsAt ? "" : pct <= gone * 100 + 5 ? t("按现在的速度够用") : t("照这个速度会提前用完");
+      const at = q.resetsAt ? new Date(q.resetsAt * 1000) : null;
+      const reset = at ? t("{time} 重置", { time: at.toLocaleDateString(I18N.lang, { weekday: "short" }) + " " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) : "";
+      kpi.push(`<div class="tile big${pct >= 90 ? " hot" : pct >= 70 ? " warm" : ""}"><span class="k">${esc(t("本周额度 · 官方账户"))}</span><span class="n num">${pct}%</span>
+        <div class="bar-mini"><i style="width:${pct}%"></i></div><span class="k">${esc([reset, pace].filter(Boolean).join(" · "))}</span></div>`);
+    }
+    kpi.push(`<div class="tile"><span class="k">${esc(t("今天"))}</span><span class="n num">${usTok(today.i + today.o)}</span><span class="k">${esc(t("tokens · {n} 轮对话", { n: usNum(today.t) }))}</span></div>`);
+    kpi.push(`<div class="tile"><span class="k">${esc(t("本月"))}</span><span class="n num">${usTok(month.i + month.o)}</span><span class="k">${esc(t("tokens · {n} 个会话", { n: usNum(month.s.size) }))}</span></div>`);
+    kpi.push(`<div class="tile"><span class="k">${esc(t("缓存命中"))}</span><span class="n num">${month.c && month.i ? Math.round((month.c / month.i) * 100) + "%" : "—"}</span><span class="k">${esc(t("本月 · 越高越省"))}</span></div>`);
+    $("us-kpis").innerHTML = kpi.join("");
+    setPageSub("usage", q ? t("本周额度 {p}%", { p: Math.round(q.used) }) : t("今天 {n} tokens", { n: usTok(today.i + today.o) }));
+    // 每天用量：最近 14 天，单序列（不要图例），今天那根用强调色
+    const days = Array.from({ length: 14 }, (_, i) => { const d = usAddDays(d0, i - 13), x = us.days.get(usDayKey(d)); return { d, v: x ? x.i + x.o : 0, t: x ? x.t : 0 }; });
+    const box = $("us-daily");
+    if (usDash.view === "table") {
+      box.innerHTML = `<table class="ctable"><tr><th>${esc(t("日期"))}</th><th>${esc(t("轮"))}</th><th>tokens</th></tr>${days.slice().reverse().map((x) =>
+        `<tr><td>${x.d.toLocaleDateString(I18N.lang, { month: "2-digit", day: "2-digit" })}</td><td class="num">${x.t || "—"}</td><td class="num">${x.v ? usTok(x.v) : "—"}</td></tr>`).join("")}</table>`;
+    } else {
+      const W = 640, H = 180, pl = 38, pb = 22, pt = 8, bw = (W - pl) / days.length;
+      const raw = Math.max(1, ...days.map((x) => x.v)), mag = Math.pow(10, Math.floor(Math.log10(raw))), step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => raw / k <= 4) || mag * 10;
+      const max = step * Math.ceil(raw / step), y = (v) => pt + (H - pt - pb) * (1 - v / max);
+      let g = "";
+      for (let v = 0; v <= max + 1e-9; v += step) g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl - 6}" y="${y(v) + 4}" class="ax" text-anchor="end">${usTok(v)}</text>`;
+      days.forEach((x, i) => {
+        const bx = pl + i * bw + 3, w = bw - 6, top = y(x.v), h = Math.max(0, y(0) - top), r = Math.min(4, h, w / 2);
+        if (h) g += `<path class="bar${i === days.length - 1 ? " today" : ""}" d="M${bx},${y(0)} V${top + r} Q${bx},${top} ${bx + r},${top} H${bx + w - r} Q${bx + w},${top} ${bx + w},${top + r} V${y(0)} Z"/>`;
+        g += `<rect class="hit" x="${pl + i * bw}" y="${pt}" width="${bw}" height="${H - pt - pb}" data-tip="${esc(x.d.toLocaleDateString(I18N.lang, { month: "numeric", day: "numeric" }) + "：" + (x.v ? usTok(x.v) + " tokens · " + t("{n} 轮", { n: x.t }) : t("没用")))}"/>`;
+        if (i % 2 === 1) g += `<text x="${bx + w / 2}" y="${H - 6}" class="ax" text-anchor="middle">${x.d.getDate()}</text>`;
+      });
+      box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg><div class="tip"></div>`;
+    }
+    // 按型号：本月 token 占比
+    const mods = Object.entries(month.mt).sort((a, b) => b[1] - a[1]), msum = mods.reduce((a, [, v]) => a + v, 0);
+    const parts = mods.slice(0, 3).map(([n, v], i) => [prettyModel(n), v, MODEL_COLORS[i]]);
+    if (mods.length > 3) parts.push([t("其他"), mods.slice(3).reduce((a, [, v]) => a + v, 0), "#8b867a"]);
+    $("us-models-card").classList.toggle("hidden", !msum);
+    $("us-share-bar").innerHTML = parts.map(([n, v, c]) => `<i style="flex:${v};background:${c}" data-tip="${esc(n)}：${Math.round((v / msum) * 100)}%"></i>`).join("") + '<div class="tip"></div>';
+    $("us-share-leg").innerHTML = parts.map(([n, v, c]) => `<span><b class="sw" style="background:${c}"></b>${esc(n)} <span class="num">${Math.max(1, Math.round((v / msum) * 100))}%</span></span>`).join("");
+    // 最费的对话：本月按 token 排前 5
+    const titleOf = (id) => ((state.sessions || []).find((x) => x.id === id) || {}).title;
+    const top = Object.entries(month.st).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    $("us-top").innerHTML = top.length ? top.map(([id, v], i) => `<div class="row" data-sid="${esc(id)}"><span class="rank num">${i + 1}</span><span class="grow t1">${esc(titleOf(id) || t("（已删除的会话）"))}</span><span class="num muted">${usTok(v)}</span></div>`).join("")
+      : `<div class="row"><span class="tiny">${esc(us.raw && !us.raw.imported ? t("正在从历史会话补算…") : t("这个月还没有记录"))}</span></div>`;
+    // 耗电：今天
+    const e = usDash.energy, b = e && e.bars && e.bars[e.bars.length - 1];
+    const k = (v, l) => `<div><span class="num">${v}</span><small>${esc(l)}</small></div>`;
+    $("en-kpis").innerHTML = e ? (e.native ? k(b && b.d != null ? (Math.round(b.d * 10) / 10) + "%" : "—", t("电量")) + k(b && b.s ? fmtDur(b.s * 1000) : "—", t("亮屏")) : "")
+      + k(b && b.c ? fmtDur(b.c * 1000) : "—", t("本应用 CPU")) : "";
+    $("en-kpi-note").textContent = e ? (e.native ? t("电量是整机今天掉了多少；CPU 是本应用（含 Claude 和它跑的命令）实际干活的时间。") : t("这个版本没有原生层，只记 CPU 时间（电量、亮屏要 cccodroid）。")) : "";
+  }
+  $("us-view").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-v]"); if (!b) return;
+    usDash.view = b.dataset.v; $("us-view").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); usPaint();
+  });
+  // 柱子、占比条：点或悬停出提示
+  for (const id of ["us-daily", "us-share-bar"]) {
+    const box = $(id);
+    const show = (e) => {
+      const tip = box.querySelector(".tip"), hit = e.target.closest("[data-tip]"); if (!tip) return;
+      if (!hit) return tip.classList.remove("show");
+      const br = box.getBoundingClientRect(), r = hit.getBoundingClientRect();
+      tip.textContent = hit.dataset.tip; tip.classList.add("show");
+      tip.style.left = Math.max(40, Math.min(br.width - 40, r.left + r.width / 2 - br.left)) + "px"; tip.style.top = (r.top - br.top - 6) + "px";
+    };
+    box.addEventListener("click", show); box.addEventListener("pointermove", show);
+    box.addEventListener("pointerleave", () => box.querySelector(".tip")?.classList.remove("show"));
+  }
+  $("us-top").addEventListener("click", (e) => { const r = e.target.closest("[data-sid]"); if (r) openSession(r.dataset.sid); });
+  $("en-more").addEventListener("click", () => { $("en-field").classList.toggle("hidden"); if (!$("en-field").classList.contains("hidden")) $("en-field").scrollIntoView({ behavior: "smooth", block: "start" }); });
+  $("us-report-btn").addEventListener("click", () => { $("us-field").classList.toggle("hidden"); if (!$("us-field").classList.contains("hidden")) { usRender(); $("us-field").scrollIntoView({ behavior: "smooth", block: "start" }); } });
+  $("us-csv").addEventListener("click", async () => {
+    if (!us.raw) return;
+    const keys = [...us.days.keys()].sort();
+    const rows = [[t("日期"), t("消息"), t("回复轮数"), t("工具调用"), t("输入 tokens"), t("输出 tokens"), t("读缓存 tokens")].join(",")]
+      .concat(keys.map((k) => { const x = us.days.get(k); return [k, x.m, x.t, x.tl, x.i, x.o, x.c].join(","); }));
+    try {
+      const r = await post("/api/usage/csv", { name: "cccodroid-usage-" + usDayKey(new Date()) + ".csv", text: rows.join("\n") });
+      if (canSaveAs()) saveAs(r.file, "text/csv"); else toast(t("已保存：{name}", { name: r.file }));
+    } catch (e) { toast(e.message, true); }
+  });
   async function loadUsage() {
     try {
       us.raw = await api("/api/usage");
       if (!us.month) { const n = new Date(); us.month = [n.getFullYear(), n.getMonth()]; }
-      usBuild(); usRender();
+      usBuild(); usPaint();
+      if (!$("us-field").classList.contains("hidden")) usRender();
       // 第一次打开：把装这个版本之前的历史会话补算进来
       if (!us.raw.imported && !us.raw.importing && !us.busy) usImport(true);
     } catch (e) { $("us-result").textContent = "✗ " + e.message; }
@@ -5249,6 +5500,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   async function loadEnergy() {
+    api("/api/energy?view=day").then((d) => { usDash.energy = d; usPaint(); }).catch(() => {});
     try { en.data = await api("/api/energy?view=" + en.view); en.sel = -1; enRender(); if (en.data.sys) enSys(en.data.sys); }
     catch (e) { $("en-cap").textContent = "✗ " + e.message; }
   }
@@ -5334,10 +5586,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 标签写「模型 · 思考强度」；点它从底部弹面板：上面一排思考强度，下面搜索 + 最近用过 + 全部模型。
   // 不占输入区的地方。OpenRouter 这类几十上百个模型的，靠搜索框过滤。
   const RECENT_KEY = "cc.recentModels";
+  function prettyModel(name) {
+    const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)/i.exec(name || "");
+    return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2] + "." + m[3] : name || "";
+  }
   function paintModel(name) {
     state.chipModel = name;
     const eff = state.settings && state.settings.effort;
-    modelEl.textContent = name + (eff ? " · " + eff : "");
+    // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度
+    const pretty = prettyModel(name);
+    modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(t("思考 {e}", { e: eff }))}</span>` : ""}`;
+    modelEl.title = name;
   }
   modelEl.setAttribute("role", "button");
   modelEl.tabIndex = 0;
@@ -5348,15 +5607,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const m = document.createElement("div");
     m.id = "model-pick";
     m.innerHTML = `<div class="sheet-panel mp-panel">
-      <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">✕</button></div>
+      <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">${uiI("x")}</button></div>
       <div class="mp-lbl">${t("思考强度")}</div><div class="mp-eff"></div>
       <div class="mp-lbl">${t("模型")}</div>
-      <input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}">
+      <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
       <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
     document.body.appendChild(m);
-    const close = () => m.remove();
+    const close = () => { m.remove(); removeEventListener("resize", close); };
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
+    // 宽屏：卡片宽 420、最高 宽×φ，左边对齐输入栏下的型号按钮，底边落在按钮上方 8px
+    if (innerWidth >= 700) {
+      m.classList.add("pop");
+      const p = m.querySelector(".mp-panel"), ar = modelEl.getBoundingClientRect();
+      const w = Math.min(420, innerWidth - 32);
+      p.style.width = w + "px";
+      p.style.left = Math.max(16, Math.min(ar.left, innerWidth - w - 16)) + "px";
+      p.style.bottom = (innerHeight - ar.top + 8) + "px";
+      p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
+      addEventListener("resize", close);
+    }
     let info;
     try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
     if (!m.isConnected) return;
@@ -5367,7 +5637,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const paintEff = (levels, now) => {
       const opts = [["", t("默认")], ...levels.map((l) => [l, l])];
       effBox.innerHTML = levels.length
-        ? opts.map(([v, l]) => `<button type="button" class="btn sm ghost${v === now ? " cur" : ""}" data-eff="${esc(v)}">${esc(l)}</button>`).join("")
+        ? `<div class="seg mp-seg">${opts.map(([v, l]) => `<button type="button" class="${v === now ? "on" : ""}" data-eff="${esc(v)}">${esc(l)}</button>`).join("")}</div>`
         : `<span class="tiny">${t("这个模型没有可选的思考强度")}</span>`;
     };
     paintEff(info.effortLevels || [], info.effort || "");
@@ -5381,10 +5651,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
 
     const list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
-    const row = (id, sub) => `<button type="button" class="mp-item${id === cur() ? " cur" : ""}" data-id="${esc(id)}"><span>${esc(id || t("默认"))}</span>${sub ? `<small>${esc(sub)}</small>` : ""}</button>`;
+    const row = (id, sub) => (sub = typeof sub === "string" ? { text: sub } : sub, `<button type="button" class="mp-item${id === cur() ? " cur" : ""}" data-id="${esc(id)}"><span>${esc(id || t("默认"))}</span>${sub && (sub.text || sub.img) ? `<small>${esc(sub.text || "")}${sub.img ? MM_IMG() : ""}</small>` : ""}</button>`);
     const meta = (md) => {
+      if (!md) return null;
       const ctx = md.context_window ? Math.round(md.context_window / 1024) + "k" : "";
-      return [md.name && md.name !== md.id ? md.name : "", ctx, (md.input_modalities || []).includes("image") ? "🖼" : ""].filter(Boolean).join(" · ");
+      return { text: [md.name && md.name !== md.id ? md.name : "", ctx].filter(Boolean).join(" · "), img: (md.input_modalities || []).includes("image") };
     };
     const paintList = () => {
       const kw = q.value.trim().toLowerCase();
@@ -5430,10 +5701,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         : "";
       sel.innerHTML = (dfltOpt + (MODELS.length
         ? MODELS.map((m) => {
-            const img = (m.input_modalities || []).includes("image") ? " 🖼" : "";
+            const img = (m.input_modalities || []).includes("image") ? ' data-img="1"' : "";
             // 官方 /v1/models 只报能力，不报窗口 —— 报不出来就别写 "0k"
             const ctx = m.context_window ? Math.round(m.context_window / 1024) + "k" : "—";
-            return `<option value="${esc(m.id)}">${esc(m.id)} · ${esc(m.name || "")} · ${ctx}${img}</option>`;
+            return `<option value="${esc(m.id)}"${img}>${esc(m.id)} · ${esc(m.name || "")} · ${ctx}</option>`;
           }).join("")
         : (dfltOpt ? "" : '<option value="">' + t("（该厂商不提供模型清单）") + '</option>')));
       if (r.current) {
@@ -5471,6 +5742,44 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     } catch (e) {
       $("model-info").textContent = t("拉取模型清单失败：{msg}", { msg: e.message });
     }
+  }
+
+  // 下拉框换成分段（照稿）：下拉框留着当真身，分段只是它的镜子 —— 选项变了、代码里改了 value 都跟着重画
+  // 输入框也能挂（opts 给定选项，输入框留着填别的数）
+  function segMirror(sel, label, opts) {
+    const seg = document.createElement("span");
+    seg.className = "seg seg-mirror";
+    if (opts) sel.before(seg); else { sel.after(seg); sel.classList.add("hidden"); }
+    const list = () => opts ? opts.map((v) => ({ value: v })) : [...sel.options];
+    let more = false;   // 输入框模式：值不在选项里、或点了「更多」才露出输入框
+    const paint = () => {
+      const hit = list().some((o) => o.value === String(sel.value));
+      seg.innerHTML = list().map((o) => `<button data-v="${esc(o.value)}" class="${o.value === String(sel.value) ? "on" : ""}">${esc(label(o))}</button>`).join("")
+        + (opts ? `<button data-v="__more" class="${hit ? "" : "on"}">${esc(t("更多"))}</button>` : "");
+      if (opts) sel.classList.toggle("hidden", hit && !more);
+    };
+    const d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(sel), "value");
+    Object.defineProperty(sel, "value", { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); paint(); } });
+    if (!opts) new MutationObserver(paint).observe(sel, { childList: true });
+    sel.addEventListener("change", paint);
+    seg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === sel.value) return;
+      if (b.dataset.v === "__more") { more = true; paint(); sel.focus(); return; }
+      more = false; sel.value = b.dataset.v; sel.dispatchEvent(new Event("change")); });
+    paint();
+  }
+  segMirror($("set-effort"), (o) => o.value || t("默认"));
+  const PERM_SHORT = { default: "问我", acceptEdits: "接受编辑", plan: "计划", auto: "自动", dontAsk: "不问就拒", bypassPermissions: "全部放行" };
+  segMirror($("set-perm"), (o) => t(PERM_SHORT[o.value] || o.value));
+  segMirror($("set-parallel"), (o) => o.value, ["1", "2", "3", "4"]);
+  // 设置里的「打开用量页」
+  $("set-ov").addEventListener("click", (e) => { const b = e.target.closest("[data-gopage]"); if (b) { closeSettings(); openPage(b.dataset.gopage); } });
+  function paintSetUsage() {
+    const q = usDash.quota, e = $("set-us-quota");
+    $("set-us-quota-row").classList.toggle("hidden", !q);
+    if (!q) return;
+    e.textContent = Math.round(q.used) + "%";
+    const at = q.resetsAt ? new Date(q.resetsAt * 1000) : null;
+    $("set-us-quota-sub").textContent = at ? t("{time} 重置", { time: at.toLocaleDateString([], { weekday: "short" }) + " " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) : "";
   }
 
   function renderEffort(levels, current, dflt) {
@@ -5514,6 +5823,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   function renderDirs() {
     const dirs = state.settings.addDirs || [];
+    $("dir-toggle").textContent = t("{n} 个", { n: dirs.length });
     $("dir-list").innerHTML = dirs.length
       ? dirs.map((d, i) => `<div class="item"><div class="it-title">${esc(d)}</div>
           <div class="it-acts"><button data-i="${i}">${t("移除")}</button></div></div>`).join("")
@@ -5523,6 +5833,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       await saveSettings({ addDirs: dirs2 });
     }));
   }
+
+  // 附加目录照稿收成一个「N 个」按钮，点开才是清单和添加框
+  $("dir-toggle").addEventListener("click", () => document.querySelectorAll("#dir-field .dir-more").forEach((x) => x.classList.toggle("hidden")));
 
   async function saveSettings(patch) {
     try {
@@ -5540,7 +5853,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   $("set-provider").addEventListener("change", (e) => {
-    state.provView = e.target.value;
+    state.provView = e.target.value; provOpen = null;
     renderProvCard();
   });
 
@@ -5605,31 +5918,50 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
   }
 
+  // 工具的权限：规则优先（deny > ask > allow，Bash(git:*) 这种带括号的算「按规则」），否则看权限模式；只读的工具默认允许
+  const READ_TOOLS = new Set(["Read", "Grep", "Glob", "LS", "TodoWrite", "TodoRead", "Task", "Agent", "NotebookRead", "ExitPlanMode", "BashOutput", "KillShell", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]);
+  const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+  function toolPerm(name, mode, rules) {
+    const hit = (list) => (list || []).some((r) => r === name || (r.endsWith("*") && name.startsWith(r.slice(0, -1))));
+    const part = (list) => (list || []).some((r) => r.startsWith(name + "("));
+    if (hit(rules.deny)) return "deny";
+    if (hit(rules.ask)) return "ask";
+    if (hit(rules.allow)) return "allow";
+    if (mode === "bypassPermissions") return "allow";
+    if (mode === "plan" && (EDIT_TOOLS.has(name) || name === "Bash")) return "deny";
+    if (mode === "acceptEdits" && EDIT_TOOLS.has(name)) return "allow";
+    if (READ_TOOLS.has(name)) return "allow";
+    if (part(rules.allow) || part(rules.deny)) return "rule";
+    return "ask";
+  }
+  const permPill = (p) => ({ allow: `<span class="pill ok"><svg class="ei" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg> ${t("允许")}</span>`, ask: `<span class="pill">${t("询问")}</span>`,
+    deny: `<span class="pill err"><svg class="ei" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> ${t("拒绝")}</span>`, rule: `<span class="pill acc">${t("按规则")}</span>` }[p]);
+  const capRows = (arr, fn) => arr?.length ? arr.map(fn).join("") : '<div class="row"><span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + "</span></div>";
+
   function renderCaps() {
     const c = state.caps || {};
-    $("caps-summary").innerHTML = c.version
-      ? t("Claude Code {ver} · 模型 {model} · 权限 {perm} · 输出风格 {style}", { ver: esc(c.version), model: esc(c.model || "—"), perm: esc(c.permissionMode || "—"), style: esc(c.outputStyle || "default") })
-      : t("还没有从 CLI 拿到能力清单 —— 发出第一条消息后会自动填充。");
+    setPageSub("caps", c.version ? t("Claude Code {ver} · 这一轮能用的", { ver: c.version }) : t("这一轮 Claude 能用的"));
     const cmds = c.slashCommands || [];
     const mcp = (c.mcpServers || []).map((m) => typeof m === "string" ? { name: m } : m);
-    const mcpBad = mcp.filter((m) => /fail|error|disconn/i.test(m.status || "")).length;
-    const N = { cmd: cmds.length, tool: (c.tools || []).length, skill: (c.skills || []).length, agent: (c.agents || []).length, mcp: mcp.length, plugin: (c.plugins || []).length };
-    for (const [k, id] of [["cmd", "c-count"], ["tool", "t-count"], ["skill", "s-count"], ["agent", "a-count"], ["mcp", "m-count"], ["plugin", "p-count"]]) $(id).textContent = N[k];
+    const mcpOk = mcp.filter((m) => /^connected$/i.test(m.status || "")).length;
+    const N = { cmd: cmds.length, tool: (c.tools || []).length, skill: (c.skills || []).length, agent: (c.agents || []).length, mcp: mcp.length && mcpOk < mcp.length ? mcpOk + "/" + mcp.length : mcp.length, plugin: (c.plugins || []).length };
     // 计数格：图标 + 大号数字 + 名字；点了跳到那一节
-    const icoOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-ico`)?.innerHTML || "";
-    const nameOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-title > span[data-i18n]`)?.textContent || k;
-    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="cap-tile" data-sec="${k}"><span class="sec-ico">${icoOf(k)}</span><span class="n">${N[k]}</span><span class="k">${esc(nameOf(k))}${k === "mcp" && mcpBad ? ` <em>${esc(t("{n} 个没连上", { n: mcpBad }))}</em>` : ""}</span></button>`).join("");
+    const icoOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .icobox`)?.innerHTML || "";
+    const nameOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-h h3`)?.textContent || k;
+    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="tile" data-sec="${k}"><span class="icobox">${icoOf(k)}</span><span class="n num">${N[k]}</span><span class="k">${esc(nameOf(k))}</span></button>`).join("");
     // 斜杠命令：卡片（命令 + 说明），点一下插进输入框
     $("caps-cmds").innerHTML = cmds.length
       ? cmds.map((x) => { const n = "/" + (x.name || x); return `<button class="cmd-card" data-cmd="${esc(n)}"><span class="mono">${esc(n)}</span><span>${esc(x.desc ? t(x.desc) : "")}</span></button>`; }).join("")
       : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
-    chips($("caps-tools"), c.tools);
-    chips($("caps-skills"), c.skills);
-    chips($("caps-agents"), c.agents);
-    $("caps-mcp").innerHTML = mcp.length
-      ? mcp.map((m) => { const bad = /fail|error|disconn/i.test(m.status || ""); return `<span class="chip mcp-chip"><i class="mdot ${bad ? "bad" : m.status ? "ok" : ""}"></i>${esc(m.name)}${m.status ? ` <small>${esc(m.status)}</small>` : ""}</span>`; }).join("")
-      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
-    chips($("caps-plugins"), c.plugins);
+    const mode = state.permissionMode || c.permissionMode || "default", rules = c.rules || { allow: [], ask: [], deny: [] };
+    const nRules = rules.allow.length + rules.ask.length + rules.deny.length;
+    $("caps-permline").textContent = t("权限模式：{m} · 规则 {n} 条", { m: modeLabel(mode), n: nRules });
+    $("caps-tools").innerHTML = capRows(c.tools, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span>${permPill(toolPerm(x, mode, rules))}</div>`);
+    $("caps-skills").innerHTML = capRows(c.skills, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
+    $("caps-agents").innerHTML = capRows(c.agents, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
+    $("caps-mcp").innerHTML = capRows(mcp, (m) => { const ok = /^connected$/i.test(m.status || ""), bad = /fail|error|disconn/i.test(m.status || "");
+      return `<div class="row"><span class="mono grow">${esc(m.name)}</span>${sdot(ok ? "ok" : bad ? "err" : "", ok ? t("已连接") : bad ? t("没连上") : m.status || "—")}</div>`; });
+    $("caps-plugins").innerHTML = capRows(c.plugins, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
     filterCaps();
   }
   // 搜索：同时筛命令卡片和各节的标签；一节里一个都不剩就整节先藏起来
@@ -5637,7 +5969,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const q = ($("caps-q").value || "").trim().toLowerCase();
     for (const sec of document.querySelectorAll("#tab-caps > .ext-sec-plain")) {
       let any = !q;
-      for (const el of sec.querySelectorAll(".cmd-card, .chip")) {
+      for (const el of sec.querySelectorAll(".cmd-card, .panel > .row")) {
         const hit = !q || el.textContent.toLowerCase().includes(q);
         el.classList.toggle("hidden", !hit); any ||= hit;
       }
@@ -5645,6 +5977,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
   }
   $("caps-q").addEventListener("input", filterCaps);
+  $("caps-rules").addEventListener("click", () => openSettings("claude"));
   $("cap-tiles").addEventListener("click", (e) => {
     const b = e.target.closest("[data-sec]"), x = b && document.querySelector(`#tab-caps > [data-sec="${b.dataset.sec}"]`); if (!x) return;
     const body = $("page-body");
@@ -5657,12 +5990,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   $("btn-refresh-mcp").addEventListener("click", async () => {
-    $("caps-mcp").innerHTML = '<span class="tiny">' + esc(t("查询中…")) + "</span>";
+    $("caps-mcp").innerHTML = '<div class="row"><span class="tiny">' + esc(t("查询中…")) + "</span></div>";
     try {
       const r = await api("/api/cli?cmd=" + encodeURIComponent("mcp list"));
       const lines = (r.out || "").split("\n").map((s) => s.trim()).filter(Boolean);
-      chips($("caps-mcp"), lines.length ? lines.slice(0, 40) : [t("(无 MCP 服务器)")]);
-    } catch (e) { chips($("caps-mcp"), [t("查询失败：{msg}", { msg: e.message })]); }
+      // claude mcp list 一行一个：「名字: 命令 - ✓ Connected」/「✗ Failed to connect」
+      $("caps-mcp").innerHTML = capRows(lines.filter((l) => /:\s/.test(l) && /connect|fail|need/i.test(l)).slice(0, 40), (l) => {
+        const name = l.split(":")[0], ok = /✓|connected/i.test(l) && !/fail|✗/i.test(l);
+        return `<div class="row"><span class="mono grow">${esc(name)}</span>${sdot(ok ? "ok" : "err", ok ? t("已连接") : t("没连上"))}</div>`;
+      }) || '<div class="row"><span class="tiny">' + esc(t("(无 MCP 服务器)")) + "</span></div>";
+    } catch (e) { $("caps-mcp").innerHTML = '<div class="row"><span class="tiny">' + esc(t("查询失败：{msg}", { msg: e.message })) + "</span></div>"; }
   });
 
   // ── 侧栏 / 整页 ───────────────────────────────────────────────────
@@ -5675,6 +6012,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     loadSessions();
     if (!tab) loadCaps();
     renderSideNav();
+    loadProjects(); loadSched();
   }
   // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点收起 / 菜单键（force）才收
   function closeDrawer(force) { if (!force && window.CCLayout && CCLayout.docked()) return; drawerEl.classList.add("hidden"); }
@@ -5682,16 +6020,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   const PAGES = {
     sessions: { name: tk("对话"), icon: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>' },
     settings: { name: tk("设置"), icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>' },
+    projects: { name: tk("项目"), icon: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' },
+    sched: { name: tk("定时任务"), icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>' },
     ext: { name: tk("扩展"), icon: '<path d="M10 3h4v4a2 2 0 1 0 4 0h3v4h-4a2 2 0 1 0 0 4h4v6H3V3z"/>' },
     caps: { name: tk("能力"), icon: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>' },
     usage: { name: tk("用量"), icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
     help: { name: tk("帮助"), icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>' },
   };
-  const NAV_ITEMS = ["sessions", "ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
+  const NAV_ITEMS = ["sessions", "projects", "sched", "ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
   var curPage = null;   // var：openSession 在启动早期就会调 closePage，别撞上 let 的暂时性死区
   // 轮询（下载进度、配对状态…）只在那一页开着时继续：整页关了、换页了就停
-  function pageOn(name) { return curPage === name && !$("pages").classList.contains("hidden"); }
-  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "ext"]; };
+  function pageOn(name) { return name === "settings" ? setOpen : curPage === name && !$("pages").classList.contains("hidden"); }
+  (function () { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p) && !localStorage.getItem("cc.navPinsV2")) { localStorage.setItem("cc.navPins", JSON.stringify([...new Set([...p.filter((k) => k !== "ext"), "projects", "sched"])])); } localStorage.setItem("cc.navPinsV2", "1"); } catch {} })();
+  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "projects", "sched"]; };
   var navEdit = false;
   function renderSideNav() {
     const nav = $("side-nav"); if (!nav) return;
@@ -5699,7 +6040,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const ico = (k) => `<svg viewBox="0 0 24 24">${PAGES[k].icon}</svg>`;
     const live = srv.runs.filter((x) => !x.idle).length;
     const badge = (k) => k === "sessions" && live ? `<span class="nav-badge"><i></i>${esc(t("{n} 个在跑", { n: live }))}</span>` : "";
-    const item = (k) => `<button class="nav-item${curPage === k ? " on" : ""}" data-page="${k}">${ico(k)}<span>${esc(t(PAGES[k].name))}</span>${badge(k)}</button>`;
+    const item = (k) => `<button class="nav-item${curPage === k || (!curPage && !setOpen && k === "sessions") ? " on" : ""}" data-page="${k}">${ico(k)}<span>${esc(t(PAGES[k].name))}</span>${badge(k)}</button>`;
     let h = pins.map(item).join("");
     const rest = NAV_ITEMS.filter((k) => !pins.includes(k));
     h += `<button class="nav-item nav-more${more ? " open" : ""}" data-nav="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg><span>${esc(t("更多"))}</span><svg viewBox="0 0 24 24" class="caret"><path d="M6 9l6 6 6-6"/></svg></button>`;
@@ -5710,10 +6051,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       h += "</div>";
     }
     nav.innerHTML = h;
-    $("side-acct")?.classList.toggle("on", curPage === "settings");
+    $("side-acct")?.classList.toggle("on", !!setOpen);
   }
   $("side-nav").addEventListener("click", (e) => {
-    const p = e.target.closest("[data-page]"); if (p) return openPage(p.dataset.page);
+    const p = e.target.closest("[data-page]");
+    if (p) { if (p.dataset.page === "projects") PJ.cur = null; if (p.dataset.page === "sched") SC.cur = null; return openPage(p.dataset.page); }
     const n = e.target.closest("[data-nav]")?.dataset.nav;
     if (n === "more") { localStorage.setItem("cc.navMore", localStorage.getItem("cc.navMore") === "1" ? "0" : "1"); navEdit = false; }
     if (n === "edit") navEdit = true;
@@ -5736,15 +6078,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const name = (s.keyMode === "login" && acctEmail) || label;
     $("acct-av").textContent = (name.trim()[0] || "C").toUpperCase();
     $("acct-name").textContent = name || t("设置");
-    $("acct-sub").textContent = [s.keyMode === "login" && acctEmail ? label : "", s.model].filter(Boolean).join(" · ");
+    $("acct-sub").textContent = [s.keyMode === "login" && acctEmail ? label : "", prettyModel(s.model),
+      s.keyMode === "login" && acctWeek != null ? t("本周额度 {p}%", { p: acctWeek }) : ""].filter(Boolean).join(" · ");
     if (s.product) $("side-title").textContent = s.product;
     // 官方账户：名字换成登录邮箱（问一次，之后十分钟内沿用）
     if (s.keyMode === "login" && Date.now() - acctEmailAt > 600000) {
       acctEmailAt = Date.now();
-      api("/api/login/status").then((st) => { if (st && st.email && st.email !== acctEmail) { acctEmail = st.email; paintAcct(s); } }).catch(() => {});
+      api("/api/login/status").then((st) => {
+        const wk = st && st.limits && st.limits.sevenDay ? Math.round(st.limits.sevenDay.used) : null;
+        if (st && ((st.email && st.email !== acctEmail) || wk !== acctWeek)) { acctEmail = st.email || acctEmail; acctWeek = wk; paintAcct(s); }
+      }).catch(() => {});
     }
   }
-  var acctEmail = "", acctEmailAt = 0;
+  var acctEmail = "", acctEmailAt = 0, acctWeek = null;
 
   // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
   function closeMenu() { document.querySelectorAll(".pop-menu").forEach((m) => m.remove()); }
@@ -5764,6 +6110,82 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { closeMenu(); removeEventListener("pointerdown", off, true); } }, true));
     return m;
   }
+  // 下拉框不用系统弹出的选择器（深色、和主题不搭），换成同一套菜单：当前项打勾，optgroup 成小标题，
+  // 长列表可滚、自动滚到当前项，宽度至少和下拉框一样。选了照常触发 input / change，原有逻辑不用改。
+  const CHECK = '<path d="M5 12l5 5 9-10"/>';
+  // 「能看图」标记（多模态）：图片框 + 山 + 太阳，不用 emoji
+  const MM_IMG = () => `<svg class="mm-img" viewBox="0 0 24 24" role="img" aria-label="${esc(t("能看图"))}"><title>${esc(t("能看图"))}</title><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-8.5 8"/></svg>`;
+  function selMenu(sel) {
+    closeMenu();
+    const items = [];
+    for (const n of sel.children) {
+      if (n.tagName === "OPTGROUP") {
+        items.push({ head: n.label });
+        for (const o of n.children) if (!o.hidden) items.push(o);
+      } else if (n.tagName === "OPTION" && !n.hidden) items.push(n);
+    }
+    const m = document.createElement("div");
+    m.className = "pop-menu sel-menu";
+    m.innerHTML = items.map((it, i) => it.head != null ? `<div class="pm-head">${esc(it.head)}</div>`
+      : `<button type="button" data-i="${i}" class="${it.selected ? "on" : ""}"${it.disabled ? " disabled" : ""}>`
+        + (it.selected ? `<svg viewBox="0 0 24 24">${CHECK}</svg>` : '<span class="pm-pad"></span>')
+        + `<span>${esc(it.textContent)}</span>${it.dataset && it.dataset.img ? MM_IMG() : ""}</button>`).join("");
+    document.body.appendChild(m);
+    const ar = sel.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+    m.style.minWidth = Math.min(ar.width, W - 16) + "px";
+    m.style.maxHeight = Math.max(160, Math.min(H * 0.6, Math.max(H - ar.bottom, ar.top) - 14)) + "px";
+    const mw = m.offsetWidth, mh = m.offsetHeight;
+    let y = ar.bottom + 4;
+    if (y + mh > H - 8) y = ar.top - mh - 4 >= 8 ? ar.top - mh - 4 : Math.max(8, H - mh - 8);
+    const x = getComputedStyle(sel).direction === "rtl" ? ar.right - mw : ar.left;
+    m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = y + "px";
+    const on = m.querySelector("button.on"); if (on) m.scrollTop = on.offsetTop - (m.clientHeight - on.offsetHeight) / 2;
+    m.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-i]"); if (!b || b.disabled) return;
+      closeMenu();
+      const o = items[+b.dataset.i];
+      if (o.selected) return;
+      sel.value = o.value;
+      sel.dispatchEvent(new Event("input", { bubbles: true }));
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { closeMenu(); removeEventListener("pointerdown", off, true); } }, true));
+  }
+  // 捕获阶段拦住：mousedown / 触摸的 pointerdown 不让系统选择器弹出，click 打开我们的菜单；回车 / 空格同样打开。
+  // 带 data-native 的保留系统选择器
+  const selOk = (s) => s && !s.disabled && !s.multiple && !s.dataset.native && s.size <= 1;
+  const selOf = (e) => e.target.closest && e.target.closest("select");
+  addEventListener("mousedown", (e) => { if (selOk(selOf(e))) e.preventDefault(); }, true);
+  addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse" && selOk(selOf(e))) e.preventDefault(); }, true);
+  addEventListener("click", (e) => {
+    const s = selOf(e); if (!selOk(s)) return;
+    e.preventDefault();
+    if (document.querySelector(".sel-menu")) { closeMenu(); return; }
+    selMenu(s);
+  }, true);
+  addEventListener("keydown", (e) => {
+    const s = selOf(e);
+    if (selOk(s) && (e.key === "Enter" || e.key === " " || (e.altKey && e.key === "ArrowDown"))) { e.preventDefault(); selMenu(s); }
+  }, true);
+  // 所有搜索框（.searchbox）统一：有字时右侧出现清空键；系统自带的清空叉隐藏（各家 WebView 长得不一样）
+  addEventListener("input", (e) => {
+    const box = e.target.closest && e.target.closest(".searchbox"); if (!box || e.target.tagName !== "INPUT") return;
+    if (!box.querySelector(".sb-x")) {
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "sb-x"; x.setAttribute("aria-label", t("清空"));
+      x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+      e.target.after(x);
+    }
+    box.classList.toggle("has-v", !!e.target.value);
+  }, true);
+  addEventListener("click", (e) => {
+    const x = e.target.closest && e.target.closest(".sb-x"); if (!x) return;
+    e.preventDefault();
+    const box = x.closest(".searchbox"), inp = box.querySelector("input");
+    inp.value = ""; box.classList.remove("has-v");
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    inp.focus();
+  }, true);
   const SM = {
     pin: '<path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
@@ -5788,10 +6210,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     for (const x of list) if (!x.pinned) groups[x.mtime >= t0 ? 1 : x.mtime >= y0 ? 2 : 3][1].push(x);
     const more = groups[3][1].length > RECENT_MAX;
     groups[3][1] = groups[3][1].slice(0, RECENT_MAX);
+    const cur = view.sessionId && list.find((x) => x.id === view.sessionId);
+    if (cur && cur.title && cur.title !== view.title) { view.title = cur.title; paintTitle(); }
     const row = (x) => `<button class="sr-item${x.id === view.sessionId ? " on" : ""}" data-sid="${esc(x.id)}" title="${esc(x.title)}">${ask.has(x.id) ? '<i class="sr-dot ask"></i>' : live.has(x.id) ? '<i class="sr-dot"></i>' : ""}<span>${esc(x.title)}</span></button>`;
     box.innerHTML = list.length
       ? groups.filter(([, l]) => l.length).map(([g, l]) => `<h4>${esc(g)}</h4>` + l.map(row).join("")).join("")
         + (more ? `<button class="sr-all" data-all>${esc(t("全部对话"))}</button>` : "")
+        + `<div class="sr-hint">${esc(t("长按会话：置顶、重命名、导出、删除"))}</div>`
       : `<div class="sr-empty">${esc(t("还没有历史会话。"))}</div>`;
   }
   $("side-recent").addEventListener("click", (e) => {
@@ -5809,6 +6234,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const reload = () => loadSessions();
     popMenu(anchor, [
       { label: x.pinned ? t("取消置顶") : t("置顶"), icon: SM.pin, fn: () => post(`/api/session/${encodeURIComponent(id)}/pin`, { pin: !x.pinned }).then(reload, (e) => toast(e.message, true)) },
+      { label: t("移到项目…"), icon: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', fn: () => moveToProject(id, anchor) },
       { label: t("重命名"), icon: SM.edit, fn: () => { const n = prompt(t("新的会话名称"), x.title || ""); if (n) post(`/api/session/${encodeURIComponent(id)}/rename`, { title: n }).then(reload, (e) => toast(e.message, true)); } },
       { label: t("导出"), icon: SM.export, fn: async () => {
         if (!confirm(t("会话记录可能含有你贴过的密钥、令牌或文件内容。导出的压缩包请只发给你信任的地方。继续？"))) return;
@@ -5847,14 +6273,570 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     popMenu($("side-acct"), items, "up");
   }
 
+  // ══ 项目与定时任务（照稿）════════════════════════════════════════
+  // 项目 = 一个工作目录 + 自己的 CLAUDE.md + 默认型号/思考强度/权限；会话按 cwd 归到项目里（网关 gw/projects.mjs）
+  // 定时任务 = 到点在本机跑一次 Claude（网关 gw/sched.mjs，App 进程活着就准点；错过的下次打开按任务设置处理）
+  // PJ / SC 在文件开头声明：启动早期 openSession → renderSessions 就会用到
+  var pageTitleOv = "";
+  var PI = {
+    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    back: '<path d="M15 6l-6 6 6 6"/>',
+    kebab: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+    play: '<path d="M7 5l12 7-12 7z"/>',
+    chev: '<path d="M9 6l6 6-6 6"/>',
+    skip: '<path d="M6 6l8 6-8 6zM17 6v12"/>',
+    term: '<path d="M4 17l6-5-6-5M12 19h8"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+    palette: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/><path d="M12 21a2 2 0 0 1 0-4h2a3 3 0 0 0 3-3"/>',
+    x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  };
+  function pi(n, cls) { return `<svg class="ei${cls ? " " + cls : ""}" viewBox="0 0 24 24">${PI[n]}</svg>`; }
+  const jsend = (p, body, method = "POST") => api(p, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+  function normPath(p) { return String(p || "").replace(/^\/sdcard(?=\/|$)/, "/storage/emulated/0").replace(/\/+$/, ""); }
+  function pjById(id) { return PJ.list.find((p) => p.id === id) || null; }
+  /** 会话的 cwd 落在哪个项目里（取最深的那个） */
+  function pjOfCwd(cwd) {
+    const c = normPath(cwd); if (!c) return null;
+    let best = null;
+    for (const p of PJ.list) { const r = normPath(p.path); if ((c === r || c.startsWith(r + "/")) && (!best || r.length > normPath(best.path).length)) best = p; }
+    return best;
+  }
+  function pjMark(p) { return `<span class="pj-mark"><i style="background:${esc(p.color || "var(--accent)")}"></i>${esc(p.name)}</span>`; }
+  function pjOfSession(id) { const s = (state.sessions || []).find((x) => x.id === id); return s ? pjOfCwd(s.cwd) : null; }
+  async function loadProjects() {
+    try { const r = await api("/api/projects"); PJ.list = r.projects || []; PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; }
+    catch { return; }
+    paintProjChip();
+    if (curPage === "projects") renderProjects();
+    if (curPage === "sessions") renderSessions();
+  }
+  async function loadSched() {
+    try { SC.data = await api("/api/sched"); } catch { return; }
+    if (curPage === "sched") renderSched();
+    if (curPage === "projects" && PJ.cur) renderProjects();
+    if (curPage === "sessions") renderSessions();
+  }
+  function schedSids() { return new Set((SC.data && SC.data.sids) || []); }
+
+  // ── 时间与频率的说法 ──
+  const p2 = (n) => String(n).padStart(2, "0");
+  // 星期名跟界面语言走（Intl）：WD()[0] 是周日；dayShort(1..7) 给「每周一、三」和选日按钮用（中文去掉「周」字）
+  const WD = () => [0, 1, 2, 3, 4, 5, 6].map((d) => new Date(2024, 0, 7 + d).toLocaleDateString(I18N.lang, { weekday: "short" }));
+  const dayShort = (d) => { const n = WD()[d % 7]; return /^zh/.test(I18N.lang) ? n.replace(/^(周|星期)/, "") : n; };
+  function whenText(ms) {
+    if (!ms) return "—";
+    const d = new Date(ms), hm = p2(d.getHours()) + ":" + p2(d.getMinutes());
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const diff = Math.floor((ms - d0.getTime()) / 864e5);
+    if (diff === 0) return t("今天 {t}", { t: hm });
+    if (diff === 1) return t("明天 {t}", { t: hm });
+    if (diff === -1) return t("昨天 {t}", { t: hm });
+    return `${d.getMonth() + 1}-${d.getDate()} ${WD()[d.getDay()]} ${hm}`;
+  }
+  function freqText(f) {
+    f = f || {};
+    const tm = f.time || "09:00";
+    if (f.kind === "daily") return t("每天 {t}", { t: tm });
+    if (f.kind === "weekly") {
+      const ds = (f.days || []).slice().sort();
+      if (ds.length === 7) return t("每天 {t}", { t: tm });
+      if (ds.join() === "1,2,3,4,5") return t("工作日 {t}", { t: tm });
+      return t("每周{d} {t}", { d: ds.map(dayShort).join(/^(zh|ja)/.test(I18N.lang) ? "、" : ", "), t: tm });
+    }
+    if (f.kind === "monthly") return f.day === "last" ? t("每月最后一天 {t}", { t: tm }) : t("每月 {d} 号 {t}", { d: f.day || 1, t: tm });
+    if (f.kind === "every") return t("每隔 {h} 小时（{a}–{b}）", { h: f.hours || 2, a: f.from || "00:00", b: f.to || "23:59" });
+    if (f.kind === "once") return t("仅一次 · {d} {t}", { d: f.date || "", t: tm });
+    if (f.kind === "cron") return "cron " + (f.cron || "");
+    return "";
+  }
+  // 花费：网关记美元；中文界面按汇率换成人民币（标 ≈）
+  const costText = (usd) => { const d = toDisp(+usd || 0, "USD", SC.data && SC.data.fx); return (d.approx ? "≈ " : "") + money(d.v, d.cur); };
+  const durText = (ms) => !ms ? "—" : ms < 60000 ? t("{n} 秒", { n: Math.round(ms / 1000) }) : t("{m} 分 {s} 秒", { m: Math.floor(ms / 60000), s: p2(Math.round(ms % 60000 / 1000)) });
+  const stIcon = (st) => st === "ok" ? `<span class="sc-st ok">${pi("check")}</span>` : st === "err" ? `<span class="sc-st err">${pi("x")}</span>` : `<span class="sc-st">${pi("skip")}</span>`;
+  const swHtml = (on, attr) => `<input type="checkbox" class="sw" ${attr || ""}${on ? " checked" : ""}>`;
+  const pageHead = (title, right, back) => `<div class="page-head">${back ? `<button class="icon-btn pj-back" data-a="back" aria-label="${esc(t("返回"))}">${pi("back")}</button>` : ""}<h2>${title}</h2>${right || ""}</div>`;
+  const kebabBtn = (a) => `<button class="icon-btn pj-kebab" data-a="${a}" aria-label="${esc(t("更多"))}"><svg viewBox="0 0 24 24">${PI.kebab}</svg></button>`;
+  const emptyRow = (txt) => `<div class="row pj-empty"><span class="muted">${esc(txt)}</span></div>`;
+  function setOv(text) { pageTitleOv = text || ""; paintTitle(); }
+
+  // ── 项目页 ──
+  async function renderProjects() {
+    const box = $("tab-projects");
+    if (PJ.cur) return renderProject(box);
+    setOv("");
+    setPageSub("projects", t("{n} 个", { n: PJ.list.length }));
+    const card = (p) => `<button class="pj-card" data-pj="${esc(p.id)}">
+        <span class="pj-ct"><span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span><b>${esc(p.name)}</b></span>
+        <span class="mono muted pj-path">\u200e${esc(p.path)}\u200e</span>
+        <span class="muted pj-meta">${esc(t("{n} 个对话", { n: p.sessions || 0 }))} · ${esc(relTime(p.lastAt || p.created))}${p.exists === false ? ` · <span class="pj-gone">${esc(t("目录不在了"))}</span>` : ""}</span></button>`;
+    box.innerHTML = pageHead(esc(t("项目")), `<button class="btn sm pj-primary" data-a="new">${pi("plus")}${esc(t("新建项目"))}</button>`) +
+      `<p class="pj-lead muted">${esc(t("一个项目 = 一个工作目录，带自己的指令（CLAUDE.md）、默认型号与权限。项目里开的对话都在这个目录里跑。"))}</p>` +
+      (PJ.list.length ? `<div class="pj-grid">${PJ.list.map(card).join("")}</div>`
+        : `<div class="panel">${emptyRow(t("还没有项目。新建一个，或者把已有的目录收进来。"))}</div>`);
+  }
+  async function renderProject(box) {
+    const id = PJ.cur;
+    let d = PJ.detail && PJ.detail.project && PJ.detail.project.id === id ? PJ.detail : null;
+    if (!d) {
+      box.innerHTML = pageHead("", "", true) + `<div class="muted">${esc(t("加载中…"))}</div>`;
+      try { d = PJ.detail = await api("/api/projects/" + encodeURIComponent(id)); } catch (e) { box.innerHTML = pageHead("", "", true) + `<div class="muted">${esc(e.message)}</div>`; return; }
+      if (PJ.cur !== id) return;
+      try { const r = await api("/api/projects/" + encodeURIComponent(id) + "/instr"); d.instr = r.text || ""; } catch { d.instr = ""; }
+    }
+    const p = d.project;
+    setOv(p.name); setPageSub("projects", p.path);
+    if (!MODELS.length) api("/api/models").then((r) => { MODELS = r.models || []; PJ.effLevels = r.effortLevels || []; if (PJ.cur === id) renderProject(box); }).catch(() => {});
+    const opt = (v, l, cur) => `<option value="${esc(v)}"${v === (cur || "") ? " selected" : ""}>${esc(l)}</option>`;
+    const follow = t("跟随全局");
+    const modelSel = `<select data-def="model">${opt("", follow, p.model)}${MODELS.map((m) => opt(m.id, prettyModel(m.id), p.model)).join("")}${p.model && !MODELS.some((m) => m.id === p.model) ? opt(p.model, prettyModel(p.model), p.model) : ""}</select>`;
+    const effs = PJ.effLevels && PJ.effLevels.length ? PJ.effLevels : ["low", "medium", "high", "xhigh", "max"];
+    const effSel = `<select data-def="effort">${opt("", follow, p.effort)}${effs.map((e) => opt(e, e, p.effort)).join("")}</select>`;
+    const permSel = `<select data-def="perm">${opt("", follow, p.perm)}${["default", "acceptEdits", "plan", "auto", "dontAsk"].map((k) => opt(k, t(PERM_SHORT[k]), p.perm)).join("")}</select>`;
+    const tasks = ((SC.data && SC.data.tasks) || []).filter((x) => x.projectId === id);
+    const files = d.files || [];
+    box.innerHTML = pageHead(`<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}`,
+        `<button class="btn sm pj-primary" data-a="chat">${pi("plus")}${esc(t("新对话"))}</button>${kebabBtn("pmenu")}`, true) +
+      `<div class="mono muted pj-dpath">${esc(p.path)}${p.exists === false ? ` · <span class="pj-gone">${esc(t("目录不在了"))}</span>` : ""}</div>` +
+      `<div class="pj-sec"><span class="grow">${esc(t("对话"))}（${d.sessions.length}）</span></div>
+      <div class="panel">${d.sessions.length ? d.sessions.slice(0, 30).map((s) => `<div class="row pj-row" data-sid="${esc(s.id)}"><div class="grow"><div class="t1">${schedSids().has(s.id) ? pi("clock", "pj-ic") : ""}${esc(s.title)}</div><div class="muted pj-sub">${esc(relTime(s.mtime))}</div></div></div>`).join("") : emptyRow(t("还没有对话"))}</div>
+      <div class="pj-sec"><span class="grow">${esc(t("指令 · CLAUDE.md"))}</span><span class="muted pj-note">${esc(t("每次对话自动带上"))}</span></div>
+      <textarea class="pj-field pj-instr" placeholder="${esc(t("这个项目是什么、怎么构建、有什么规矩…"))}">${esc(d.instr || "")}</textarea>
+      <div class="pj-save hidden"><button class="btn sm ghost" data-a="instr-undo">${esc(t("还原"))}</button><button class="btn sm" data-a="instr-save">${esc(t("保存"))}</button></div>
+      <div class="pj-sec"><span class="grow">${esc(t("默认设置"))} <span class="muted pj-note">${esc(t("（只管这个项目里新开的对话）"))}</span></span></div>
+      <div class="panel">
+        <div class="row"><div class="grow"><b>${esc(t("型号"))}</b></div>${modelSel}</div>
+        <div class="row"><div class="grow"><b>${esc(t("思考强度"))}</b></div>${effSel}</div>
+        <div class="row"><div class="grow"><b>${esc(t("权限模式"))}</b></div>${permSel}</div>
+        <div class="row"><div class="grow"><b>${esc(t("MCP 服务器"))}</b><div class="muted pj-sub">${d.mcp && d.mcp.length ? esc(t("项目自己的 .mcp.json：{list}", { list: d.mcp.join("、") })) : esc(t("没有 .mcp.json；用的是全局的"))}</div></div></div>
+      </div>
+      <div class="pj-sec"><span class="grow">${esc(t("文件"))}</span><button class="btn sm ghost" data-a="files">${esc(t("在文件浏览器打开"))}</button></div>
+      <div class="panel pj-files">${files.length ? files.slice(0, 12).map((f) => `<div class="row pj-row" data-file="${esc(f.name)}" data-dir="${f.dir ? 1 : ""}"><span class="mono grow">${esc(f.name)}${f.dir ? "/" : ""}</span></div>`).join("") + (files.length > 12 ? `<div class="row"><span class="muted">${esc(t("还有 {n} 项", { n: files.length - 12 }))}</span></div>` : "") : emptyRow(t("（空目录）"))}</div>
+      <div class="pj-sec"><span class="grow">${esc(t("记忆"))}</span></div>
+      <div class="panel"><div class="row"><div class="grow"><b>${esc(t("{n} 条", { n: (d.memory || []).length }))}</b><div class="muted pj-sub">${esc(t("Claude 在这个项目里记下的事"))}</div></div>${(d.memory || []).length ? `<button class="btn sm ghost" data-a="memory">${esc(t("查看"))}</button>` : ""}</div></div>
+      <div class="pj-sec"><span class="grow">${esc(t("定时任务"))}</span><button class="btn sm ghost" data-a="newtask">${pi("plus")}${esc(t("新建"))}</button></div>
+      <div class="panel">${tasks.length ? tasks.map((x) => `<div class="row pj-row" data-task="${esc(x.id)}"><div class="grow"><div class="t1">${pi("clock", "pj-ic")}${esc(x.name)}</div><div class="muted pj-sub">${esc(freqText(x.freq))}</div></div><span class="pill ${x.on ? "acc" : ""}">${esc(x.on ? t("开") : t("关"))}</span></div>`).join("") : emptyRow(t("没有"))}</div>`;
+    const ta = box.querySelector(".pj-instr");
+    ta.addEventListener("input", () => box.querySelector(".pj-save").classList.toggle("hidden", ta.value === (d.instr || "")));
+  }
+  $("tab-projects").addEventListener("click", async (e) => {
+    const box = $("tab-projects");
+    const a = e.target.closest("[data-a]")?.dataset.a;
+    if (a === "back") { PJ.cur = null; PJ.detail = null; return renderProjects(); }
+    if (a === "new") return newProjectDlg();
+    const card = e.target.closest("[data-pj]"); if (card) return openProject(card.dataset.pj);
+    const sid = e.target.closest("[data-sid]"); if (sid) return openSession(sid.dataset.sid);
+    const tk = e.target.closest("[data-task]"); if (tk) { SC.cur = tk.dataset.task; SC.detail = null; return openPage("sched"); }
+    const p = PJ.detail && PJ.detail.project; if (!p) return;
+    if (a === "chat") return newChatIn(p.id);
+    if (a === "pmenu") return projMenu(p, e.target.closest("[data-a]"));
+    if (a === "files") return openFiles(p.path);
+    if (a === "memory") { const m = PJ.detail.memory[0]; return openFiles(m.path.replace(/\/[^/]+$/, "")); }
+    if (a === "newtask") return taskDlg(null, { projectId: p.id });
+    const f = e.target.closest("[data-file]");
+    if (f) { const full = p.path.replace(/\/$/, "") + "/" + f.dataset.file; return f.dataset.dir ? openFiles(full) : openViewer(full); }
+    if (a === "instr-undo") { box.querySelector(".pj-instr").value = PJ.detail.instr || ""; box.querySelector(".pj-save").classList.add("hidden"); return; }
+    if (a === "instr-save") {
+      const text = box.querySelector(".pj-instr").value;
+      try { await jsend(`/api/projects/${encodeURIComponent(p.id)}/instr`, { text }, "PUT"); PJ.detail.instr = text; box.querySelector(".pj-save").classList.add("hidden"); toast(t("已保存")); }
+      catch (err) { toast(err.message, true); }
+    }
+  });
+  $("tab-projects").addEventListener("change", async (e) => {
+    const k = e.target.dataset.def; const p = PJ.detail && PJ.detail.project; if (!k || !p) return;
+    try { const r = await jsend("/api/projects/" + encodeURIComponent(p.id), { [k]: e.target.value }, "PATCH"); Object.assign(p, r.project); toast(t("已保存")); loadProjects(); }
+    catch (err) { toast(err.message, true); }
+  });
+  function openProject(id) { PJ.cur = id; PJ.detail = null; if (curPage !== "projects") openPage("projects"); else { renderProjects(); $("page-body").scrollTop = 0; } }
+  /** 在项目里开新对话：换到空白会话，记下项目，发第一条时网关在项目目录里跑 */
+  function newChatIn(id) {
+    closePage(); closeDrawer();
+    newConversation();
+    view.projectId = id || null;
+    paintProjChip();
+  }
+  function projMenu(p, anchor) {
+    popMenu(anchor, [
+      { label: t("重命名"), icon: PI.edit, fn: async () => { const n = prompt(t("项目名称"), p.name); if (!n || !n.trim()) return; try { await jsend("/api/projects/" + encodeURIComponent(p.id), { name: n.trim() }, "PATCH"); PJ.detail = null; await loadProjects(); renderProjects(); } catch (e) { toast(e.message, true); } } },
+      { label: t("换颜色"), icon: PI.palette, fn: () => popMenu(anchor, PJ.colors.map((c) => ({ label: c, icon: `<circle cx="12" cy="12" r="7" fill="${esc(c)}" stroke="none"/>`, fn: async () => { try { await jsend("/api/projects/" + encodeURIComponent(p.id), { color: c }, "PATCH"); PJ.detail = null; await loadProjects(); renderProjects(); } catch (e) { toast(e.message, true); } } }))) },
+      { label: t("在文件浏览器打开目录"), icon: PI.folder, fn: () => openFiles(p.path) },
+      { label: t("在终端打开这个目录"), icon: PI.term, fn: () => openTermAt(p.path) },
+      "hr",
+      { label: t("删除项目…"), icon: PI.trash, danger: true, fn: () => deleteProjectDlg(p) },
+    ]);
+  }
+  async function openTermAt(dir) {
+    await openTerm();
+    if (TERM.list.some((x) => x.alive)) await newTerm({ cwd: dir });
+  }
+
+  // ── 弹层：宽屏居中（宽 560、高不过宽×φ），窄屏整页推入；返回键先关它 ──
+  function dlg(title, body, foot) {
+    document.querySelectorAll(".pj-ov").forEach((x) => x.remove());
+    const narrow = innerWidth < 680;
+    const o = document.createElement("div");
+    o.className = "pj-ov" + (narrow ? " narrow" : "");
+    const xb = `<button class="icon-btn" data-close aria-label="${esc(t(narrow ? "返回" : "关闭"))}"><svg viewBox="0 0 24 24">${narrow ? PI.back : PI.x}</svg></button>`;
+    o.innerHTML = `<div class="pj-sheet" role="dialog" aria-modal="true"><div class="pj-shead">${narrow ? xb : ""}<h3>${esc(title)}</h3>${narrow ? "" : xb}</div>
+      <div class="pj-smain">${body}</div><div class="pj-sfoot">${foot}</div></div>`;
+    document.body.appendChild(o);
+    o.addEventListener("click", (e) => {
+      if ((e.target === o && !narrow) || e.target.closest("[data-close]")) return o.remove();
+      const rc = e.target.closest(".pj-rc");
+      if (rc && !rc.classList.contains("on")) { rc.parentNode.querySelectorAll(":scope > .pj-rc").forEach((x) => x.classList.toggle("on", x === rc)); rc.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
+      const sb = e.target.closest(".pj-seg button");
+      if (sb) { [...sb.parentNode.children].forEach((b) => b.classList.toggle("on", b === sb)); sb.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
+    });
+    return o;
+  }
+  const rcards = (name, opts, on) => `<div class="pj-rcs" data-name="${name}">${opts.map(([k, l, d]) => `<div class="pj-rc${k === on ? " on" : ""}" data-v="${k}" role="radio" tabindex="0"><span class="pj-dot"></span><div>${esc(l)}${d ? `<small>${d}</small>` : ""}</div></div>`).join("")}</div>`;
+  const segOf = (name, opts, on) => `<span class="seg pj-seg" data-name="${name}">${opts.map(([k, l]) => `<button type="button" data-v="${k}" class="${k === on ? "on" : ""}">${esc(l)}</button>`).join("")}</span>`;
+  const picked = (o, name) => { const el = o.querySelector(`[data-name="${name}"] > .on`); return el ? el.dataset.v : ""; };
+  const frow = (label, inner, hint) => `<div class="pj-frow"><label>${esc(label)}</label>${inner}${hint ? `<div class="pj-hint">${hint}</div>` : ""}</div>`;
+
+  function newProjectDlg() {
+    const ws = PJ.ws || "";
+    const o = dlg(t("新建项目"), frow(t("名称"), `<input class="pj-field" id="np-name" value="${esc(t("新项目"))}" autocomplete="off">`) +
+      frow(t("目录"), rcards("mode", [
+        ["new", t("在工作区新建"), `<span class="mono" id="np-where">${esc(ws + "/" + t("新项目"))}</span>`],
+        ["dir", t("用已有的目录"), esc(t("以前在这个目录里开的对话自动归进来"))],
+        ["git", t("从 git 克隆"), esc(t("填仓库地址，克隆到工作区"))],
+      ], "new") + `<input class="pj-field mono hidden" id="np-dir" placeholder="${esc(ws + "/…")}" value="${esc(ws + "/")}" autocomplete="off" spellcheck="false">
+        <input class="pj-field mono hidden" id="np-url" placeholder="https://github.com/…" autocomplete="off" spellcheck="false">`) +
+      frow(t("指令（写进 CLAUDE.md，可留空）"), `<textarea class="pj-field" id="np-instr" placeholder="${esc(t("这个项目是什么、怎么构建、有什么规矩…"))}"></textarea>`),
+      `<button class="btn sm ghost" data-close>${esc(t("取消"))}</button><button class="btn sm" id="np-ok">${esc(t("创建"))}</button>`);
+    const name = o.querySelector("#np-name");
+    const sync = () => {
+      const m = picked(o, "mode");
+      o.querySelector("#np-dir").classList.toggle("hidden", m !== "dir");
+      o.querySelector("#np-url").classList.toggle("hidden", m !== "git");
+      o.querySelector("#np-where").textContent = ws + "/" + (name.value.trim() || "…");
+    };
+    o.addEventListener("pick", sync); name.addEventListener("input", sync);
+    name.select();
+    o.querySelector("#np-ok").addEventListener("click", async (e) => {
+      const b = e.currentTarget, mode = picked(o, "mode");
+      const body = { name: name.value.trim(), mode, path: o.querySelector("#np-dir").value.trim(), url: o.querySelector("#np-url").value.trim(), instr: o.querySelector("#np-instr").value };
+      if (!body.name) return toast(t("项目名不能为空"), true);
+      b.disabled = true; b.textContent = mode === "git" ? t("正在克隆…") : t("创建中…");
+      try { const r = await jsend("/api/projects", body); o.remove(); await loadProjects(); toast(t("已创建项目")); openProject(r.project.id); }
+      catch (err) { b.disabled = false; b.textContent = t("创建"); toast(err.message, true); }
+    });
+  }
+  function deleteProjectDlg(p) {
+    const o = dlg(t("删除项目「{n}」", { n: p.name }), rcards("how", [
+      ["keep", t("只删项目，目录和对话都留着"), esc(t("对话回到「不在项目里」，目录还在 {p}", { p: p.path }))],
+      ["dir", t("连目录一起删"), esc(t("对话进回收站（可恢复），目录直接删掉，不可恢复"))],
+    ], "keep"), `<button class="btn sm ghost" data-close>${esc(t("取消"))}</button><button class="btn sm danger-fill" id="dp-ok">${esc(t("删除"))}</button>`);
+    o.querySelector("#dp-ok").addEventListener("click", async () => {
+      const withDir = picked(o, "how") === "dir";
+      if (withDir && !confirm(t("目录 {p} 会被直接删掉，不能恢复。确定？", { p: p.path }))) return;
+      try { await api(`/api/projects/${encodeURIComponent(p.id)}${withDir ? "?withDir=1" : ""}`, { method: "DELETE" }); }
+      catch (err) { return toast(err.message, true); }
+      o.remove(); PJ.cur = null; PJ.detail = null; await loadProjects(); loadSessions(); renderProjects(); toast(t("已删除项目"));
+    });
+  }
+
+  // ── 输入栏下的项目标签 + 新会话的项目选择 ──
+  function curProject() { return view.sessionId ? pjOfSession(view.sessionId) : pjById(view.projectId); }
+  function paintProjChip() {
+    const el = $("proj-chip"); if (!el) return;
+    const p = curProject();
+    el.classList.toggle("hidden", !p);
+    if (p) el.innerHTML = `<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}`;
+    document.querySelectorAll(".welcome-proj button").forEach((b) => b.classList.toggle("on", (b.dataset.pj || "") === (view.projectId || "")));
+  }
+  $("proj-chip")?.addEventListener("click", (e) => {
+    const p = curProject(); if (!p) return;
+    if (view.sessionId) return openProject(p.id);
+    popMenu(e.currentTarget, [{ label: t("不放进项目"), icon: view.projectId ? "" : PI.check, fn: () => { view.projectId = null; paintProjChip(); } },
+      ...PJ.list.map((x) => ({ label: x.name, icon: x.id === view.projectId ? PI.check : PI.folder, fn: () => { view.projectId = x.id; paintProjChip(); } }))], "up");
+  });
+  /** 欢迎页：放进哪个项目？（只有建过项目才出现） */
+  function welcomeProjHtml() {
+    if (!PJ.list.length) return "";
+    return `<div class="welcome-proj"><p class="welcome-ex-h">${esc(t("放进哪个项目？（在项目目录里跑，带上它的指令和默认设置）"))}</p>
+      <div class="welcome-ex">${[["", t("不放进项目")], ...PJ.list.map((p) => [p.id, p.name])].map(([id, n]) => `<button class="btn ghost sm${(view.projectId || "") === id ? " on" : ""}" data-pj="${esc(id)}">${id ? `<span class="pj-fold" style="color:${esc(pjById(id).color)}">${pi("folder")}</span>` : ""}${esc(n)}</button>`).join("")}</div></div>`;
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".welcome-proj button[data-pj]"); if (!b) return;
+    if (view.sessionId) return;
+    view.projectId = b.dataset.pj || null; paintProjChip();
+  });
+
+  // ── 会话：移到项目 ──
+  function moveToProject(id, anchor) {
+    const cur = pjOfSession(id);
+    const run = (srv.runs || []).some((r) => r.sessionId === id);
+    if (run) return toast(t("这个会话还在跑，等它停下再挪"), true);
+    popMenu(anchor, [{ head: t("移到项目（会话记录跟着挪到项目目录）") }, { label: t("不放进项目"), icon: cur ? "" : PI.check, fn: () => mv(null) },
+      ...PJ.list.map((p) => ({ label: p.name, icon: cur && cur.id === p.id ? PI.check : PI.folder, fn: () => mv(p.id) }))]);
+    async function mv(pid) {
+      try { await jsend(`/api/sessions/${encodeURIComponent(id)}/move`, { projectId: pid }); toast(pid ? t("已移到「{n}」", { n: pjById(pid).name }) : t("已移出项目")); loadSessions(); loadProjects(); }
+      catch (err) { toast(err.message, true); }
+    }
+  }
+
+  // ── 定时任务页 ──
+  async function renderSched() {
+    const box = $("tab-sched");
+    if (SC.cur) return renderTask(box);
+    setOv("");
+    if (!SC.data) { box.innerHTML = pageHead(esc(t("定时任务"))) + `<div class="muted">${esc(t("加载中…"))}</div>`; return loadSched(); }
+    const D = SC.data, tasks = D.tasks || [];
+    const on = tasks.filter((x) => x.on), nx = on.map((x) => x.nextAt).filter(Boolean).sort((a, b) => a - b)[0];
+    setPageSub("sched", t("{n} 个开着", { n: on.length }) + (nx ? " · " + t("下次 {w}", { w: whenText(nx) }) : ""));
+    const byId = (id) => tasks.find((x) => x.id === id);
+    const missed = (D.missed || []).map((m) => { const x = byId(m.taskId); return x ? `<div class="sc-missed">${pi("clock")}<div class="grow"><b>${esc(t("错过 1 次："))}</b>${esc(t("「{n}」{w}", { n: x.name, w: whenText(m.at) }))}</div>
+        <button class="btn sm" data-missed="run" data-id="${esc(m.taskId)}" data-at="${m.at}">${esc(t("现在补跑"))}</button><button class="btn sm ghost" data-missed="skip" data-id="${esc(m.taskId)}" data-at="${m.at}">${esc(t("算了"))}</button></div>` : ""; }).join("");
+    const list = tasks.filter((x) => SC.flt === "all" || (SC.flt === "on" ? x.on : !x.on));
+    const running = new Set(D.running || []);
+    const row = (x) => {
+      const p = x.projectId && pjById(x.projectId);
+      const last = running.has(x.id) ? `<span class="pill acc">${esc(t("在跑"))}</span>` : x.last ? `<span class="pill ${x.last.st === "ok" ? "ok" : x.last.st === "err" ? "err" : ""}">${x.last.st === "ok" ? pi("check") : x.last.st === "err" ? pi("x") : ""}${esc(whenText(x.last.at))}</span>` : `<span class="pill">${esc(t("没跑过"))}</span>`;
+      return `<div class="row pj-row" data-task="${esc(x.id)}"><div class="grow"><div class="t1">${esc(x.name)}</div>
+        <div class="muted pj-sub">${esc(freqText(x.freq))}${p ? " · " + pjMark(p) : ""} · ${esc(x.on ? (x.nextAt ? t("下次 {w}", { w: whenText(x.nextAt) }) : t("不会再跑")) : t("已关"))}</div></div>${last}${swHtml(x.on, `data-sw="${esc(x.id)}" aria-label="${esc(t("开关"))}"`)}</div>`;
+    };
+    const b = D.budget || {}, daily = b.daily || 0, today = b.today || 0, m = b.month || {};
+    const pct = daily ? Math.min(100, today / daily * 100) : 0;
+    box.innerHTML = pageHead(esc(t("定时任务")), `<button class="btn sm pj-primary" data-a="new">${pi("plus")}${esc(t("新建"))}</button>`) + missed +
+      `<div class="sc-note">${esc(t("到点在本机跑一次 Claude，在指定目录里；跑完按设置通知你，结果存成一个对话。没人在旁边：要问你的操作一律当拒绝。错过的不会偷偷补跑，按每个任务的设置来。"))}</div>` +
+      (tasks.length ? `<div class="seg-scroll">${segOf("flt", [["all", t("全部")], ["on", t("开着的")], ["off", t("关着的")]], SC.flt)}</div>` : "") +
+      `<div class="panel">${list.length ? list.map(row).join("") : emptyRow(tasks.length ? t("没有") : t("还没有定时任务。比如每天早上让它看一眼 CI。"))}</div>
+      <div class="pj-sec"><span class="grow">${esc(t("花费与额度"))}</span></div>
+      <div class="panel"><div class="row"><div class="grow"><b>${esc(daily ? t("今天 {a} / 每日上限 {b}", { a: costText(today), b: costText(daily) }) : t("今天 {a} · 不设每日上限", { a: costText(today) }))}</b>
+          ${daily ? `<div class="bar-mini"><i style="width:${pct.toFixed(1)}%"></i></div>` : ""}<div class="muted pj-sub">${esc(t("到上限后当天其余任务跳过，并通知你。第三方接口多数不回报花费，按 0 记。"))}</div></div><button class="btn sm ghost" data-a="budget">${esc(t("改上限"))}</button></div>
+        <div class="row"><div class="grow"><b>${esc(t("本月 {c} · 跑了 {n} 次", { c: costText(m.cost || 0), n: m.runs || 0 }))}</b><div class="muted pj-sub">${esc(t("成功 {a} · 失败 {b} · 跳过 {c}", { a: m.ok || 0, b: m.err || 0, c: m.skip || 0 }))}</div></div></div></div>
+      <div class="pj-sec"><span class="grow">${esc(t("叫醒"))}</span></div>
+      <div class="panel"><div class="row"><div class="grow"><b>${esc(t("App 活着就准点跑"))}</b><div class="muted pj-sub">${esc(t("计时在网关里：App 开着或在后台运行时到点就跑；被系统清掉、关机时会错过，下次打开按任务的「错过了」设置处理。"))}</div></div></div>
+        <div class="row"><div class="grow"><b>${esc(t("后台运行"))}</b><div class="muted pj-sub">${esc(t("锁屏后要能接着跑完，得允许后台运行、不被省电策略冻结"))}</div></div><button class="btn sm ghost" data-a="bgset">${esc(t("去设置"))}</button></div></div>`;
+  }
+  async function renderTask(box) {
+    const id = SC.cur;
+    let d = SC.detail && SC.detail.task.id === id ? SC.detail : null;
+    if (!d) {
+      box.innerHTML = pageHead("", "", true) + `<div class="muted">${esc(t("加载中…"))}</div>`;
+      try { d = SC.detail = await api("/api/sched/" + encodeURIComponent(id)); } catch (e) { SC.cur = null; return renderSched(); }
+      if (SC.cur !== id) return;
+    }
+    const x = d.task, p = x.projectId && pjById(x.projectId);
+    setOv(x.name); setPageSub("sched", freqText(x.freq));
+    const pauseNow = x.skipNext ? "skip" : x.pausedUntil > Date.now() ? "until" : "none";
+    const yes = (b) => b ? t("是") : t("否");
+    const kv = [
+      [t("在哪"), p ? pjMark(p) : esc(t("工作区"))],
+      [t("会话"), esc(x.session === "same" ? t("接着同一个对话（带着上次的上下文）") : t("每次新开一个对话"))],
+      [t("型号"), esc([x.model ? prettyModel(x.model) : t("跟随项目 / 全局"), x.effort].filter(Boolean).join(" · "))],
+      [t("权限"), esc((x.perm === "proj" ? t("可以改项目目录里的文件") : x.perm === "custom" ? t("只允许：{l}", { l: x.tools || "—" }) : t("只读")) + t("；要问你的操作一律当作拒绝"))],
+      [t("条件"), esc([x.cond && x.cond.wifi ? t("只在 Wi-Fi 下") : "", x.cond && x.cond.charging ? t("只在充电时") : "", x.cond && x.cond.battery ? t("电量低于 {p}% 跳过", { p: x.cond.battery }) : ""].filter(Boolean).join(" · ") || t("连着网就跑"))],
+      [t("撞上别的对话"), esc({ queue: t("排队等它跑完"), skip: t("跳过这次"), run: t("照跑（占一个并行名额）") }[x.busy] || "")],
+      [t("上限"), esc([x.limitCost ? costText(x.limitCost) : t("花费不限"), t("{n} 分钟", { n: x.limitMin || 15 })].join(" · "))],
+      [t("失败"), esc(x.retry ? t("重试 {n} 次", { n: x.retry }) : t("不重试"))],
+      [t("错过"), esc({ ask: t("下次打开问我"), run: t("开机后立刻补跑一次"), skip: t("跳过") }[x.missed] || "")],
+      [t("通知"), esc({ all: t("每次都通知"), fail: t("只在失败时"), found: t("只在有发现时（回复不是「{q}」）", { q: x.quiet || "—" }), none: t("不通知") }[x.notify] || "")],
+      [t("结果存成对话"), esc(yes(x.saveSession !== false))],
+      [t("有效期"), esc(x.freq && x.freq.kind === "once" ? t("跑完自动关") : x.until && x.until.kind === "date" ? t("到 {d} 为止", { d: x.until.date }) : x.until && x.until.kind === "count" ? t("跑满 {n} 次就关（已跑 {m} 次）", { n: x.until.count, m: x.runsDone || 0 }) : t("一直有效"))],
+    ];
+    const runs = (d.runs || []).filter((r) => SC.rflt === "all" || r.st !== "ok");
+    box.innerHTML = pageHead(esc(x.name), `<button class="btn sm ghost" data-a="edit">${pi("edit")}${esc(t("编辑"))}</button>${kebabBtn("tmenu")}`, true) +
+      `<div class="panel"><div class="row"><div class="grow"><b>${esc(x.on ? t("开着") : t("关着"))}</b><div class="muted pj-sub">${esc(freqText(x.freq))} · ${esc(x.on ? (x.nextAt ? t("下次 {w}", { w: whenText(x.nextAt) }) : t("不会再跑")) : t("不会自己跑"))}</div></div>${swHtml(x.on, `data-sw="${esc(x.id)}"`)}</div>
+        <div class="row"><div class="grow"><b>${esc(t("暂停一阵"))}</b><div class="muted pj-sub">${esc(pauseNow === "until" ? t("暂停到 {w}，到时间自动恢复", { w: whenText(x.pausedUntil) }) : t("到时间自动恢复"))}</div></div>
+          <select data-pause>${[["none", t("不暂停")], ["skip", t("跳过下一次")], ["1d", t("暂停 1 天")], ["1w", t("暂停 1 周")], ...(pauseNow === "until" ? [["until", t("暂停中")]] : [])].map(([k, l]) => `<option value="${k}"${k === pauseNow ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div></div>
+      <div class="pj-sec"><span class="grow">${esc(t("要做的事"))}</span></div><div class="panel sc-prompt">${esc(x.prompt)}</div>
+      <div class="pj-sec"><span class="grow">${esc(t("怎么跑"))}</span></div>
+      <div class="panel sc-kvp"><dl class="sc-kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl></div>
+      <div class="pj-sec"><span class="grow">${esc(t("运行记录"))}</span>${segOf("rflt", [["all", t("全部")], ["bad", t("没成的")]], SC.rflt)}<button class="btn sm" data-a="run"${d.running ? " disabled" : ""}>${pi("play")}${esc(d.running ? t("在跑…") : t("立刻跑一次"))}</button></div>
+      <div class="panel">${runs.length ? runs.map((r) => `<div class="row pj-row"${r.sid && !r.trial ? ` data-sid="${esc(r.sid)}"` : ""}>${stIcon(r.st)}<div class="grow"><div class="t1">${esc(r.msg || "—")}</div><div class="muted pj-sub">${esc([whenText(r.at), r.dur ? durText(r.dur) : "", r.st !== "skip" ? costText(r.cost || 0) : "", r.trial ? t("试跑") : "", r.attempt ? t("第 {n} 次重试", { n: r.attempt }) : ""].filter(Boolean).join(" · "))}</div></div>${r.sid ? pi("chev", "pj-go") : ""}</div>`).join("") : emptyRow(t("还没跑过"))}</div>`;
+  }
+  $("tab-sched").addEventListener("click", async (e) => {
+    if (e.target.closest("input.sw")) return;       // 开关走 change
+    const a = e.target.closest("[data-a]")?.dataset.a;
+    if (a === "back") { SC.cur = null; SC.detail = null; renderSched(); $("page-body").scrollTop = 0; return; }
+    if (a === "new") return taskDlg(null);
+    if (a === "bgset") return openPage("settings", "run");
+    if (a === "budget") {
+      const D = SC.data || {}, cur = (D.budget && D.budget.daily) || 0;
+      const v = prompt(t("每日上限（美元，0 = 不设）。定时任务当天累计花费到这里就跳过其余任务。"), String(cur));
+      if (v == null) return;
+      try { await jsend("/api/sched/budget", { daily: +v || 0 }, "PUT"); loadSched(); } catch (err) { toast(err.message, true); }
+      return;
+    }
+    const ms = e.target.closest("[data-missed]");
+    if (ms) { try { await jsend("/api/sched/missed", { taskId: ms.dataset.id, at: +ms.dataset.at, act: ms.dataset.missed }); toast(ms.dataset.missed === "run" ? t("已开始补跑") : t("这次就算了")); } catch (err) { toast(err.message, true); } return loadSched(); }
+    const sid = e.target.closest("[data-sid]"); if (sid) return openSession(sid.dataset.sid);
+    const tk = e.target.closest("[data-task]"); if (tk && !SC.cur) { SC.cur = tk.dataset.task; SC.detail = null; renderSched(); $("page-body").scrollTop = 0; return; }
+    const d = SC.detail; if (!d) return;
+    if (a === "edit") return taskDlg(d.task);
+    if (a === "run") return runTaskNow(d.task);
+    if (a === "tmenu") return taskMenu(d.task, e.target.closest("[data-a]"));
+  });
+  // 页面上的分段（筛选）不在弹层里：自己处理
+  $("tab-sched").addEventListener("click", (e) => {
+    const sb = e.target.closest(".pj-seg button"); if (!sb) return;
+    const name = sb.parentNode.dataset.name;
+    if (name === "flt") { SC.flt = sb.dataset.v; renderSched(); }
+    if (name === "rflt") { SC.rflt = sb.dataset.v; renderSched(); }
+  });
+  $("tab-sched").addEventListener("change", async (e) => {
+    const sw = e.target.closest("[data-sw]");
+    if (sw) {
+      try { const r = await jsend("/api/sched/" + encodeURIComponent(sw.dataset.sw), { on: sw.checked }, "PATCH"); toast(sw.checked ? t("已打开：{f}", { f: freqText(r.task.freq) }) : t("已关掉")); if (SC.detail) SC.detail.task = { ...SC.detail.task, ...r.task }; }
+      catch (err) { sw.checked = !sw.checked; toast(err.message, true); }
+      return loadSched();
+    }
+    const ps = e.target.closest("[data-pause]");
+    if (ps && SC.detail && ps.value !== "until") {
+      try { const r = await jsend(`/api/sched/${encodeURIComponent(SC.detail.task.id)}/pause`, { mode: ps.value }); SC.detail.task = { ...SC.detail.task, ...r.task }; renderSched(); loadSched(); }
+      catch (err) { toast(err.message, true); }
+    }
+  });
+  async function runTaskNow(x, trial) {
+    try { const r = await jsend(`/api/sched/${encodeURIComponent(x.id)}/run`, { trial: !!trial }); if (!r.ok) throw new Error(t("没能开始（条件不满足或今天的额度用完了，看运行记录）")); toast(trial ? t("试跑开始：不计入记录，结果在新对话里") : t("已开始：会话出现在「最近」里，跑完按设置通知")); }
+    catch (err) { toast(err.message, true); }
+    SC.detail = null; setTimeout(loadSched, 800); if (SC.cur) setTimeout(renderSched, 900);
+  }
+  function taskMenu(x, anchor) {
+    popMenu(anchor, [
+      { label: t("立刻跑一次"), icon: PI.play, fn: () => runTaskNow(x) },
+      { label: t("编辑"), icon: PI.edit, fn: () => taskDlg(x) },
+      { label: t("复制一份"), icon: PI.copy, fn: () => taskDlg({ ...x, id: null, name: x.name + " " + t("（副本）") }) },
+      { label: t("导出 JSON（复制到剪贴板）"), icon: SM.export, fn: () => { const { id, last, runs, nextAt, lastFiredAt, runsDone, created, lastSid, ...rest } = x; navigator.clipboard?.writeText(JSON.stringify(rest, null, 2)); toast(t("已复制")); } },
+      "hr",
+      { label: t("删除"), icon: PI.trash, danger: true, fn: async () => {
+        if (!confirm(t("删除定时任务「{n}」？运行记录留着，存下的对话不受影响。", { n: x.name }))) return;
+        try { await api("/api/sched/" + encodeURIComponent(x.id), { method: "DELETE" }); SC.cur = null; SC.detail = null; await loadSched(); renderSched(); toast(t("已删除")); } catch (err) { toast(err.message, true); }
+      } },
+    ]);
+  }
+
+  // ── 新建 / 编辑定时任务 ──
+  function taskDlg(x, preset) {
+    const edit = !!(x && x.id);
+    const v = Object.assign({ name: "", prompt: "", projectId: null, freq: { kind: "daily", time: "09:00" }, session: "new", perm: "ro", tools: "", model: "", effort: "",
+      cond: { wifi: false, charging: false, battery: 0 }, busy: "queue", limitCost: 0, limitMin: 15, retry: 0, missed: "ask", notify: "all", quiet: "", saveSession: true, carryLast: false, until: { kind: "ever" } }, x || {}, preset || {});
+    const f = Object.assign({ time: "09:00", days: [1], day: 1, hours: 2, from: "08:00", to: "23:00", date: new Date(Date.now() + 864e5).toISOString().slice(0, 10), cron: "30 8 * * 1-5" }, v.freq);
+    const opt = (val, l, cur) => `<option value="${esc(val)}"${String(val) === String(cur) ? " selected" : ""}>${esc(l)}</option>`;
+    const sel = (id, opts, cur) => `<select id="${id}">${opts.map(([a, b]) => opt(a, b, cur)).join("")}</select>`;
+    const line = (label, ctl, sub) => `<div class="row"><div class="grow"><b>${esc(label)}</b>${sub ? `<div class="muted pj-sub">${esc(sub)}</div>` : ""}</div>${ctl}</div>`;
+    const tm = (id, val) => `<input class="pj-field pj-time" type="time" id="${id}" value="${esc(val)}">`;
+    // 整句交给翻译，控件按占位符嵌进去（各语言语序不同）
+    const tpl = (str, ctl) => str.split(/(\{\w+\})/).map((x) => /^\{\w+\}$/.test(x) && ctl[x.slice(1, -1)] != null ? ctl[x.slice(1, -1)] : esc(x)).join("");
+    const FREQ = {
+      daily: () => `<div class="pj-inline">${tpl(t("每天 {time}"), { time: tm("f-time", f.time) })}</div>`,
+      weekly: () => `<div class="pj-days">${[1, 2, 3, 4, 5, 6, 7].map((d) => `<button type="button" data-day="${d}" class="${(f.days || []).includes(d) ? "on" : ""}">${esc(dayShort(d))}</button>`).join("")}</div><div class="pj-inline">${tpl(t("这几天的 {time}"), { time: tm("f-time", f.time) })}</div>`,
+      monthly: () => `<div class="pj-inline">${tpl(t("每月 {day} 的 {time}"), { day: sel("f-day", [...Array.from({ length: 28 }, (_, i) => [i + 1, t("{n} 号", { n: i + 1 })]), ["last", t("最后一天")]], f.day), time: tm("f-time", f.time) })}</div>`,
+      every: () => `<div class="pj-inline">${tpl(t("每隔 {h} 小时，只在 {a} 到 {b} 之间"), { h: sel("f-hours", [1, 2, 3, 4, 6, 8, 12].map((h) => [h, String(h)]), f.hours), a: tm("f-from", f.from), b: tm("f-to", f.to) })}</div>`,
+      once: () => `<div class="pj-inline"><input class="pj-field pj-date" type="date" id="f-date" value="${esc(f.date)}"> ${tm("f-time", f.time)}</div><div class="pj-hint">${esc(t("跑完自动关掉。"))}</div>`,
+      cron: () => `<div class="pj-inline"><input class="pj-field mono" id="f-cron" value="${esc(f.cron)}" spellcheck="false" style="width:13em"></div><div class="pj-hint">${esc(t("标准五段式 cron：分 时 日 月 周。"))}</div>`,
+    };
+    const models = MODELS.length ? MODELS : [];
+    const effs = PJ.effLevels && PJ.effLevels.length ? PJ.effLevels : ["low", "medium", "high", "xhigh", "max"];
+    const cost = [0, 0.1, 0.3, 0.5, 1, 2, 5];
+    const body = frow(t("名称"), `<input class="pj-field" id="t-name" value="${esc(v.name)}" placeholder="${esc(t("比如：每天早上看 CI"))}" autocomplete="off">`) +
+      frow(t("要 Claude 做什么"), `<textarea class="pj-field" id="t-prompt" placeholder="${esc(t("写清楚做什么、做完怎么交代。没人在旁边：它不能问你问题。"))}">${esc(v.prompt)}</textarea>`,
+        esc(t("想「没事就别吵我」：让它没发现时只回一句固定的话（比如「全绿」），下面的通知选「只在有发现时」。"))) +
+      frow(t("在哪跑"), sel("t-proj", [["", t("工作区")], ...PJ.list.map((p) => [p.id, t("项目：{n}", { n: p.name })])], v.projectId || "")) +
+      frow(t("什么时候"), `<div class="seg-scroll">${segOf("kind", [["daily", t("每天")], ["weekly", t("每周")], ["monthly", t("每月")], ["every", t("每隔几小时")], ["once", t("仅一次")], ["cron", t("自定义")]], f.kind)}</div><div class="pj-sub-form" id="t-freq">${FREQ[f.kind]()}</div><div class="pj-hint" id="t-next"></div>`) +
+      frow(t("会话"), rcards("session", [["new", t("每次新开一个对话"), esc(t("互不干扰；结果一次一个，好翻"))], ["same", t("接着同一个对话"), esc(t("带着上次的上下文（适合「和上次比有什么变化」）；越跑越长，会自动压缩"))]], v.session)) +
+      frow(t("权限"), rcards("perm", [["ro", t("只读"), esc(t("能看文件、跑查询类命令，不改任何东西（先这样试几天）"))], ["proj", t("可以改项目目录里的文件"), esc(t("目录外的写入、安装软件、删除等一律当作拒绝"))], ["custom", t("自己挑允许的工具"), esc(t("比如只允许 Bash(git *) 和 WebFetch；其余一律拒绝"))]], v.perm) +
+        `<input class="pj-field mono${v.perm === "custom" ? "" : " hidden"}" id="t-tools" value="${esc(v.tools || "")}" placeholder="Bash(git *),WebFetch,Read" spellcheck="false">`) +
+      `<button type="button" class="pj-col" data-col aria-expanded="false">${pi("chev")}${esc(t("更多设置"))}</button><div class="pj-colbody hidden">` +
+      frow(t("型号"), `<div class="panel">${line(t("型号"), sel("t-model", [["", t("跟随项目 / 全局")], ...models.map((m) => [m.id, prettyModel(m.id)]), ...(v.model && !models.some((m) => m.id === v.model) ? [[v.model, prettyModel(v.model)]] : [])], v.model || ""))}${line(t("思考强度"), sel("t-effort", [["", t("跟随项目 / 全局")], ...effs.map((e) => [e, e])], v.effort || ""))}</div>`) +
+      frow(t("条件（不满足就跳过这次，记一笔）"), `<div class="panel">${line(t("只在 Wi-Fi 下"), swHtml(v.cond.wifi, 'id="t-wifi"'))}${line(t("只在充电时"), swHtml(v.cond.charging, 'id="t-chg"'))}${line(t("电量低于多少就跳过"), sel("t-bat", [[0, t("不管")], [15, "15%"], [30, "30%"], [50, "50%"]], v.cond.battery || 0))}</div>`) +
+      frow(t("到点时有别的对话在跑"), segOf("busy", [["queue", t("排队等它跑完")], ["skip", t("跳过这次")], ["run", t("照跑")]], v.busy), esc(t("「照跑」占一个并行名额（设置 → 后台与并行）；排队最多等 30 分钟，等不到算跳过。"))) +
+      frow(t("限制"), `<div class="panel">${line(t("单次花费上限"), sel("t-cost", cost.map((c) => [c, c ? costText(c) : t("不限")]).concat(cost.includes(+v.limitCost) ? [] : [[v.limitCost, costText(v.limitCost)]]), v.limitCost || 0), t("超了就停，记成失败；第三方接口多数不回报花费"))}${line(t("单次时长上限"), sel("t-min", [5, 15, 30, 60, 90, 180].map((n) => [n, n < 60 ? t("{n} 分钟", { n }) : t("{n} 小时", { n: n / 60 })]), v.limitMin || 15))}${line(t("失败了"), sel("t-retry", [[0, t("不重试")], [1, t("重试 1 次")], [2, t("重试 2 次")]], v.retry || 0), t("网络断、接口报错、超上限"))}${line(t("错过了"), sel("t-missed", [["ask", t("下次打开问我")], ["run", t("开机后立刻补跑一次")], ["skip", t("跳过")]], v.missed), t("关机、被系统冻结、没网"))}</div>`) +
+      frow(t("跑完"), `<div class="panel">${line(t("通知"), sel("t-notify", [["all", t("每次都通知")], ["fail", t("只在失败时")], ["found", t("只在有发现时")], ["none", t("不通知")]], v.notify))}
+        <div class="row${v.notify === "found" ? "" : " hidden"}" id="t-quiet-row"><div class="grow"><b>${esc(t("没发现时它回的那句话"))}</b><div class="muted pj-sub">${esc(t("回复正好是这句就不通知"))}</div></div><input class="pj-field pj-quiet" id="t-quiet" value="${esc(v.quiet || "")}" placeholder="${esc(t("全绿"))}"></div>
+        ${line(t("结果存成对话"), swHtml(v.saveSession !== false, 'id="t-save"'), t("列表里带时钟标记；关掉就只记在运行记录里"))}${line(t("把上一次的结果带上"), swHtml(v.carryLast, 'id="t-carry"'), t("让它知道上次说了什么（只对「每次新开」有用）"))}</div>`) +
+      frow(t("有效期"), segOf("until", [["ever", t("一直有效")], ["date", t("到某天为止")], ["count", t("跑满几次就关")]], v.until.kind) +
+        `<div class="pj-inline" id="t-until"><input class="pj-field pj-date${v.until.kind === "date" ? "" : " hidden"}" type="date" id="t-udate" value="${esc(v.until.date || "")}"><input class="pj-field pj-num${v.until.kind === "count" ? "" : " hidden"}" type="number" min="1" id="t-ucount" value="${esc(v.until.count || 10)}"></div>`) +
+      `</div>`;
+    const o = dlg(edit ? t("编辑定时任务") : t("新建定时任务"), body,
+      `${edit ? `<button class="btn sm ghost pj-try" id="t-try">${esc(t("试跑一次"))}</button>` : ""}<button class="btn sm ghost" data-close>${esc(t("取消"))}</button><button class="btn sm" id="t-ok">${esc(t("保存"))}</button>`);
+    const q = (s) => o.querySelector(s);
+    const readFreq = () => {
+      const kind = picked(o, "kind"), r = { kind };
+      if (q("#f-time")) r.time = q("#f-time").value;
+      if (kind === "weekly") r.days = [...o.querySelectorAll(".pj-days .on")].map((b) => +b.dataset.day);
+      if (kind === "monthly") r.day = q("#f-day").value === "last" ? "last" : +q("#f-day").value;
+      if (kind === "every") { r.hours = +q("#f-hours").value; r.from = q("#f-from").value; r.to = q("#f-to").value; }
+      if (kind === "once") r.date = q("#f-date").value;
+      if (kind === "cron") r.cron = q("#f-cron").value.trim();
+      return r;
+    };
+    const keepFreq = () => { const r = readFreq(); Object.assign(f, r); };
+    let pvT = 0, pvN = 0;
+    const preview = () => { clearTimeout(pvT); pvT = setTimeout(async () => {
+      const n = ++pvN;
+      let r; try { r = await jsend("/api/sched/preview", { freq: readFreq() }); } catch { return; }
+      if (n !== pvN || !o.isConnected) return;
+      q("#t-next").textContent = r.error ? t("看不懂：{e}", { e: r.error }) : r.next.length ? t("下次 {a}", { a: whenText(r.next[0]) }) + (r.next[1] ? t("，再下次 {b}", { b: whenText(r.next[1]) }) : "") : t("算不出下一次（时间已经过了？）");
+    }, 250); };
+    preview();
+    o.addEventListener("pick", (e) => {
+      const name = e.target.dataset.name;
+      if (name === "kind") { const k = picked(o, "kind"); q("#t-freq").innerHTML = FREQ[k](); preview(); }
+      if (name === "perm") q("#t-tools").classList.toggle("hidden", picked(o, "perm") !== "custom");
+      if (name === "until") { const k = picked(o, "until"); q("#t-udate").classList.toggle("hidden", k !== "date"); q("#t-ucount").classList.toggle("hidden", k !== "count"); }
+    });
+    o.addEventListener("click", (e) => {
+      const d = e.target.closest("[data-day]"); if (d) { d.classList.toggle("on"); keepFreq(); preview(); }
+      const c = e.target.closest("[data-col]"); if (c) { const open = c.getAttribute("aria-expanded") !== "true"; c.setAttribute("aria-expanded", String(open)); q(".pj-colbody").classList.toggle("hidden", !open); }
+    });
+    o.addEventListener("input", (e) => { if (e.target.closest("#t-freq")) { keepFreq(); preview(); } });
+    o.addEventListener("change", (e) => {
+      if (e.target.closest("#t-freq")) { keepFreq(); preview(); }
+      if (e.target.id === "t-notify") q("#t-quiet-row").classList.toggle("hidden", e.target.value !== "found");
+    });
+    const collect = () => ({
+      name: q("#t-name").value.trim(), prompt: q("#t-prompt").value.trim(), projectId: q("#t-proj").value || null, freq: readFreq(),
+      session: picked(o, "session"), perm: picked(o, "perm"), tools: q("#t-tools").value.trim(), model: q("#t-model").value, effort: q("#t-effort").value,
+      cond: { wifi: q("#t-wifi").checked, charging: q("#t-chg").checked, battery: +q("#t-bat").value }, busy: picked(o, "busy"),
+      limitCost: +q("#t-cost").value, limitMin: +q("#t-min").value, retry: +q("#t-retry").value, missed: q("#t-missed").value,
+      notify: q("#t-notify").value, quiet: q("#t-quiet").value.trim(), saveSession: q("#t-save").checked, carryLast: q("#t-carry").checked,
+      until: { kind: picked(o, "until"), date: q("#t-udate").value, count: +q("#t-ucount").value },
+    });
+    q("#t-ok").addEventListener("click", async (e) => {
+      const b = collect();
+      if (!b.name || !b.prompt) return toast(t("名称和要做的事都要填"), true);
+      if (b.freq.kind === "weekly" && !b.freq.days.length) return toast(t("每周至少挑一天"), true);
+      if (b.notify === "found" && !b.quiet) return toast(t("「只在有发现时」要填没发现时它回的那句话"), true);
+      e.currentTarget.disabled = true;
+      try {
+        const r = edit ? await jsend("/api/sched/" + encodeURIComponent(x.id), b, "PATCH") : await jsend("/api/sched", b);
+        o.remove(); toast(edit ? t("已保存") : t("已创建：{f}", { f: freqText(r.task.freq) }));
+        SC.cur = r.task.id; SC.detail = null; await loadSched();
+        if (curPage !== "sched") openPage("sched"); else renderSched();
+      } catch (err) { e.currentTarget.disabled = false; toast(err.message, true); }
+    });
+    q("#t-try")?.addEventListener("click", () => runTaskNow(x, true));
+    if (!MODELS.length) api("/api/models").then((r) => { MODELS = r.models || []; PJ.effLevels = r.effortLevels || []; }).catch(() => {});
+    setTimeout(() => (edit ? null : q("#t-name").focus()), 50);
+  }
+
+  // 网关推来的：任务变了 / 跑完了的提醒（App 在前台时只弹一句，后台由外壳发系统通知）
+  let schedT = 0;
+  function onSchedEvent(ev) {
+    clearTimeout(schedT); schedT = setTimeout(() => { if (SC.detail && SC.cur) SC.detail = null; loadSched(); }, 400);
+    if (ev.type === "sched_note" && !document.hidden) {
+      const msg = ev.title + (ev.text ? "：" + ev.text.slice(0, 60) : "");
+      if (ev.sessionId) toastAct(msg, t("打开"), () => openSession(ev.sessionId)); else toast(msg, !ev.ok);
+      loadSessions();
+    }
+  }
+
   /** 打开整页：窄屏收起侧栏、盖住对话；宽屏侧栏照旧常驻，高亮当前项 */
   function openPage(name, cat) {
-    if (!PAGES[name]) name = "settings";
+    if (!PAGES[name] || name === "settings") return openSettings(cat);
     const prev = curPage;
     curPage = name;
     $("pages").classList.remove("hidden");
-    $("page-title").textContent = t(PAGES[name].name);
-    $("page-sub").textContent = "";
+    pageSub = "";
+    paintTitle();
     document.querySelectorAll("#page-body > .tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
     if (prev !== name) $("page-body").scrollTop = 0;    // 换页从顶上看起
     closeDrawer();
@@ -5866,13 +6848,52 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (SUBNAVS[name]) paintSubnav(name);
     if (name === "help") loadHelp();
     if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); }
-    if (name === "settings") { setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general"); paintSetCats(); setTimeout(paintSetCats, 900); loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); }
+    if (name !== "projects" && name !== "sched") pageTitleOv = "";
+    if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }
+    if (name === "sched") { renderSched(); loadSched(); loadProjects(); }
   }
   function closePage() {
     if (!curPage) return;
     curPage = null;
+    pageTitleOv = "";
     $("pages").classList.add("hidden");
     renderSideNav();
+    paintTitle();
+  }
+  // 顶栏标题：对话里是会话名 + 状态；整页时是页名 + 这一页的一句概况（照设计稿，整页自己不再有标题条）
+  var chatStatus = chatStatus || ["", ""], pageSub = pageSub || "";   // setStatus 可能在这行之前就调过
+  function paintTitle() {
+    const el = $("app-title");
+    if (curPage) { el.textContent = pageTitleOv || t(PAGES[curPage].name); subEl.textContent = pageSub; subEl.className = ""; }
+    else { el.textContent = view.title || t("新对话"); subEl.textContent = chatStatus[0]; subEl.className = chatStatus[1]; }
+  }
+  function setPageSub(name, text) { if (curPage !== name) return; pageSub = text || ""; subEl.textContent = pageSub; }
+
+  // ── 设置：弹窗。宽屏居中（左分类、右内容）；窄屏铺满，先列分类，点进去看一类，返回键回分类 ──
+  var setOpen = false;
+  function openSettings(cat) {
+    setOpen = true;
+    $("set-ov").classList.remove("hidden");
+    setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general");
+    loadQuota().catch(() => {});
+    paintSetCats(); setTimeout(paintSetCats, 900);
+    renderSideNav();
+    closeDrawer();
+    loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false);
+  }
+  function closeSettings() {
+    if (!setOpen) return;
+    setOpen = false;
+    $("set-ov").classList.add("hidden");
+    renderSideNav();
+  }
+  $("set-x").addEventListener("click", closeSettings);
+  $("set-back").addEventListener("click", () => setBack());
+  $("set-ov").addEventListener("click", (e) => { if (e.target.id === "set-ov") closeSettings(); });
+  // 返回：窄屏点进了某一类先回分类列表，否则关掉设置
+  function setBack() {
+    if (pagesNarrow() && setCatOpen) { setCatOpen = null; paintSetCats(); $("tab-settings").scrollTop = 0; return; }
+    closeSettings();
   }
   // ── 页内分区导航（扩展、能力）：吸顶一排，点了展开并滚到那一节，滚动时高亮当前节 ──
   // 节 = 页里直接挂着的 .ext-sec / .ext-sec-plain（没藏起来的）；名字取标题，计数取标题里的 .pill（「3 / 7 · 1.2 GB」只留前半）
@@ -5881,7 +6902,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function paintSubnav(name) {
     const nav = $(SUBNAVS[name]); if (!nav) return;
     nav.innerHTML = subnavSecs(name).map((x) => {
-      const nm = (x.querySelector(":scope > summary > span[data-i18n], :scope > summary > span.sec-name, :scope > .sec-title > span:last-child") || {}).textContent || "";
+      const nm = x.dataset.short ? t(x.dataset.short) : (x.querySelector(":scope > summary > span[data-i18n], :scope > summary > span.sec-name, :scope > .sec-title > span:last-child") || {}).textContent || "";
       const cnt = ((x.querySelector(":scope > summary .pill, :scope > .sec-title .pill") || {}).textContent || "").split("·")[0].trim();
       return `<button data-sec="${esc(x.dataset.sec)}">${esc(nm)}${cnt ? `<span class="cnt">${esc(cnt)}</span>` : ""}</button>`;
     }).join("");
@@ -5910,17 +6931,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (curPage === "help") spyHelp(); }, { passive: true });
 
-  // 返回：设置在窄屏点进了某一类时先回分类列表，否则回到对话
-  function pageBack() {
-    if (curPage === "settings" && pagesNarrow() && setCatOpen) { setCatOpen = null; paintSetCats(); $("page-body").scrollTop = 0; return; }
-    closePage();
-  }
-  $("page-back").addEventListener("click", pageBack);
 
   // ── 设置分类：宽屏左栏分类 + 右边一类的内容；窄屏先是分类列表，点进去才是内容 ──
   var setCatOpen = null;
-  const pagesNarrow = () => $("pages").offsetWidth < 680;
+  const pagesNarrow = () => innerWidth < 680;
   function paintSetCats() {
+    paintSetUsage();
     const narrow = pagesNarrow(), cats = [...document.querySelectorAll("#set-cats [data-cat]")];
     // 一类里一项都没显示（比如开发端没有通知 / 更新）就连分类一起藏起来
     const empty = (k) => ![...document.querySelectorAll(`.set-cat[data-cat="${k}"] > :is(.srow, .sblock)`)].some((f) => !f.classList.contains("hidden"));
@@ -5931,14 +6947,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     cats.forEach((b) => b.classList.toggle("on", b.dataset.cat === setCatOpen));
     document.querySelectorAll(".set-cat").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
     const cb = cats.find((b) => b.dataset.cat === setCatOpen);
-    $("page-sub").textContent = narrow && cb ? cb.textContent.trim() : "";
+    $("set-title").textContent = narrow && cb ? cb.textContent.trim() : t("设置");
+    $("set-ov").classList.toggle("narrow", narrow);
+    $("set-back").classList.toggle("hidden", !narrow);
+    $("set-x").classList.toggle("hidden", narrow);
   }
   $("set-cats").addEventListener("click", (e) => {
     const b = e.target.closest("[data-cat]"); if (!b) return;
     setCatOpen = b.dataset.cat; paintSetCats();
-    if (pagesNarrow()) $("page-body").scrollTop = 0;
+    if (pagesNarrow()) $("tab-settings").scrollTop = 0;
   });
-  new ResizeObserver(() => { if (curPage === "settings") paintSetCats(); }).observe($("pages"));
+  addEventListener("resize", () => { if (setOpen) paintSetCats(); });
   // 侧栏常驻项：打开侧栏、展开「更多」、进入勾选
   $("set-navpins").addEventListener("click", () => {
     localStorage.setItem("cc.navMore", "1"); navEdit = true;
@@ -5950,7 +6969,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const p = e.target.closest(".sl p.clamp"); if (p && !e.target.closest("a, code")) p.classList.toggle("open");
   });
   // 整页从顶栏下沿开始：顶栏高度随安全区 / 手机横屏压缩而变，量出来给 CSS
-  new ResizeObserver(() => document.documentElement.style.setProperty("--tbh", $("topbar").offsetHeight + "px")).observe($("topbar"));
+  new ResizeObserver(() => document.documentElement.style.setProperty("--tbh", $("topbar").offsetHeight + "px")).observe($("topbar"), { box: "border-box" });   // 外壳注入 --safe-t 只改内边距，内容盒不变；不看边框盒就漏掉，页面层会压住顶栏
 
 
   // ── 交流群与参与：帮助页最后一节、更新说明卡片底部共用。群号为主，二维码点开才显示 ──
@@ -6012,7 +7031,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (!rows.length || !rows.every((r) => HELP_TOPBAR[r[0]])) return;
       const g = document.createElement("div");
       g.className = "help-legend";
-      g.innerHTML = rows.map(([k, d]) => `<div><span class="hl-ico">${helpIcon(HELP_TOPBAR[k])}</span><span>${esc(d)}</span></div>`).join("");
+      // 「名称：说明」拆成两行（照稿：图标 + 粗体名 + 灰色说明）
+      g.innerHTML = rows.map(([k, d]) => { const m = d.match(/^(.+?)[：:]\s*(.*)$/) || [0, d, ""];
+        return `<div><span class="hl-ico">${helpIcon(HELP_TOPBAR[k])}</span><b>${esc(m[1])}</b><span>${esc(m[2])}</span></div>`; }).join("");
       (tb.closest(".md-table, .tbl-wrap") || tb).replaceWith(g);
     });
     // 正文里零散的 📎 换成附件图标
@@ -6037,7 +7058,31 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (cur) cur.appendChild(n);
       else if (n.nodeType === 1) n.classList.add("help-lead");
     }
-    if (secs[0]) secs[0].querySelector(":scope > ol")?.classList.add("help-steps");
+    const steps = secs[0] && secs[0].querySelector(":scope > ol");
+    if (steps) {
+      steps.classList.add("help-steps");
+      // 「**标题**：说明」→ 标题一行、说明一行
+      steps.querySelectorAll(":scope > li").forEach((li) => {
+        const b = li.firstElementChild;
+        if (!b || b.tagName !== "STRONG" || li.firstChild !== b) return;
+        const rest = li.innerHTML.slice(b.outerHTML.length).replace(/^\s*[：:]\s*/, "");
+        li.innerHTML = `<b>${b.innerHTML}</b><span>${rest}</span>`;
+      });
+    }
+    // 已知问题：「状态 · 厂商 · **标题**：说明」→ 可折叠卡片
+    const ISSUE_OK = ["修好了", "Fixed"], ISSUE_ALT = ["有绕法", "Workaround"];   // 帮助只有中英两份
+    body.querySelectorAll(".help-sec li").forEach((li) => {
+      const m = li.innerHTML.match(/^\s*([^·<]+?)\s*·\s*([^·<]+?)\s*·\s*<strong>(.+?)<\/strong>\s*[：:]\s*([\s\S]*)$/);
+      if (!m) return;
+      const ul = li.parentElement;
+      const st = m[1].trim(), cls = ISSUE_OK.includes(st) ? "ok" : ISSUE_ALT.includes(st) ? "acc" : "";
+      const d = document.createElement("details");
+      d.className = "help-issue";
+      d.innerHTML = `<summary><span class="pill ${cls}">${esc(st)}</span><b>${m[3]}</b><span class="tag">${esc(m[2].trim())}</span></summary><p>${m[4]}</p>`;
+      ul.before(d);
+      li.remove();
+      if (!ul.children.length) ul.remove();
+    });
     toc.innerHTML = secs.map((x) => `<button type="button" data-sec="${x.dataset.sec}">${esc(x.querySelector("h3").textContent)}</button>`).join("");
     $("help-q").value = "";
     spyHelp();
@@ -7321,7 +8366,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       rows = Math.max(5, Math.floor((box.clientHeight - 4) / (TERM.font * 1.2)));
     }
     let r;
-    try { r = await api("/api/term/new", { method: "POST", body: JSON.stringify({ cols, rows, ...(opts.login ? { login: opts.login } : {}) }) }); }
+    try { r = await api("/api/term/new", { method: "POST", body: JSON.stringify({ cols, rows, ...(opts.login ? { login: opts.login } : {}), ...(opts.cwd ? { cwd: opts.cwd } : {}) }) }); }
     catch (e) { toast(t("新建终端失败：{msg}", { msg: e.message }), true); return; }
     TERM.list.push(r.term);
     TERM.cur = r.term.id;
@@ -7470,12 +8515,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     ["←", "\x1b[D"], ["↓", "\x1b[B"], ["↑", "\x1b[A"], ["→", "\x1b[C"],
     ["Home", "\x1b[H"], ["End", "\x1b[F"], ["PgUp", "\x1b[5~"], ["PgDn", "\x1b[6~"],
     ["|", "|"], ["~", "~"], ["/", "/"], ["-", "-"],
-    ["📋", "paste"], ["A−", "font-"], ["A+", "font+"],
+    ["\u0000clip", "paste"], ["A−", "font-"], ["A+", "font+"],
   ];
 
   function renderTermKeys() {
     $("term-keys").innerHTML = TERM_KEYS.map(([l, k], i) =>
-      `<button class="tk ${(k === "ctrl" && TERM.ctrl) || (k === "alt" && TERM.alt) ? "on" : ""}" data-i="${i}">${esc(l)}</button>`).join("");
+      `<button class="tk ${(k === "ctrl" && TERM.ctrl) || (k === "alt" && TERM.alt) ? "on" : ""}" data-i="${i}">${l === "\u0000clip" ? uiI("clip") : esc(l)}</button>`).join("");
   }
 
   // 长按连发：退格、删除、方向键按住不放就一直发（先等 400ms，之后每 60ms 一下）
@@ -7645,7 +8690,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         return;
       }
       if (s.uiTag) uiTag = s.uiTag;
-      if (s.product) { const t = document.getElementById("app-title"); if (t && t.textContent !== s.product) { t.textContent = s.product; document.title = s.product; } }
+      if (s.product && document.title !== s.product) document.title = s.product;
       state.serverStatus = s;
       paintAcct(s);
       paintSafeMode(s.safeMode);
@@ -7771,6 +8816,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   window.__ccBack = () => {
     const open = (id) => !$(id).classList.contains("hidden");
     if (document.querySelector(".pop-menu")) { closeMenu(); return true; }
+    const ov = document.querySelector(".pj-ov"); if (ov) { ov.remove(); return true; }
     const steps = [
       ["lightbox", () => $("lightbox").classList.add("hidden")],
       ["term-textview", () => $("term-textview").classList.add("hidden")],
@@ -7781,8 +8827,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["files", closeFiles],
       ["popup", hidePopup],
       ["sheet", () => $("sheet").classList.add("hidden")],
+      ["set-ov", setBack],
       ["drawer", closeDrawer],
-      ["pages", pageBack],
+      // 项目 / 定时任务的详情：先回列表，再关整页
+      ["pages", () => { if (curPage === "projects" && PJ.cur) { PJ.cur = null; PJ.detail = null; renderProjects(); } else if (curPage === "sched" && SC.cur) { SC.cur = null; SC.detail = null; renderSched(); } else closePage(); }],
     ];
     // 宽屏：文件 / 查看器 / 终端并排停在右边，先关最近打开的那个，而不是按 z-index；常驻的侧栏不算浮层
     const L = window.CCLayout;

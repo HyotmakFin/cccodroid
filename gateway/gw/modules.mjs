@@ -95,7 +95,9 @@ function modList() {
       sha256: (m.gz && m.gz.sha256) || "",
     };
   });
-  return { supported: true, modular: true, snapshot: mj.snapshot, release: dk.base || "", items };
+  let free = null;   // 扩展页的存储条要「剩余」
+  try { const st = fs.statfsSync(path.dirname(PREFIX)); free = st.bavail * st.bsize; } catch {}
+  return { supported: true, modular: true, snapshot: mj.snapshot, release: dk.base || "", items, free };
 }
 
 // ── 装 ────────────────────────────────────────────────────────────────

@@ -39,7 +39,7 @@ export async function handleLocalCommand(name, arg, reply) {
     log(`⌘ /autocompact → ${n || "(默认)"}`);
     return reply(
       (n ? `自动压缩线已设为 **${fmt(n)} tokens**，下一轮起生效。` : "自动压缩线已恢复默认（由 claude 按模型窗口决定），下一轮起生效。") +
-      (n && win && n > win ? `\n\n> ⚠️ 比当前模型的窗口（${fmt(win)}）还大，实际会先撞上窗口上限。` : ""),
+      (n && win && n > win ? `\n\n> **注意**：比当前模型的窗口（${fmt(win)}）还大，实际会先撞上窗口上限。` : ""),
       "autocompact"
     );
   }
@@ -101,7 +101,7 @@ export async function handleLocalCommand(name, arg, reply) {
       `- 上下文窗口：${Math.round((target.context_window || 0) / 1024)}k\n` +
       `- 输入模态：${(target.input_modalities || []).join(" / ")}\n` +
       `- effort 档位：${(target.effort?.supported_levels || []).join(" / ")}\n` +
-      (effChanged ? `- ⚠️ 原 effort 该模型不支持，已调为 \`${eff}\`\n` : "") +
+      (effChanged ? `- **注意**：原 effort 该模型不支持，已调为 \`${eff}\`\n` : "") +
       `\n下一条消息生效。`,
       "model"
     );

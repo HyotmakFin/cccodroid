@@ -37,7 +37,7 @@
   function leftWidth() {
     if (!docked()) return 0;
     const saved = parseFloat(localStorage.getItem(LS_LW));
-    const w = saved > 0 ? saved : Math.min(420, Math.max(300, innerWidth * 0.28));
+    const w = saved > 0 ? saved : 286;     // 默认照设计稿
     return Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, innerWidth - MIN_CHAT, w)));
   }
 

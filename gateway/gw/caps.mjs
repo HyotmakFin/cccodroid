@@ -47,6 +47,18 @@ const COMMAND_META = {
 
 const FALLBACK_COMMANDS = Object.keys(COMMAND_META);
 
+/** 权限规则（能力页「工具」一节标允许 / 询问 / 拒绝用）：用户级 ~/.claude/settings.json 的 permissions + 本应用设置里的允许 / 禁用工具 */
+function permRules() {
+  const r = { allow: [], ask: [], deny: [] };
+  try {
+    const j = JSON.parse(fs.readFileSync((process.env.HOME || CFG.home) + "/.claude/settings.json", "utf8")).permissions || {};
+    for (const k of ["allow", "ask", "deny"]) if (Array.isArray(j[k])) r[k].push(...j[k].map(String));
+  } catch {}
+  if (Array.isArray(SETTINGS.allowedTools)) r.allow.push(...SETTINGS.allowedTools);
+  if (Array.isArray(SETTINGS.disallowedTools)) r.deny.push(...SETTINGS.disallowedTools);
+  return r;
+}
+
 function capabilities() {
   const init = LAST_INIT || {};
   const cmds = (init.slash_commands || FALLBACK_COMMANDS).filter((c) => !c.startsWith("__"));
@@ -65,6 +77,7 @@ function capabilities() {
     mcpServers: init.mcp_servers || [],
     outputStyle: init.output_style || "default",
     version: init.claude_code_version || "",
+    rules: permRules(),
     settings: SETTINGS,
   };
 }

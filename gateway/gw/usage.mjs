@@ -16,6 +16,7 @@ import { devPrivStatus } from "./devside.mjs";
 // 键是「1970 年起第几个小时」，前端按本地时区自己汇总成日 / 周 / 月（换时区也不乱）。
 // since：开始实时记录的时刻；它之前的小时可以从历史会话补算（imported 记补算时间，null = 还没补过）。
 // 桶：m 消息数、t 回复轮数、tl 工具调用、i 输入 token（含缓存）、o 输出 token、s 当时用过的会话、md 各模型的轮数；x = 补算来的
+//     （0.3.13 起）c 读缓存的输入 token（i 的一部分，算缓存命中）、mt 各模型的 token（i+o）、st 各会话的 token（i+o，用量页「最费的对话」）
 const USAGE_FILE = path.join(CFG.home, "ccapp-usage.json");
 const USAGE = { v: 1, since: Date.now(), imported: null, off: false, hours: {} };
 try { Object.assign(USAGE, JSON.parse(fs.readFileSync(USAGE_FILE, "utf8"))); } catch {}
@@ -28,16 +29,21 @@ function usageSave(now) {
   };
   if (now) write(); else usageTimer = setTimeout(write, 5000);
 }
-if (!fs.existsSync(USAGE_FILE)) usageSave(true);
+if (!fs.existsSync(USAGE_FILE)) { USAGE.v = 2; usageSave(true); }
+// 0.3.13 前的数据没有 c / mt / st：启动一会儿后从会话记录补上（不动别的数）
+else if ((USAGE.v || 1) < 2 && USAGE.imported) setTimeout(() => usageImport(true).catch((e) => log("使用统计补算失败：" + e.message)), 20000);
 function usageBucket(hours, h) {
-  return hours[h] || (hours[h] = { m: 0, t: 0, tl: 0, i: 0, o: 0, s: [], md: {} });
+  return hours[h] || (hours[h] = { m: 0, t: 0, tl: 0, i: 0, o: 0, c: 0, s: [], md: {}, mt: {}, st: {} });
 }
 export function usageAdd(d, sid, model, ts) {
   if (USAGE.off) return;
   const b = usageBucket(USAGE.hours, Math.floor((ts || Date.now()) / 3600e3));
-  for (const k of ["m", "t", "tl", "i", "o"]) if (d[k]) b[k] += d[k];
+  for (const k of ["m", "t", "tl", "i", "o", "c"]) if (d[k]) b[k] = (b[k] || 0) + d[k];
   if (sid && !b.s.includes(sid) && b.s.length < 200) b.s.push(sid);
   if (model && d.t) b.md[model] = (b.md[model] || 0) + d.t;
+  const tok = (d.i || 0) + (d.o || 0);
+  if (tok && model) (b.mt || (b.mt = {}))[model] = (b.mt[model] || 0) + tok;
+  if (tok && sid) (b.st || (b.st = {}))[sid] = (b.st[sid] || 0) + tok;
   usageSave();
 }
 // 用户自己打的字才算一次对话：斜杠命令、命令回显、系统注入的不算
@@ -50,9 +56,10 @@ const usageText = (content) => typeof content === "string" ? content
 
 /** 从 ~/.claude/projects 下的会话记录补算 since 之前的部分。分叉出来的会话会重复带上原会话的消息，按 uuid / message.id 去重 */
 let usageImporting = null;
-function usageImport() {
+function usageImport(extraOnly) {
   return usageImporting || (usageImporting = (async () => {
-    const until = Math.floor(USAGE.since / 3600e3);
+    // extraOnly：老数据（v1）补上 c / mt / st 三项，别的照旧（实时记下的、后来删掉的会话也还在）
+    const until = Math.floor((extraOnly ? Date.now() : USAGE.since) / 3600e3);
     const hours = {}, seenU = new Set(), seenTool = new Set(), msgs = new Map();
     let files = 0, prompts = 0;
     let dirs = [];
@@ -83,20 +90,30 @@ function usageImport() {
             if (pending) { pending.t++; pending.md[m.model] = (pending.md[m.model] || 0) + 1; pending = null; }
             for (const c of m.content || []) if (c && c.type === "tool_use" && c.id && !seenTool.has(c.id)) { seenTool.add(c.id); usageBucket(hours, h).tl++; }
             // 同一条回复流式拆成好几行、每行都带 usage：按 message.id 只算一次（取最后一行的）
-            if (m.id && m.usage) msgs.set(m.id, [h, m.usage]);
+            if (m.id && m.usage) msgs.set(m.id, [h, m.usage, m.model, e.sessionId]);
           }
         }
       }
     }
-    for (const [h, u] of msgs.values()) {
+    for (const [h, u, model, sid] of msgs.values()) {
       const b = usageBucket(hours, h);
-      b.i += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-      b.o += u.output_tokens || 0;
+      const i = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), o = u.output_tokens || 0;
+      b.i += i; b.o += o; b.c += u.cache_read_input_tokens || 0;
+      if (model) b.mt[model] = (b.mt[model] || 0) + i + o;
+      if (sid) b.st[sid] = (b.st[sid] || 0) + i + o;
+    }
+    if (extraOnly) {
+      for (const [k, b] of Object.entries(hours)) { const o = USAGE.hours[k]; if (o) { o.c = b.c; o.mt = b.mt; o.st = b.st; } }
+      USAGE.v = 2;
+      usageSave(true);
+      log("使用统计：给老数据补上了缓存命中、按型号与按会话的 token");
+      return { files, prompts: 0 };
     }
     // 换掉上次补算的（since 之前的实时数据——比如清空后重新补——也一并以这次为准）
     for (const k of Object.keys(USAGE.hours)) if (+k < until) delete USAGE.hours[k];
     for (const [k, b] of Object.entries(hours)) USAGE.hours[k] = { ...b, x: 1 };
     USAGE.imported = Date.now();
+    USAGE.v = 2;
     usageSave(true);
     log(`使用统计：从 ${files} 个会话记录补算了 ${prompts} 条消息`);
     return { files, prompts };
@@ -336,6 +353,17 @@ export async function routeUsage(req, res, u, p) {
       fs.mkdirSync(dir, { recursive: true });
       const file = path.join(dir, name);
       fs.writeFileSync(file, data);
+      return sendJson(res, 200, { ok: true, file });
+    }
+    // 导出 CSV：前端按本地时区汇总好的逐日表，落到同一个导出目录
+    if (op === "csv") {
+      const name = String(b.name || ""), text = String(b.text || "");
+      if (!/^[\w.-]+\.csv$/.test(name) || !text || text.length > 4e6) return sendJson(res, 400, { error: "bad csv" });
+      const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
+      const dir = path.join(base, "exports");
+      fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, "\ufeff" + text);   // 带 BOM，表格软件才认得出中文
       return sendJson(res, 200, { ok: true, file });
     }
     return sendJson(res, 404, { error: "unknown op" });

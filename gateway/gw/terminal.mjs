@@ -87,7 +87,7 @@ function termInfo(t) {
   return { id: t.id, title: t.title, cols: t.cols, rows: t.rows, created: t.created, alive: t.alive, code: t.code };
 }
 
-function termNew({ cols, rows, login } = {}) {
+function termNew({ cols, rows, login, cwd: want } = {}) {
   for (const [id, t] of TERMS) if (!t.alive) TERMS.delete(id);   // 已退出的不占名额
   if (TERMS.size >= TERM_MAX) return { error: `too many terminals (${TERM_MAX})` };
   const pc = ptyCommand();
@@ -95,7 +95,9 @@ function termNew({ cols, rows, login } = {}) {
   cols = Math.max(20, Math.min(500, cols | 0 || 80));
   rows = Math.max(5, Math.min(300, rows | 0 || 24));
   const shell = ensureShell();
-  let cwd = CFG.workspace;
+  // want：从项目页「在终端打开」带来的目录；不是目录就照旧落在工作区
+  let cwd = typeof want === "string" && want ? want : CFG.workspace;
+  try { if (!fs.statSync(cwd).isDirectory()) cwd = CFG.workspace; } catch { cwd = CFG.workspace; }
   try { if (!fs.statSync(cwd).isDirectory()) cwd = CFG.home; } catch { cwd = CFG.home; }
   // login：给手动登录用的终端。环境和账户登录一样清掉第三方厂商的地址 / 密钥 / 模型，
   // 开好后替用户敲下 claude auth login —— 授权码由用户贴给 claude 自己的提示，网关只当字节通道

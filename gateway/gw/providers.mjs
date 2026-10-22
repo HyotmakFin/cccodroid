@@ -353,7 +353,7 @@ export function noteTokens(id, u) {
 
 // 汇率：界面货币跟语言走（中文显示人民币，其余显示美元），账户币种不同时按汇率换算并标「≈」。半天取一次
 let FX = null;
-async function usdCny() {
+export async function usdCny() {
   if (FX && Date.now() - FX.at < 12 * 3600e3) return FX;
   try {
     const j = await fetchJson("https://open.er-api.com/v6/latest/USD", {});
