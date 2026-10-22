@@ -1206,9 +1206,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <button data-mode="${k}" class="${k === state.permissionMode ? "cur" : ""}${k === "bypassPermissions" ? " danger" : ""}">
         <b>${modeLabel(k)}</b><small>${desc[k]}</small></button>`).join("");
     document.body.appendChild(m);
-    const r = permEl.getBoundingClientRect();
+    const r = permEl.getBoundingClientRect(), col = colRect(), mw = Math.min(m.offsetWidth, col.width - 16);
+    m.style.maxWidth = (col.width - 16) + "px";
     m.style.bottom = (innerHeight - r.top + 6) + "px";
-    m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px";
+    // 标签在右半边就右对齐；不出对话这一栏（右边可能是浏览器窗格）
+    const x0 = r.left + r.width / 2 > col.left + col.width / 2 ? r.right - mw : r.left;
+    m.style.left = Math.max(col.left + 8, Math.min(x0, col.right - mw - 8)) + "px";
     m.addEventListener("click", async (ev) => {
       const b = ev.target.closest("button");
       if (!b) return;
@@ -2282,7 +2285,22 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     popupHead.innerHTML = `<span>${esc(head)}</span><span>${t("{n} 项", { n: items.length })}</span>`;
     renderPopup();
     popupEl.classList.remove("hidden");
+    placePopup(); requestAnimationFrame(placePopup);   // 首屏布局刚切换时下一帧再量一次
   }
+  // 对话这一栏的左右边界：右侧窗格（浏览器是原生视图，永远在页面上面）和常驻侧栏都不算，浮层只能在这里面摆
+  function colRect() {
+    const r = $("chat").getBoundingClientRect();
+    return r.width > 0 ? { left: r.left, right: r.right, width: r.width } : { left: 0, right: innerWidth, width: innerWidth };
+  }
+  // 补全浮层贴着输入框上沿、和输入框一样宽 —— 首屏输入框在屏幕中间，平常在底部，都跟着走
+  function placePopup() {
+    const c = $("composer-inner").getBoundingClientRect(), col = colRect();
+    if (!c.width) return;
+    const left = Math.max(col.left + 8, c.left), right = Math.min(col.right - 8, c.right);
+    Object.assign(popupEl.style, { left: left + "px", right: "auto", width: (right - left) + "px",
+      bottom: (innerHeight - c.top + 8) + "px", maxHeight: Math.max(160, Math.min(innerHeight * 0.46, c.top - $("chat").getBoundingClientRect().top - 8)) + "px" });   // 不盖顶栏
+  }
+  addEventListener("resize", () => { if (!popupEl.classList.contains("hidden")) placePopup(); });
 
   function renderPopup() {
     const { items, sel } = state.popup;
@@ -5685,15 +5703,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     document.body.appendChild(m);
     const close = () => { m.remove(); removeEventListener("resize", close); };
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
-    // 宽屏：卡片宽 420、最高 宽×φ，左边对齐输入栏下的型号按钮，底边落在按钮上方 8px
-    if (innerWidth >= 700) {
+    // 宽屏：卡片宽 420、最高 宽×φ，对齐输入栏下的型号按钮，底边落在按钮上方 8px；都只在对话这一栏里摆
+    const col = colRect();
+    if (col.width < 560) { m.style.left = col.left + "px"; m.style.right = (innerWidth - col.right) + "px"; }
+    if (col.width >= 560) {
       m.classList.add("pop");
       // 首屏里 #model-chip 是 display:contents，自己没有盒子，量里面第一片
       const p = m.querySelector(".mp-panel"), ar = (modelEl.getBoundingClientRect().height ? modelEl : modelEl.firstElementChild || modelEl).getBoundingClientRect();
-      const w = Math.min(420, innerWidth - 32);
+      const w = Math.min(420, col.width - 32);
       p.style.width = w + "px";
-      const x0 = ar.left + ar.width / 2 > innerWidth / 2 ? ar.right - w : ar.left;   // 按钮在右半边就右对齐
-      p.style.left = Math.max(16, Math.min(x0, innerWidth - w - 16)) + "px";
+      const x0 = ar.left + ar.width / 2 > col.left + col.width / 2 ? ar.right - w : ar.left;   // 按钮在右半边就右对齐
+      p.style.left = Math.max(col.left + 16, Math.min(x0, col.right - w - 16)) + "px";
       p.style.bottom = (innerHeight - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
       addEventListener("resize", close);
