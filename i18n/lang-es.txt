@@ -1916,3 +1916,20 @@
 1916	Pequeño
 1917	Mediano
 1918	Grande
+1919	Batería baja. Primero algo rápido
+1920	Enchufado. El trabajo grande puede ir tranquilo
+1921	Noche cerrada y la pantalla encendida
+1922	¿Aún a estas horas? Seguro que es buena idea
+1923	Madrugaste. Empecemos por algo fácil
+1924	Lunes. Empieza por algo pequeño
+1925	Buenos días. Tu taller de bolsillo está listo
+1926	Cabeza despejada. ¿Vamos con lo difícil?
+1927	¿Ni en la hora de comer paras?
+1928	¿Ya comiste? Hagamos algo de paso
+1929	Buenas tardes. ¿Retomamos donde lo dejaste?
+1930	Prepárate un té. Sin prisa
+1931	Viernes por la tarde. Hagamos algo divertido
+1932	Atardece. ¿Cerramos algo o empezamos otra cosa?
+1933	Buenas noches. Buen momento para escribir
+1934	Noche tranquila. Di lo que se te ocurra
+1935	Fin de semana. Haz algo para ti

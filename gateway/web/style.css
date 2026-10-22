@@ -2318,18 +2318,19 @@ html:not(.dock-l) .drawer-panel{border-start-end-radius:var(--g4);border-end-end
    界面：Inter（西文）+ 思源黑体（中文，改名 CC Hei）；回复正文：Spectral（西文）+ 思源宋体（CC Song）。
    西文字体只含拉丁字符，中文自然落到后一个字体上；都是 OFL，授权见 fonts/OFL-*.txt。
    设置 → 通用里可以改成跟随系统 / 回复用无衬线，正文字号分小中大（theme.js 写 html 的 data-* 属性） */
-@font-face{font-family:"CC Inter";src:url("/fonts/inter-400.woff2") format("woff2");font-weight:400;font-display:swap}
-@font-face{font-family:"CC Inter";src:url("/fonts/inter-500.woff2") format("woff2");font-weight:500;font-display:swap}
-@font-face{font-family:"CC Inter";src:url("/fonts/inter-700.woff2") format("woff2");font-weight:600 700;font-display:swap}
-@font-face{font-family:"CC Hei";src:url("/fonts/hei-400.woff2") format("woff2");font-weight:400;font-display:swap}
-@font-face{font-family:"CC Hei";src:url("/fonts/hei-500.woff2") format("woff2");font-weight:500;font-display:swap}
-@font-face{font-family:"CC Hei";src:url("/fonts/hei-700.woff2") format("woff2");font-weight:600 700;font-display:swap}
-@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400.woff2") format("woff2");font-weight:400;font-display:swap}
-@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400i.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
-@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-500.woff2") format("woff2");font-weight:500;font-display:swap}
-@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-600.woff2") format("woff2");font-weight:600 700;font-display:swap}
-@font-face{font-family:"CC Song";src:url("/fonts/song-400.woff2") format("woff2");font-weight:400 500;font-display:swap}
-@font-face{font-family:"CC Song";src:url("/fonts/song-600.woff2") format("woff2");font-weight:600 700;font-display:swap}
+/* 粗细：600（界面标题、导航、按钮）一律落到 Medium，700 起才是粗体（正文强调）；自带字体整体缩一点，布局里的字号不用动 */
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-400.woff2") format("woff2");font-weight:300 450;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-500.woff2") format("woff2");font-weight:451 650;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Inter";src:url("/fonts/inter-700.woff2") format("woff2");font-weight:651 900;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-400.woff2") format("woff2");font-weight:300 450;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-500.woff2") format("woff2");font-weight:451 650;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Hei";src:url("/fonts/hei-700.woff2") format("woff2");font-weight:651 900;size-adjust:93%;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400.woff2") format("woff2");font-weight:300 450;size-adjust:96%;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-400i.woff2") format("woff2");font-weight:300 450;font-style:italic;size-adjust:96%;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-500.woff2") format("woff2");font-weight:451 550;size-adjust:96%;font-display:swap}
+@font-face{font-family:"CC Spectral";src:url("/fonts/spectral-600.woff2") format("woff2");font-weight:551 900;size-adjust:96%;font-display:swap}
+@font-face{font-family:"CC Song";src:url("/fonts/song-400.woff2") format("woff2");font-weight:300 550;size-adjust:96%;font-display:swap}
+@font-face{font-family:"CC Song";src:url("/fonts/song-600.woff2") format("woff2");font-weight:551 900;size-adjust:96%;font-display:swap}
 :root{
   --font-sans:"CC Inter","CC Hei",sans-serif;
   --font-serif:"CC Spectral","CC Song",serif;
@@ -2366,8 +2367,8 @@ html.wel #wl-below{display:block;flex:1 1 0;min-height:0;overflow:auto;padding:v
 html.wel .msg.welcome{width:100%;margin-bottom:var(--g4)}
 html.wel .msg.welcome .who,html.wel .msg.welcome + .msg-acts,html.wel .msg.welcome .msg-acts{display:none}
 .wl-hero{display:flex;align-items:center;justify-content:center;gap:var(--g3);text-align:center;flex-wrap:wrap}
-.wl-mark{width:40px;height:40px;flex:none;fill:none;stroke:var(--accent);stroke-width:3.4;stroke-linecap:round}
-.wl-greet{margin:0;font-family:var(--font-serif);font-weight:400;font-size:clamp(26px,3.4vw,38px);line-height:1.3;letter-spacing:.01em;color:var(--fg)}
+.wl-mark{width:52px;height:52px;flex:none;background:var(--accent);-webkit-mask:url(mark.png) center/contain no-repeat;mask:url(mark.png) center/contain no-repeat}
+.wl-greet{margin:0;font-family:var(--font-serif);font-weight:400;font-size:clamp(23px,2.8vw,31px);line-height:1.3;letter-spacing:.01em;color:var(--fg)}
 html.wel .msg.welcome .setup-guide{text-align:start;margin-top:var(--g4)}
 /* 首屏的输入框更舒展：两行高，像一张卡片 */
 html.wel #composer-inner{border-radius:20px;padding:var(--g2) var(--g2) var(--g2) var(--g3);box-shadow:0 2px 14px var(--shadow)}
@@ -2388,7 +2389,7 @@ html.wel #hint-row #model-chip::before{display:none !important}
 /* 手机横屏太矮：不居中，照常贴底 */
 html.short.wel #chat{flex:1 1 auto}
 html.short.wel #wl-below{display:none}
-.msg.welcome .bubble .wl-greet{font-size:clamp(26px,3.4vw,38px);margin:0;font-weight:400;line-height:1.3}
+html .msg.welcome.bot .bubble h1.wl-greet{font-size:clamp(23px,2.8vw,31px);margin:0;font-weight:400;line-height:1.3}
 /* 首屏输入框：第一行整行写字，第二行左边 ＋、右边发送（同网页版） */
 html.wel #composer-inner{flex-wrap:wrap;align-items:center;row-gap:2px}
 html.wel #input{order:-1;flex:1 1 100%;padding:6px var(--g1) 4px}
@@ -2404,3 +2405,7 @@ html.wel #hint-row #proj-chip:not(.hidden) ~ #model-chip > .chip:first-child{mar
 .u-ref.img img{display:block;width:89px;height:89px;object-fit:cover;background:var(--bg3)}
 .u-refs:has(.u-ref.img:nth-child(4)) .u-ref.img img{width:68px;height:68px}
 .wl-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* 侧栏底部账户行上弹的菜单：宽度跟着侧栏走，长的接口名截断 */
+.pop-menu{box-sizing:border-box}
+.pop-menu.up{min-width:0;max-width:none}
+.pop-menu.up .pm-head{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

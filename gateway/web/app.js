@@ -1712,22 +1712,24 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 新会话首屏（照网页版的布局）：问候语居中，输入框紧跟在下面，示例和使用提示在输入框下方；
   //    输入框下面那行左边是项目、右边是型号与权限。发出第一条（或会话里出现任何别的东西）就退回平常的布局。
   //    html.wel 只看 #hist / #live 的直接子节点，流式输出不会触发
-  const WL_MARK = (() => {
-    let d = "";
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2 - Math.PI / 2, r1 = 6.5, r2 = i % 2 ? 17 : 21;
-      const f = (n) => (24 + n).toFixed(2);
-      d += `M${f(Math.cos(a) * r1)} ${f(Math.sin(a) * r1)}L${f(Math.cos(a) * r2)} ${f(Math.sin(a) * r2)}`;
-    }
-    return `<svg class="wl-mark" viewBox="0 0 48 48" aria-hidden="true"><path d="${d}"/></svg>`;
-  })();
+  // 标识：应用图标抠出来的线稿（mark.png 只当遮罩用），颜色跟主题走
+  const WL_MARK = '<span class="wl-mark" aria-hidden="true"></span>';
+  // 问候语看此刻的处境说话：几点、星期几、电量；同一时段有几句，每次随手挑一句
+  let wlBat = null;
+  try { navigator.getBattery && navigator.getBattery().then((b) => { wlBat = b; }).catch(() => {}); } catch {}
   function greeting() {
-    const h = new Date().getHours();
-    return h >= 23 || h < 5 ? t("夜深了，灵感正好")
-      : h < 11 ? t("早上好，今天做点什么？")
-      : h < 14 ? t("中午好，想做点什么？")
-      : h < 18 ? t("下午好，接着干活吧")
-      : t("晚上好，今天还有什么要做？");
+    const d = new Date(), h = d.getHours(), wd = d.getDay(), pool = [];
+    if (wlBat && !wlBat.charging && wlBat.level <= 0.2) pool.push(t("电量见底了，挑件快的先做"));
+    else if (wlBat && wlBat.charging && (h >= 22 || h < 6)) pool.push(t("插着电呢，大活可以放心跑"));
+    if (h >= 0 && h < 5) pool.push(t("夜深了，屏幕还亮着"), t("这个点还在折腾，必有好点子"));
+    else if (h < 8) pool.push(t("起得真早，先做点轻松的"));
+    else if (h < 11) pool.push(wd === 1 ? t("周一，从一件小事开始") : t("上午好，口袋里的工作台已就绪"), t("趁脑子清楚，啃块硬骨头？"));
+    else if (h < 14) pool.push(t("午休也闲不住？"), t("吃过饭了吗？顺手做点什么"));
+    else if (h < 18) pool.push(t("下午好，接着上回的思路？"), t("泡杯茶，慢慢来"));
+    else if (h < 21) pool.push(wd === 5 ? t("周五傍晚，做点好玩的") : t("傍晚了，收个尾还是开新坑？"));
+    else pool.push(t("晚上好，适合慢慢写点东西"), t("夜里安静，想到什么就说"));
+    if ((wd === 0 || wd === 6) && h >= 8 && h < 22) pool.push(t("周末，做点自己想做的"));
+    return pool[Math.floor(Math.random() * pool.length)];
   }
   function showWelcome() {
     const b = mkMsg("bot", null, histEl);
@@ -5686,10 +5688,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 宽屏：卡片宽 420、最高 宽×φ，左边对齐输入栏下的型号按钮，底边落在按钮上方 8px
     if (innerWidth >= 700) {
       m.classList.add("pop");
-      const p = m.querySelector(".mp-panel"), ar = modelEl.getBoundingClientRect();
+      // 首屏里 #model-chip 是 display:contents，自己没有盒子，量里面第一片
+      const p = m.querySelector(".mp-panel"), ar = (modelEl.getBoundingClientRect().height ? modelEl : modelEl.firstElementChild || modelEl).getBoundingClientRect();
       const w = Math.min(420, innerWidth - 32);
       p.style.width = w + "px";
-      p.style.left = Math.max(16, Math.min(ar.left, innerWidth - w - 16)) + "px";
+      const x0 = ar.left + ar.width / 2 > innerWidth / 2 ? ar.right - w : ar.left;   // 按钮在右半边就右对齐
+      p.style.left = Math.max(16, Math.min(x0, innerWidth - w - 16)) + "px";
       p.style.bottom = (innerHeight - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
       addEventListener("resize", close);
@@ -6162,22 +6166,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
   function closeMenu() { document.querySelectorAll(".pop-menu").forEach((m) => m.remove()); }
   function popMenu(anchor, items, place) {
+    // 同一个按钮再点一次 = 收起（侧栏账户、项目标签、⋯ 这些都走这里）
+    const open = document.querySelector(".pop-menu");
+    if (open && anchor && open._anchor === anchor) { closeMenu(); return null; }
     closeMenu();
     const m = document.createElement("div");
     m.className = "pop-menu";
+    m._anchor = anchor;
     m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head">${esc(it.head)}</div>`
       : `<button data-i="${i}" class="${it.danger ? "danger" : ""}">${it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
     document.body.appendChild(m);
     const ar = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
     let x, y;
-    if (place === "up") { x = ar.left; y = ar.top - mh - 6; m.style.minWidth = ar.width + "px"; }
+    if (place === "up") { m.classList.add("up"); x = ar.left + 8; m.style.width = (ar.width - 16) + "px"; y = ar.top - m.offsetHeight - 6; }   // 上弹的收在按钮里面，不溢出侧栏
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
     m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; closeMenu(); items[+b.dataset.i].fn(); });
-    // 点菜单外面收起；点的是这个下拉框本身就留给 click 去切换（否则这里先关、click 又开，永远收不回去）
+    // 点菜单外面收起；点的是弹出它的那个按钮就留给 click 去切换（否则这里先关、click 又开，永远收不回去）
     setTimeout(() => addEventListener("pointerdown", function off(e) {
       if (!m.isConnected) return removeEventListener("pointerdown", off, true);
-      if (m.contains(e.target) || sel.contains(e.target)) return;
+      if (m.contains(e.target) || (anchor && anchor.contains && anchor.contains(e.target))) return;
       closeMenu(); removeEventListener("pointerdown", off, true);
     }, true));
     return m;

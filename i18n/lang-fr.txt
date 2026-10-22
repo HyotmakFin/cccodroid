@@ -1916,3 +1916,20 @@
 1916	Petite
 1917	Moyenne
 1918	Grande
+1919	Batterie faible. Commençons par un truc rapide
+1920	Branché. Le gros chantier peut tourner
+1921	Tard dans la nuit, l'écran encore allumé
+1922	Encore là à cette heure ? L'idée doit être bonne
+1923	Debout tôt. Commençons en douceur
+1924	Lundi. Une petite chose pour commencer
+1925	Bonjour. Votre atelier de poche est prêt
+1926	L'esprit clair. On attaque le plus dur ?
+1927	Même à la pause déjeuner ?
+1928	Déjà mangé ? Un petit quelque chose en passant
+1929	Bon après-midi. On reprend le fil ?
+1930	Un thé, et on prend son temps
+1931	Vendredi soir. Faisons un truc amusant
+1932	Fin de journée. On boucle, ou on démarre autre chose ?
+1933	Bonsoir. Le bon moment pour écrire
+1934	Nuit calme. Dites ce qui vous vient
+1935	Week-end. Faites ce qui vous plaît
