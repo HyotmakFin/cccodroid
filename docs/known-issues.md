@@ -2,7 +2,7 @@
 
 [中文](known-issues.zh-CN.md)
 
-These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, tap **Settings → Troubleshooting → Report on GitHub** in the app (device, Android version and self-test results are filled in) and say what you were doing; attach the zip from **I'm stuck · bundle diagnostics** if logs are needed. Problems tied to a particular phone or vendor system are covered in section 5 below.
+These are problems whose root cause we have **not found and cannot fully rule out**. You are unlikely to hit them in normal use, but we would rather not hide them. If you do, tap **Settings → Troubleshooting → Report on GitHub** in the app (device, Android version and self-test results are filled in) and say what you were doing; attach the zip from **I'm stuck · bundle diagnostics** if logs are needed. Problems tied to a particular phone or vendor system are covered in section 6 below.
 
 ## 1. ~~The keyboard stops typing into the message box (the mystery mobile bug)~~ Fixed in 0.3.7
 
@@ -34,7 +34,14 @@ The wide layout does not avoid the hinge precisely, because the build chain lack
 
 When the app is cold-started without the launcher icon animation (adb, a notification, another app), Android 12+ first draws a system splash screen. Since 0.2.0-rc1 it uses the setup screen colour and no icon, but on a Red Magic 9 Pro a translucent grey scrim still covers the page for about half a second as the window opens. It is probably the ROM's own window animation; not confirmed. Launching from the home screen icon does not show it.
 
-## 5. Phone makers and chips (only two devices tested)
+## 5. The top bar sometimes shows "UI script error: Script error." (investigating)
+
+- **Symptom**: the subtitle in the top bar turns into "UI script error: Script error." with no file name and no reason. The app usually keeps working.
+- **Why that is all it says**: the Android shell calls into the page in a few places: the back key, the callback after saving a file, the system switching between light and dark, opening a session from a notification, and content shared in from other apps. When an error escapes from code injected this way, WebView hides the details for security reasons and leaves only this line, so on its own it doesn't tell you where it came from.
+- **What we found** (2026-10-22): we exercised each of these entry points in a test shell, and none of them produces it in 0.3.13. We caught one real bug: sharing text in from another app inserted the text but also reported "t is not a function"; that is fixed. The screenshot we got most likely came from a regression during the redesign a few days earlier that has since been fixed, but we can't replay it to be sure.
+- **From 0.3.13**: every piece of code the shell injects catches its own errors, so the top bar now reads "UI script error: <entry point>: <reason>", e.g. "__ccBack: …". If you still see it, the entry point in a screenshot is enough to track it down; please report it as described at the top.
+
+## 6. Phone makers and chips (only two devices tested)
 
 Only two devices have been tested by hand: a **Lenovo TB320FC** (ZUXOS, Android 15, Snapdragon 8+ Gen 1) and a **RedMagic NX769J** (ZTE-based system, Android 14, Snapdragon). The settings paths for other brands below come from public sources and common practice and have **not been verified**; menu names vary between system versions. [dontkillmyapp.com](https://dontkillmyapp.com) has more detailed steps per brand.
 

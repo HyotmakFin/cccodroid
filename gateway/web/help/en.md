@@ -110,6 +110,7 @@ Layout follows the window width, not orientation:
 - Workaround · Red Magic / Nubia · **Frozen after about 90 s in the background**: App info → Battery usage → allow background activity, and allow auto-start.
 - Workaround · Xiaomi / OPPO / vivo / Huawei · **Aggressive background cleaning**: set battery saving to unrestricted, allow auto-start and lock the card in recents. Per-brand steps are on the website's Known issues page.
 - Workaround · ZUI · **"Split screen not supported"**: the system's split-screen blocklist is stale. Reinstall over the top or reboot.
+- Investigating · All · **Top bar shows "UI script error: Script error."**: when code the Android shell runs in the page fails, WebView only gives this line, so you can't tell where it came from. From 0.3.13 it reads "<entry point>: <reason>", so a screenshot is enough to track it down. The app usually keeps working.
 - Investigating · Non-Snapdragon · **GPU components unavailable**: most need Snapdragon. Mali GPUs such as MediaTek can use gpu-driver-mali; Exynos and Kirin are not supported yet.
 
 ## Troubleshooting

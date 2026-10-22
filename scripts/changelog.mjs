@@ -8,7 +8,8 @@
 //  拉不到 GitHub 时沿用上次生成的已发布部分，只补 whatsnew。
 //
 //  用法:  node scripts/changelog.mjs          写好新版的 whatsnew 说明后跑一次，连同生成结果一起提交
-//  格式:  [{ v: "0.3.12", date: "2026-10-22", md: "…" }, …]  新的在前；date 为空 = 还没发布
+//  格式:  [{ v: "0.3.12", date: "2026-10-22", md: "…" }, …]  新的在前。还没发布的版本记生成这天（就是要发的那天），
+//         包装好到用户手里时它已经发了，别标成「未发布」
 // ─────────────────────────────────────────────────────────────────────
 import fs from "node:fs";
 import path from "node:path";
@@ -50,17 +51,18 @@ try {
   console.log("  ⚠ 拉不到 GitHub Releases，沿用上次生成的：" + String(e.message || e).split("\n")[0]);
 }
 
+const d = new Date(), today = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 fs.mkdirSync(OUT, { recursive: true });
 for (const lang of ["zh", "en"]) {
   const file = path.join(OUT, lang + ".json");
   let rel = released ? released[lang] : [];
-  if (!released) try { rel = JSON.parse(fs.readFileSync(file, "utf8")).filter((x) => x.date); } catch {}
+  if (!released) try { rel = JSON.parse(fs.readFileSync(file, "utf8")).filter((x) => !x.pre); } catch {}
   const top = rel.reduce((m, x) => (cmpVer(x.v, m) > 0 ? x.v : m), "0");
   const fresh = [];
   for (const f of fs.existsSync(WN) ? fs.readdirSync(WN) : []) {
     const m = f.match(/^v(\d+\.\d+\.\d+)\.(zh|en)\.md$/);
     if (!m || m[2] !== lang || cmpVer(m[1], top) <= 0) continue;
-    fresh.push({ v: m[1], date: "", md: tidy(fs.readFileSync(path.join(WN, f), "utf8")) });
+    fresh.push({ v: m[1], date: today, pre: 1, md: tidy(fs.readFileSync(path.join(WN, f), "utf8")) });
   }
   const all = [...fresh, ...rel].sort((a, b) => cmpVer(b.v, a.v));
   fs.writeFileSync(file, JSON.stringify(all) + "\n");
