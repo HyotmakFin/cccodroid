@@ -1933,3 +1933,8 @@
 1933	Bonsoir. Le bon moment pour écrire
 1934	Nuit calme. Dites ce qui vous vient
 1935	Week-end. Faites ce qui vous plaît
+1936	Impossible de lire cette image
+1937	Avatar et pseudo
+1938	Langue
+1939	Affichés en bas de la barre latérale et sur les bilans mensuels exportés
+1940	Changer d'avatar

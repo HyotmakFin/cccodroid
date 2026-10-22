@@ -1936,4 +1936,9 @@ window.I18N_DICT["es"] = {
   "晚上好，适合慢慢写点东西": "Buenas noches. Buen momento para escribir",
   "夜里安静，想到什么就说": "Noche tranquila. Di lo que se te ocurra",
   "周末，做点自己想做的": "Fin de semana. Haz algo para ti",
+  "读不了这张图片": "No se puede leer esta imagen",
+  "头像与昵称": "Avatar y apodo",
+  "语言": "Idioma",
+  "显示在侧栏左下角；导出使用月报时也会印上": "Se muestran al pie de la barra lateral y en los informes mensuales exportados",
+  "换头像": "Cambiar avatar",
 };

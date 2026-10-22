@@ -145,7 +145,7 @@
       s.__i18nFilled = true;
       s.innerHTML = "";
       const add = (v, label) => { const o = document.createElement("option"); o.value = v; o.textContent = label; s.appendChild(o); };
-      add("auto", "跟随系统 / System");
+      add("auto", t("跟随系统"));
       for (const l of LANGS) add(l.code, l.name);
     }
     if (s.value !== pref) s.value = pref;

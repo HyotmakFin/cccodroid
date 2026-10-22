@@ -2414,3 +2414,9 @@ html.wel #chat{container-type:inline-size}
 .wl-mark{width:clamp(40px,7cqi,52px);height:clamp(40px,7cqi,52px)}
 html.wel-narrow .wl-ex [data-ex]:nth-child(3){display:none}
 html.wel-narrow .wl-hero{gap:var(--g2)}
+/* 头像：设了图片就铺满圆，不写字母 */
+.acct-av.img{background:center/cover no-repeat var(--bg3);color:transparent}
+.prof-row{display:flex;align-items:center;gap:var(--g2)}
+.prof-av{width:40px;height:40px;font-size:17px;border:0;cursor:pointer;padding:0;position:relative}
+.prof-av:hover{box-shadow:0 0 0 2px var(--accent-dim)}
+#prof-name{width:12em;max-width:40vw}

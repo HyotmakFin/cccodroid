@@ -5319,7 +5319,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   // 画月报：宽 1080，配色随当前外观（见 usPalette）
-  function usDraw(cv, st) {
+  function usDraw(cv, st, who) {
     const K = usPalette();
     const W = 1080, P = 72, ACC = K.ACC, FG = K.FG, FG2 = K.FG2, FG3 = K.FG3, TILE = K.fg(K.dark ? 0.055 : 0.05);
     const font = (w, px) => `${w} ${px}px system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif`;
@@ -5339,6 +5339,16 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     c.textBaseline = "alphabetic";
     let y = P + 34;
     text("cccodroid · " + t("使用月报"), P, y, font(500, 30), FG2);
+    // 导出才有：右上角 头像 + 昵称（和标题同一行）
+    if (who) {
+      const R0 = 34, cx = W - P - R0, cy = y - 11;
+      c.save(); c.beginPath(); c.arc(cx, cy, R0, 0, Math.PI * 2); c.closePath();
+      if (who.img) { c.clip(); c.drawImage(who.img, cx - R0, cy - R0, R0 * 2, R0 * 2); }
+      else { c.fillStyle = ACC; c.fill(); c.restore(); c.save(); text((who.name.trim()[0] || "C").toUpperCase(), cx, cy + 12, font(600, 32), K.ON, "center"); }
+      c.restore();
+      c.font = font(600, 30); let nm = who.name; while (c.measureText(nm).width > 360 && nm.length > 2) nm = nm.slice(0, -2) + "…";
+      text(nm, cx - R0 - 18, y, font(600, 30), FG, "right");
+    }
     y += 92; text(usMonthName(st.y, st.m), P, y, font(700, 76), FG);
     // 主数字
     y += 190;
@@ -5573,7 +5583,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 月报图片：先交给网关落成文件，再走「保存到」/ 系统分享；都没有就让浏览器自己下载
   async function usCardFile() {
     const [y, m] = us.month, name = `cccodroid-usage-${y}-${String(m + 1).padStart(2, "0")}.png`;
-    const data = $("us-card").toDataURL("image/png");
+    // 导出的图另画一张：多了右上角的头像与昵称
+    const p = profile(), cv = document.createElement("canvas");
+    let img = null;
+    if (p.av) { img = new Image(); img.src = p.av; try { await img.decode(); } catch { img = null; } }
+    usDraw(cv, usMonthStats(y, m), { name: profName(), img });
+    const data = cv.toDataURL("image/png");
     return { name, data, file: (await post("/api/usage/card", { name, data: data.split(",")[1] })).file };
   }
   $("us-actions").addEventListener("click", async (e) => {
@@ -6186,15 +6201,52 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
   $("side-new").addEventListener("click", () => { closePage(); closeDrawer(); newConversation(); });
   $("side-acct").addEventListener("click", () => acctMenu());
-  // 账户行：哪家接口 + 型号；首字母当头像
+  // ── 头像与昵称：只存本机。没设昵称时用登录邮箱 @ 前面那段，再没有就叫 cccodroid ──
+  const PROF_KEY = "cc.profile";
+  const profile = () => { try { return JSON.parse(localStorage.getItem(PROF_KEY)) || {}; } catch { return {}; } };
+  const profName = () => profile().name || (acctEmail ? acctEmail.split("@")[0] : "") || "cccodroid";
+  function paintAv(el, p) {
+    p = p || profile();
+    el.style.backgroundImage = p.av ? `url("${p.av}")` : "";
+    el.classList.toggle("img", !!p.av);
+    el.textContent = p.av ? "" : (profName().trim()[0] || "C").toUpperCase();
+  }
+  function saveProfile(patch) {
+    const p = Object.assign(profile(), patch);
+    for (const k of Object.keys(p)) if (!p[k]) delete p[k];
+    try { localStorage.setItem(PROF_KEY, JSON.stringify(p)); } catch (e) { toast(t("保存失败"), true); }
+    paintAcct(state.serverStatus); paintProf();
+  }
+  function paintProf() {
+    const b = $("prof-av"); if (!b) return;
+    paintAv(b);
+    const i = $("prof-name"); if (document.activeElement !== i) i.value = profile().name || "";
+    i.placeholder = profName();
+  }
+  // 选的图片裁成正方形、缩到 160px 存成 JPEG（十几 KB），不存原图
+  async function pickAvatar(file) {
+    if (!file) return;
+    try {
+      const bmp = await createImageBitmap(file);
+      const s = Math.min(bmp.width, bmp.height), cv = document.createElement("canvas");
+      cv.width = cv.height = 160;
+      cv.getContext("2d").drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, 160, 160);
+      saveProfile({ av: cv.toDataURL("image/jpeg", 0.86) });
+    } catch { toast(t("读不了这张图片"), true); }
+  }
+  $("prof-av")?.addEventListener("click", () => $("prof-file").click());
+  $("prof-file")?.addEventListener("change", (e) => { pickAvatar(e.target.files[0]); e.target.value = ""; });
+  $("prof-name")?.addEventListener("change", (e) => saveProfile({ name: e.target.value.trim().slice(0, 24) }));
+  $("prof-reset")?.addEventListener("click", () => { localStorage.removeItem(PROF_KEY); $("prof-name").value = ""; paintAcct(state.serverStatus); paintProf(); });
+  paintProf();
+
+  // 账户行：头像 + 昵称，下面一行只写当前接口（账户登录 / DeepSeek / Kimi …），别的都不放
   function paintAcct(s) {
     if (!s) return;
-    const label = s.providerLabel || s.provider || "";
-    const name = (s.keyMode === "login" && acctEmail) || label;
-    $("acct-av").textContent = (name.trim()[0] || "C").toUpperCase();
-    $("acct-name").textContent = name || t("设置");
-    $("acct-sub").textContent = [s.keyMode === "login" && acctEmail ? label : "", prettyModel(s.model),
-      s.keyMode === "login" && acctWeek != null ? t("本周额度 {p}%", { p: acctWeek }) : ""].filter(Boolean).join(" · ");
+    paintAv($("acct-av"));
+    $("acct-name").textContent = profName();
+    $("acct-sub").textContent = s.providerLabel || s.provider || "";
+    paintProf();
     if (s.product) $("side-title").textContent = s.product;
     // 官方账户：名字换成登录邮箱（问一次，之后十分钟内沿用）
     if (s.keyMode === "login" && Date.now() - acctEmailAt > 600000) {
@@ -6392,6 +6444,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const items = [
       { head: [st.providerLabel || st.provider, st.model].filter(Boolean).join(" · ") || t("设置") },
       { label: t("设置"), icon: PAGES.settings.icon, fn: () => openPage("settings") },
+      { label: t("头像与昵称"), icon: SM.edit, fn: () => openPage("settings", "general") },
       { label: t("切换接口 / 账户"), icon: SM.swap, small: st.providerLabel || "", fn: () => openPage("settings", "provider") },
       { label: t("用量"), icon: PAGES.usage.icon, fn: () => openPage("usage") },
       "hr",

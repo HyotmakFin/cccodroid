@@ -1933,3 +1933,8 @@
 1933	Buenas noches. Buen momento para escribir
 1934	Noche tranquila. Di lo que se te ocurra
 1935	Fin de semana. Haz algo para ti
+1936	No se puede leer esta imagen
+1937	Avatar y apodo
+1938	Idioma
+1939	Se muestran al pie de la barra lateral y en los informes mensuales exportados
+1940	Cambiar avatar

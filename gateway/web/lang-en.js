@@ -1970,4 +1970,9 @@ window.I18N_DICT.en = {
   "晚上好，适合慢慢写点东西": "Good evening. A fine time to write",
   "夜里安静，想到什么就说": "Quiet night. Say whatever comes to mind",
   "周末，做点自己想做的": "Weekend. Do something just for you",
+  "读不了这张图片": "Couldn't read this image",
+  "头像与昵称": "Avatar & nickname",
+  "语言": "Language",
+  "显示在侧栏左下角；导出使用月报时也会印上": "Shown at the bottom of the sidebar, and on exported monthly reports",
+  "换头像": "Change avatar",
 };
