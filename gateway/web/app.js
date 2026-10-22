@@ -1208,7 +1208,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     document.body.appendChild(m);
     const r = permEl.getBoundingClientRect(), col = colRect(), mw = Math.min(m.offsetWidth, col.width - 16);
     m.style.maxWidth = (col.width - 16) + "px";
-    m.style.bottom = (innerHeight - r.top + 6) + "px";
+    m.style.bottom = (fixedH() - r.top + 6) + "px";
     // 标签在右半边就右对齐；不出对话这一栏（右边可能是浏览器窗格）
     const x0 = r.left + r.width / 2 > col.left + col.width / 2 ? r.right - mw : r.left;
     m.style.left = Math.max(col.left + 8, Math.min(x0, col.right - mw - 8)) + "px";
@@ -2288,22 +2288,40 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     popupHead.innerHTML = `<span>${esc(head)}</span><span>${t("{n} 项", { n: items.length })}</span>`;
     renderPopup();
     popupEl.classList.remove("hidden");
-    placePopup(); requestAnimationFrame(placePopup);   // 首屏布局刚切换时下一帧再量一次
+    followPopup();
   }
   // 对话这一栏的左右边界：右侧窗格（浏览器是原生视图，永远在页面上面）和常驻侧栏都不算，浮层只能在这里面摆
+  // 固定定位真正参照的高度（布局视口）；innerHeight 是可视区，键盘悬浮、缩放时两者不同
+  const fixedH = () => document.documentElement.clientHeight || innerHeight;
   function colRect() {
     const r = $("chat").getBoundingClientRect();
     return r.width > 0 ? { left: r.left, right: r.right, width: r.width } : { left: 0, right: innerWidth, width: innerWidth };
   }
   // 补全浮层贴着输入框上沿、和输入框一样宽 —— 首屏输入框在屏幕中间，平常在底部，都跟着走
-  function placePopup() {
-    const c = $("composer-inner").getBoundingClientRect(), col = colRect();
-    if (!c.width) return;
-    const left = Math.max(col.left + 8, c.left), right = Math.min(col.right - 8, c.right);
-    Object.assign(popupEl.style, { left: left + "px", right: "auto", width: (right - left) + "px",
-      bottom: (innerHeight - c.top + 8) + "px", maxHeight: Math.max(160, Math.min(innerHeight * 0.46, c.top - $("chat").getBoundingClientRect().top - 8)) + "px" });   // 不盖顶栏
+  // 输入框会动：首屏 ↔ 平常、多行长高、软键盘起落、附件栏、右侧窗格开合、分屏改宽……
+  // 浮层开着时每帧对一次输入框和对话栏的位置，变了才重摆；收起就停
+  let popKey = "", popRaf = 0;
+  function followPopup() {
+    cancelAnimationFrame(popRaf); popKey = "";
+    const tick = () => {
+      if (popupEl.classList.contains("hidden")) { popRaf = 0; return; }
+      placePopup();
+      popRaf = requestAnimationFrame(tick);
+    };
+    tick();
   }
-  addEventListener("resize", () => { if (!popupEl.classList.contains("hidden")) placePopup(); });
+  function placePopup() {
+    const c = $("composer-inner").getBoundingClientRect(), col = colRect(), top = $("chat").getBoundingClientRect().top;
+    if (!c.width) return;
+    const key = [c.left, c.right, c.top, col.left, col.right, top].map(Math.round).join();
+    if (key === popKey) return;
+    popKey = key;
+    const left = Math.max(col.left + 8, c.left), right = Math.min(col.right - 8, c.right);
+    // 用 top 从输入框上沿往上量，不用 bottom：软键盘悬浮 / 可视区缩放时 innerHeight 和固定定位的参照高度对不上，会压住输入框
+    const maxH = Math.max(120, Math.min(fixedH() * 0.46, c.top - top - 8));   // 不盖顶栏
+    Object.assign(popupEl.style, { left: left + "px", right: "auto", width: (right - left) + "px", bottom: "auto", maxHeight: maxH + "px" });
+    popupEl.style.top = Math.max(top, c.top - 8 - popupEl.offsetHeight) + "px";
+  }
 
   function renderPopup() {
     const { items, sel } = state.popup;
@@ -2317,6 +2335,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         `</div>`;
     });
     popupList.innerHTML = html || '<div class="pitem">' + t("没有匹配项") + '</div>';
+    popKey = "";
     const selEl = popupList.querySelector(".pitem.sel");
     if (selEl) selEl.scrollIntoView({ block: "nearest" });
   }
@@ -5719,7 +5738,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       p.style.width = w + "px";
       const x0 = ar.left + ar.width / 2 > col.left + col.width / 2 ? ar.right - w : ar.left;   // 按钮在右半边就右对齐
       p.style.left = Math.max(col.left + 16, Math.min(x0, col.right - w - 16)) + "px";
-      p.style.bottom = (innerHeight - ar.top + 8) + "px";
+      p.style.bottom = (fixedH() - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
       addEventListener("resize", onRz);
     }
@@ -8791,7 +8810,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const ar = $("btn-plus").getBoundingClientRect(), w = Math.min(360, col.width - 32);
     p.style.width = w + "px";
     p.style.left = Math.max(col.left + 16, Math.min(ar.left - 6, col.right - w - 16)) + "px";
-    p.style.bottom = (innerHeight - ar.top + 10) + "px";
+    p.style.bottom = (fixedH() - ar.top + 10) + "px";
     p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 10 - 16) + "px";
   }
   $("btn-plus").addEventListener("click", openSheet);
