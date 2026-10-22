@@ -96,6 +96,7 @@ export async function routeCaps(req, res, u, p) {
       model: SETTINGS.model || PROVIDER.defaultModel || null,
       provider: PROVIDER.id,
       providerLabel: PROVIDER.label || PROVIDER.id,
+      providerLabelEn: PROVIDER.labelEn || "",   // 界面不是中文时用（和设置里选接口那张单子同一规则）
       upstream: CFG.upstream,
       nativeModels: !!PROVIDER.nativeModels,
       workspace: CFG.workspace,

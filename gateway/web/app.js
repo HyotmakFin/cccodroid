@@ -4289,6 +4289,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 选接口这张单子：界面不是中文时整张用英文（厂商名、线路名本来就是英文世界的叫法，逐语言翻反而对不上官网）
   const provEn = () => !/^zh/.test((window.I18N && I18N.lang) || "zh");
   const pLabel = (x) => (provEn() && x.labelEn) || x.label;
+  // 状态里的当前接口名：同上规则（旧网关没有 providerLabelEn 就用中文名）
+  const provName = (s) => (s && ((provEn() && s.providerLabelEn) || s.providerLabel || s.provider)) || "";
   const pHint = (x) => (provEn() && x.hintEn) || x.hint || "";
   const GROUP_NAME = provEn() ? { claude: "Claude", third: "Third-party (just add a key)", local: "On-device", custom: "Custom endpoints" }
     : { claude: "Claude", third: t("第三方（填 Key 即用）"), local: t("端侧（本机运行）"), custom: t("自定义接口") };
@@ -6245,7 +6247,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (!s) return;
     paintAv($("acct-av"));
     $("acct-name").textContent = profName();
-    $("acct-sub").textContent = s.providerLabel || s.provider || "";
+    $("acct-sub").textContent = provName(s);
     paintProf();
     if (s.product) $("side-title").textContent = s.product;
     // 官方账户：名字换成登录邮箱（问一次，之后十分钟内沿用）
@@ -6442,10 +6444,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function acctMenu() {
     const st = state.serverStatus || {};
     const items = [
-      { head: [st.providerLabel || st.provider, st.model].filter(Boolean).join(" · ") || t("设置") },
       { label: t("设置"), icon: PAGES.settings.icon, fn: () => openPage("settings") },
       { label: t("头像与昵称"), icon: SM.edit, fn: () => openPage("settings", "general") },
-      { label: t("切换接口 / 账户"), icon: SM.swap, small: st.providerLabel || "", fn: () => openPage("settings", "provider") },
+      { label: t("切换接口 / 账户"), icon: SM.swap, fn: () => openPage("settings", "provider") },
       { label: t("用量"), icon: PAGES.usage.icon, fn: () => openPage("usage") },
       "hr",
       { label: t("帮助"), icon: PAGES.help.icon, fn: () => openPage("help") },
@@ -8910,7 +8911,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       $("status-box").textContent =
                 `${t("网关")}     ${s.version} (pid ${s.pid})\n` +
         `${t("运行时")}   ${s.ready ? t("就绪") : t("缺失")}\n` +
-        `${t("厂商")}     ${s.providerLabel || s.provider}\n` +
+        `${t("厂商")}     ${provName(s)}\n` +
         `${t("上游")}     ${s.upstream}\n` +
         `${t("凭据")}     ${s.keyMode === "login" ? t("官方登录态") : (s.hasKey ? t("已配置密钥") : t("未配置"))}\n` +
         `${t("DNS 桥")}   ${s.bridge ? t("已连接") : t("未启动")}\n` +
