@@ -267,10 +267,17 @@ export function compNeeds(id, rec) {
   return s;
 }
 
-/** 已装组件的记录（id → rec），模块卸载时要知道组件在用哪些文件、哪些底座包 */
+/** 已装、且装在当前工具包上的组件记录（id → rec）：判断「谁还在用这些文件 / 底座包」都用它。
+ *  工具包换过之后，旧组件的记录还在（界面显示「需要更新」），文件却已随旧 usr 一起没了 —— 不能再算它认领：
+ *  不然 10.22 装的 pdf-tools 认领着 gnupg，卸 libreoffice 时它新装的 1038 个 gnupg 文件全留下（10-22 真机验证查出） */
 export function compRecords() {
-  const out = new Map();
-  try { for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) { const r = compRecord(f.slice(0, -5)); if (r) out.set(f.slice(0, -5), r); } } catch {}
+  const out = new Map(), dk = devkitIdentity();
+  try {
+    for (const f of fs.readdirSync(COMP_DIR)) if (f.endsWith(".json")) {
+      const r = compRecord(f.slice(0, -5));
+      if (r && r.state === "ok" && dk && r.base === dk.sha256) out.set(f.slice(0, -5), r);
+    }
+  } catch {}
   return out;
 }
 /** 组件依赖链里由底座提供的包（索引里这个构建的 baseDeps）；索引没给时为 null（不知道） */
@@ -285,13 +292,7 @@ export function compBaseDeps(id, sha) {
  *  不然卸一个，另一个就悄悄坏了 */
 function compRemoveFiles(id, rec) {
   const others = [];
-  try {
-    for (const f of fs.readdirSync(COMP_DIR)) {
-      if (!f.endsWith(".json") || f === id + ".json") continue;
-      const oid = f.slice(0, -5), orec = compRecord(oid);
-      if (orec) others.push({ id: oid, rec: orec, needs: compNeeds(oid, orec), gained: [] });
-    }
-  } catch {}
+  for (const [oid, orec] of compRecords()) if (oid !== id) others.push({ id: oid, rec: orec, needs: compNeeds(oid, orec), gained: [] });
   const dirs = new Set();
   // Python 运行时在旁边的 __pycache__ 里生成 .pyc（不在组件清单里）：删 .py 时一并删掉，不然卸载后留下几十 MB
   const pyc = new Map();

@@ -48,7 +48,7 @@ t "strace" "strace -c -o /dev/null ./a"
 t "patchelf" "patchelf --print-interpreter ./a"
 else skip C/C++ "C/C++ 构建"; fi
 echo "== 基础命令"
-# 10.22.1 起补进基础模块（以前漏了：没有 which、patch）
+# 10.22.1 起补进基础模块（以前漏了）；which 在 Termux 是单独的 which 包、不在 debianutils 里，10.22.3 才补上
 t "which" "w=\$(command -v which); [ \"\$w\" = \"\$PREFIX/bin/which\" ] || { echo \"which 不是工具包带的：\${w:-没有}\"; exit 1; }; which bash"
 t "patch" "printf 'a\\n' > p1 && printf 'b\\n' > p2 && { diff -u p1 p2 > p.diff; true; } && patch -s p1 p.diff && cat p1"
 t "tree" "tree --version"

@@ -22,7 +22,7 @@
       "ca-certificates",
       "openssl",
       "openssl-tool",
-      "debianutils",
+      "debianutils", "which",
       "patch",
       "ed",
       "dos2unix",
