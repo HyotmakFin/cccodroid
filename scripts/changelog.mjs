@@ -35,6 +35,8 @@ function split(body) {
   return { zh: tidy(dropSec(zh, ["安装"])), en: tidy(dropSec(en || zh, ["Install"])) };
 }
 
+// 日期按本机时区：GitHub 给的是 UTC，北京时间早上发的版会差一天，和包里自带的那版对不上
+const ymd = (d) => [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
 let released = null;
 try {
   const raw = execFileSync("gh", ["api", "--paginate", `repos/${REPO}/releases?per_page=100`], { encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "pipe"] });
@@ -42,7 +44,7 @@ try {
   released = { zh: [], en: [] };
   for (const r of list) {
     if (!/^v\d+\.\d+\.\d+$/.test(r.tag_name) || r.prerelease || r.draft) continue;
-    const v = r.tag_name.slice(1), date = (r.published_at || r.created_at || "").slice(0, 10), s = split(r.body || "");
+    const v = r.tag_name.slice(1), date = ymd(new Date(r.published_at || r.created_at)), s = split(r.body || "");
     released.zh.push({ v, date, md: s.zh });
     released.en.push({ v, date, md: s.en });
   }
@@ -51,7 +53,7 @@ try {
   console.log("  ⚠ 拉不到 GitHub Releases，沿用上次生成的：" + String(e.message || e).split("\n")[0]);
 }
 
-const d = new Date(), today = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, "0")).join("-");
+const today = ymd(new Date());
 fs.mkdirSync(OUT, { recursive: true });
 for (const lang of ["zh", "en"]) {
   const file = path.join(OUT, lang + ".json");
