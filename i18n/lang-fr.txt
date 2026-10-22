@@ -1938,3 +1938,8 @@
 1938	Langue
 1939	Affichés en bas de la barre latérale et sur les bilans mensuels exportés
 1940	Changer d'avatar
+1941	Notes de version
+1942	Rechercher dans les notes de version…
+1943	Non publiée
+1944	Version actuelle
+1945	Aucune version correspondante

@@ -259,7 +259,7 @@ public class MainActivity extends Activity {
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration cfg) {
         super.onConfigurationChanged(cfg);
-        if (web != null) web.evaluateJavascript("window.Theme&&Theme.system(" + systemNight() + ")", null);
+        if (web != null) web.evaluateJavascript(guarded("Theme.system", "window.Theme&&Theme.system(" + systemNight() + ")"), null);
     }
 
     /** 通知或设置页递过来的动作 */
@@ -310,12 +310,16 @@ public class MainActivity extends Activity {
             if (n == 0 && uris.isEmpty() && text != null) toPage("ccapp-insert", text);
         }, "share-in").start();
     }
+    /** 往页面里调代码都套一层：错误在注入代码里自己接住，连同入口名交给页面按原文显示（app.js __ccErr）。
+     *  不接的话，从注入代码里冒出去的错 WebView 只给一句「Script error.」，没有文件、行号和原因，查不出是哪一处 */
+    private static String caught(String entry) { return "catch(e){window.__ccErr&&__ccErr(" + org.json.JSONObject.quote(entry) + ",e)}"; }
+    private static String guarded(String entry, String code) { return "try{" + code + "}" + caught(entry); }
     /** 页面可能还在启动：等 __cc 就绪再派发（app.js 里有对应的监听） */
     private void toPage(String event, String value) {
         ui.post(() -> {
             if (web == null) return;
-            web.evaluateJavascript("(function f(n){if(window.__cc&&window.__cc.view){window.dispatchEvent(new CustomEvent(" + org.json.JSONObject.quote(event)
-                + ",{detail:{value:" + org.json.JSONObject.quote(value) + "}}))}else if(n<150)setTimeout(function(){f(n+1)},200)})(0)", null);
+            web.evaluateJavascript("(function f(n){try{if(window.__cc&&window.__cc.view){window.dispatchEvent(new CustomEvent(" + org.json.JSONObject.quote(event)
+                + ",{detail:{value:" + org.json.JSONObject.quote(value) + "}}))}else if(n<150)setTimeout(function(){f(n+1)},200)}" + caught(event) + "})(0)", null);
         });
     }
     private String displayName(android.net.Uri u) {
@@ -329,8 +333,8 @@ public class MainActivity extends Activity {
     /** 从「已完成」通知点进来：切到那个会话（界面正显示它就不动）。页面可能还在启动，等 __cc 就绪 */
     private void openSession(String sid) {
         if (web == null || sid == null || !sid.matches("[0-9A-Za-z-]{8,64}")) return;
-        web.evaluateJavascript("(function f(n){var c=window.__cc;if(c&&c.view){setTimeout(function(){if(c.view.sessionId!==\"" + sid
-            + "\")c.openSession(\"" + sid + "\")},n?800:0)}else if(n<50)setTimeout(function(){f(n+1)},200)})(0)", null);
+        web.evaluateJavascript("(function f(n){var c=window.__cc;if(c&&c.view){setTimeout(function(){try{if(c.view.sessionId!==\"" + sid
+            + "\")c.openSession(\"" + sid + "\")}" + caught("openSession") + "},n?800:0)}else if(n<50)setTimeout(function(){f(n+1)},200)})(0)", null);
     }
 
     // ── 工具包从哪装：GitHub / cccodroid.net 镜像 / 本地文件 ──────────────────
@@ -1230,7 +1234,7 @@ public class MainActivity extends Activity {
     }
 
     private void savedJs(boolean ok, String msg) {
-        if (web != null) web.evaluateJavascript("window.__ccSaved&&__ccSaved(" + ok + "," + org.json.JSONObject.quote(msg) + ")", null);
+        if (web != null) web.evaluateJavascript(guarded("__ccSaved", "window.__ccSaved&&__ccSaved(" + ok + "," + org.json.JSONObject.quote(msg) + ")"), null);
     }
 
     // ── 嵌入式浏览器窗格 ──
@@ -1270,7 +1274,7 @@ public class MainActivity extends Activity {
         pane.destroy();
         pane = null;
         paneCanBack = false;
-        if (fromPane && web != null) web.evaluateJavascript("window.__ccBrowserClosed&&__ccBrowserClosed()", null);
+        if (fromPane && web != null) web.evaluateJavascript(guarded("__ccBrowserClosed", "window.__ccBrowserClosed&&__ccBrowserClosed()"), null);
     }
     /** 返回手势要同步问"网页能不能后退"，JS 桥在别的线程上，这里定时把答案备好 */
     private void tickPaneBack() {
@@ -1335,7 +1339,7 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (web == null) { moveTaskToBack(true); return; }
         // 先让页面关最上层的浮层（侧栏 / 查看器 / 终端 / 弹窗…，见 app.js __ccBack），都没开才退
-        web.evaluateJavascript("window.__ccBack?__ccBack():false", v -> {
+        web.evaluateJavascript(guarded("__ccBack", "window.__ccBack?__ccBack():false"), v -> {
             if ("true".equals(v)) return;
             // 不走 WebView 的历史：页面是单页（只用 replaceState），历史里只会有整页重载和冻结脱困跳出去的
             // 127.0.0.2:9 —— 退回去就是「找不到网页」，再退一次整页重载，看着像网关重建了（用户 10-22 报）

@@ -25,15 +25,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (el) { el.textContent = t("界面脚本出错：{msg}", { msg }); el.className = "err"; }
   };
   window.addEventListener("error", (e) => {
-    // 光秃秃的「Script error.」没有文件和行号：是外壳 evaluateJavascript 注入的那几行出的错，WebView 把细节抹了。
-    // 写在顶栏上谁也看不懂，只进控制台；外壳会调的入口都用 guardHook 包着，真错在那里按原文报
+    // 光秃秃的「Script error.」没有文件和行号：是从外壳 evaluateJavascript 注入的代码里冒出去的错，WebView 把细节抹了。
+    // 写在顶栏上谁也看不懂，只进控制台；外壳注入的每段代码自己 try 住交给 __ccErr，页面这边的入口也用 guardHook 包着
     if (!e.filename && /^Script error\.?$/.test(e.message || "")) { console.warn("[cc] 外壳注入的脚本出错（细节被 WebView 隐去）"); return; }
     showErr(e.message || String(e.error));
   });
   // 外壳（MainActivity）直接调用的入口：在页面自己的代码里接住错误，按原文报，不让它变成「Script error.」
+  // 外壳注入的代码接住错误后交到这里（MainActivity.guarded / caught）：name 是哪个入口
+  window.__ccErr = (name, err) => { console.error("[cc] " + name, err); showErr(name + "：" + (err && err.message || err)); };
   const guardHook = (name, fn) => function () {
     try { return fn.apply(this, arguments); }
-    catch (err) { console.error("[cc] " + name, err); showErr(name + "：" + (err && err.message || err)); return false; }
+    catch (err) { window.__ccErr(name, err); return false; }
   };
   window.addEventListener("unhandledrejection", (e) => {
     const el = document.getElementById("sub-title");
@@ -2572,9 +2574,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     toast(t("已附加 {name}", { name }));
   });
   window.addEventListener("ccapp-insert", (e) => {
-    const t = e.detail?.value;
-    if (!t) return;
-    insertAtCursor(t);
+    const v = e.detail?.value;      // 别叫 t：会遮住翻译函数，下面那句提示就抛「t is not a function」
+    if (!v) return;
+    insertAtCursor(v);
     toast(t("已插入分享的内容"));
   });
 
@@ -4237,6 +4239,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     toast(r.safeMode ? t("已进入安全模式，下一条消息生效") : t("已退出安全模式，下一条消息生效"));
   }
   $("safe-mode").addEventListener("change", (e) => setSafe(e.target.checked));
+  $("upd-log").addEventListener("click", () => { closeSettings(); openPage("changelog"); });
   $("btn-share-logs").addEventListener("click", async () => {
     // 打包前给用户看清单：发出去的是什么、去掉了什么
     if (!confirm(t("打一个诊断包，经系统分享发出去。\n\n包里有：\n· 版本与设备：cccodroid / Android 版本、机型、芯片、剩余空间\n· 开发工具包：装的是哪一版、更新与自检状态\n· 最近的日志：本应用的系统日志、网关日志的最后一段\n· 修复账本：安装、校验、修复做过哪些、成没成\n\n已经去掉：\n· 密钥、令牌、登录凭据、邮箱\n· 你发给 Claude 的消息内容\n· 会话记录本身不在包里\n\n继续？"))) return;
@@ -6169,8 +6172,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     caps: { name: tk("能力"), icon: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>' },
     usage: { name: tk("用量"), icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
     help: { name: tk("帮助"), icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>' },
+    changelog: { name: tk("更新日志"), icon: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>' },
   };
-  const NAV_ITEMS = ["sessions", "projects", "sched", "ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
+  const NAV_ITEMS = ["sessions", "projects", "sched", "ext", "caps", "usage", "help", "changelog"];          // 侧栏「去哪」里能放的；设置走底部账户行
   var curPage = null;   // var：openSession 在启动早期就会调 closePage，别撞上 let 的暂时性死区
   // 轮询（下载进度、配对状态…）只在那一页开着时继续：整页关了、换页了就停
   function pageOn(name) { return name === "settings" ? setOpen : curPage === name && !$("pages").classList.contains("hidden"); }
@@ -6461,6 +6465,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       { label: t("用量"), icon: PAGES.usage.icon, fn: () => openPage("usage") },
       "hr",
       { label: t("帮助"), icon: PAGES.help.icon, fn: () => openPage("help") },
+      { label: t("更新日志"), icon: PAGES.changelog.icon, fn: () => openPage("changelog") },
       { label: t("到 GitHub 反馈"), icon: SM.chat, fn: () => $("btn-issue").click() },
       { label: t("交流群 · 讨论区"), icon: SM.people, fn: () => { openPage("help"); setTimeout(() => $("help-body").querySelector(".cm-box")?.scrollIntoView({ block: "center", behavior: "smooth" }), 400); } },
     ];
@@ -7043,6 +7048,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (name === "ext") loadExt();
     if (SUBNAVS[name]) paintSubnav(name);
     if (name === "help") loadHelp();
+    if (name === "changelog") loadChangelog();
     if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); }
     if (name !== "projects" && name !== "sched") pageTitleOv = "";
     if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }
@@ -7125,7 +7131,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     new MutationObserver((recs) => { if (raf || recs.every((m) => $(id) && $(id).contains(m.target))) return; raf = requestAnimationFrame(() => { raf = 0; if (curPage === name) paintSubnav(name); }); })
       .observe($("tab-" + name), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
   }
-  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (curPage === "help") spyHelp(); }, { passive: true });
+  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (TOCS[curPage]) spyToc(curPage); }, { passive: true });
 
 
   // ── 设置分类：宽屏左栏分类 + 右边一类的内容；窄屏先是分类列表，点进去才是内容 ──
@@ -7287,19 +7293,27 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("help-q").value = "";
     spyHelp();
   }
-  function helpSecs() { return [...$("help-body").querySelectorAll(".help-sec")].filter((x) => !x.classList.contains("hidden")); }
-  function spyHelp() {
-    const toc = $("help-toc"), body = $("page-body");
-    if (curPage !== "help" || !toc.children.length) return;
+  // 帮助、更新日志共用：目录在哪、正文在哪
+  const TOCS = { help: ["help-toc", "help-body"], changelog: ["cl-toc", "cl-body"] };
+  function tocSecs(name) { return [...$(TOCS[name][1]).querySelectorAll(".help-sec")].filter((x) => !x.classList.contains("hidden")); }
+  function spyHelp() { spyToc("help"); }
+  function spyToc(name) {
+    const toc = $(TOCS[name][0]), body = $("page-body");
+    if (curPage !== name || !toc.children.length) return;
     const narrow = getComputedStyle(toc).flexDirection === "row";
     const top = body.getBoundingClientRect().top + (narrow ? toc.offsetHeight : 0) + 40;
     let cur = null;
-    for (const x of helpSecs()) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
-    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) cur = (helpSecs().at(-1) || {}).dataset?.sec || cur;
-    if (!cur) cur = (helpSecs()[0] || {}).dataset?.sec;
+    const secs = tocSecs(name);
+    for (const x of secs) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
+    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) cur = (secs.at(-1) || {}).dataset?.sec || cur;
+    if (!cur) cur = (secs[0] || {}).dataset?.sec;
     toc.querySelectorAll("button").forEach((b) => {
       const on = b.dataset.sec === cur;
-      if (on && !b.classList.contains("on") && narrow) b.scrollIntoView({ inline: "center", block: "nearest" });
+      if (on && !b.classList.contains("on")) {
+        if (narrow) b.scrollIntoView({ inline: "center", block: "nearest" });
+        // 竖排目录比屏幕长（更新日志几十版）：目录自己滚，让当前项留在中间，不带着整页动
+        else if (toc.scrollHeight > toc.clientHeight) toc.scrollTop = b.offsetTop - toc.clientHeight / 2;
+      }
       b.classList.toggle("on", on);
     });
   }
@@ -7316,6 +7330,95 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("help-body").querySelectorAll(".help-lead").forEach((x) => x.classList.toggle("hidden", !!q));
     $("help-toc").querySelectorAll("button").forEach((b) => b.classList.toggle("hidden", !!q && !!$("help-body").querySelector(`.help-sec.hidden[data-sec="${b.dataset.sec}"]`)));
     spyHelp();
+  });
+  // ── 更新日志 ── 和 GitHub Releases 同一份（scripts/changelog.mjs 生成 web/changelog/zh|en.json，其余语言用英文）。
+  // 第一次点开才取。五十多版、上百 KB：每版只先放标题和一个估了高度的空壳，进到视口上下一屏多的范围才渲染正文，
+  // 离远了收回成量好高度的空壳 —— DOM 里任何时候只有眼前那几版。目录、滚动高亮、搜索和帮助页同一套，搜索查原文不用渲染。
+  const CL = { lang: "", list: [], low: [], h: [], io: null };
+  async function loadChangelog() {
+    const lang = /^zh/.test((window.I18N && I18N.lang) || "zh") ? "zh" : "en";
+    if (CL.lang === lang) return spyToc("changelog");
+    const body = $("cl-body"), toc = $("cl-toc");
+    if (CL.io) { CL.io.disconnect(); CL.io = null; }
+    toc.innerHTML = "";
+    body.innerHTML = `<p class="muted">${esc(t("加载中…"))}</p>`;
+    let list;
+    try {
+      const r = await fetch("/changelog/" + lang + ".json", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      list = await r.json();
+    } catch (e) { body.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+    CL.lang = lang; CL.list = list; CL.h = []; CL.low = list.map((x) => ("v" + x.v + "\n" + x.md).toLowerCase());
+    const cur = ((lastUpd && lastUpd.items) || []).find((x) => x.id === "app")?.current || "";
+    // 估高：按这一栏能放几个字折行，再加段落间距；渲染时量出真高，差的那点在 clShow 里补回滚动位置
+    const w = Math.max(240, body.clientWidth || 600), cpl = w / (lang === "zh" ? 14.5 : 7.4);
+    const est = (md) => Math.round(md.split("\n").reduce((h, l) => h + (l.trim() ? Math.max(1, Math.ceil(l.length / cpl)) * 24.5 : 10), 0));
+    body.innerHTML = list.map((x, i) => `<section class="help-sec cl-sec" data-sec="c${i}"><h3><span>v${esc(x.v)}</span>` +
+      (x.v === cur ? `<span class="pill acc">${esc(t("当前版本"))}</span>` : "") +
+      `<span class="cl-date">${esc(x.date || t("未发布"))}</span></h3><div class="cl-md" data-i="${i}" style="height:${est(x.md)}px"></div></section>`).join("");
+    toc.innerHTML = list.map((x, i) => `<button type="button" data-sec="c${i}">v${esc(x.v)}</button>`).join("");
+    $("cl-q").value = "";
+    CL.io = new IntersectionObserver((ents) => ents.forEach((e) => clShow(e.target, e.isIntersecting)), { root: $("page-body"), rootMargin: "120% 0px" });
+    body.querySelectorAll(".cl-md").forEach((el) => CL.io.observe(el));
+    spyToc("changelog");
+  }
+  function clShow(el, on) {
+    if (on === !!el.dataset.on) return;
+    const pb = $("page-body"), above = el.getBoundingClientRect().top < pb.getBoundingClientRect().top;
+    const i = +el.dataset.i, h0 = el.offsetHeight;
+    if (on) {
+      el.dataset.on = "1";
+      setHtml(el, renderMd(CL.list[i].md));
+      el.style.height = "";
+      if (el.offsetHeight) CL.h[i] = el.offsetHeight;
+    } else {
+      // 收回：量好的高度留给空壳，滚动条不跳。整页切走 / 被搜索藏起来时量出来是 0，用渲染时记下的
+      el.style.height = (h0 || CL.h[i] || 0) + "px";
+      if (h0) CL.h[i] = h0;
+      el.textContent = "";
+      delete el.dataset.on;
+    }
+    // 视口上方的版本长高 / 变矮了：把差值补给滚动位置，眼前的内容不动。刚从目录跳过来时按目标版本对齐（clPin）
+    if (CL.pin) clAlign();
+    else if (on && above) pb.scrollTop += el.offsetHeight - h0;
+  }
+  // 目录跳转后的一小会儿钉住目标：沿途版本陆续渲染、高度和估的不一样，每次都按目标的实际位置重新对齐。手一碰就放开
+  function clAlign() {
+    const p = CL.pin; if (!p) return;
+    const pb = $("page-body");
+    pb.scrollTop += p.el.getBoundingClientRect().top - pb.getBoundingClientRect().top - p.off;
+  }
+  function clPin(el, off) {
+    clearTimeout(CL.pinT);
+    CL.pin = { el, off };
+    clAlign();
+    let n = 0;
+    const tick = () => { if (!CL.pin) return; clAlign(); if (++n < 8) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    CL.pinT = setTimeout(() => { CL.pin = null; }, 600);
+  }
+  ["touchstart", "wheel", "keydown"].forEach((ev) => $("page-body").addEventListener(ev, () => { CL.pin = null; }, { passive: true }));
+  $("cl-body").addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]"); if (!a) return;
+    const u = a.getAttribute("href") || "";
+    if (!/^https?:\/\//.test(u)) return;
+    e.preventDefault();
+    if (window.CCApp && CCApp.openUrl) CCApp.openUrl(u); else window.open(u, "_blank", "noopener");
+  });
+  $("cl-toc").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sec]"); if (!b) return;
+    const x = $("cl-body").querySelector(`.help-sec[data-sec="${b.dataset.sec}"]`); if (!x) return;
+    const toc = $("cl-toc");
+    const off = getComputedStyle(toc).flexDirection === "row" ? toc.offsetHeight + 8 : 8;
+    // 直接跳，不平滑：一路滑过去会把沿途几十版挨个渲染又收回
+    clPin(x, off);
+  });
+  $("cl-q").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $("cl-body").querySelectorAll(".cl-sec").forEach((x, i) => x.classList.toggle("hidden", !!q && !CL.low[i].includes(q)));
+    $("cl-toc").querySelectorAll("button").forEach((b, i) => b.classList.toggle("hidden", !!q && !CL.low[i].includes(q)));
+    $("cl-none").classList.toggle("hidden", !q || CL.low.some((x) => x.includes(q)));
+    spyToc("changelog");
   });
   $("btn-menu").addEventListener("click", () => { if (!(window.CCLayout && CCLayout.toggleDock())) openDrawer("sessions"); });
   // ── 文件查看 / 编辑器 ──────────────────────────────────────────────
@@ -9107,10 +9210,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="wn-head" id="wn-title">${esc(t("更新说明"))}</div>
       <div class="wn-body">${list.map((x) => `<section><div class="wn-ver">v${esc(x.v)}</div><div class="bubble wn-md">${renderMd(x.md)}</div></section>`).join("")}
         <section class="wn-cm"><div class="wn-ver">${esc(t("交流与反馈"))}</div>${communityHtml(true)}</section></div>
-      <div class="wn-foot"><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
+      <div class="wn-foot"><button class="btn ghost" data-act="log">${esc(t("更新日志"))}</button><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
     const close = () => el.remove();
     communityBind(el);
-    el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-act=ok]")) close(); });
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("[data-act=log]")) { close(); openPage("changelog"); }
+      else if (e.target === el || e.target.closest("[data-act=ok]")) close();
+    });
     el.querySelectorAll(".wn-md a[href]").forEach((a) => a.addEventListener("click", (e) => {
       const u = a.getAttribute("href") || "";
       if (/^https?:\/\//.test(u) && A.openUrl) { e.preventDefault(); A.openUrl(u); }

@@ -32,6 +32,8 @@ W="$ROOT/android/assets/whatsnew"
 [ -z "$NOTES_EN" ] && [ -s "$W/$TAG.en.md" ] && NOTES_EN="$W/$TAG.en.md"
 [ -z "$NOTES" ] && echo "⚠ 没有更新说明：$W/$TAG.zh.md（App 里也不会弹）"
 [ -n "$NOTES" ] && [ -z "$NOTES_EN" ] && echo "⚠ 只给了中文说明（NOTES），没给英文（NOTES_EN）"
+# App 里的「更新日志」页（gateway/web/changelog/*.json）要已经带着这一版：写好 whatsnew 后跑 node scripts/changelog.mjs 再提交、打包
+grep -q "\"v\":\"$VER\"" "$ROOT/gateway/web/changelog/zh.json" 2>/dev/null || echo "⚠ 更新日志里没有 $TAG：这个包里的「更新日志」页会缺这一版（先跑 node scripts/changelog.mjs，提交后重新打包）"
 export TOKEN REPO TAG COMMIT SHA DEVKIT APK NOTES NOTES_EN
 node --input-type=module -e '
 import fs from "node:fs";

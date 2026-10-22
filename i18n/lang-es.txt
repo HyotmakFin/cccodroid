@@ -1938,3 +1938,8 @@
 1938	Idioma
 1939	Se muestran al pie de la barra lateral y en los informes mensuales exportados
 1940	Cambiar avatar
+1941	Notas de la versión
+1942	Buscar en las notas de la versión…
+1943	Sin publicar
+1944	Versión actual
+1945	Ninguna versión coincide

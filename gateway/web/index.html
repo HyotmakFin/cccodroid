@@ -242,6 +242,16 @@
       </div>
     </section>
 
+    <!-- 更新日志：和 GitHub Releases 同一份（changelog/<语言>.json），第一次点开才取；正文只渲染眼前那几版 -->
+    <section id="tab-changelog" class="tab-pane hidden">
+      <label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="cl-q" type="search" placeholder="搜更新日志…" data-i18n-attr="placeholder" autocomplete="off"></label>
+      <div class="help-layout">
+        <nav id="cl-toc" class="help-toc"></nav>
+        <div id="cl-body" class="help-body"></div>
+      </div>
+      <p id="cl-none" class="muted hidden" data-i18n>没有相关的版本</p>
+    </section>
+
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
     <section id="tab-ext" class="tab-pane hidden">
       <nav class="subnav" id="ext-subnav"></nav>
@@ -612,7 +622,7 @@
           <div class="sblock hidden" id="upd-field">
             <div class="srow head">
               <div class="sl"><b data-i18n>版本</b></div>
-              <div class="sc"><button class="btn sm ghost" id="upd-check" data-i18n>检查更新</button></div>
+              <div class="sc"><button class="btn sm ghost" id="upd-log" data-i18n>更新日志</button><button class="btn sm ghost" id="upd-check" data-i18n>检查更新</button></div>
             </div>
             <div id="upd-items"></div>
             <div class="srow sub">

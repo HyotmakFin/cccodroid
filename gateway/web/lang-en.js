@@ -1975,4 +1975,9 @@ window.I18N_DICT.en = {
   "语言": "Language",
   "显示在侧栏左下角；导出使用月报时也会印上": "Shown at the bottom of the sidebar, and on exported monthly reports",
   "换头像": "Change avatar",
+  "更新日志": "Release notes",
+  "搜更新日志…": "Search release notes…",
+  "未发布": "Unreleased",
+  "当前版本": "Current",
+  "没有相关的版本": "No matching versions",
 };

@@ -1941,4 +1941,9 @@ window.I18N_DICT["es"] = {
   "语言": "Idioma",
   "显示在侧栏左下角；导出使用月报时也会印上": "Se muestran al pie de la barra lateral y en los informes mensuales exportados",
   "换头像": "Cambiar avatar",
+  "更新日志": "Notas de la versión",
+  "搜更新日志…": "Buscar en las notas de la versión…",
+  "未发布": "Sin publicar",
+  "当前版本": "Versión actual",
+  "没有相关的版本": "Ninguna versión coincide",
 };
