@@ -1511,3 +1511,28 @@
 1511	Volver al chat
 1512	Menú arriba a la izquierda: chat nuevo y chats anteriores; Extensiones, Capacidades, Uso y Ayuda están en «Más», Ajustes al final de la barra lateral
 1513	Sigue escribiendo mientras trabaja: Intro pone en cola, el botón del rayo interviene (sin interrumpir, se une al turno actual)
+1514	{n} sin conectar
+1515	{n} en ejecución
+1516	Anteriores
+1517	Todas las conversaciones
+1518	Exportar
+1519	Eliminar (a la papelera)
+1520	Cambiar proveedor / cuenta
+1521	Comunidad · Discusiones
+1522	General
+1523	Proveedor y modelo
+1524	Comportamiento de Claude
+1525	Segundo plano y paralelo
+1526	Dispositivo y permisos
+1527	Colores nativos o Qiusuo
+1528	Los teclados del móvil no tienen Mayús: elige nueva línea si escribes en varias líneas
+1529	Elementos fijos de la barra lateral
+1530	El resto va en «Más»
+1531	Qué canal de Claude Code seguir
+1532	Actualización automática
+1533	Paquete de diagnóstico
+1534	Si componentes, módulos, lista de paquetes y disco coinciden
+1535	Lo que han hecho la instalación, la verificación y la reparación
+1536	Cuota de suscripción
+1537	Buscar comandos, herramientas, habilidades…
+1538	Buscar en la ayuda…

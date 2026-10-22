@@ -1511,3 +1511,28 @@
 1511	Retour à la discussion
 1512	Menu en haut à gauche : nouvelle discussion et discussions passées ; Extensions, Capacités, Utilisation et Aide sont dans « Plus », les Réglages en bas de la barre latérale
 1513	Continuez à écrire pendant la génération : Entrée met en file, le bouton éclair intervient (sans interrompre, rejoint le tour en cours)
+1514	{n} non connecté(s)
+1515	{n} en cours
+1516	Plus ancien
+1517	Toutes les conversations
+1518	Exporter
+1519	Supprimer (vers la corbeille)
+1520	Changer de fournisseur / compte
+1521	Communauté · Discussions
+1522	Général
+1523	Fournisseur et modèle
+1524	Comportement de Claude
+1525	Arrière-plan et parallèle
+1526	Appareil et autorisations
+1527	Couleurs natives ou Qiusuo
+1528	Les claviers de téléphone n'ont pas de Maj : choisissez nouvelle ligne pour écrire sur plusieurs lignes
+1529	Éléments épinglés du panneau latéral
+1530	Le reste va dans « Plus »
+1531	Canal de Claude Code à suivre
+1532	Mise à jour automatique
+1533	Paquet de diagnostic
+1534	Composants, modules, liste des paquets et disque concordent-ils
+1535	Ce que l'installation, la vérification et la réparation ont fait
+1536	Quota d'abonnement
+1537	Rechercher commandes, outils, compétences…
+1538	Rechercher dans l'aide…

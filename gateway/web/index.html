@@ -103,23 +103,8 @@
     <button id="side-new" class="side-new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span data-i18n>新对话</span></button>
     <nav id="side-nav" class="side-nav"></nav>
 
-    <!-- 会话 -->
-    <section id="tab-sessions" class="tab-pane">
-      <div class="side-sec"><span data-i18n>对话</span>
-        <button id="btn-sess-more" class="icon-btn sm" aria-label="管理对话" title="管理对话" data-i18n-attr="aria-label,title"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
-      </div>
-      <div class="row-actions hidden" id="sess-manage">
-                <button id="btn-refresh-sessions" class="btn ghost sm" data-i18n>刷新列表</button>
-                <button id="btn-close-session" class="btn ghost sm" data-i18n>断开当前</button>
-                <button id="btn-sess-select" class="btn ghost sm" data-i18n>选择</button>
-                <button id="btn-sess-import" class="btn ghost sm" data-i18n>导入</button>
-                <button id="btn-sess-trash" class="btn ghost sm" data-i18n>回收站</button>
-                <input id="sess-import-file" type="file" accept=".zip,application/zip" hidden>
-      </div>
-      <input id="sess-q" type="search" placeholder="搜索对话内容…" data-i18n-attr="placeholder" autocomplete="off" enterkeyhint="search">
-      <div id="sess-bar" class="row-actions sess-bar hidden"></div>
-      <div id="session-list" class="list"></div>
-    </section>
+    <!-- 最近的对话：单行条目，按置顶 / 今天 / 昨天 / 更早分组；长按（右键）出菜单。搜索、多选、导入、回收站在「对话」整页 -->
+    <div id="side-recent" class="side-recent"></div>
 
     <button id="side-acct" class="side-acct">
       <span class="acct-av" id="acct-av">C</span>
@@ -137,304 +122,339 @@
     <span id="page-sub"></span>
   </div>
   <div class="page-body" id="page-body">
+    <!-- 对话（整页）：搜索内容、置顶 / 时间分组、多选导出删除、导入、回收站 -->
+    <section id="tab-sessions" class="tab-pane hidden">
+      <label class="searchbox" id="sess-qbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="sess-q" type="search" placeholder="搜索对话内容…" data-i18n-attr="placeholder" autocomplete="off" enterkeyhint="search"></label>
+      <div class="row-actions" id="sess-manage">
+                <button id="btn-refresh-sessions" class="btn ghost sm" data-i18n>刷新列表</button>
+                <button id="btn-close-session" class="btn ghost sm" data-i18n>断开当前</button>
+                <button id="btn-sess-select" class="btn ghost sm" data-i18n>选择</button>
+                <button id="btn-sess-import" class="btn ghost sm" data-i18n>导入</button>
+                <button id="btn-sess-trash" class="btn ghost sm" data-i18n>回收站</button>
+                <input id="sess-import-file" type="file" accept=".zip,application/zip" hidden>
+      </div>
+      <div id="sess-bar" class="row-actions sess-bar hidden"></div>
+      <div id="session-list" class="list"></div>
+    </section>
+
     <!-- 设置 -->
     <section id="tab-settings" class="tab-pane hidden">
+      <!-- 设置（0.3.13 改版）：按类分开，每项一行 —— 左边名称和一句说明，右边控件；开关一律拨动开关。
+           复杂的块（接口卡、Shizuku、设备工具、内存管家、更新）是「标题行 + 内容」。
+           宽屏左栏分类、右边一类；窄屏先列分类，点进去再看（逻辑在 app.js paintSetCats）。所有 id 与旧版一致 -->
+      <div class="set-wrap">
+        <nav class="set-cats" id="set-cats">
+          <button data-cat="general"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 4v5"/></svg><span data-i18n>通用</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="provider"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg><span data-i18n>接口与型号</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="claude"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 9.3l-4.4 3.9 1.3 5.8L12 16l-4.9 3 1.3-5.8L4 9.3l5.8-.7z"/></svg><span data-i18n>Claude 行为</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="run"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg><span data-i18n>后台与并行</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="device"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><span data-i18n>设备与权限</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="update"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span data-i18n>更新</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button data-cat="trouble"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg><span data-i18n>排障</span><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button>
+        </nav>
+        <div class="set-main">
 
-      <!-- 语言：标签与选项故意中英并列、不翻译 —— 切错了语言也认得出怎么切回来。逻辑在 i18n.js -->
-      <div class="field" data-i18n-skip>
-        <label>语言 / Language</label>
-        <!-- 选项由 i18n.js 按 langs.js 生成；这三项只是 i18n.js 没加载时的兜底 -->
-        <select id="set-lang">
-          <option value="auto">跟随系统 / System</option>
-          <option value="zh">简体中文</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label data-i18n>外观</label>
-        <select id="set-theme">
-          <option value="auto" data-i18n>原生 · 跟随系统</option>
-          <option value="light" data-i18n>原生 · 浅色</option>
-          <option value="dark" data-i18n>原生 · 深色</option>
-          <option value="qs-auto" data-i18n>求索 · 跟随系统</option>
-          <option value="qs-light" data-i18n>求索 · 浅色</option>
-          <option value="qs-dark" data-i18n>求索 · 深色</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label data-i18n>回车键</label>
-        <select id="set-enter">
-          <option value="send" data-i18n>发送（Shift + 回车换行）</option>
-          <option value="newline" data-i18n>换行（Ctrl + 回车或点发送键发出）</option>
-        </select>
-      </div>
-
-      <div class="field">
-                <label><span data-i18n>接口</span> <span class="pill" id="provider-count"></span></label>
-        <select id="set-provider"></select>
-                <div class="tiny" id="provider-info" data-i18n>正在读取…</div>
-      </div>
-
-      <!-- 选中那一家的配置卡：账户登录 / 密钥 / 自定义接口，由 app.js 按类型渲染 -->
-      <div class="field prov-card" id="prov-card"></div>
-
-      <!-- 后台被冻结的提示：GatewayService 测到冻结才出现（前台服务挡不住部分厂商的冻结器） -->
-      <div class="field hidden" id="bg-field">
-                <label data-i18n>后台运行</label>
-        <div class="prov-card">
-          <div class="prov-state warn" id="bg-state"></div>
-          <div class="tiny" id="bg-how"></div>
-          <div class="row-actions" id="bg-actions">
-                        <button class="btn sm" data-act="appsettings" data-i18n>去系统设置</button>
-                        <button class="btn sm ghost" data-act="ack" data-i18n>已设置好，清除提示</button>
+        <!-- ── 通用 ── -->
+        <div class="set-cat hidden" data-cat="general">
+          <h3 class="set-h" data-i18n>通用</h3>
+          <!-- 语言：标签与选项故意中英并列、不翻译 —— 切错了语言也认得出怎么切回来。逻辑在 i18n.js -->
+          <div class="srow" data-i18n-skip>
+            <div class="sl"><b>语言 / Language</b></div>
+            <div class="sc">
+              <!-- 选项由 i18n.js 按 langs.js 生成；这三项只是 i18n.js 没加载时的兜底 -->
+              <select id="set-lang">
+                <option value="auto">跟随系统 / System</option>
+                <option value="zh">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>外观</b><p data-i18n>原生或「求索」配色</p></div>
+            <div class="sc">
+              <select id="set-theme">
+                <option value="auto" data-i18n>原生 · 跟随系统</option>
+                <option value="light" data-i18n>原生 · 浅色</option>
+                <option value="dark" data-i18n>原生 · 深色</option>
+                <option value="qs-auto" data-i18n>求索 · 跟随系统</option>
+                <option value="qs-light" data-i18n>求索 · 浅色</option>
+                <option value="qs-dark" data-i18n>求索 · 深色</option>
+              </select>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>回车键</b><p data-i18n>手机键盘没有 Shift，想多行输入就选换行</p></div>
+            <div class="sc">
+              <select id="set-enter">
+                <option value="send" data-i18n>发送（Shift + 回车换行）</option>
+                <option value="newline" data-i18n>换行（Ctrl + 回车或点发送键发出）</option>
+              </select>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>侧栏常驻项</b><p data-i18n>其余收在「更多」里</p></div>
+            <div class="sc"><button class="btn sm ghost" id="set-navpins" data-i18n>编辑</button></div>
           </div>
         </div>
-      </div>
 
-      <!-- 通知：应用在后台时，跑完 / 等确认提醒一下。只有 cccodroid 带（GatewayService 发），开发端整块隐藏 -->
-      <div class="field hidden" id="ntf-field">
-                <label data-i18n>通知</label>
-        <div class="prov-card">
-          <label class="tiny" style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="ntf-done" style="width:auto;margin:0">
-                        <span data-i18n>任务跑完时通知（应用在后台时才发）</span>
-          </label>
-          <label class="tiny" style="display:flex;gap:8px;align-items:center;margin-top:8px">
-            <input type="checkbox" id="ntf-ask" style="width:auto;margin:0">
-                        <span data-i18n>等你确认时通知（命令、计划、选择题；通知里只能拒绝，允许要回到应用里看完整内容再点）</span>
-          </label>
-          <div class="prov-state warn hidden" id="ntf-off"></div>
-          <div class="row-actions hidden" id="ntf-actions">
-                        <button class="btn sm ghost" id="ntf-sys" data-i18n>去系统通知设置</button>
+        <!-- ── 接口与型号 ── -->
+        <div class="set-cat hidden" data-cat="provider">
+          <h3 class="set-h" data-i18n>接口与型号</h3>
+          <div class="srow">
+            <div class="sl"><b><span data-i18n>接口</span> <span class="pill" id="provider-count"></span></b><p id="provider-info" data-i18n>正在读取…</p></div>
+            <div class="sc"><select id="set-provider"></select></div>
+          </div>
+          <!-- 选中那一家的配置卡：账户登录 / 密钥 / 自定义接口，由 app.js 按类型渲染 -->
+          <div class="sblock prov-card" id="prov-card"></div>
+          <div class="srow">
+            <div class="sl"><b><span data-i18n>模型</span> <span class="pill" id="model-count"></span></b><p id="model-info" data-i18n-html>从厂商的 <code>/models</code> 实时拉取；也可在输入框直接打 <code>/model &lt;id&gt;</code>。</p></div>
+            <div class="sc"><select id="set-model"></select></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>思考强度（--effort）</b><p id="effort-info" data-i18n-html>档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</p></div>
+            <div class="sc"><select id="set-effort"></select></div>
           </div>
         </div>
-      </div>
 
-      <!-- 设备工具：给 Claude 挂的 MCP（device-mcp.mjs → DeviceTools.java）。只有 cccodroid 有，开发端整块隐藏 -->
-      <div class="field hidden" id="dev-field">
-                <label data-i18n>设备工具</label>
-        <div class="prov-card">
-          <label class="tiny" style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="dev-on" style="width:auto;margin:0">
-                        <span data-i18n>让 Claude 使用设备工具（通知、剪贴板、打开链接 / 日历 / 闹钟、分享文件…）</span>
-          </label>
-          <div class="tiny" style="margin-top:6px" data-i18n>默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。</div>
-          <div class="tiny" style="margin-top:6px" data-i18n>调用时和其他工具一样，按你选的权限模式确认。会打开别的应用的只是预填，保存、发送、拨出都由你在那个应用里点。</div>
-          <div id="dev-tools" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px"></div>
-          <div class="lbl" style="margin-top:12px" data-i18n>读屏与点按（无障碍）</div>
-          <select id="dev-a11y" style="margin-top:4px">
-            <option value="off" data-i18n>关（默认）</option>
-            <option value="auto" data-i18n>用时自动开，空闲后自动关（要先激活 Shizuku）</option>
-            <option value="on" data-i18n>常开（较耗电）</option>
-          </select>
-          <label class="tiny" id="dev-idle-row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-            <span data-i18n>空闲多久自动关（分钟）</span>
-            <input type="number" id="dev-idle" min="1" max="240" style="width:5em;margin:0">
-          </label>
-          <div class="prov-state" id="dev-a11y-state"></div>
-          <div class="tiny" id="dev-a11y-how"></div>
-          <div class="row-actions">
-                        <button class="btn sm ghost" id="dev-a11y-sys" data-i18n>去系统无障碍设置</button>
+        <!-- ── Claude 行为 ── -->
+        <div class="set-cat hidden" data-cat="claude">
+          <h3 class="set-h" data-i18n>Claude 行为</h3>
+          <div class="srow">
+            <div class="sl"><b data-i18n>权限模式</b><p class="clamp" data-i18n>默认逐项确认，和官方一致：改文件、跑命令前会在对话里问你。全部放行意味着 Claude 不问你就能删文件、跑任意命令。也可以点输入框下方的权限标签随时切换。</p></div>
+            <div class="sc">
+              <select id="set-perm">
+                <option value="default" data-i18n>default · 逐项确认（默认）</option>
+                <option value="acceptEdits" data-i18n>acceptEdits · 自动接受编辑</option>
+                <option value="plan" data-i18n>plan · 只出计划不执行</option>
+                <option value="auto" data-i18n>auto · 自动判断</option>
+                <option value="dontAsk" data-i18n>dontAsk · 不询问（要确认的一律拒绝）</option>
+                <option value="bypassPermissions" data-i18n>bypassPermissions · 全部放行</option>
+              </select>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>输出风格</b></div>
+            <div class="sc"><select id="set-style"><option value="" data-i18n>（默认）</option></select></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>自动压缩窗口（token）</b><p id="ac-info" data-i18n-html>用量逼近这个值时自动摘要历史。留空即不干预；也可在输入框打 <code>/autocompact &lt;n&gt;k</code>。</p></div>
+            <div class="sc"><input id="set-autocompact" type="number" inputmode="numeric" placeholder="留空 = 交给 claude 按窗口决定" data-i18n-attr="placeholder"></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>空闲压缩</b><p data-i18n>长会话闲置快一小时时先压缩</p><p class="clamp" data-i18n>只对 Claude 账户和 Anthropic API Key 生效。上下文超过 20 万 token 的会话闲置约 54 分钟、1 小时提示缓存快过期时，先压缩一次；回来接着聊就不用把整段历史按全价重新处理，订阅账户少占额度，API Key 少花钱。电脑上的 Claude Code 也是这么做的。</p></div>
+            <div class="sc"><input type="checkbox" class="sw" id="set-idlecompact"></div>
+          </div>
+          <div class="sblock">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>附加目录（--add-dir）</b><p data-i18n>让 claude 能读写工作区之外的目录。这些目录同时会成为文件浏览器的快捷入口。</p></div>
+            </div>
+            <div id="dir-list" class="list compact"></div>
+            <div class="sinline">
+              <input id="inp-dir" placeholder="/sdcard/某个目录" data-i18n-attr="placeholder">
+              <button id="btn-add-dir" class="btn sm" data-i18n>添加</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Shizuku：调试提权。只有 cccodroid 带这项集成，旧版里整块隐藏 -->
-      <div class="field hidden" id="priv-field">
-                <label data-i18n>Shizuku（调试提权）</label>
-        <div class="prov-card">
-                    <div class="prov-state" id="priv-state" data-i18n>查询中…</div>
-          <div class="prov-state hidden" id="priv-setup"></div>
-          <div class="row-actions hidden" id="priv-pair">
-            <input id="priv-code" inputmode="numeric" maxlength="6" placeholder="6 位配对码" data-i18n-attr="placeholder" style="width:8em;margin:0">
-            <input id="priv-port" inputmode="numeric" maxlength="5" placeholder="端口（可不填）" data-i18n-attr="placeholder" style="width:8em;margin:0">
-                        <button class="btn sm" data-act="pair" data-i18n>配对</button>
+        <!-- ── 后台与并行 ── -->
+        <div class="set-cat hidden" data-cat="run">
+          <h3 class="set-h" data-i18n>后台与并行</h3>
+          <!-- 后台被冻结的提示：GatewayService 测到冻结才出现（前台服务挡不住部分厂商的冻结器） -->
+          <div class="sblock hidden" id="bg-field">
+            <div class="srow head"><div class="sl"><b data-i18n>后台运行</b></div></div>
+            <div class="prov-state warn" id="bg-state"></div>
+            <div class="tiny" id="bg-how"></div>
+            <div class="row-actions" id="bg-actions">
+              <button class="btn sm" data-act="appsettings" data-i18n>去系统设置</button>
+              <button class="btn sm ghost" data-act="ack" data-i18n>已设置好，清除提示</button>
+            </div>
           </div>
-          <div class="row-actions" id="priv-actions"></div>
-          <div class="priv-audit hidden" id="priv-audit"></div>
-          <label class="tiny hidden" id="priv-auto-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
-            <input type="checkbox" id="priv-auto" style="width:auto;margin:0">
-                        <span data-i18n>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</span>
-          </label>
-          <label class="tiny" id="priv-ka-row" style="display:flex;gap:8px;align-items:center;margin-top:8px">
-            <input type="checkbox" id="priv-ka" style="width:auto;margin:0">
-                        <span data-i18n>后台保活增强：放宽安卓的“幽灵进程”上限（防止并行编译时子进程被系统杀掉）、加入电池白名单、允许后台运行</span>
-          </label>
-          <div class="prov-state" id="priv-ka-result"></div>
-                    <div class="tiny" data-i18n-html>开启后，终端里可用 <code>priv '命令'</code> 以 shell 身份执行（pm / am / settings / dumpsys / logcat / screencap…），Claude 也会用它。
-            没有 Shizuku 时基础开发功能照常，只是这些调试能力用不了。</div>
-        </div>
-      </div>
-
-      <!-- 内存管家（cc-mem）：重活前清场、压住杀了又活的后台应用。默认关，经 Shizuku -->
-      <div class="field" id="mem-field">
-        <label data-i18n>内存管家</label>
-        <div class="prov-card">
-          <label class="tiny" style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="mem-on" style="width:auto;margin:0">
-            <span data-i18n>开启：允许停掉白名单以外的后台应用（需要 Shizuku）</span>
-          </label>
-          <div class="tiny" data-i18n-html>不会被停的：你正在看的、分屏的、挂着前台通知的（代理、音乐）、桌面、输入法、无障碍服务、VPN、Shizuku，以及它们依赖的组件，再加上下面的白名单。
-            终端里用 <code>cc-mem run -- 命令</code> 跑重活：开跑前清场，跑的时候谁复活就再停谁。</div>
-          <textarea id="mem-wl" rows="3" placeholder="白名单：每行一个包名，例如 com.tencent.mm" data-i18n-attr="placeholder" spellcheck="false" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:8px;font:inherit;font-size:13px"></textarea>
-          <div class="row-actions" id="mem-actions">
-            <button class="btn sm ghost" data-act="save" data-i18n>保存白名单</button>
-            <button class="btn sm ghost" data-act="status" data-i18n>查看内存</button>
-            <button class="btn sm" data-act="clear" data-i18n>立即清理</button>
+          <div class="srow">
+            <div class="sl"><b data-i18n>最多同时跑几个会话</b><p class="clamp" data-i18n>不同会话可以同时干活，同一个会话里还是一条接一条。每多跑一个要多占几百 MB 内存，手机内存紧时调小；1 = 一次只跑一轮。</p></div>
+            <div class="sc"><input id="set-parallel" class="narrow" type="number" inputmode="numeric" min="1" step="1"></div>
           </div>
-          <div class="prov-state" id="mem-result"></div>
-        </div>
-      </div>
-
-      <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
-      <div class="field hidden" id="upd-field">
-                <label data-i18n>更新</label>
-        <div class="prov-card">
-          <div id="upd-items"></div>
-          <div class="row-actions">
-                        <button class="btn sm" id="upd-check" data-i18n>检查更新</button>
-            <select id="upd-channel" style="width:auto;margin:0">
-                            <option value="stable" data-i18n>CLI：stable</option>
-              <option value="latest" data-i18n>CLI：latest</option>
-              <option value="pinned" data-i18n>CLI：固定版本…</option>
-            </select>
+          <div class="srow">
+            <div class="sl"><b data-i18n>静态程序兼容</b><p data-i18n>罩住 claude 拉起的所有程序</p><p class="clamp" data-i18n>网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。</p></div>
+            <div class="sc"><input type="checkbox" class="sw" id="set-static"></div>
           </div>
-          <label class="tiny" style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="upd-auto" style="width:auto;margin:0">
-                        <span data-i18n>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</span>
-          </label>
-          <div id="upd-orphans" class="hidden" style="margin-top:6px"></div>
-          <div class="tiny" id="upd-last"></div>
-        </div>
-      </div>
-
-      <!-- 排障：安全模式 / 一键分享日志 / 修复账本 -->
-      <div class="field">
-        <label data-i18n>排障</label>
-        <div class="prov-card">
-          <label class="tiny" style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="safe-mode" style="width:auto;margin:0">
-            <span data-i18n>安全模式：用 claude 自带的 --safe-mode 起，CLAUDE.md、技能、插件、钩子、MCP、自定义命令与输出风格一概不加载。登录、Key、会话、模型照旧，不改动任何文件，关掉即恢复</span>
-          </label>
-          <div class="row-actions">
-            <button class="btn sm" id="btn-share-logs" data-i18n>我卡住了 · 打包诊断</button>
-            <button class="btn sm" id="btn-issue" data-i18n>到 GitHub 反馈</button>
-            <button class="btn sm ghost" id="btn-reconcile" data-i18n>核对记录</button>
-            <button class="btn sm ghost" id="btn-ledger" data-i18n>修复账本</button>
+          <!-- 内存管家（cc-mem）：重活前清场、压住杀了又活的后台应用。默认关，经 Shizuku -->
+          <div class="sblock" id="mem-field">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>内存管家</b><p data-i18n>开启：允许停掉白名单以外的后台应用（需要 Shizuku）</p>
+                <p class="clamp" data-i18n-html>不会被停的：你正在看的、分屏的、挂着前台通知的（代理、音乐）、桌面、输入法、无障碍服务、VPN、Shizuku，以及它们依赖的组件，再加上下面的白名单。
+                  终端里用 <code>cc-mem run -- 命令</code> 跑重活：开跑前清场，跑的时候谁复活就再停谁。</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="mem-on"></div>
+            </div>
+            <textarea id="mem-wl" rows="3" placeholder="白名单：每行一个包名，例如 com.tencent.mm" data-i18n-attr="placeholder" spellcheck="false" autocomplete="off"></textarea>
+            <div class="row-actions" id="mem-actions">
+              <button class="btn sm ghost" data-act="save" data-i18n>保存白名单</button>
+              <button class="btn sm ghost" data-act="status" data-i18n>查看内存</button>
+              <button class="btn sm" data-act="clear" data-i18n>立即清理</button>
+            </div>
+            <div class="prov-state" id="mem-result"></div>
           </div>
-          <div class="tiny" id="share-logs-hint" data-i18n>遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。</div>
-          <div class="tiny" id="issue-hint" data-i18n>「到 GitHub 反馈」会打开一个新建 Issue 的页面，机型、系统版本、自检结果都已经填好，你只要写遇到了什么。需要 GitHub 账号；不放日志和对话。</div>
-          <div id="reconcile-box" class="list hidden"></div>
-          <div id="ledger-list" class="list hidden"></div>
         </div>
-      </div>
 
-      <div class="field">
-                <label><span data-i18n>模型</span> <span class="pill" id="model-count"></span></label>
-        <select id="set-model"></select>
-                <div class="tiny" id="model-info" data-i18n-html>从厂商的 <code>/models</code> 实时拉取；也可在输入框直接打 <code>/model &lt;id&gt;</code>。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>权限模式</label>
-        <select id="set-perm">
-          <option value="default" data-i18n>default · 逐项确认（默认）</option>
-          <option value="acceptEdits" data-i18n>acceptEdits · 自动接受编辑</option>
-          <option value="plan" data-i18n>plan · 只出计划不执行</option>
-          <option value="auto" data-i18n>auto · 自动判断</option>
-          <option value="dontAsk" data-i18n>dontAsk · 不询问（要确认的一律拒绝）</option>
-          <option value="bypassPermissions" data-i18n>bypassPermissions · 全部放行</option>
-        </select>
-                <div class="tiny" data-i18n>默认逐项确认，和官方一致：改文件、跑命令前会在对话里问你。全部放行意味着 Claude 不问你就能删文件、跑任意命令。也可以点输入框下方的权限标签随时切换。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>附加目录（--add-dir）</label>
-        <div id="dir-list" class="list compact"></div>
-        <div class="row-actions">
-                    <input id="inp-dir" placeholder="/sdcard/某个目录" data-i18n-attr="placeholder" style="flex:1">
-                    <button id="btn-add-dir" class="btn sm" data-i18n>添加</button>
+        <!-- ── 设备与权限 ── -->
+        <div class="set-cat hidden" data-cat="device">
+          <h3 class="set-h" data-i18n>设备与权限</h3>
+          <!-- Shizuku：调试提权。只有 cccodroid 带这项集成，旧版里整块隐藏 -->
+          <div class="sblock hidden" id="priv-field">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>Shizuku（调试提权）</b>
+                <p class="clamp" data-i18n-html>开启后，终端里可用 <code>priv '命令'</code> 以 shell 身份执行（pm / am / settings / dumpsys / logcat / screencap…），Claude 也会用它。
+                  没有 Shizuku 时基础开发功能照常，只是这些调试能力用不了。</p></div>
+            </div>
+            <div class="prov-state" id="priv-state" data-i18n>查询中…</div>
+            <div class="prov-state hidden" id="priv-setup"></div>
+            <div class="sinline hidden" id="priv-pair">
+              <input id="priv-code" inputmode="numeric" maxlength="6" placeholder="6 位配对码" data-i18n-attr="placeholder">
+              <input id="priv-port" inputmode="numeric" maxlength="5" placeholder="端口（可不填）" data-i18n-attr="placeholder">
+              <button class="btn sm" data-act="pair" data-i18n>配对</button>
+            </div>
+            <div class="row-actions" id="priv-actions"></div>
+            <div class="priv-audit hidden" id="priv-audit"></div>
+            <div class="srow sub hidden" id="priv-auto-row">
+              <div class="sl"><p data-i18n>重启手机后自动重新激活（需连着 Wi‑Fi；会在开机时启动 cccodroid 后台服务）</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="priv-auto"></div>
+            </div>
+            <div class="srow sub" id="priv-ka-row">
+              <div class="sl"><p data-i18n>后台保活增强：放宽安卓的“幽灵进程”上限（防止并行编译时子进程被系统杀掉）、加入电池白名单、允许后台运行</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="priv-ka"></div>
+            </div>
+            <div class="prov-state" id="priv-ka-result"></div>
+          </div>
+          <!-- 通知：应用在后台时，跑完 / 等确认提醒一下。只有 cccodroid 带（GatewayService 发），开发端整块隐藏 -->
+          <div class="sblock hidden" id="ntf-field">
+            <div class="srow head"><div class="sl"><b data-i18n>通知</b></div></div>
+            <div class="srow sub">
+              <div class="sl"><p data-i18n>任务跑完时通知（应用在后台时才发）</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="ntf-done"></div>
+            </div>
+            <div class="srow sub">
+              <div class="sl"><p data-i18n>等你确认时通知（命令、计划、选择题；通知里只能拒绝，允许要回到应用里看完整内容再点）</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="ntf-ask"></div>
+            </div>
+            <div class="prov-state warn hidden" id="ntf-off"></div>
+            <div class="row-actions hidden" id="ntf-actions">
+              <button class="btn sm ghost" id="ntf-sys" data-i18n>去系统通知设置</button>
+            </div>
+          </div>
+          <!-- 设备工具：给 Claude 挂的 MCP（device-mcp.mjs → DeviceTools.java）。只有 cccodroid 有，开发端整块隐藏 -->
+          <div class="sblock hidden" id="dev-field">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>设备工具</b><p data-i18n>让 Claude 使用设备工具（通知、剪贴板、打开链接 / 日历 / 闹钟、分享文件…）</p>
+                <p class="clamp" data-i18n>默认关。让 Claude 测你自己做的 App、或把它生成的文件发到别的应用时再打开；开着时每轮对话会多带一两千 token 的工具说明。</p>
+                <p class="clamp" data-i18n>调用时和其他工具一样，按你选的权限模式确认。会打开别的应用的只是预填，保存、发送、拨出都由你在那个应用里点。</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="dev-on"></div>
+            </div>
+            <div id="dev-tools" class="dev-tools"></div>
+            <div class="srow sub">
+              <div class="sl"><b data-i18n>读屏与点按（无障碍）</b></div>
+              <div class="sc">
+                <select id="dev-a11y">
+                  <option value="off" data-i18n>关（默认）</option>
+                  <option value="auto" data-i18n>用时自动开，空闲后自动关（要先激活 Shizuku）</option>
+                  <option value="on" data-i18n>常开（较耗电）</option>
+                </select>
+              </div>
+            </div>
+            <div class="srow sub" id="dev-idle-row">
+              <div class="sl"><p data-i18n>空闲多久自动关（分钟）</p></div>
+              <div class="sc"><input type="number" id="dev-idle" class="narrow" min="1" max="240"></div>
+            </div>
+            <div class="prov-state" id="dev-a11y-state"></div>
+            <div class="tiny" id="dev-a11y-how"></div>
+            <div class="row-actions">
+              <button class="btn sm ghost" id="dev-a11y-sys" data-i18n>去系统无障碍设置</button>
+            </div>
+          </div>
         </div>
-                <div class="tiny" data-i18n>让 claude 能读写工作区之外的目录。这些目录同时会成为文件浏览器的快捷入口。</div>
-      </div>
 
-      <div class="field">
-                <label data-i18n>输出风格</label>
-        <select id="set-style">
-                    <option value="" data-i18n>（默认）</option>
-        </select>
-      </div>
+        <!-- ── 更新 ── -->
+        <div class="set-cat hidden" data-cat="update">
+          <h3 class="set-h" data-i18n>更新</h3>
+          <!-- 更新：应用本体 / 开发工具包 / Claude Code。只有 cccodroid 带，旧版里整块隐藏 -->
+          <div class="sblock hidden" id="upd-field">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>版本</b></div>
+              <div class="sc"><button class="btn sm" id="upd-check" data-i18n>检查更新</button></div>
+            </div>
+            <div id="upd-items"></div>
+            <div class="srow sub">
+              <div class="sl"><b data-i18n>Claude Code 跟哪个通道</b></div>
+              <div class="sc">
+                <select id="upd-channel">
+                  <option value="stable" data-i18n>CLI：stable</option>
+                  <option value="latest" data-i18n>CLI：latest</option>
+                  <option value="pinned" data-i18n>CLI：固定版本…</option>
+                </select>
+              </div>
+            </div>
+            <div class="srow sub">
+              <div class="sl"><b data-i18n>自动更新</b><p class="clamp" data-i18n>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</p></div>
+              <div class="sc"><input type="checkbox" class="sw" id="upd-auto"></div>
+            </div>
+            <div id="upd-orphans" class="hidden"></div>
+            <div class="tiny" id="upd-last"></div>
+          </div>
+        </div>
 
-      <div class="field">
-                <label data-i18n>思考强度（--effort）</label>
-        <select id="set-effort"></select>
-                <div class="tiny" id="effort-info" data-i18n-html>档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</div>
-      </div>
+        <!-- ── 排障：安全模式 / 打包诊断 / 反馈 / 核对记录 / 修复账本 / 运行状态 ── -->
+        <div class="set-cat hidden" data-cat="trouble">
+          <h3 class="set-h" data-i18n>排障</h3>
+          <div class="srow">
+            <div class="sl"><b data-i18n>安全模式</b><p class="clamp" data-i18n>安全模式：用 claude 自带的 --safe-mode 起，CLAUDE.md、技能、插件、钩子、MCP、自定义命令与输出风格一概不加载。登录、Key、会话、模型照旧，不改动任何文件，关掉即恢复</p></div>
+            <div class="sc"><input type="checkbox" class="sw" id="safe-mode"></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>打包诊断</b><p class="clamp" id="share-logs-hint" data-i18n>遇到装不上、跑不动、报错看不懂：打一个诊断包，经系统分享发给帮你看的人（或附在 GitHub issue 里）。打包前会列出包里有什么；密钥、令牌、邮箱和你的消息内容都会先去掉。</p></div>
+            <div class="sc"><button class="btn sm" id="btn-share-logs" data-i18n>我卡住了 · 打包诊断</button></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>到 GitHub 反馈</b><p class="clamp" id="issue-hint" data-i18n>「到 GitHub 反馈」会打开一个新建 Issue 的页面，机型、系统版本、自检结果都已经填好，你只要写遇到了什么。需要 GitHub 账号；不放日志和对话。</p></div>
+            <div class="sc"><button class="btn sm" id="btn-issue" data-i18n>到 GitHub 反馈</button></div>
+          </div>
+          <div class="sblock">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>核对记录</b><p data-i18n>组件、模块、包清单与磁盘是否一致</p></div>
+              <div class="sc"><button class="btn sm ghost" id="btn-reconcile" data-i18n>核对记录</button></div>
+            </div>
+            <div id="reconcile-box" class="list hidden"></div>
+          </div>
+          <div class="sblock">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>修复账本</b><p data-i18n>安装、校验、修复做过什么</p></div>
+              <div class="sc"><button class="btn sm ghost" id="btn-ledger" data-i18n>修复账本</button></div>
+            </div>
+            <div id="ledger-list" class="list hidden"></div>
+          </div>
+          <div class="sblock">
+            <div class="srow head">
+              <div class="sl"><b data-i18n>运行状态</b></div>
+              <div class="sc"><button id="btn-cli-doctor" class="btn ghost sm" data-i18n>跑一次 doctor</button></div>
+            </div>
+            <pre id="status-box" class="mono" data-i18n>读取中…</pre>
+            <pre id="cli-out" class="mono hidden"></pre>
+          </div>
+        </div>
 
-      <div class="field">
-                <label data-i18n>自动压缩窗口（token）</label>
-                <input id="set-autocompact" type="number" inputmode="numeric" placeholder="留空 = 交给 claude 按窗口决定" data-i18n-attr="placeholder">
-                <div class="tiny" id="ac-info" data-i18n-html>用量逼近这个值时自动摘要历史。留空即不干预；也可在输入框打 <code>/autocompact &lt;n&gt;k</code>。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>空闲压缩</label>
-                <label class="tiny" style="display:flex;gap:8px;align-items:center">
-                  <input type="checkbox" id="set-idlecompact" style="width:auto;margin:0">
-                  <span data-i18n>长会话闲置快一小时时先压缩</span>
-                </label>
-                <div class="tiny" data-i18n>只对 Claude 账户和 Anthropic API Key 生效。上下文超过 20 万 token 的会话闲置约 54 分钟、1 小时提示缓存快过期时，先压缩一次；回来接着聊就不用把整段历史按全价重新处理，订阅账户少占额度，API Key 少花钱。电脑上的 Claude Code 也是这么做的。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>最多同时跑几个会话</label>
-                <input id="set-parallel" type="number" inputmode="numeric" min="1" step="1">
-                <div class="tiny" data-i18n>不同会话可以同时干活，同一个会话里还是一条接一条。每多跑一个要多占几百 MB 内存，手机内存紧时调小；1 = 一次只跑一轮。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>静态程序兼容</label>
-                <label class="tiny" style="display:flex;gap:8px;align-items:center">
-                  <input type="checkbox" id="set-static" style="width:auto;margin:0">
-                  <span data-i18n>罩住 claude 拉起的所有程序</span>
-                </label>
-                <div class="tiny" data-i18n>网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。</div>
-      </div>
-
-      <div class="field">
-                <label data-i18n>运行状态</label>
-                <pre id="status-box" class="mono" data-i18n>读取中…</pre>
-                <button id="btn-cli-doctor" class="btn ghost sm" data-i18n>跑一次 doctor</button>
-        <pre id="cli-out" class="mono hidden"></pre>
+        </div>
       </div>
     </section>
 
     <!-- 用量：本应用的使用统计 + 耗电（原来在设置里） -->
     <section id="tab-usage" class="tab-pane hidden">
-      <!-- 耗电：本应用自己量的 CPU 时间 + 原生层给的电量 / 亮屏 / 前台时长；系统估算要 Shizuku，点了才查 -->
-      <div class="field" id="en-field">
-        <label data-i18n>耗电</label>
-        <div class="prov-card">
-          <div class="en-head">
-            <div class="en-seg" id="en-seg">
-              <button data-v="hour" class="on" data-i18n>小时</button><button data-v="day" data-i18n>日</button><button data-v="week" data-i18n>周</button>
-            </div>
-            <span class="tiny" id="en-bat"></span>
-          </div>
-          <div id="en-charts"></div>
-          <div class="tiny en-cap" id="en-cap"></div>
-          <div class="row-actions">
-            <button class="btn sm ghost" id="en-sys-btn" data-i18n>系统估算（需要 Shizuku）</button>
-          </div>
-          <div id="en-sys"></div>
-        </div>
+      <!-- 订阅额度：用 Claude 账户登录时才有（claude 每轮回报，网关记最近一次） -->
+      <div class="ext-sec-plain hidden" id="quota-field" data-sec="quota">
+        <div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></svg></span><span data-i18n>订阅额度</span></div>
+        <div class="quota-tiles" id="quota-tiles"></div>
+        <div class="tiny" id="quota-note"></div>
       </div>
 
       <!-- 使用统计：每天 / 周 / 月和 Claude 对话多少次；月报是 canvas 画的图，可保存、分享。数据在网关 home/ccapp-usage.json -->
-      <div class="field" id="us-field">
-        <label data-i18n>使用统计</label>
+      <div class="ext-sec-plain" id="us-field" data-sec="stats">
+        <div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span data-i18n>使用统计</span></div>
         <div class="prov-card">
           <div class="us-tiles" id="us-tiles"></div>
           <div class="us-year" id="us-year"></div>
@@ -451,7 +471,7 @@
             </div>
             <details class="ext-more"><summary data-i18n>管理统计数据</summary>
               <label class="tiny" style="display:flex;gap:8px;align-items:center;margin:4px 0">
-                <input type="checkbox" id="us-off" style="width:auto;margin:0">
+                <input type="checkbox" class="sw" id="us-off">
                 <span data-i18n>记录使用统计</span>
               </label>
               <div class="row-actions">
@@ -465,57 +485,81 @@
           <div class="prov-state" id="us-result"></div>
         </div>
       </div>
+
+      <!-- 耗电：本应用自己量的 CPU 时间 + 原生层给的电量 / 亮屏 / 前台时长；系统估算要 Shizuku，点了才查 -->
+      <div class="ext-sec-plain" id="en-field" data-sec="energy">
+        <div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 11v2M6 10v4M9 10v4"/></svg></span><span data-i18n>耗电</span></div>
+        <div class="prov-card">
+          <div class="en-head">
+            <div class="en-seg" id="en-seg">
+              <button data-v="hour" class="on" data-i18n>小时</button><button data-v="day" data-i18n>日</button><button data-v="week" data-i18n>周</button>
+            </div>
+            <span class="tiny" id="en-bat"></span>
+          </div>
+          <div id="en-charts"></div>
+          <div class="tiny en-cap" id="en-cap"></div>
+          <div class="row-actions">
+            <button class="btn sm ghost" id="en-sys-btn" data-i18n>系统估算（需要 Shizuku）</button>
+          </div>
+          <div id="en-sys"></div>
+        </div>
+      </div>
     </section>
 
-    <!-- 能力 -->
+    <!-- 能力：这一轮 Claude 能用的全部东西（取自 init 报告）。顶上计数格点了跳到那一节；搜索框同时筛所有节 -->
     <section id="tab-caps" class="tab-pane hidden">
-      <div id="caps-summary" class="tiny"></div>
-            <div class="field"><label><span data-i18n>斜杠命令</span> <span id="c-count" class="pill"></span></label>
-        <div id="caps-cmds" class="chips"></div></div>
-            <div class="field"><label><span data-i18n>工具</span> <span id="t-count" class="pill"></span></label>
+      <div id="caps-summary" class="caps-sum"></div>
+      <div class="cap-tiles" id="cap-tiles"></div>
+      <label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="caps-q" type="search" placeholder="搜命令、工具、技能…" data-i18n-attr="placeholder" autocomplete="off"></label>
+      <div class="ext-sec-plain" data-sec="cmd"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M15 4 9 20"/></svg></span><span data-i18n>斜杠命令</span> <span id="c-count" class="pill"></span></div>
+        <div id="caps-cmds" class="cmd-grid"></div></div>
+      <div class="ext-sec-plain" data-sec="tool"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M4 20l7-7M14 4l6 6-3 3-6-6zM10 8l6 6"/></svg></span><span data-i18n>工具</span> <span id="t-count" class="pill"></span></div>
         <div id="caps-tools" class="chips"></div></div>
-            <div class="field"><label><span data-i18n>技能</span> <span id="s-count" class="pill"></span></label>
+      <div class="ext-sec-plain" data-sec="skill"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg></span><span data-i18n>技能</span> <span id="s-count" class="pill"></span></div>
         <div id="caps-skills" class="chips"></div></div>
-            <div class="field"><label><span data-i18n>子代理</span> <span id="a-count" class="pill"></span></label>
+      <div class="ext-sec-plain" data-sec="agent"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 8 11 16M16.5 8 13 16M8.5 6h7"/></svg></span><span data-i18n>子代理</span> <span id="a-count" class="pill"></span></div>
         <div id="caps-agents" class="chips"></div></div>
-            <div class="field"><label data-i18n>MCP 服务器</label>
-        <div id="caps-mcp" class="chips"></div>
-                <button id="btn-refresh-mcp" class="btn ghost sm" data-i18n>查询 MCP</button></div>
-            <div class="field"><label data-i18n>插件</label>
+      <div class="ext-sec-plain" data-sec="mcp"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg></span><span data-i18n>MCP 服务器</span> <span id="m-count" class="pill"></span> <button id="btn-refresh-mcp" class="btn ghost sm sec-act" data-i18n>查询 MCP</button></div>
+        <div id="caps-mcp" class="chips"></div></div>
+      <div class="ext-sec-plain" data-sec="plugin"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z"/></svg></span><span data-i18n>插件</span> <span id="p-count" class="pill"></span></div>
         <div id="caps-plugins" class="chips"></div></div>
     </section>
 
     <!-- 帮助：第一次点开才去取 help/<语言>.md 渲染（懒加载），目录点了跳到对应小节 -->
     <section id="tab-help" class="tab-pane hidden">
-      <nav id="help-toc" class="help-toc"></nav>
-      <div id="help-body" class="help-body"></div>
+      <label class="searchbox"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="help-q" type="search" placeholder="搜帮助…" data-i18n-attr="placeholder" autocomplete="off"></label>
+      <div class="help-layout">
+        <nav id="help-toc" class="help-toc"></nav>
+        <div id="help-body" class="help-body"></div>
+      </div>
     </section>
 
     <!-- 扩展：插件 / 技能 / MCP 的安装与卸载（都转给 claude 自己的命令行） -->
     <section id="tab-ext" class="tab-pane hidden">
+      <nav class="subnav" id="ext-subnav"></nav>
       <!-- 四节都是折叠容器（展开状态记在本机），每节一条横向滚动的分类索引条：点一下只看那一类 -->
       <!-- 工具包模块（0.3.9 起）：只有模块化工具包才显示；整包工具包看不到这一节，和以前一样 -->
-      <details class="field ext-sec hidden" id="mod-field" data-sec="mod" open><summary><span data-i18n>工具包模块</span> <span id="mod-count" class="pill"></span></summary>
+      <details class="field ext-sec hidden" id="mod-field" data-sec="mod" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></span><span data-i18n>工具包模块</span> <span id="mod-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>开发工具包按用途拆成模块，用得上的才装。基础模块必装；共享运行库跟着用它的模块自动装卸。</div>
         <div id="mod-list" class="list"></div>
       </details>
-      <details class="field ext-sec hidden" id="comp-field" data-sec="comp" open><summary><span data-i18n>可选组件</span> <span id="comp-count" class="pill"></span></summary>
+      <details class="field ext-sec hidden" id="comp-field" data-sec="comp" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></svg></span><span data-i18n>可选组件</span> <span id="comp-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>体积大的工具不随应用安装，用得上再在这里下载；卸载只删组件自己的文件。</div>
         <div class="ext-idx" id="comp-idx"></div>
         <div id="comp-list" class="list"></div>
       </details>
-      <details class="field ext-sec hidden" id="custom-field" data-sec="custom" open><summary><span data-i18n>自定义组件</span> <span id="custom-count" class="pill"></span></summary>
+      <details class="field ext-sec hidden" id="custom-field" data-sec="custom" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg></span><span data-i18n>自定义组件</span> <span id="custom-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>市场里没有的，可以自己导入 Linux arm64 程序：单个程序，或 .tar.gz / .zip 压缩包。会自动补缺的库、生成命令，Claude 和终端里都能直接用。</div>
         <div class="it-acts"><button class="btn sm" id="custom-pick" data-i18n>导入程序…</button><input type="file" id="custom-file" class="hidden"></div>
         <div class="cu-row"><input id="custom-path" data-i18n-attr="placeholder" placeholder="或者填本机路径，如 /sdcard/Download/foo.tar.gz" spellcheck="false" autocapitalize="off"><button class="btn ghost sm" id="custom-path-go" data-i18n>分析</button></div>
         <div id="custom-wiz"></div>
         <div id="custom-list" class="list"></div>
       </details>
-      <div class="field hidden" id="gh-field"><label><span>GitHub</span></label>
+      <div class="field ext-sec-plain hidden" id="gh-field" data-sec="gh"><div class="sec-title"><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M9 19c-4 1.4-4-2-6-2.5M15 22v-3.5a3 3 0 0 0-.9-2.4c3-.3 6-1.5 6-6.6a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.6 1.4a12.4 12.4 0 0 0-6.5 0C6 1.9 4.9 2.2 4.9 2.2a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 3.4 9.4c0 5.1 3 6.3 6 6.6a3 3 0 0 0-.9 2.4V22"/></svg></span><span>GitHub</span></div>
         <div id="gh-field-box" class="list"></div>
       </div>
       <div class="tiny" data-i18n>改动在下一条消息生效。插件和 MCP 由 claude 自己的命令装卸，这里只是替你敲命令。</div>
-      <details class="field ext-sec" data-sec="plugin" open><summary><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></summary>
+      <details class="field ext-sec" data-sec="plugin" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z"/></svg></span><span data-i18n>插件</span> <span id="ext-p-count" class="pill"></span></summary>
         <div class="ext-idx" id="plugin-idx"></div>
         <div id="ext-plugins" class="list"></div>
         <div class="row-actions">
@@ -531,7 +575,7 @@
           </div>
         </details>
       </details>
-      <details class="field ext-sec" data-sec="skill" open><summary><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></summary>
+      <details class="field ext-sec" data-sec="skill" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg></span><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></summary>
         <div class="ext-idx" id="skill-idx"></div>
         <div id="ext-skills" class="list"></div>
         <div class="row-actions">
@@ -543,7 +587,7 @@
           <div id="ext-s-cat" class="list"></div>
         </details>
       </details>
-      <details class="field ext-sec" data-sec="mcp" open><summary><span data-i18n>MCP 服务器</span> <span id="ext-m-count" class="pill"></span></summary>
+      <details class="field ext-sec" data-sec="mcp" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg></span><span data-i18n>MCP 服务器</span> <span id="ext-m-count" class="pill"></span></summary>
         <div class="ext-idx" id="mcp-idx"></div>
         <div id="ext-mcp" class="list"><div class="tiny" data-i18n>查询中…（要逐个试连，稍等几秒）</div></div>
         <details class="ext-more" id="ext-mcp-catbox"><summary data-i18n>官方 MCP 注册表</summary>
@@ -564,7 +608,7 @@
           </div>
         </details>
       </details>
-      <details class="field ext-sec" id="ext-hook-sec" data-sec="hook" open><summary><span data-i18n>Hooks（自动规则）</span> <span id="ext-h-count" class="pill"></span></summary>
+      <details class="field ext-sec" id="ext-hook-sec" data-sec="hook" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/></svg></span><span data-i18n>Hooks（自动规则）</span> <span id="ext-h-count" class="pill"></span></summary>
         <div class="tiny" data-i18n>hooks 就是「到了某个时刻，自动跑一条命令」：Claude 用工具之前或之后、你发消息时、它答完一轮时……命令可以拦下 Claude 的动作、给它补充说明，也可以顺手做些杂事（存档、记录、格式化）。</div>
         <div class="ext-idx" id="hook-scope"></div>
         <div id="hook-bar" class="hk-bar"></div>

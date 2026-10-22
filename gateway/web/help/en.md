@@ -18,7 +18,7 @@ cccodroid runs the **official, unmodified Claude Code** on your phone, wraps it 
 
 | Button | What it does |
 |---|---|
-| ☰ | Sidebar: Sessions / Settings / Capabilities / Extensions / Help |
+| ☰ | Sidebar: new chat, Chats / Extensions (the rest under "More"), recent chats; the account row at the bottom opens Settings |
 | 📁 | File browser |
 | >_ | Terminal |
 | 🌐 | In-app browser |
@@ -72,7 +72,7 @@ Before Claude edits files, runs commands or goes online, the **permission mode**
 
 ## Sessions
 
-Sidebar → Sessions:
+Sidebar → Chats (recent chats can also be opened straight from the sidebar; long-press to pin, rename, export or delete):
 
 - Tap one to switch. You can **rename** and **delete** (deleted sessions go to the trash for 30 days).
 - **Select**: tick sessions or select all and **export** them as a zip (save anywhere or share).
@@ -108,7 +108,7 @@ The layout follows the **window width**, not the orientation:
 
 - Narrow (phone portrait, narrow split screen): one column; files, terminal and browser cover the screen.
 - Wide (≥ 840): chat plus a workspace on the right, where files, viewer, terminal and browser open. Drag the divider; double-tap it to reset.
-- Wider (≥ 1000): the sidebar also stays docked on the left; ☰ or ✕ collapses it.
+- Wider (≥ 1000): the sidebar also stays docked on the left; ☰ or the collapse button hides it. Drag its right edge to resize, double-tap to reset.
 - With several panes open, tabs at the top of the workspace switch between them; the back gesture closes the most recently opened one first.
 
 ## Settings
@@ -135,7 +135,7 @@ Sidebar → Extensions:
 
 Changes take effect with the **next message**. Everything goes through Claude Code's own `claude plugin` / `claude mcp` commands; anything that needs to run a command to install shows it to you first.
 
-Sidebar → Capabilities lists the slash commands, tools, skills, subagents, MCP servers and plugins currently available.
+Sidebar → More → Capabilities lists the slash commands, tools, skills, subagents, MCP servers and plugins currently available; tap a command card to put it in the input box.
 
 **Packages from the Termux repository: `pkg`** (in the terminal; Claude uses it too):
 

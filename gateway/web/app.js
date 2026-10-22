@@ -2715,9 +2715,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
 
   function renderSessions() {
+    renderSideRecent();
+    renderSideNav();
     const box = $("session-list");
     renderSessBar();
-    $("sess-q").classList.toggle("hidden", sess.mode === "trash");
+    $("sess-qbox").classList.toggle("hidden", sess.mode === "trash");
     if (sess.mode === "trash") return renderTrash(box);
     const q = sess.q.trim();
     if (!q && !state.sessions.length) {
@@ -2729,25 +2731,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const idleSids = new Set(srv.runs.filter((r) => r.idle).map((r) => r.sessionId).filter(Boolean));
     const askSids = new Set(srv.runs.filter((r) => r.perms && r.perms.length).map((r) => r.sessionId).filter(Boolean));
     const picking = sess.mode === "select";
-    const item = (s) => `
-      <div class="item ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
-        <div class="it-title">${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}> ` : ""}${s.pinned && q ? '<span class="pin-ic">📌</span>' : ""}${markHit(s.title, q)}</div>
-        ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
-        <div class="it-meta">
-          <span title="${esc(new Date(s.mtime).toLocaleString())}">${t("更新 {time}", { time: fmtStamp(s.mtime) })}</span>
-          <span title="${s.created ? esc(new Date(s.created).toLocaleString()) : ""}">${t("创建 {time}", { time: fmtStamp(s.created) })}</span>
-          <span>${fmtSize(s.sizeKb * 1024)}</span>
-          ${askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : idleSids.has(s.id) ? `<span class="badge">${t("后台任务在跑")}</span>` : ""}
-          ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
-          ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
+    // 一行一个：标题 + 等宽的时间/大小；点整行打开，「⋯」里是置顶、改名、导出、删除（和侧栏长按同一份菜单）
+    const item = (s) => {
+      const st = askSids.has(s.id) ? `<span class="badge warn">${t("等你确认")}</span>` : liveSids.has(s.id) ? `<span class="badge cur">${t("生成中")}</span>` : idleSids.has(s.id) ? `<span class="badge">${t("后台任务在跑")}</span>` : "";
+      return `
+      <div class="item srow-sess ${s.id === view.sessionId ? "active" : ""} ${picking && sess.sel.has(s.id) ? "picked" : ""}" data-id="${esc(s.id)}">
+        ${picking ? `<input type="checkbox" class="sess-ck" ${sess.sel.has(s.id) ? "checked" : ""}>` : ""}
+        <div class="ss-main">
+          <div class="it-title">${s.pinned ? `<svg class="pin-ic" viewBox="0 0 24 24">${SM.pin}</svg>` : ""}${markHit(s.title, q)}</div>
+          ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
+          <div class="it-meta">
+            <span title="${esc(t("更新 {time}", { time: new Date(s.mtime).toLocaleString() }) + (s.created ? " · " + t("创建 {time}", { time: new Date(s.created).toLocaleString() }) : ""))}">${fmtStamp(s.mtime)}</span>
+            <span>${fmtSize(s.sizeKb * 1024)}</span>
+            ${st}
+            ${s.currentProject ? `<span class="badge cur">${t("当前项目")}</span>` : ""}
+            ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
+          </div>
         </div>
-        ${picking ? "" : `<div class="it-acts">
-          <button data-a="open">${t("切换到此会话")}</button>
-          <button data-a="pin">${s.pinned ? t("取消置顶") : t("置顶")}</button>
-          <button data-a="rename">${t("重命名")}</button>
-          <button data-a="del">${t("删除")}</button>
-        </div>`}
+        ${picking ? "" : `<button class="ss-more" data-a="more" aria-label="${esc(t("更多"))}"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>`}
       </div>`;
+    };
     if (q) {
       // 标题先在本地筛，内容命中等网关回来再补上
       const list = sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()));
@@ -2767,7 +2770,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     let html = "";
     for (const g of groups) {
       const folded = sessFolded(g.key);
-      html += `<div class="sess-grp ${g.key === "pin" ? "pin" : ""} ${folded ? "folded" : ""}" data-g="${esc(g.key)}"><span class="chev">▾</span>${esc(g.label)} · ${g.list.length}</div>`;
+      html += `<div class="sess-grp ${g.key === "pin" ? "pin" : ""} ${folded ? "folded" : ""}" data-g="${esc(g.key)}"><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>${esc(g.label)} · ${g.list.length}</div>`;
       html += (folded ? g.list.filter((s) => s.id === view.sessionId) : g.list).map(item).join("");
     }
     box.innerHTML = html;
@@ -2923,9 +2926,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       return renderSessions();
     }
     const b = e.target.closest("button");
+    if (!b && sess.mode !== "trash") {
+      const h = sess.q.trim() && (sess.hits || []).find((s) => s.id === id);
+      closeDrawer(); openSession(id, h && h.count ? sess.q.trim() : ""); return;
+    }
     if (!b) return;
     e.stopPropagation();
     const a = b.dataset.a;
+    if (a === "more") return sessMenu(id, b);
     if (a === "restore") {
       const r = await post("/api/trash/restore", { ids: [id] }).catch((err) => ({ failed: [{ error: err.message }] }));
       if (r.failed && r.failed.length) toast(t("恢复失败：{msg}", { msg: r.failed[0].error === "exists" ? t("同名会话已存在") : r.failed[0].error }), true);
@@ -3036,7 +3044,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       else if (m.state === "ok") acts = btn("remove", m.id, t("卸载"), used.length ? ' data-usedby="' + listOf(used) + '"' : "");
       return extItem(esc(pickLang(m.name) || m.id), meta, acts, desc + bar);
     }).join("");
-    if (moving && !$("tab-ext").classList.contains("hidden")) modTimer = setTimeout(loadModules, 1500);
+    if (moving && pageOn("ext")) modTimer = setTimeout(loadModules, 1500);
   }
   $("mod-list").addEventListener("click", async (e) => {
     const b = e.target.closest("button[data-c]");
@@ -3162,7 +3170,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (llmDl.open) loadLlmDl();
     }
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
-    if ((r.items || []).some((c) => c.progress) && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+    if ((r.items || []).some((c) => c.progress) && pageOn("ext"))
       compTimer = setTimeout(loadComponents, 1000);
   }
 
@@ -3327,7 +3335,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const inp = $("llm-url"); if (inp) inp.addEventListener("input", () => { llmDl.url = inp.value; });
     }
     const busy = (r.items || []).some((m) => m.job && m.job.phase !== "error");
-    if (busy && llmDl.open && $("llm-dl") && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+    if (busy && llmDl.open && $("llm-dl") && pageOn("ext"))
       llmDl.timer = setTimeout(loadLlmDl, 1000);
   }
   $("tab-ext").addEventListener("click", async (e) => {
@@ -3390,7 +3398,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     ghAuth.html = h;
     const box = $("gh-auth");
     if (box) box.innerHTML = h;
-    if (ghAuth.polling && box && !$("tab-ext").classList.contains("hidden") && !$("drawer").classList.contains("hidden"))
+    if (ghAuth.polling && box && pageOn("ext"))
       ghAuth.timer = setTimeout(loadGhAuth, 2000);
   }
 
@@ -4224,6 +4232,28 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return `<div class="quota">${row(t("5 小时"), l.fiveHour)}${row(t("每周"), l.sevenDay)}
       <div class="tiny">${ago < 1 ? t("额度刚刚更新") : t("额度更新于 {n} 分钟前（每轮对话后刷新）", { n: ago })}</div></div>`;
   }
+  /** 用量页的额度面板：只有用 Claude 账户登录时才显示，大数字 + 进度条 + 重置时间 */
+  async function loadQuota() {
+    let st = null;
+    try { st = await api("/api/login/status"); } catch {}
+    const box = $("quota-field"), l = st && st.loggedIn !== false && st.limits;
+    box.classList.toggle("hidden", !(st && st.loggedIn));
+    if (!l) { $("quota-tiles").innerHTML = ""; $("quota-note").textContent = t("额度：发一条消息后显示（5 小时 / 每周）"); return; }
+    const tile = (label, w) => {
+      if (!w) return "";
+      const pct = Math.max(0, Math.min(100, w.used));
+      const cls = pct >= 90 ? "hot" : pct >= 70 ? "warm" : "";
+      const at = w.resetsAt ? new Date(w.resetsAt * 1000) : null;
+      const reset = at ? t("{time} 重置", { time: esc(at.toDateString() === new Date().toDateString()
+        ? at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : at.toLocaleDateString([], { month: "numeric", day: "numeric" }) + " " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })) }) : "";
+      return `<div class="q-tile ${cls}"><span class="q-l">${label}</span><b>${Math.round(pct)}<small>%</small></b>
+        <span class="quota-bar"><i class="${cls}" style="width:${pct}%"></i></span><span class="q-r">${reset}</span></div>`;
+    };
+    $("quota-tiles").innerHTML = tile(t("5 小时"), l.fiveHour) + tile(t("每周"), l.sevenDay);
+    const ago = Math.max(0, Math.round((Date.now() - l.at) / 60000));
+    $("quota-note").textContent = ago < 1 ? t("额度刚刚更新") : t("额度更新于 {n} 分钟前（每轮对话后刷新）", { n: ago });
+  }
   /** 交给系统浏览器：安卓壳把非本机地址都转给外部浏览器（WebView 里登录会被 Google 等拦） */
   function openExternal(url) {
     if (window.CCApp && window.CCApp.openUrl) return window.CCApp.openUrl(url);
@@ -4514,7 +4544,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("priv-ka").checked = !!st.keepalive;
     // 安装、配对、启动都在进行时自己刷新（设置页开着才刷）
     clearTimeout(privPoll);
-    if (busy && !$("tab-settings").classList.contains("hidden")) privPoll = setTimeout(loadPriv, 1500);
+    if (busy && pageOn("settings")) privPoll = setTimeout(loadPriv, 1500);
   }
   // 经 priv 执行过的命令（谁发起、命令、退出码、用时）。再点一次收起
   const privBy = (k) => ({ claude: "Claude", terminal: t("终端"), gateway: "cccodroid", "cc-mem": t("内存管家"), other: t("其他") })[k] || k;
@@ -4633,7 +4663,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       : st.lastCheck ? t("上次检查：{at}", { at: new Date(st.lastCheck).toLocaleString() }) : t("还没检查过");
     clearTimeout(updPoll);
     // 点完按钮 / 换完渠道后的一小段时间也接着刷：后台的检查、换版本要过一会儿才开始，只看「正在进行」会漏掉结果
-    if ((moving || st.checking || Date.now() < updFollowUntil) && !$("tab-settings").classList.contains("hidden")) updPoll = setTimeout(loadUpd, 1500);
+    if ((moving || st.checking || Date.now() < updFollowUntil) && pageOn("settings")) updPoll = setTimeout(loadUpd, 1500);
   }
   /** Claude Code 版本选单：跟随 stable / latest，或固定到某一版（固定后自动更新、检查更新都不动它） */
   async function openClaudeVersions() {
@@ -5580,22 +5610,54 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("caps-summary").innerHTML = c.version
       ? t("Claude Code {ver} · 模型 {model} · 权限 {perm} · 输出风格 {style}", { ver: esc(c.version), model: esc(c.model || "—"), perm: esc(c.permissionMode || "—"), style: esc(c.outputStyle || "default") })
       : t("还没有从 CLI 拿到能力清单 —— 发出第一条消息后会自动填充。");
-
-    const cmds = (c.slashCommands || []).map((x) => "/" + (x.name || x));
-    $("c-count").textContent = cmds.length;
-    chips($("caps-cmds"), cmds, true);
-    $("t-count").textContent = (c.tools || []).length;
+    const cmds = c.slashCommands || [];
+    const mcp = (c.mcpServers || []).map((m) => typeof m === "string" ? { name: m } : m);
+    const mcpBad = mcp.filter((m) => /fail|error|disconn/i.test(m.status || "")).length;
+    const N = { cmd: cmds.length, tool: (c.tools || []).length, skill: (c.skills || []).length, agent: (c.agents || []).length, mcp: mcp.length, plugin: (c.plugins || []).length };
+    for (const [k, id] of [["cmd", "c-count"], ["tool", "t-count"], ["skill", "s-count"], ["agent", "a-count"], ["mcp", "m-count"], ["plugin", "p-count"]]) $(id).textContent = N[k];
+    // 计数格：图标 + 大号数字 + 名字；点了跳到那一节
+    const icoOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-ico`)?.innerHTML || "";
+    const nameOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-title > span[data-i18n]`)?.textContent || k;
+    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="cap-tile" data-sec="${k}"><span class="sec-ico">${icoOf(k)}</span><span class="n">${N[k]}</span><span class="k">${esc(nameOf(k))}${k === "mcp" && mcpBad ? ` <em>${esc(t("{n} 个没连上", { n: mcpBad }))}</em>` : ""}</span></button>`).join("");
+    // 斜杠命令：卡片（命令 + 说明），点一下插进输入框
+    $("caps-cmds").innerHTML = cmds.length
+      ? cmds.map((x) => { const n = "/" + (x.name || x); return `<button class="cmd-card" data-cmd="${esc(n)}"><span class="mono">${esc(n)}</span><span>${esc(x.desc ? t(x.desc) : "")}</span></button>`; }).join("")
+      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
     chips($("caps-tools"), c.tools);
-    $("s-count").textContent = (c.skills || []).length;
     chips($("caps-skills"), c.skills);
-    $("a-count").textContent = (c.agents || []).length;
     chips($("caps-agents"), c.agents);
-    chips($("caps-mcp"), (c.mcpServers || []).map((m) => m.name || String(m)));
+    $("caps-mcp").innerHTML = mcp.length
+      ? mcp.map((m) => { const bad = /fail|error|disconn/i.test(m.status || ""); return `<span class="chip mcp-chip"><i class="mdot ${bad ? "bad" : m.status ? "ok" : ""}"></i>${esc(m.name)}${m.status ? ` <small>${esc(m.status)}</small>` : ""}</span>`; }).join("")
+      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
     chips($("caps-plugins"), c.plugins);
+    filterCaps();
   }
+  // 搜索：同时筛命令卡片和各节的标签；一节里一个都不剩就整节先藏起来
+  function filterCaps() {
+    const q = ($("caps-q").value || "").trim().toLowerCase();
+    for (const sec of document.querySelectorAll("#tab-caps > .ext-sec-plain")) {
+      let any = !q;
+      for (const el of sec.querySelectorAll(".cmd-card, .chip")) {
+        const hit = !q || el.textContent.toLowerCase().includes(q);
+        el.classList.toggle("hidden", !hit); any ||= hit;
+      }
+      sec.classList.toggle("hidden", !any);
+    }
+  }
+  $("caps-q").addEventListener("input", filterCaps);
+  $("cap-tiles").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sec]"), x = b && document.querySelector(`#tab-caps > [data-sec="${b.dataset.sec}"]`); if (!x) return;
+    const body = $("page-body");
+    body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - 12, behavior: "smooth" });
+  });
+  $("caps-cmds").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cmd]"); if (!b) return;
+    closePage();
+    inputEl.value = b.dataset.cmd + " "; autoGrow(); inputEl.focus();
+  });
 
   $("btn-refresh-mcp").addEventListener("click", async () => {
-    chips($("caps-mcp"), [t("查询中…")]);
+    $("caps-mcp").innerHTML = '<span class="tiny">' + esc(t("查询中…")) + "</span>";
     try {
       const r = await api("/api/cli?cmd=" + encodeURIComponent("mcp list"));
       const lines = (r.out || "").split("\n").map((s) => s.trim()).filter(Boolean);
@@ -5618,21 +5680,26 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function closeDrawer(force) { if (!force && window.CCLayout && CCLayout.docked()) return; drawerEl.classList.add("hidden"); }
 
   const PAGES = {
+    sessions: { name: tk("对话"), icon: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>' },
     settings: { name: tk("设置"), icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>' },
     ext: { name: tk("扩展"), icon: '<path d="M10 3h4v4a2 2 0 1 0 4 0h3v4h-4a2 2 0 1 0 0 4h4v6H3V3z"/>' },
     caps: { name: tk("能力"), icon: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>' },
     usage: { name: tk("用量"), icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
     help: { name: tk("帮助"), icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>' },
   };
-  const NAV_ITEMS = ["ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
+  const NAV_ITEMS = ["sessions", "ext", "caps", "usage", "help"];          // 侧栏「去哪」里能放的；设置走底部账户行
   var curPage = null;   // var：openSession 在启动早期就会调 closePage，别撞上 let 的暂时性死区
-  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["ext", "caps"]; };
+  // 轮询（下载进度、配对状态…）只在那一页开着时继续：整页关了、换页了就停
+  function pageOn(name) { return curPage === name && !$("pages").classList.contains("hidden"); }
+  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "ext"]; };
   var navEdit = false;
   function renderSideNav() {
     const nav = $("side-nav"); if (!nav) return;
     const pins = navPins(), more = localStorage.getItem("cc.navMore") === "1";
     const ico = (k) => `<svg viewBox="0 0 24 24">${PAGES[k].icon}</svg>`;
-    const item = (k) => `<button class="nav-item${curPage === k ? " on" : ""}" data-page="${k}">${ico(k)}<span>${esc(t(PAGES[k].name))}</span></button>`;
+    const live = srv.runs.filter((x) => !x.idle).length;
+    const badge = (k) => k === "sessions" && live ? `<span class="nav-badge"><i></i>${esc(t("{n} 个在跑", { n: live }))}</span>` : "";
+    const item = (k) => `<button class="nav-item${curPage === k ? " on" : ""}" data-page="${k}">${ico(k)}<span>${esc(t(PAGES[k].name))}</span>${badge(k)}</button>`;
     let h = pins.map(item).join("");
     const rest = NAV_ITEMS.filter((k) => !pins.includes(k));
     h += `<button class="nav-item nav-more${more ? " open" : ""}" data-nav="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg><span>${esc(t("更多"))}</span><svg viewBox="0 0 24 24" class="caret"><path d="M6 9l6 6 6-6"/></svg></button>`;
@@ -5661,19 +5728,127 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     renderSideNav();
   });
   $("side-new").addEventListener("click", () => { closePage(); closeDrawer(); newConversation(); });
-  $("side-acct").addEventListener("click", () => openPage("settings"));
-  $("btn-sess-more").addEventListener("click", () => $("sess-manage").classList.toggle("hidden"));
+  $("side-acct").addEventListener("click", () => acctMenu());
   // 账户行：哪家接口 + 型号；首字母当头像
   function paintAcct(s) {
     if (!s) return;
     const label = s.providerLabel || s.provider || "";
-    $("acct-av").textContent = (label.trim()[0] || "C").toUpperCase();
-    $("acct-sub").textContent = [label, s.model].filter(Boolean).join(" · ");
+    const name = (s.keyMode === "login" && acctEmail) || label;
+    $("acct-av").textContent = (name.trim()[0] || "C").toUpperCase();
+    $("acct-name").textContent = name || t("设置");
+    $("acct-sub").textContent = [s.keyMode === "login" && acctEmail ? label : "", s.model].filter(Boolean).join(" · ");
     if (s.product) $("side-title").textContent = s.product;
+    // 官方账户：名字换成登录邮箱（问一次，之后十分钟内沿用）
+    if (s.keyMode === "login" && Date.now() - acctEmailAt > 600000) {
+      acctEmailAt = Date.now();
+      api("/api/login/status").then((st) => { if (st && st.email && st.email !== acctEmail) { acctEmail = st.email; paintAcct(s); } }).catch(() => {});
+    }
+  }
+  var acctEmail = "", acctEmailAt = 0;
+
+  // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
+  function closeMenu() { document.querySelectorAll(".pop-menu").forEach((m) => m.remove()); }
+  function popMenu(anchor, items, place) {
+    closeMenu();
+    const m = document.createElement("div");
+    m.className = "pop-menu";
+    m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head">${esc(it.head)}</div>`
+      : `<button data-i="${i}" class="${it.danger ? "danger" : ""}">${it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
+    document.body.appendChild(m);
+    const ar = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
+    let x, y;
+    if (place === "up") { x = ar.left; y = ar.top - mh - 6; m.style.minWidth = ar.width + "px"; }
+    else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
+    m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
+    m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; closeMenu(); items[+b.dataset.i].fn(); });
+    setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { closeMenu(); removeEventListener("pointerdown", off, true); } }, true));
+    return m;
+  }
+  const SM = {
+    pin: '<path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+    export: '<path d="M12 15V3M7 8l5-5 5 5M4 13v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+    swap: '<path d="M7 7h11l-3-3M17 17H6l3 3"/>',
+    chat: '<path d="M4 4h16v12H8l-4 4z"/>',
+    people: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>',
+    logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+  };
+
+  // 侧栏的最近对话：一行一个，分组 置顶 / 今天 / 昨天 / 更早；更早的只列前一段，全部在「对话」整页
+  const RECENT_MAX = 40;
+  function renderSideRecent() {
+    const box = $("side-recent"); if (!box) return;
+    const list = state.sessions || [];
+    const live = new Set(srv.runs.filter((x) => !x.idle).map((x) => x.sessionId).filter(Boolean));
+    const ask = new Set(srv.runs.filter((x) => x.perms && x.perms.length).map((x) => x.sessionId).filter(Boolean));
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const t0 = d0.getTime(), y0 = t0 - 86400000;
+    const groups = [[t("置顶"), list.filter((x) => x.pinned)], [t("今天"), []], [t("昨天"), []], [t("更早"), []]];
+    for (const x of list) if (!x.pinned) groups[x.mtime >= t0 ? 1 : x.mtime >= y0 ? 2 : 3][1].push(x);
+    const more = groups[3][1].length > RECENT_MAX;
+    groups[3][1] = groups[3][1].slice(0, RECENT_MAX);
+    const row = (x) => `<button class="sr-item${x.id === view.sessionId ? " on" : ""}" data-sid="${esc(x.id)}" title="${esc(x.title)}">${ask.has(x.id) ? '<i class="sr-dot ask"></i>' : live.has(x.id) ? '<i class="sr-dot"></i>' : ""}<span>${esc(x.title)}</span></button>`;
+    box.innerHTML = list.length
+      ? groups.filter(([, l]) => l.length).map(([g, l]) => `<h4>${esc(g)}</h4>` + l.map(row).join("")).join("")
+        + (more ? `<button class="sr-all" data-all>${esc(t("全部对话"))}</button>` : "")
+      : `<div class="sr-empty">${esc(t("还没有历史会话。"))}</div>`;
+  }
+  $("side-recent").addEventListener("click", (e) => {
+    if (e.target.closest("[data-all]")) return openPage("sessions");
+    const it = e.target.closest("[data-sid]"); if (!it) return;
+    closeDrawer(); openSession(it.dataset.sid);
+  });
+  $("side-recent").addEventListener("contextmenu", (e) => {
+    const it = e.target.closest("[data-sid]"); if (!it) return;
+    e.preventDefault(); sessMenu(it.dataset.sid, it);
+  });
+  // 单个会话的操作：置顶、重命名、导出、删除（进回收站）
+  function sessMenu(id, anchor) {
+    const x = (state.sessions || []).find((s) => s.id === id) || (sess.hits || []).find((s) => s.id === id); if (!x) return;
+    const reload = () => loadSessions();
+    popMenu(anchor, [
+      { label: x.pinned ? t("取消置顶") : t("置顶"), icon: SM.pin, fn: () => post(`/api/session/${encodeURIComponent(id)}/pin`, { pin: !x.pinned }).then(reload, (e) => toast(e.message, true)) },
+      { label: t("重命名"), icon: SM.edit, fn: () => { const n = prompt(t("新的会话名称"), x.title || ""); if (n) post(`/api/session/${encodeURIComponent(id)}/rename`, { title: n }).then(reload, (e) => toast(e.message, true)); } },
+      { label: t("导出"), icon: SM.export, fn: async () => {
+        if (!confirm(t("会话记录可能含有你贴过的密钥、令牌或文件内容。导出的压缩包请只发给你信任的地方。继续？"))) return;
+        const r = await post("/api/sessions/export", { ids: [id] }).catch((e) => ({ ok: false, message: e.message }));
+        if (!r.ok) return toast(t("导出失败：{msg}", { msg: r.message || "" }), true);
+        if (canSaveAs()) saveAs(r.file, "application/zip"); else toast(t("已导出 {n} 个会话：{file}", { n: r.count, file: r.file }));
+      } },
+      "hr",
+      { label: t("删除（进回收站）"), icon: SM.trash, danger: true, fn: async () => {
+        try { await api(`/api/session/${encodeURIComponent(id)}`, { method: "DELETE" }); } catch (e) { return toast(e.message, true); }
+        if (view.sessionId === id) newConversation();
+        reload();
+        toast(t("已移进回收站（{d} 天内可恢复）", { d: sess.keepDays }));
+      } },
+    ]);
+  }
+  // 账户菜单：常用的在上，不可逆的放最下
+  function acctMenu() {
+    const st = state.serverStatus || {};
+    const items = [
+      { head: [st.providerLabel || st.provider, st.model].filter(Boolean).join(" · ") || t("设置") },
+      { label: t("设置"), icon: PAGES.settings.icon, fn: () => openPage("settings") },
+      { label: t("切换接口 / 账户"), icon: SM.swap, small: st.providerLabel || "", fn: () => openPage("settings", "provider") },
+      { label: t("用量"), icon: PAGES.usage.icon, fn: () => openPage("usage") },
+      "hr",
+      { label: t("帮助"), icon: PAGES.help.icon, fn: () => openPage("help") },
+      { label: t("到 GitHub 反馈"), icon: SM.chat, fn: () => $("btn-issue").click() },
+      { label: t("交流群 · 讨论区"), icon: SM.people, fn: () => { openPage("help"); setTimeout(() => $("help-body").querySelector(".cm-box")?.scrollIntoView({ block: "center", behavior: "smooth" }), 400); } },
+    ];
+    if (st.keyMode === "login") items.push("hr", { label: t("退出登录"), icon: SM.logout, danger: true, fn: async () => {
+      if (!confirm(t("退出这台设备上的 Claude 账户登录？"))) return;
+      const r = await post("/api/login/logout").catch((e) => ({ ok: false, output: e.message }));
+      toast(r.ok ? t("已退出登录") : t("退出失败：{msg}", { msg: r.output || r.message || "" }), !r.ok);
+      refreshStatus();
+    } });
+    popMenu($("side-acct"), items, "up");
   }
 
   /** 打开整页：窄屏收起侧栏、盖住对话；宽屏侧栏照旧常驻，高亮当前项 */
-  function openPage(name) {
+  function openPage(name, cat) {
     if (!PAGES[name]) name = "settings";
     const prev = curPage;
     curPage = name;
@@ -5685,11 +5860,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     closeDrawer();
     renderSideNav();
     refreshStatus();
+    if (name === "sessions") loadSessions();
     if (name === "caps") loadCaps();
     if (name === "ext") loadExt();
+    if (SUBNAVS[name]) paintSubnav(name);
     if (name === "help") loadHelp();
-    if (name === "usage") { loadEnergy(); loadUsage(); }
-    if (name === "settings") { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); }
+    if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); }
+    if (name === "settings") { setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general"); paintSetCats(); setTimeout(paintSetCats, 900); loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); }
   }
   function closePage() {
     if (!curPage) return;
@@ -5697,7 +5874,81 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     $("pages").classList.add("hidden");
     renderSideNav();
   }
-  $("page-back").addEventListener("click", closePage);
+  // ── 页内分区导航（扩展、能力）：吸顶一排，点了展开并滚到那一节，滚动时高亮当前节 ──
+  // 节 = 页里直接挂着的 .ext-sec / .ext-sec-plain（没藏起来的）；名字取标题，计数取标题里的 .pill（「3 / 7 · 1.2 GB」只留前半）
+  const SUBNAVS = { ext: "ext-subnav" };
+  function subnavSecs(name) { return [...$("tab-" + name).querySelectorAll(":scope > .ext-sec, :scope > .ext-sec-plain")].filter((x) => !x.classList.contains("hidden")); }
+  function paintSubnav(name) {
+    const nav = $(SUBNAVS[name]); if (!nav) return;
+    nav.innerHTML = subnavSecs(name).map((x) => {
+      const nm = (x.querySelector(":scope > summary > span[data-i18n], :scope > summary > span.sec-name, :scope > .sec-title > span:last-child") || {}).textContent || "";
+      const cnt = ((x.querySelector(":scope > summary .pill, :scope > .sec-title .pill") || {}).textContent || "").split("·")[0].trim();
+      return `<button data-sec="${esc(x.dataset.sec)}">${esc(nm)}${cnt ? `<span class="cnt">${esc(cnt)}</span>` : ""}</button>`;
+    }).join("");
+    spySubnav();
+  }
+  function spySubnav() {
+    const nav = curPage && $(SUBNAVS[curPage]); if (!nav) return;
+    const body = $("page-body"), top = body.getBoundingClientRect().top + nav.offsetHeight + 24;
+    let cur = null;
+    for (const x of subnavSecs(curPage)) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
+    if (!cur) cur = (subnavSecs(curPage)[0] || {}).dataset?.sec;
+    nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.sec === cur));
+  }
+  for (const [name, id] of Object.entries(SUBNAVS)) {
+    $(id)?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-sec]"); if (!b) return;
+      const x = $("tab-" + name).querySelector(`:scope > [data-sec="${b.dataset.sec}"]`); if (!x) return;
+      if (x.tagName === "DETAILS") x.open = true;
+      const body = $("page-body");
+      body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - $(id).offsetHeight - 10, behavior: "smooth" });
+    });
+    // 计数、哪节显示都是异步加载出来的：内容一变就重画（下一帧合并；导航自己重画引起的变化不算）
+    let raf = 0;
+    new MutationObserver((recs) => { if (raf || recs.every((m) => $(id) && $(id).contains(m.target))) return; raf = requestAnimationFrame(() => { raf = 0; if (curPage === name) paintSubnav(name); }); })
+      .observe($("tab-" + name), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+  }
+  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (curPage === "help") spyHelp(); }, { passive: true });
+
+  // 返回：设置在窄屏点进了某一类时先回分类列表，否则回到对话
+  function pageBack() {
+    if (curPage === "settings" && pagesNarrow() && setCatOpen) { setCatOpen = null; paintSetCats(); $("page-body").scrollTop = 0; return; }
+    closePage();
+  }
+  $("page-back").addEventListener("click", pageBack);
+
+  // ── 设置分类：宽屏左栏分类 + 右边一类的内容；窄屏先是分类列表，点进去才是内容 ──
+  var setCatOpen = null;
+  const pagesNarrow = () => $("pages").offsetWidth < 680;
+  function paintSetCats() {
+    const narrow = pagesNarrow(), cats = [...document.querySelectorAll("#set-cats [data-cat]")];
+    // 一类里一项都没显示（比如开发端没有通知 / 更新）就连分类一起藏起来
+    const empty = (k) => ![...document.querySelectorAll(`.set-cat[data-cat="${k}"] > :is(.srow, .sblock)`)].some((f) => !f.classList.contains("hidden"));
+    cats.forEach((b) => b.classList.toggle("hidden", empty(b.dataset.cat)));
+    if (!narrow && (!setCatOpen || empty(setCatOpen))) setCatOpen = "general";
+    $("tab-settings").classList.toggle("set-list", narrow && !setCatOpen);
+    $("tab-settings").classList.toggle("set-one", narrow && !!setCatOpen);
+    cats.forEach((b) => b.classList.toggle("on", b.dataset.cat === setCatOpen));
+    document.querySelectorAll(".set-cat").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
+    const cb = cats.find((b) => b.dataset.cat === setCatOpen);
+    $("page-sub").textContent = narrow && cb ? cb.textContent.trim() : "";
+  }
+  $("set-cats").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cat]"); if (!b) return;
+    setCatOpen = b.dataset.cat; paintSetCats();
+    if (pagesNarrow()) $("page-body").scrollTop = 0;
+  });
+  new ResizeObserver(() => { if (curPage === "settings") paintSetCats(); }).observe($("pages"));
+  // 侧栏常驻项：打开侧栏、展开「更多」、进入勾选
+  $("set-navpins").addEventListener("click", () => {
+    localStorage.setItem("cc.navMore", "1"); navEdit = true;
+    if (!(window.CCLayout && CCLayout.docked())) drawerEl.classList.remove("hidden");
+    renderSideNav();
+  });
+  // 设置里较长的说明默认收成两行，点一下展开 / 收起
+  $("tab-settings").addEventListener("click", (e) => {
+    const p = e.target.closest(".sl p.clamp"); if (p && !e.target.closest("a, code")) p.classList.toggle("open");
+  });
   // 整页从顶栏下沿开始：顶栏高度随安全区 / 手机横屏压缩而变，量出来给 CSS
   new ResizeObserver(() => document.documentElement.style.setProperty("--tbh", $("topbar").offsetHeight + "px")).observe($("topbar"));
 
@@ -5732,12 +5983,18 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
   }
 
-  // ── 帮助 ── 文档是 web/help/zh.md、en.md（其他语言先用英文）。第一次点开才取、才渲染；
-  // 「## 」小节做成目录，点了在侧栏里滚到那一节；每节标题旁一个 ↑ 回目录。换了界面语言下次点开重新取。
+  // ── 帮助 ── 文档是 web/help/zh.md、en.md（其他语言先用英文）。第一次点开才取、才渲染。
+  // 「## 」小节各包成一个 section：宽屏左边是固定目录、窄屏是顶上一排横向目录，滚动时高亮当前节；
+  // 搜索框按节过滤。顶栏按钮那张表换成真图标的图例（md 里写的是字符，各语言共用一份映射）。
   let helpLang = "";
+  const HELP_TOPBAR = { "☰": "btn-menu", "📁": "btn-files", ">_": "btn-term", "🌐": "btn-web", "‹›": "btn-palette", "❄": "btn-unfreeze", "＋": "btn-new" };
+  function helpIcon(id) {
+    const sv = $(id)?.querySelector("svg");
+    return sv ? sv.outerHTML : "";
+  }
   async function loadHelp() {
     const lang = /^zh/.test((window.I18N && I18N.lang) || "zh") ? "zh" : "en";
-    if (helpLang === lang) return;
+    if (helpLang === lang) return spyHelp();
     const body = $("help-body"), toc = $("help-toc");
     body.innerHTML = `<p class="muted">${esc(t("加载中…"))}</p>`;
     try {
@@ -5749,24 +6006,72 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (!body.dataset.cm) { body.dataset.cm = "1"; communityBind(body); }
       helpLang = lang;
     } catch (e) { body.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
-    toc.textContent = "";
-    body.querySelectorAll("h3").forEach((h, i) => {        // renderMd 把 ## 渲染成 h3
-      h.id = "help-" + i;
-      const a = document.createElement("button");
-      a.type = "button";
-      a.className = "help-link";
-      a.textContent = h.textContent;
-      a.onclick = () => h.scrollIntoView({ block: "start", behavior: "smooth" });
-      toc.appendChild(a);
-      const up = document.createElement("button");
-      up.type = "button";
-      up.className = "help-up";
-      up.textContent = "↑";
-      up.title = t("回到目录");
-      up.onclick = () => toc.scrollIntoView({ block: "start", behavior: "smooth" });
-      h.appendChild(up);
+    // 顶栏表 → 图例
+    body.querySelectorAll("table").forEach((tb) => {
+      const rows = [...tb.querySelectorAll("tr")].filter((tr) => tr.querySelector("td")).map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+      if (!rows.length || !rows.every((r) => HELP_TOPBAR[r[0]])) return;
+      const g = document.createElement("div");
+      g.className = "help-legend";
+      g.innerHTML = rows.map(([k, d]) => `<div><span class="hl-ico">${helpIcon(HELP_TOPBAR[k])}</span><span>${esc(d)}</span></div>`).join("");
+      (tb.closest(".md-table, .tbl-wrap") || tb).replaceWith(g);
+    });
+    // 正文里零散的 📎 换成附件图标
+    const att = helpIcon("btn-attach");
+    if (att) body.querySelectorAll("li, p").forEach((el) => {
+      const tn = el.firstChild;
+      if (tn && tn.nodeType === 3 && /^\s*📎/.test(tn.data)) { tn.data = tn.data.replace("📎", ""); el.insertAdjacentHTML("afterbegin", `<span class="hl-inl">${att}</span>`); }
+    });
+    // 按 h3 分节
+    const lead = body.querySelector("h2");
+    if (lead) lead.remove();
+    const secs = [];
+    let cur = null;
+    for (const n of [...body.childNodes]) {
+      if (n.nodeName === "H3") {
+        cur = document.createElement("section");
+        cur.className = "help-sec";
+        cur.dataset.sec = "h" + secs.length;
+        n.before(cur);
+        secs.push(cur);
+      }
+      if (cur) cur.appendChild(n);
+      else if (n.nodeType === 1) n.classList.add("help-lead");
+    }
+    if (secs[0]) secs[0].querySelector(":scope > ol")?.classList.add("help-steps");
+    toc.innerHTML = secs.map((x) => `<button type="button" data-sec="${x.dataset.sec}">${esc(x.querySelector("h3").textContent)}</button>`).join("");
+    $("help-q").value = "";
+    spyHelp();
+  }
+  function helpSecs() { return [...$("help-body").querySelectorAll(".help-sec")].filter((x) => !x.classList.contains("hidden")); }
+  function spyHelp() {
+    const toc = $("help-toc"), body = $("page-body");
+    if (curPage !== "help" || !toc.children.length) return;
+    const narrow = getComputedStyle(toc).flexDirection === "row";
+    const top = body.getBoundingClientRect().top + (narrow ? toc.offsetHeight : 0) + 40;
+    let cur = null;
+    for (const x of helpSecs()) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
+    if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) cur = (helpSecs().at(-1) || {}).dataset?.sec || cur;
+    if (!cur) cur = (helpSecs()[0] || {}).dataset?.sec;
+    toc.querySelectorAll("button").forEach((b) => {
+      const on = b.dataset.sec === cur;
+      if (on && !b.classList.contains("on") && narrow) b.scrollIntoView({ inline: "center", block: "nearest" });
+      b.classList.toggle("on", on);
     });
   }
+  $("help-toc").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sec]"); if (!b) return;
+    const x = $("help-body").querySelector(`.help-sec[data-sec="${b.dataset.sec}"]`); if (!x) return;
+    const body = $("page-body"), toc = $("help-toc");
+    const off = getComputedStyle(toc).flexDirection === "row" ? toc.offsetHeight + 8 : 8;
+    body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - off, behavior: "smooth" });
+  });
+  $("help-q").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $("help-body").querySelectorAll(".help-sec").forEach((x) => x.classList.toggle("hidden", !!q && !x.textContent.toLowerCase().includes(q)));
+    $("help-body").querySelectorAll(".help-lead").forEach((x) => x.classList.toggle("hidden", !!q));
+    $("help-toc").querySelectorAll("button").forEach((b) => b.classList.toggle("hidden", !!q && !!$("help-body").querySelector(`.help-sec.hidden[data-sec="${b.dataset.sec}"]`)));
+    spyHelp();
+  });
   $("btn-menu").addEventListener("click", () => { if (!(window.CCLayout && CCLayout.toggleDock())) openDrawer("sessions"); });
   // ── 文件查看 / 编辑器 ──────────────────────────────────────────────
   // 文本 / 代码：直接改，保存时带上打开那一刻的 mtime —— Claude 在这期间改过就先问，别互相覆盖。
@@ -7345,9 +7650,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       paintAcct(s);
       paintSafeMode(s.safeMode);
       // 日志分享靠安卓壳（cccodroid）打包、弹分享面板；旧版应用没有
-      $("btn-share-logs").classList.toggle("hidden", s.product !== "cccodroid");
-      $("btn-issue").classList.toggle("hidden", s.product !== "cccodroid"); $("issue-hint").classList.toggle("hidden", s.product !== "cccodroid");
-      $("share-logs-hint").classList.toggle("hidden", s.product !== "cccodroid");
+      // 打包诊断、到 GitHub 反馈只有 cccodroid 有：整行藏起来
+      $("btn-share-logs").closest(".srow").classList.toggle("hidden", s.product !== "cccodroid");
+      $("btn-issue").closest(".srow").classList.toggle("hidden", s.product !== "cccodroid");
       $("btn-ledger").classList.toggle("hidden", !s.hasLedger);
       paintModel(s.model || "—");
       state.model = s.model;
@@ -7465,6 +7770,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
   window.__ccBack = () => {
     const open = (id) => !$(id).classList.contains("hidden");
+    if (document.querySelector(".pop-menu")) { closeMenu(); return true; }
     const steps = [
       ["lightbox", () => $("lightbox").classList.add("hidden")],
       ["term-textview", () => $("term-textview").classList.add("hidden")],
@@ -7476,7 +7782,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       ["popup", hidePopup],
       ["sheet", () => $("sheet").classList.add("hidden")],
       ["drawer", closeDrawer],
-      ["pages", closePage],
+      ["pages", pageBack],
     ];
     // 宽屏：文件 / 查看器 / 终端并排停在右边，先关最近打开的那个，而不是按 z-index；常驻的侧栏不算浮层
     const L = window.CCLayout;
@@ -7494,7 +7800,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return false;
   };
   if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
-  window.__cc = { view, srv, state, send, abort, openSession, newConversation,
+  window.__cc = { view, srv, state, send, abort, openSession, newConversation, openPage,
     openGit, openViewer, openFiles, openDrawer, showWhatsNew, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };
 
   // ── 启动 ──────────────────────────────────────────────────────────
