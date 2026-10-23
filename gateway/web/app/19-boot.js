@@ -227,11 +227,11 @@
   })();
 
   // ── 竖屏横滑拉出侧栏 ───────────────────────────────────────────────
-  //  在对话区里从左往右滑（RTL 反过来）：侧栏跟着手指出来，松手时过了三分之一或甩得快就展开，否则缩回去。
+  //  在对话区里从左往右滑（RTL 反过来）：侧栏跟着手指出来，松手时过了五分之一或轻轻一甩就展开，否则缩回去。
   //  贴边那一条留给系统的返回手势（安卓会先吃掉），这里管的是对话区里面起手的横滑。
   //  不抢的情况：常驻左栏（宽屏）、侧栏 / 整页 / 浮层已开、多指、在输入框 / 终端里、在拖选文字、
   //  手指下有还能往右滚的横向内容（代码块、表格滚过了就先让它滚回去）。
-  //  起手 12px 内判方向：横向明显大于竖向才接管，接管后拦掉这次的竖向滚动；否则整个手势交还系统。
+  //  起手 8px 就判方向（赶在系统开始滚动之前）：横向不小于竖向就接管，接管后拦掉这次的竖向滚动；否则整个手势交还系统。
   (() => {
     const panel = drawerEl.querySelector(".drawer-panel");
     if (!panel) return;
@@ -261,8 +261,8 @@
       if (!g || e.touches.length !== 1) { g = null; return; }
       const p = e.touches[0], dx = (p.clientX - g.x) * (rtl() ? -1 : 1), dy = p.clientY - g.y;
       if (!g.on) {
-        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
-        if (!(dx > 0 && dx > 1.6 * Math.abs(dy)) || !e.cancelable) { g = null; return; }
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        if (!(dx > 0 && dx >= Math.abs(dy))) { g = null; return; }
         g.on = true;
         panel.style.animation = "none";
         panel.style.transition = drawerEl.style.transition = "none";
@@ -272,11 +272,11 @@
         g.w = panel.getBoundingClientRect().width || 300;
         panel.style.transition = drawerEl.style.transition = "none";
       }
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();      // 系统已经开始滚了就拦不住，照样跟手
       const now = performance.now();
       g.v = ((p.clientX - g.lastX) * (rtl() ? -1 : 1)) / Math.max(1, now - g.lastT);
       g.lastX = p.clientX; g.lastT = now;
-      g.dx = Math.max(0, Math.min(g.w, dx - 12));
+      g.dx = Math.max(0, Math.min(g.w, dx - 8));
       const k = g.dx / g.w;
       panel.style.transform = `translateX(${(rtl() ? 1 : -1) * (g.w - g.dx)}px)`;
       scrim(k);
@@ -284,7 +284,7 @@
     const end = () => {
       const s = g; g = null;
       if (!s || !s.on) return;
-      const open = s.dx > s.w / 3 || s.v > 0.5;
+      const open = s.dx > s.w / 5 || s.v > 0.3;
       panel.style.transition = "transform .18s ease";
       drawerEl.style.transition = "background-color .18s ease";
       panel.style.transform = open ? "translateX(0)" : `translateX(${(rtl() ? 1 : -1) * s.w}px)`;
@@ -294,7 +294,7 @@
     chatEl.addEventListener("touchend", end, { passive: true });
     chatEl.addEventListener("touchcancel", end, { passive: true });
 
-    // 收回：侧栏开着时，在侧栏或遮罩上从右往左推（RTL 反过来），侧栏跟手退回去；推过三分之一或甩得快就收起，否则弹回。
+    // 收回：侧栏开着时，在侧栏或遮罩上从右往左推（RTL 反过来），侧栏跟手退回去；推过五分之一或轻轻一甩就收起，否则弹回。
     // 同样先判方向（横向明显大于竖向才接管，竖着滑照常滚对话列表）；拖宽度的把手、输入框、能往左滚的横向内容不接管
     let c = null;
     const hScrollableIn = (el) => {
@@ -314,25 +314,25 @@
       if (!c || e.touches.length !== 1) { c = null; return; }
       const p = e.touches[0], dx = (c.x - p.clientX) * (rtl() ? -1 : 1), dy = p.clientY - c.y;   // dx > 0：往收起的方向推
       if (!c.on) {
-        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
-        if (!(dx > 0 && dx > 1.6 * Math.abs(dy)) || !e.cancelable) { c = null; return; }
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        if (!(dx > 0 && dx >= Math.abs(dy))) { c = null; return; }
         c.on = true;
         c.w = panel.getBoundingClientRect().width || 300;
         panel.style.animation = "none";               // 别让收起途中再播滑入动画
         panel.style.transition = drawerEl.style.transition = "none";
       }
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();      // 系统已经开始滚了就拦不住，照样跟手
       const now = performance.now();
       c.v = ((c.lastX - p.clientX) * (rtl() ? -1 : 1)) / Math.max(1, now - c.lastT);
       c.lastX = p.clientX; c.lastT = now;
-      c.dx = Math.max(0, Math.min(c.w, dx - 12));
+      c.dx = Math.max(0, Math.min(c.w, dx - 8));
       panel.style.transform = `translateX(${(rtl() ? 1 : -1) * c.dx}px)`;
       scrim(1 - c.dx / c.w);
     }, { passive: false });
     const endClose = () => {
       const s = c; c = null;
       if (!s || !s.on) return;
-      const shut = s.dx > s.w / 3 || s.v > 0.5;
+      const shut = s.dx > s.w / 5 || s.v > 0.3;
       panel.style.transition = "transform .18s ease";
       drawerEl.style.transition = "background-color .18s ease";
       panel.style.transform = shut ? `translateX(${(rtl() ? 1 : -1) * s.w}px)` : "translateX(0)";
