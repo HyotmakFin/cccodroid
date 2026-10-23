@@ -32,20 +32,30 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - **切到后台不丢活**：一轮跑完、或 Claude 等你确认时发系统通知（不弹横幅；通知里只有「拒绝」和「打开查看」，放行必须回到应用看完整命令）。应用被系统杀掉后重开，没跑完的那一轮会标明「被中断」并给「继续」按钮，排队的消息也都还在。
   - **会话管理**：删除先进回收站（30 天内可恢复）；可逐条勾选或全选，打包导出成 zip，用系统的「保存到」存到任意位置或直接分享；在另一台设备上导入就能接着聊。
   - **终端**（顶栏）：真正的终端，可开多个标签，跑的是 Claude 用的同一个 bash 与工具链 —— hx（Helix）、less、top、git 等都能用。底下一排补上手机键盘没有的键（Esc、Tab、粘住的 Ctrl / Alt、方向键、Home / End、PgUp / PgDn、粘贴、字号）；「文本视图」可长按选择复制输出。关掉面板终端照样在跑，回来时回放输出。
-  - **文件查看 / 编辑器**（从文件浏览器打开）：文本、代码直接改、直接存 —— 打开之后磁盘上的文件被改过（比如 Claude 改了），保存前会先问你，不会悄悄覆盖。Markdown 渲染显示，可切到编辑；图片适应屏幕，点一下看原始大小；PDF 用 [pdf.js](https://mozilla.github.io/pdf.js/) 渲染（含中日韩文字与带密码的文件），翻到哪页才画哪页。
+  - **文件查看 / 编辑器**（从文件浏览器打开）：文本、代码直接改、直接存 —— 打开之后磁盘上的文件被改过（比如 Claude 改了），保存前会先问你，不会悄悄覆盖。Markdown 渲染显示，可切到编辑；图片适应屏幕，点一下看原始大小；PDF 用 [pdf.js](https://mozilla.github.io/pdf.js/) 渲染（含中日韩文字与带密码的文件），翻到哪页才画哪页。docx 直接看，PPT / Excel 装了 LibreOffice 组件后转成 PDF 看。`.html` 文件直接显示成网页，同目录的 CSS、JS、图片都能加载，文件一改自动刷新，Claude 写的网页小游戏点开就能玩。右上角是**分享**：交给系统分享面板，发到别的应用。
+  - **输入栏下面直接换**模型、思考强度和权限模式；新对话首屏也能先挑好项目和型号再开口。
+  - **回退到这里**：每条你发的消息下面都能回退，只撤销 Claude 改过的文件，或者截到这条之前另开一个会话重新问；也能从任意一条回复**分叉**，另起一个会话接着聊，原会话不动。Claude 干长活时列的**任务清单**显示在输入框上方，子代理做的每一步收在它的卡片下面。
+  - **附件**：＋ 面板上排是附加文件、拍照、截屏、浏览文件。拍照直接开系统相机，照片缩到长边 2048 像素、转正后附上；截屏走 Shizuku，长按「截屏」是 5 秒后截，趁这几秒切到要截的应用。别的应用里「分享 → cccodroid」也能直接变成附件。
   - 往上翻长对话时右下角出一个 **↓ 圆钮**，点一下回到最新消息；翻着的时候有新输出，钮上会亮一个点。
   - **回复里的路径能点**：像 `/storage/emulated/0/…/report.pdf`（或 `file.js:12`）这样的绝对路径，点一下就在查看器里打开；目录则打开文件浏览器。已要求 Claude 一律写完整路径。读写文件的工具卡片上也有 ↗ 按钮。
   - **应用内浏览器**（顶栏地球按钮）：回复里的网页链接直接在应用里打开，看本机开发服务 `http://127.0.0.1:<端口>/` 很方便；宽屏时开在右侧工作区，边看网页边看对话。用的是系统 WebView，不额外下载任何东西；登录授权页仍交给系统浏览器。
+  - 外观：除了浅色 / 深色，还有「求索」「逐月」两套配色。
   - 界面 9 种语言：简体中文、繁體中文、English、Français、Español、Русский、العربية（从右到左）、日本語、한국어。
+- **项目与定时任务**（0.3.13 起）：
+  - 一个项目就是一个工作目录，加上它的 CLAUDE.md 和默认的接口、型号、思考强度、权限；会话按目录自动归到项目下。
+  - 定时任务让 Claude 按时干一件事：每天、每周、每月、每隔几小时、只跑一次，或者直接写 cron；由系统闹钟准点叫醒。可以限定只读、只改这个项目或只用哪些工具，设单次花费和时长上限、每天的总额。跑的时候没人看着，凡是需要你确认的操作一律拒绝。
+- **用量与额度**：顶栏上下文线的后半截直接显示当前接口还剩多少——账户登录是 5 小时与每周额度，DeepSeek、Kimi 等是余额；快用完时提醒。「用量」页记对话次数、活跃天数、常用模型，每月一张月报图，可以保存或分享；只记次数和用量，不记内容。
 - **工具包按模块装**（扩展 → 工具包模块，0.3.9 起）：开发工具包分成基础、命令行工具、C/C++ 编译、Java 与安卓打包、图形库、音视频、其他工具几块，首次安装时勾选，之后随装随卸。每块写明用途、主要命令、大小、依赖和被谁用着；在终端敲一个没装的命令会提示它在哪块。从 0.3.8 及以前升级会装上全部模块，功能一样不少。
 - **可选组件**（扩展 → 可选组件）：体积大的工具不随应用安装，用得上再下载。每个组件包都对应特定版本的工具包，装之前先核对 SHA-256 和逐文件清单，卸载干净。
   - **浏览器组件（无头 Chromium 155）**：下载约 254 MB，装好后约 750 MB。让 Claude 在后台打开网页：截图、导出 PDF、取渲染后的页面、用 puppeteer-core 操作网页。附带一个技能，告诉 Claude 怎么用。
   - **社区组件**：还可以装 [cccodroid-components](https://github.com/greyoak111/cccodroid-components) 仓库里的组件。目前 28 个，加上面的浏览器共 29 个。开发：GitHub CLI（gh）、Godot（无头运行 / 导出 APK）、Graphviz / PlantUML 画图、Hugo 建站、逆向分析（rizin、binwalk）；图像影音：Blender（无头合成 / 渲染，3D 走 GPU）、LilyPond（乐谱排版）、音乐制作工具链；办公：LibreOffice、Pandoc、PDF 工具箱、OCR（简繁中英）、LaTeX（Tectonic，支持中文）；AI：llama.cpp；3D 与科学计算：OpenSCAD、GNU Octave、科学计算 Python（numpy / scipy / matplotlib）；电子设计：ngspice / gnucap、Icarus Verilog / Yosys；GPU：骁龙驱动（Vulkan / OpenGL / OpenCL）、Mali 驱动、GPU 跑分；网络：Cloudflare（wrangler）、rclone。见[完整列表](https://github.com/greyoak111/cccodroid-components/blob/main/README.zh-CN.md#组件列表)。索引带 ed25519 签名，核对不过不装；社区组件标「社区」，没人在真机上验证过的会先提示一声再装。
+  - **自定义组件**：市场里没有的 Linux arm64 程序可以自己导入（单个程序或 .tar.gz / .zip），自动认出它是 glibc、安卓原生、静态程序还是脚本，缺的库从 Termux glibc 仓库补上；装好就是一条命令，Claude 和终端都能用。来源由你自己负责。
 - **多种接入方式**：
   - Claude 账户登录：应用内完成，浏览器授权后自动回到应用。账户卡片显示 5 小时额度与每周额度的占用和重置时间（取自 Claude Code 每轮自己回报的数据，应用不拿你的凭据去查任何东西）。
   - Claude API Key。
   - DeepSeek、智谱 GLM、通义千问、Kimi 的官方 Anthropic 兼容接口。
   - 可以继续添加任意第三方兼容接口。
+  - **每个对话各用各的**：设置里的接口、型号、思考强度是默认值；在对话里单独选过的，只改这个对话。好几个对话可以同时跑，比如一个用 Claude 账户、一个用 DeepSeek，互不影响。
 - **完整的开发工具链**（约 250 个包，取自 [Termux](https://termux.dev) 官方仓库）：
   - C/C++：clang 21 / lld、make / cmake / ninja、gdb / strace。
   - 语言：Python 3.14（pip、venv）、Node 26（npm、npx）。
@@ -57,9 +67,10 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - 设置页一键安装并激活：从 Shizuku 官方 Release 下载（核对官方签名证书），用系统安装器装好；
     再经「无线调试」激活，不用电脑。配对码在常驻屏幕顶部的通知里填，配对框不用关。
   - 激活后重启手机，cccodroid 会自己打开无线调试、重新激活 Shizuku（需连着 Wi‑Fi）。
+- **设备工具（默认关）**：在 设置 → 设备工具 里打开后，Claude 能发通知、读写剪贴板、把文件分享到别的应用、打开链接或应用、看电量和网络；读屏与点按要用无障碍，单独一档。实现上是一个给 Claude 的 MCP 服务器，经 Priv 调用系统能力。打开日历、邮件这类只把内容填好，保存、发送由你自己点。
 - **自动更新**（默认开，设置页可关、可手动检查）：
-  - Claude Code：从官方渠道静默更新（stable / latest 可选），正在跑的对话不受影响；
-  - cccodroid 本体：下载后核对签名，提醒安装；有 Shizuku 时空闲自动静默安装；
+  - Claude Code：从官方渠道静默更新（stable / latest 可选，也能钉在某个具体版本），正在跑的对话不受影响；官方连不上时改从 npm 镜像取同一份文件，照样按官方清单校验；
+  - cccodroid 本体：下载后核对签名，提醒安装；有 Shizuku 时空闲自动静默安装。有 targetSdk 28 和 36 两套安装包，默认跟着你装的那套更新，设置里可以换（只认 36 的系统不让换回 28）；
   - 开发工具包：只在 Wi‑Fi 下预先下载，下次打开应用时替换；你用 pip / npm -g 装进去的东西会保留。
   - 更新之间不会互相打断：工具包在下载或替换时，应用本体的更新会等它完成。替换前先按发布清单核对解出来的内容，核对不过就不动旧工具包；替换中途被打断（应用重启、进程被杀），下次打开时会接着装完或退回旧版。
   - 设置页的**校验 / 修复**：逐个文件核对工具包的哈希；修复会重装同一版本，你自己装的包照常保留。每次启动也会做一次快速自检。
@@ -110,7 +121,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/cccodroid-architecture.zh-CN-dark.png">
-  <img alt="cccodroid 架构：用户在界面（WebView 里的 app.js）上操作，界面经 HTTP 与 SSE 连 127.0.0.1 上的 Node 网关；网关由前台服务 GatewayService 拉起和崩溃重启，读写 home/ 下的会话、设置与令牌，经本地套接字通过 Priv 提权中转调用 Shizuku，并以 stream-json 驱动官方原版 Claude Code；Claude Code 经 HTTPS 调用模型 API，用 Bash 工具调用 devkit 工具链；Updater / Installer 从 GitHub Releases 与 downloads.claude.ai 下载，安装和升级 Claude Code；组件管理从组件市场取 ed25519 签名的索引和组件包，装进 devkit，并把组件带的 skill 拷进 ~/.claude/skills，Claude Code 读到后就学会用新工具" src="docs/diagrams/cccodroid-architecture.zh-CN-light.png">
+  <img alt="cccodroid 架构：用户在界面（WebView，前端分 19 段由网关拼接下发）上操作，界面经 HTTP 与 SSE 连 127.0.0.1 上的网关（server.mjs 加 gw/ 下的功能模块，令牌校验与事件总线）；网关由前台服务 GatewayService 拉起和崩溃重启，读写 home/ 下的会话、设置与令牌，经本地套接字通过 Priv 提权中转调用 Shizuku，并以 stream-json 驱动官方原版 Claude Code；Claude Code 经 HTTPS 调用模型 API（官方账户、DeepSeek、Kimi 等，每个对话各选），用 Bash 工具调用 devkit 工具链（基础加按需模块）；targetSdk 36 版里，APK 自带的加载器 libldlinux.so 与 exec 垫片负责改写程序启动方式；设备工具 MCP 是给 Claude 的 MCP 服务器，经本地套接字走 Priv；Updater / Installer 从 GitHub、cccodroid.net 镜像与官方渠道下载，管理 28/36 两套安装包、工具包模块与 Claude Code；组件管理从组件市场取 ed25519 签名的索引和组件包，装进 devkit，并把组件带的 skill 拷进 ~/.claude/skills，Claude Code 读到后就学会用新工具" src="docs/diagrams/cccodroid-architecture.zh-CN-light.png">
 </picture>
 
 可交互版本（引导视图、深浅色、导出）：下载 [`docs/diagrams/cccodroid-architecture.zh-CN.html`](docs/diagrams/cccodroid-architecture.zh-CN.html) 用浏览器打开；
@@ -122,12 +133,14 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 cccodroid.apk（Java 外壳：安装器 + 前台服务 + WebView）
   ├─ files/usr/      开发工具包：Termux 官方包，等长前缀改写后原生运行
   ├─ 官方 Claude Code（linux-arm64 glibc 版，原版二进制）
-  │     └─ 由工具包里的 glibc 加载器运行，--preload 一个处理 seccomp 的小库
-  └─ 网关 gateway/server.mjs（Node）：管理 claude 进程、事件流、队列、厂商配置 → 界面 gateway/web/
+  │     └─ 由 glibc 加载器运行，--preload 一个处理 seccomp 的小库
+  ├─ lib/arm64-v8a/libldlinux.so   同一份 glibc 加载器，36 版经它启动 glibc 程序
+  └─ 网关 gateway/server.mjs + gw/（Node）：管理 claude 进程、事件流、队列、接口配置 → 界面 gateway/web/
 ```
 
 - **等长前缀改写**：Termux 的程序在编译期写死了 `/data/data/com.termux/` 前缀。包名 `cc.codroid` 与 `com.termux` 一样是 10 个字符，于是逐字节替换就能让 RUNPATH、shebang、配置路径全部指对，不需要 `LD_LIBRARY_PATH`、包装脚本或二进制补丁。zip / jmod 归档内部的条目同样改写。详见 [devkit/README.md](devkit/README.md)。
 - **seccomp**：安卓给应用进程装了系统调用白名单，白名单外的调用直接用 SIGSYS 杀进程。Android 14 不放行 `epoll_pwait2`，Claude Code 一启动就会被杀。[`seccomp-enosys.c`](android/native/seccomp-enosys.c) 把这类调用改成返回 ENOSYS，让程序走自己的回退路径；静态二进制用 `enosys-run` 从外面（ptrace）做同一件事。
+- **targetSdk 36**：安卓 10 起，targetSdk 29 以上的应用不能直接执行自己数据目录里的文件。常规包仍是 targetSdk 28；36 版把 glibc 加载器放进 APK 的原生库目录（系统允许执行那里），bionic 程序经 `/system/bin/linker64` 启动，再由一个 exec 垫片（[`exec-shim.c`](android/native/exec-shim.c)）在每次启动程序时自动改写成这两种方式之一。两套包功能一样，全部组件都在 36 版上实机跑过。
 - **网关访问控制**：网关只监听 127.0.0.1，且 `/api/*` 必须带应用私有目录里的 256 位令牌，并校验 Host 与 Origin。手机上别的应用、浏览器里的网页都驱动不了它。
 - **凭据**：账户登录由 Claude Code 自己完成。网关只把授权地址交给系统浏览器，不读取、不保存 claude.ai 的凭据；一次性授权码也不经过它（见[条款与合规](#条款与合规)）。第三方 API Key 存在应用私有目录，通过 `apiKeyHelper` 交给 claude，不进环境变量。
 
@@ -135,8 +148,8 @@ cccodroid.apk（Java 外壳：安装器 + 前台服务 + WebView）
 
 cccodroid 力求遵守 [Anthropic 对运行 Claude Code 的产品的条款](https://code.claude.com/docs/en/legal-and-compliance)。下面如实写明应用实际怎么做，你可以自己判断：
 
-- **程序怎么运行。** Claude Code 的程序文件与官方 linux-arm64 版逐字节一致：按官方 sha256 清单校验，不打任何补丁。安卓没有 `/lib/ld-linux-aarch64.so.1`，所以由工具链的 glibc 加载器启动，并预加载一个 61 行的小库（[`seccomp-enosys.c`](android/native/seccomp-enosys.c)），把安卓 seccomp 过滤器禁止的系统调用改成返回 ENOSYS。这个库不读、不改 Claude Code 的代码和内存，只让进程不被系统杀掉。
-- **用 Claude 订阅登录。** 登录就是 Claude Code 自己的 `claude auth login`：你在浏览器里的 Anthropic 页面上授权，令牌由 Claude Code 写进它自己的 `~/.claude/.credentials.json`（应用从不读这个文件）；登录状态下，Claude Code 直连 api.anthropic.com，不经过我们的任何进程。实际上这和"SSH 到一台自己的 Linux 机器上运行 Claude Code 并登录"是一回事：这台 Linux 机器就是手机，应用是屏幕和键盘。每一轮都是你自己发出的消息，应用没有定时或无人值守运行的功能。Anthropic 的条款对这种情况有明文：不妨碍「终端用户用自己的 Claude 订阅登录未经修改的 Claude Code 程序，包括由平台托管 Claude Code 的情形」（原文：does not prevent an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code）。
+- **程序怎么运行。** Claude Code 的程序文件与官方 linux-arm64 版逐字节一致：按官方 sha256 清单校验，不打任何补丁。安卓没有 `/lib/ld-linux-aarch64.so.1`，所以由 glibc 加载器启动（工具包里那份，36 版用的是 APK 里的同一份），并预加载一个 61 行的小库（[`seccomp-enosys.c`](android/native/seccomp-enosys.c)），把安卓 seccomp 过滤器禁止的系统调用改成返回 ENOSYS。这个库不读、不改 Claude Code 的代码和内存，只让进程不被系统杀掉。
+- **用 Claude 订阅登录。** 登录就是 Claude Code 自己的 `claude auth login`：你在浏览器里的 Anthropic 页面上授权，令牌由 Claude Code 写进它自己的 `~/.claude/.credentials.json`（应用从不读这个文件）；登录状态下，Claude Code 直连 api.anthropic.com，不经过我们的任何进程。实际上这和"SSH 到一台自己的 Linux 机器上运行 Claude Code 并登录"是一回事：这台 Linux 机器就是手机，应用是屏幕和键盘。每一轮都由你发起：要么是你发的消息，要么是你自己设的定时任务。定时任务跑在你自己的手机、你自己的账户上，用的仍是同一个未修改的 Claude Code；跑的时候没人看着，所以凡是需要确认的操作一律拒绝，应用不会替你点「允许」。Anthropic 的条款对这种情况有明文：不妨碍「终端用户用自己的 Claude 订阅登录未经修改的 Claude Code 程序，包括由平台托管 Claude Code 的情形」（原文：does not prevent an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code）。
 - **一次性授权码。** 正常情况下，浏览器在本机直接把授权码交回 Claude Code，不经过应用。自动回传失败时（比如在别的设备上授权），应用打开内置终端并在里面运行 `claude auth login`，你把授权码贴给 Claude Code 自己的提示。终端只是通用的字节通道，和 Termux、SSH 一样；应用没有任何接收授权码的输入框，也不解析、不保存、不记录它。
 - **权限确认。** 和官方命令行一样，Claude 在改文件、跑命令、联网之前会先问你，你在对话里回答。默认模式是「逐项确认」；「全部放行」可以选，但要先确认一次。
 - **名字。** cccodroid 是 "Claude Code CLI On droid" 的缩写，起名方式参照老牌安卓 C/C++ IDE C4droid。项目名、图标、包名都不使用 Claude 或 Anthropic 的名称和标志，也不声称由 Anthropic 制作、认可或与其合作。如果 Anthropic 提出要求，项目会改名。
@@ -145,7 +158,8 @@ cccodroid 力求遵守 [Anthropic 对运行 Claude Code 的产品的条款](http
 ## 构建
 
 ```sh
-sh scripts/build.sh          # javac → d8 → aapt2 → 签名，产出 dist/cccodroid.apk
+sh scripts/build.sh                 # javac → d8 → aapt2 → 签名，产出 dist/cccodroid.apk（targetSdk 28）
+TARGET_SDK=36 sh scripts/build.sh   # 36 版；发版时 scripts/ship.mjs 两套都出
 node devkit/devkit.mjs build --target cc.codroid   # 构建开发工具包（也可由 CI 完成）
 ```
 
@@ -162,7 +176,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 
 | 目录 | 内容 |
 |---|---|
-| `android/` | Java 外壳、Manifest、资源、终端小工具（`assets/bin/`）、原生小库（`native/`） |
+| `android/` | Java 外壳、Manifest、资源、终端小工具（`assets/bin/`）、原生小库（`native/`）、随包的 glibc 加载器原件（`prebuilt/glibc/`） |
 | `gateway/` | 网关（`server.mjs` 与 `gw/` 下的功能模块，Node.js）与界面（`web/`，原生 JS，无构建步骤） |
 | `i18n/` | 界面译文：各语言的 txt 与生成、检查脚本，见 [i18n/README.md](i18n/README.md) |
 | `devkit/` | 开发工具包构建脚本与清单 |
