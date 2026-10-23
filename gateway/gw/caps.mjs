@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { CFG, PATHS, PREFIX } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { API_KEY, PROVIDER } from "./providers.mjs";
+import { API_KEY, PROVIDER, providerBrief } from "./providers.mjs";
 import { bridgeAlive, runClaude, safeMode } from "./claude.mjs";
 import { LAST_SESSION, RUNS } from "./runs.mjs";
 import { NEXT, sendJson, uiTag } from "./http.mjs";
@@ -93,6 +93,8 @@ export async function routeCaps(req, res, u, p) {
       // 登录态厂商也算"就绪"：它不用密钥，用的是 claude 自己的 OAuth 登录
       hasKey: !!API_KEY || !!PROVIDER.login,
       keyMode: API_KEY ? "key" : (PROVIDER.login ? "login" : "none"),
+      // 别家填了 Key 也算接上了：会话可以单独选那家（0.3.16 起），首屏不该再叫人去接模型
+      otherKey: providerBrief().some((p) => !p.active && p.keyMode === "key"),
       model: SETTINGS.model || PROVIDER.defaultModel || null,
       provider: PROVIDER.id,
       providerLabel: PROVIDER.label || PROVIDER.id,

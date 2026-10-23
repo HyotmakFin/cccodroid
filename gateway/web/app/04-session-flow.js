@@ -246,7 +246,7 @@
   async function fillSetupGuide(box) {
     let s = null;
     try { s = await api("/api/status"); } catch { return; }
-    let ready = s.keyMode === "key";
+    let ready = s.keyMode === "key" || s.otherKey;
     if (s.keyMode === "login") { try { ready = !!(await api("/api/login/status")).loggedIn; } catch {} }
     if (ready || !box.isConnected) return;
     box.innerHTML = `<p><strong>${esc(t("开始之前，先接上模型（两条路选一条）："))}</strong></p>
