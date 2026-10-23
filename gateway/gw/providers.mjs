@@ -448,6 +448,18 @@ function loadApiKey(p) {
 }
 
 export let API_KEY = null;   // 在 SETTINGS 载入后按「生效厂商」解析
+/** 按 id 取一家（0.3.16 起各会话可以用不同的接口）：生效的那家直接给 PROVIDER；配置里没有的给 null */
+export function providerById(id) {
+  if (!id || id === PROVIDER.id) return PROVIDER;
+  if (PROVIDERS_CFG && PROVIDERS_CFG.providers[id]) return pickProvider(id);
+  return id === BUILTIN_PROVIDER.id ? BUILTIN_PROVIDER : null;
+}
+/** 这一家的密钥：生效的那家用已解析好的 API_KEY，别家现取（同样的回落规则，见 loadApiKey） */
+export function keyOf(p) {
+  if (!p || p === PROVIDER || p.id === PROVIDER.id) return API_KEY;
+  return loadApiKey(p);
+}
+
 /** 应用当前厂商：更新上游与密钥。
  *  模型清单缓存无需在此清除 —— fetchModels 以 MODELS_FOR===PROVIDER.id 为键，
  *  换厂商自然失效。 */
@@ -460,6 +472,7 @@ export function applyProvider() {
 /** claude 认的权限模式（2026-10 版二进制）。没有 manual */
 export const PERM_MODES = ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"];
 
+function pickProvider(id) { return { id, explicit: !!PROVIDERS_RAW.providers[id] || id !== BUILTIN_PROVIDER.id, ...PROVIDERS_CFG.providers[id] }; }
 /** 生效厂商：设置里的 provider 优先，其次配置文件 active，最后内置兜底 */
 function resolveProvider() {
   const want = SETTINGS.provider;
@@ -469,7 +482,7 @@ function resolveProvider() {
     // explicit：密钥只认这条自己的，不往历史配置回落。唯一例外是老版 DeepSeek ——
     // 它的密钥可能还躺在 ccapp-config.json 里、配置文件里没它这一条。
     // （官方账户条目绝不能回落：那会把 DeepSeek 的钥匙注成 ANTHROPIC_API_KEY，见 loadApiKey）
-    const pick = (id) => ({ id, explicit: !!PROVIDERS_RAW.providers[id] || id !== BUILTIN_PROVIDER.id, ...PROVIDERS_CFG.providers[id] });
+    const pick = pickProvider;
     if (want && PROVIDERS_CFG.providers[want]) return pick(want);
     const a = PROVIDERS_CFG.active;
     if (a && PROVIDERS_CFG.providers[a]) return pick(a);
@@ -506,7 +519,7 @@ export async function routeProviders(req, res, u, p) {
   if (req.method === "POST" && p === "/api/providers/delete") {
     const b = JSON.parse((await readBody(req)) || "{}");
     const id = String(b.id || "");
-    if (id === PROVIDER.id && RUNS.size) return sendJson(res, 409, { error: "busy", message: tz("这一家正在用，等这一轮跑完再删。") });
+    if ([...RUNS.values()].some((r) => !r.ended && r.provider === id)) return sendJson(res, 409, { error: "busy", message: tz("这一家正在用，等这一轮跑完再删。") });
     if (PRESETS[id]) {
       // 预置厂商删不掉，只清空用户字段（密钥等）
       delete PROVIDERS_RAW.providers[id];

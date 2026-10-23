@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { CFG, NO_BRIDGE, PATHS, PREFIX, log, sleep } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { API_KEY, PROVIDER } from "./providers.mjs";
+import { PROVIDER, keyOf } from "./providers.mjs";
 import { MODELS, withWindows } from "./models.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 
@@ -146,20 +146,24 @@ export async function setBridgeUpstream(url) {
 }
 
 // ── claude 进程 ───────────────────────────────────────────────────────
-/** 某个模型（缺省 = 全局设置里的）在【当前厂商】那边的真实参数（窗口 / 输出上限 / effort 档位） */
-export function currentModelInfo(id = SETTINGS.model) {
-  const list = withWindows(MODELS || PROVIDER.fallbackModels || []);
+/** 某个模型（缺省 = 全局设置里的）在某家（缺省 = 当前生效的）那边的真实参数（窗口 / 输出上限 / effort 档位）。
+ *  别家没有拉过的清单缓存，先用目录里写的 fallbackModels */
+export function currentModelInfo(id = SETTINGS.model, p = PROVIDER) {
+  const list = withWindows((p.id === PROVIDER.id ? MODELS : null) || p.fallbackModels || []);
   if (!Array.isArray(list) || !list.length) return {};
   if (!id) return list[0] || {};
   return list.find((m) => m.id === id) || list[0] || {};
 }
 
 /** o.model：这一轮用的模型（会话自己的、定时任务 / 项目指定的）；不给就按全局设置。
- *  档位映射、上下文窗口都跟着它走 —— 不然子代理、窗口还是全局那个模型的 */
+ *  档位映射、上下文窗口都跟着它走 —— 不然子代理、窗口还是全局那个模型的。
+ *  o.provider：这一轮用的那家（会话钉在别家时）；不给就是全局生效的。地址、认证方式、密钥都按它 */
 export function claudeEnv(o = {}) {
   const want = o.model !== undefined ? o.model : SETTINGS.model;
-  const info = currentModelInfo(want);
-  const p = PROVIDER;
+  const p = o.provider || PROVIDER;
+  const other = p.id !== PROVIDER.id;
+  const key = keyOf(p);
+  const info = currentModelInfo(want, p);
   const env = {
     ...process.env,
     HOME: CFG.home,
@@ -191,7 +195,8 @@ export function claudeEnv(o = {}) {
     CCAPP_RUN: "1",
     LD_LIBRARY_PATH: PREFIX ? "" : PATHS.nodeLib,   // 只给 node 用；glibc 走 --library-path
     // 前缀布局下 glibc 的 resolv.conf 是齐的，不需要本地桥：直连厂商
-    ANTHROPIC_BASE_URL: NO_BRIDGE ? (p.baseUrl || "") : `http://127.0.0.1:${CFG.bridgePort}`,
+    // 别家（会话钉的不是全局那家）也直连：桥只有一个上游，跟着全局走；claude（Bun）自己解析 DNS，用不着桥
+    ANTHROPIC_BASE_URL: NO_BRIDGE || other ? (p.baseUrl || "") : `http://127.0.0.1:${CFG.bridgePort}`,
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
     CLAUDE_CODE_SHELL: ensureShell(),
     SHELL: ensureShell(),
@@ -211,7 +216,7 @@ export function claudeEnv(o = {}) {
   // ⚠️ 密钥不进环境变量：claude 的每个 Bash 子进程都继承环境，模型跑一句 env 就整个打印出来
   // （实测发生过：grep 坏了，模型退而用裸 env，DeepSeek 的 key 原样进了会话记录）。
   // 改走 claude 自己的 apiKeyHelper：它要用时执行一条命令从 0600 的私有文件里读，见 settingsArgs()。
-  if (API_KEY) {
+  if (key) {
     delete env.ANTHROPIC_AUTH_TOKEN;
     delete env.ANTHROPIC_API_KEY;
   } else if (p.login) {
@@ -409,19 +414,23 @@ export function readLedger(n = 100) {
   } catch { return []; }
 }
 
-export function settingsArgs() {
+/** p：这一轮用的那家（缺省 = 全局生效的）。密钥文件按家分开 —— 几家同时在跑时，
+ *  claude 每次要钥匙都现读文件，共用一个文件会读到别家的 */
+export function settingsArgs(p = PROVIDER) {
   const st = {};
   const safe = safeMode();
   if (SETTINGS.outputStyle && !safe) st.outputStyle = SETTINGS.outputStyle;
-  if (API_KEY) {
+  const key = keyOf(p);
+  const file = p.id === PROVIDER.id ? KEY_FILE : KEY_FILE + "-" + String(p.id).replace(/[^\w.-]/g, "_");
+  if (key) {
     try {
-      fs.mkdirSync(path.dirname(KEY_FILE), { recursive: true });
-      fs.writeFileSync(KEY_FILE, API_KEY, { mode: 0o600 });
-      fs.chmodSync(KEY_FILE, 0o600);
-      st.apiKeyHelper = "cat '" + KEY_FILE + "'";
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, key, { mode: 0o600 });
+      fs.chmodSync(file, 0o600);
+      st.apiKeyHelper = "cat '" + file + "'";
     } catch (e) { log("写密钥文件失败: " + e.message); }
   } else {
-    try { fs.unlinkSync(KEY_FILE); } catch {}
+    try { fs.unlinkSync(file); } catch {}
   }
   return [...(safe ? ["--safe-mode"] : []), ...(Object.keys(st).length ? ["--settings", JSON.stringify(st)] : [])];
 }

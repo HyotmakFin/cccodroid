@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { CFG, LAST_LANG, log, tr, tz } from "./config.mjs";
 import { SETTINGS, saveSettings } from "./settings.mjs";
-import { API_KEY, PERM_MODES, PROVIDER } from "./providers.mjs";
+import { PERM_MODES, PROVIDER, keyOf, providerById } from "./providers.mjs";
+import { sessProvider } from "./sessmodel.mjs";
 import { isLoginMode } from "./models.mjs";
 import { findSessionFile } from "./sessions.mjs";
 import { killTree } from "./claude.mjs";
@@ -243,7 +244,7 @@ export function enqueue(body) {
     cid: body.cid ? String(body.cid).slice(0, 64) : null,   // 前端自己的消息号：SSE 可能比 POST 的响应先到
     model: body.model || null,
     // 新会话（还没会话号）在输入栏面板里选的模型 / 思考强度：跑起来拿到会话号时记成这个会话自己的（gw/sessmodel.mjs）
-    pin: !body.sessionId && body.pin && typeof body.pin === "object" ? Object.fromEntries(["model", "effort"].filter((k) => typeof body.pin[k] === "string").map((k) => [k, body.pin[k].slice(0, 200)])) : null,
+    pin: !body.sessionId && body.pin && typeof body.pin === "object" ? Object.fromEntries(["model", "effort", "provider"].filter((k) => typeof body.pin[k] === "string").map((k) => [k, body.pin[k].slice(0, 200)])) : null,
     permissionMode: body.permissionMode || null,
     addDirs: Array.isArray(body.addDirs) ? body.addDirs : [],
     projectId: body.projectId ? String(body.projectId) : null,
@@ -282,10 +283,12 @@ export async function routeQueue(req, res, u, p) {
     let b;
     try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     if (!String(b.message || "").trim()) return sendJson(res, 400, { error: "empty message" });
-    if (!API_KEY && !PROVIDER.login && !/^\/(model|models|effort|autocompact)\b/.test(String(b.message).trim())) {
+    // 看这条消息要用的那家（新会话首条选的 / 会话钉的 / 全局的），不是只看全局
+    const bp = (b.pin && typeof b.pin.provider === "string" && !b.sessionId && providerById(b.pin.provider)) || sessProvider(b.sessionId || null);
+    if (!keyOf(bp) && !bp.login && !/^\/(model|models|effort|autocompact)\b/.test(String(b.message).trim())) {
       return sendJson(res, 503, {
         error: "no_api_key",
-        message: tz("「{name}」还没填 Key。到 设置 → 接口 里填好保存，或换一个接口。", { name: PROVIDER.label || PROVIDER.id }),
+        message: tz("「{name}」还没填 Key。到 设置 → 接口 里填好保存，或换一个接口。", { name: bp.label || bp.id }),
       });
     }
     if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });

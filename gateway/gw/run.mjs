@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { API_KEY, PERM_MODES, PROVIDER, billAfterRun, noteTokens } from "./providers.mjs";
+import { PERM_MODES, PROVIDER, billAfterRun, keyOf, noteTokens, providerById } from "./providers.mjs";
 import { ALIAS_SEEN, isLoginMode } from "./models.mjs";
 import { claudeCmd, claudeEnv, ensureBridge, settingsArgs } from "./claude.mjs";
 import { tasksCheck } from "./goal.mjs";
@@ -16,7 +16,7 @@ import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs"
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
-import { sessModel, setSessModel } from "./sessmodel.mjs";
+import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 
 /** 这一轮在哪个目录跑：显式指定 → 接着的会话当初的 cwd（--resume 只在同一 cwd 下找得到）→ 项目目录 → 工作区 */
 const isDirSync = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
@@ -30,6 +30,10 @@ function cwdOf(item, sessionId) {
 // ── 跑一轮 ────────────────────────────────────────────────────────────
 // 和 HTTP 请求完全脱钩：前端断了也接着跑，结果照样落进 transcript、照样广播。
 export async function startRun(item) {
+  // 这一轮用哪家：新会话首条带来的选择（pin）→ 这个会话钉的 → 全局生效的。整轮都按它（地址、密钥、模型名规则）
+  const sid0 = item.sessionId || (item.follow && RUN_SESSIONS.get(item.follow)) || null;
+  const P = (item.pin && item.pin.provider && providerById(item.pin.provider)) || sessProvider(sid0);
+  const KEY = keyOf(P);
   const run = {
     id: item.id,
     text: item.message,
@@ -40,7 +44,7 @@ export async function startRun(item) {
     auto: item.auto || null,           // "idle" = 网关自己发起的空闲压缩（界面画成系统提示，不发通知）
     startedAt: Date.now(),
     child: null, aborted: false, ended: false,
-    provider: PROVIDER.id,             // 记 token 用：开跑时的厂商（跑着的时候不许切）
+    provider: P.id,                    // 这一轮用的那家：记 token、删接口前查占用都看它
     log: [], pend: null, pendTimer: null,
     sched: item.sched || null,         // 定时任务跑的：{ taskId, runKey }（结束时 sched.mjs 记运行记录）
     unattended: !!item.unattended,     // 没人看着：要确认的一律拒绝
@@ -65,8 +69,8 @@ export async function startRun(item) {
       (text, cmd) => endRun(run, { localCommand: cmd || local[1], resultText: text, durationMs: 0, costUsd: 0 }), run.sessionId);
   }
 
-  if (!API_KEY && !PROVIDER.login) {
-    emit({ type: "error", message: tr(LAST_LANG, tz("未配置 API 密钥。请在设置里填入 {name} 的密钥。", { name: PROVIDER.label || PROVIDER.id })) });
+  if (!KEY && !P.login) {
+    emit({ type: "error", message: tr(LAST_LANG, tz("未配置 API 密钥。请在设置里填入 {name} 的密钥。", { name: P.label || P.id })) });
     return endRun(run, { failed: true });
   }
   // 用户在设置里卸了 Claude Code（之后自己选版本装）：说清楚，别让加载器报一句看不懂的找不到文件
@@ -74,7 +78,7 @@ export async function startRun(item) {
     emit({ type: "error", message: tr(LAST_LANG, tz("Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。")) });
     return endRun(run, { failed: true });
   }
-  if (!isLoginMode() && !(await ensureBridge())) {
+  if (P.id === PROVIDER.id && !isLoginMode() && !(await ensureBridge())) {   // 别家直连，不经桥
     emit({ type: "error", message: tr(LAST_LANG, tz("本地 DNS 桥启动失败，无法连接 API。")) });
     return endRun(run, { failed: true });
   }
@@ -87,18 +91,22 @@ export async function startRun(item) {
   // 模型 / 思考强度的取值顺序：本次请求指定（定时任务）→ 新会话首条带来的选择（pin）→ 这个会话单独选过的
   // → 项目默认 → 全局默认（设置页）→ 该厂商自己的默认。选过的 "" 表示「接口默认」，也算选过
   // ⚠️ 不能回落到 CFG.model：那是全局兜底（deepseek-flash），只有内置厂商能碰。
-  const own = sessModel(run.sessionId), pin = item.pin || {};
+  // 首条带来的接口和会话现在的不是同一家时，会话记下的模型名不作数
+  const own0 = sessModel(run.sessionId), pin = item.pin || {};
+  const own = own0 && (own0.model == null || own0.provider === P.id) ? own0 : null;
   const ownM = pin.model != null ? pin.model : own && own.model != null ? own.model : null;
   const ownE = pin.effort != null ? pin.effort : own && own.effort != null ? own.effort : null;
   const effort = item.effort || (ownE != null ? ownE : pdef.effort || SETTINGS.effort) || "";
-  let model = (item.model || (ownM != null ? ownM : pdef.model || SETTINGS.model) || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
+  // 用的不是全局那家：项目默认、全局默认的模型名都是给全局那家的，不作数，走这家自己的默认
+  const fallM = P.id === PROVIDER.id ? pdef.model || SETTINGS.model : "";
+  let model = (item.model || (ownM != null ? ownM : fallM) || P.defaultModel || (P.explicit ? "" : CFG.model) || "").trim();
   // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
-  if (PROVIDER.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
+  if (P.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
   let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
   if (!PERM_MODES.includes(permMode)) permMode = "default";
 
   // 端侧小模型：先确保 llama-server 跑着、载的是这个模型（第一次要加载十几秒）
-  if (PROVIDER.local) {
+  if (P.local) {
     try {
       const m = await ensureLlama(model, (key, text) => emit({ type: "note", key, text }));
       model = m.id;
@@ -129,22 +137,22 @@ export async function startRun(item) {
   // 设备工具（通知、剪贴板、打开应用、读屏点按…）：只有 cccodroid 有 Java 那一层。开关在应用里，
   // 这里只看总开关决定挂不挂；具体哪些工具出现由 device-mcp.mjs 现问应用。端侧小模型不挂（读不起）
   const devMcp = deviceMcpConfig();
-  if (devMcp && !PROVIDER.local && (await privCall({ op: "dev_status" }, 3000)).on) argv.push("--mcp-config", devMcp);
+  if (devMcp && !P.local && (await privCall({ op: "dev_status" }, 3000)).on) argv.push("--mcp-config", devMcp);
 
   // 告诉 claude 这台设备上有什么现成工具 —— 不说它就不会去用。
   // 和用户自己的追加提示合成一条：重复给同一个单值参数，解析器一般只留一个，合成一条最稳
   // 端侧：--bare 换成很短的系统提示和精简工具（见「端侧小模型」一节）；本机工具清单太长，小模型读不起，不附
   // 内置只有聊天（不给工具）；自定义模式的工具清单和提示由用户的配置文件给（见 localCustom）
-  const lcust = PROVIDER.local ? localCustomActive() : null;
-  if (PROVIDER.local) argv.push("--bare", "--tools", lcust ? lcust.tools : "");
+  const lcust = P.local ? localCustomActive() : null;
+  if (P.local) argv.push("--bare", "--tools", lcust ? lcust.tools : "");
   // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
-  const localHint = !PROVIDER.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
+  const localHint = !P.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
-  const appendPrompt = [PROVIDER.local ? localHint : toolsHint(), !PROVIDER.nativeModels && !PROVIDER.local ? TASKS_HINT : "", PROVIDER.local ? "" : PREVIEW_HINT, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : PREVIEW_HINT, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
-  argv.push(...settingsArgs());
+  argv.push(...settingsArgs(P));
   if (effort) argv.push("--effort", effort);
   const allowed = [...(SETTINGS.allowedTools || []), ...(Array.isArray(item.allowedTools) ? item.allowedTools : [])];
   if (allowed.length) argv.push("--allowedTools", allowed.join(","));
@@ -165,7 +173,7 @@ export async function startRun(item) {
   const [cmd0, args0] = claudeCmd(argv);
   const child = spawn(cmd0, args0, {
     cwd,
-    env: claudeEnv({ model }),
+    env: claudeEnv({ model, provider: P }),
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,            // 当进程组长，中断时好整组带走（见 killTree）
   });
@@ -385,7 +393,7 @@ export async function startRun(item) {
       return endRun(run, {
         durationMs: ms,
         // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报
-        costUsd: PROVIDER.nativeModels ? Number(lastResult.total_cost_usd || 0) : 0,
+        costUsd: P.nativeModels ? Number(lastResult.total_cost_usd || 0) : 0,
         usage: lastResult.usage
           ? {
               output_tokens: lastResult.usage.output_tokens || 0,

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { API_KEY, PROVIDER } from "./providers.mjs";
+import { API_KEY, PROVIDER, keyOf } from "./providers.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
 import { effectiveModel } from "./sessmodel.mjs";
@@ -44,7 +44,7 @@ export function normalizeModels(j) {
 /** 走官方账户登录（且没填密钥）时：凭据只归 claude 自己管。
  *  Anthropic 条款：第三方不得收集、保存或中转 claude.ai 凭据/会话令牌，登录须走官方流程。
  *  所以这种情况下网关既不读 .credentials.json，也不让请求经过本地桥 —— claude 直连官方。 */
-export function isLoginMode(p = PROVIDER) { return !!(p && p.login && !API_KEY); }
+export function isLoginMode(p = PROVIDER) { return !!(p && p.login && !keyOf(p)); }
 
 // 登录态拉不了清单（那要用令牌，我们不碰），给一份静态的；厂商配置里写了 fallbackModels 就用那份。
 // 别名排前面：claude 自己把它解析成该系列的最新版，最不容易过时。
