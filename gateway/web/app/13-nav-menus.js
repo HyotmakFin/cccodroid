@@ -232,6 +232,7 @@
     chat: '<path d="M4 4h16v12H8l-4 4z"/>',
     people: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>',
     logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+    update: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>',
   };
 
   // 侧栏的最近对话：一行一个，分组 置顶 / 今天 / 昨天 / 更早；更早的只列前一段，全部在「对话」整页
@@ -291,11 +292,15 @@
   // 账户菜单：常用的在上，不可逆的放最下
   function acctMenu() {
     const st = state.serverStatus || {};
+    // 更新直达设置里的「更新」类目；有东西可下 / 可装就在右边标出来（状态是上次取的，顺手再取一次给下回用）
+    const pend = (lastUpd.items || []).filter((it) => it.state === "available" || it.state === "ready").length;
+    loadUpd();
     const items = [
       { label: t("设置"), icon: PAGES.settings.icon, fn: () => openPage("settings") },
       { label: t("头像与昵称"), icon: SM.edit, fn: () => openPage("settings", "general") },
       { label: t("切换接口 / 账户"), icon: SM.swap, fn: () => openPage("settings", "provider") },
       { label: t("用量"), icon: PAGES.usage.icon, fn: () => openPage("usage") },
+      { label: t("更新"), icon: SM.update, small: pend ? t("有 {n} 项可更新", { n: pend }) : "", fn: () => openPage("settings", "update") },
       "hr",
       { label: t("帮助"), icon: PAGES.help.icon, fn: () => openPage("help") },
       { label: t("更新日志"), icon: PAGES.changelog.icon, fn: () => openPage("changelog") },

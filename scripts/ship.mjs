@@ -27,6 +27,8 @@ const F = "/data/user/0/li.dsh.claudecli/files", P = `${F}/toolchain/dshtc/prefi
 const MANI = path.join(ROOT, "android/AndroidManifest.xml");
 const WN = path.join(ROOT, "android/assets/whatsnew");
 const APK = path.join(ROOT, "dist/cccodroid.apk");
+// 双方案：cccodroid.apk 是 targetSdk 28（默认、兼容最好），cccodroid-36.apk 给系统不让装 28 的机器。同版本号、同钥匙，互相覆盖安装
+const APK36 = path.join(ROOT, "dist/cccodroid-36.apk");
 const STEPS = ["preflight", "bump", "changelog", "commit", "build", "verify", "push", "release", "check", "install"];
 const PUBLIC = ["push", "release", "check"];
 
@@ -60,10 +62,10 @@ function fuseOk(files) {
   const bad = files.filter((f) => fs.existsSync(f) && fs.statSync(f).size !== fs.readFileSync(f).length);
   if (bad.length) throw new Error("FUSE 报的大小和实际内容不一致（等几秒再跑）：\n  " + bad.join("\n  "));
 }
-const badging = () => {
-  const out = sh("env", [`LD_LIBRARY_PATH=${P}/lib`, `${P}/bin/aapt2`, "dump", "badging", APK]);
+const badging = (apk = APK) => {
+  const out = sh("env", [`LD_LIBRARY_PATH=${P}/lib`, `${P}/bin/aapt2`, "dump", "badging", apk]);
   const m = out.match(/versionCode='(\d+)' versionName='([^']*)'/);
-  return { code: +m[1], name: m[2], pkg: (out.match(/package: name='([^']+)'/) || [])[1] };
+  return { code: +m[1], name: m[2], pkg: (out.match(/package: name='([^']+)'/) || [])[1], sdk: +((out.match(/targetSdkVersion:'(\d+)'/) || [])[1] || 0) };
 };
 
 // ── 各步 ──
@@ -109,6 +111,12 @@ const S = {
     console.log("  " + git("log", "--oneline", "-1"));
   },
   build() {
+    // 先出 36 的、改名放一边，再出 28 的（build.sh 的产物固定叫 cccodroid.apk）。dev 只出 28，省一半时间
+    fs.rmSync(APK36, { force: true });
+    if (!DEV) {
+      run("sh", [path.join(ROOT, "scripts/build.sh")], { cwd: ROOT, env: { ...process.env, TARGET_SDK: "36" } });
+      fs.renameSync(APK, APK36);
+    }
     run("sh", [path.join(ROOT, "scripts/build.sh")], { cwd: ROOT });
   },
   verify() {
@@ -116,8 +124,17 @@ const S = {
     if (b.pkg !== "cc.codroid") throw new Error(`包名是 ${b.pkg}`);
     if (b.code !== m.code || b.name !== m.name) throw new Error(`包里是 ${b.name}（${b.code}），清单是 ${m.name}（${m.code}）`);
     if (!DEV && b.name !== VER) throw new Error(`包里版本 ${b.name}，要发的是 ${VER}`);
+    if (b.sdk !== 28) throw new Error(`cccodroid.apk 的 targetSdk 是 ${b.sdk}，应为 28`);
     state.sha = shaFile(APK); state.size = fs.statSync(APK).size;
     if (fs.readFileSync(APK).length !== state.size) throw new Error("APK 的 stat 大小和实际不一致（FUSE），等几秒重跑 verify");
+    if (!DEV) {
+      if (!fs.existsSync(APK36)) throw new Error("没有 dist/cccodroid-36.apk，重打：--from build");
+      const c = badging(APK36);
+      if (c.pkg !== b.pkg || c.code !== b.code || c.name !== b.name || c.sdk !== 36) throw new Error(`36 包不对：${c.pkg} ${c.name}（${c.code}）targetSdk ${c.sdk}`);
+      state.sha36 = shaFile(APK36); state.size36 = fs.statSync(APK36).size;
+      if (fs.readFileSync(APK36).length !== state.size36) throw new Error("36 包的 stat 大小和实际不一致（FUSE），等几秒重跑 verify");
+      console.log(`  36 版 ${(state.size36 / 1048576).toFixed(2)} MB  sha256 ${state.sha36}`);
+    }
     // 包里的前端要和工作树一致（打包后又改了代码就不算数）
     if (!DEV && git("status", "--porcelain")) throw new Error("打包后工作区又有改动，重打：--from build");
     console.log(`  ${b.name}（${b.code}） ${(state.size / 1048576).toFixed(2)} MB  sha256 ${state.sha}`);
@@ -131,13 +148,15 @@ const S = {
   async check() {
     const tag = "v" + VER;
     const rel = JSON.parse(sh("gh", ["api", `repos/${REPO}/releases/tags/${tag}`]));
-    const a = (rel.assets || []).find((x) => x.name === "cccodroid.apk");
-    if (!a) throw new Error("Release 上没有 cccodroid.apk");
-    if (a.size !== state.size) throw new Error(`Release 上的包 ${a.size} 字节，本地 ${state.size}`);
-    const tmp = path.join(W, "dl.apk");
-    run("curl", ["-fsSL", "--retry", "3", "-o", tmp, a.browser_download_url]);
-    const got = shaFile(tmp); fs.rmSync(tmp);
-    if (got !== state.sha) throw new Error(`下载回来的 sha256 ${got} ≠ 本地 ${state.sha}`);
+    for (const [name, size, sha] of [["cccodroid.apk", state.size, state.sha], ["cccodroid-36.apk", state.size36, state.sha36]]) {
+      const a = (rel.assets || []).find((x) => x.name === name);
+      if (!a) throw new Error(`Release 上没有 ${name}`);
+      if (a.size !== size) throw new Error(`Release 上的 ${name} ${a.size} 字节，本地 ${size}`);
+      const tmp = path.join(W, "dl.apk");
+      run("curl", ["-fsSL", "--retry", "3", "-o", tmp, a.browser_download_url]);
+      const got = shaFile(tmp); fs.rmSync(tmp);
+      if (got !== sha) throw new Error(`下载回来的 ${name} sha256 ${got} ≠ 本地 ${sha}`);
+    }
     const tagSha = sh("gh", ["api", `repos/${REPO}/commits/${tag}`, "--jq", ".sha"]);
     if (tagSha !== git("rev-parse", "HEAD")) throw new Error(`tag 指向 ${tagSha.slice(0, 7)}，不是当前 HEAD`);
     if (!rel.prerelease) {
@@ -147,8 +166,12 @@ const S = {
     console.log(`  ✓ ${rel.html_url}  下载哈希一致${rel.prerelease ? "（预发布）" : "，已是 Latest"}`);
   },
   install() {
-    const size = fs.statSync(APK).size;
-    run("priv", [`cat '${APK}' | pm install -r -S ${size}`]);
+    // 本机装着哪套就装哪套：别因为发版把 36 的机器换回 28
+    const cur = sh("priv", ["dumpsys package cc.codroid | grep -m1 -o 'targetSdk=[0-9]*' || true"]);
+    const apk = /targetSdk=(\d+)/.test(cur) && +cur.match(/targetSdk=(\d+)/)[1] >= 29 && fs.existsSync(APK36) ? APK36 : APK;
+    const size = fs.statSync(apk).size;
+    console.log(`  装 ${path.basename(apk)}`);
+    run("priv", [`cat '${apk}' | pm install -r -S ${size}`]);
     const v = sh("priv", ["dumpsys package cc.codroid | grep -m1 versionName"]);
     console.log("  已装：" + v.trim());
     // 装完把应用打开（和应用内更新一样）：刚装完系统可能还在做安装后扫描、头一次启动会被丢掉，起不来就再拉

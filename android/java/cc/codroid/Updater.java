@@ -126,6 +126,32 @@ final class Updater {
     String pinVer() { return prefs().getString("pin", ""); }
     boolean pinned() { return "pinned".equals(channel()) && !pinVer().isEmpty(); }
 
+    // ── 安装包方案：targetSdk 28（默认，兼容最好）/ 36（系统不让装 28 时用）。同一包名、同一钥匙、同一版本号，互相覆盖安装数据都在 ──
+    /** 本机装着的是哪一套 */
+    String flavor() { return ctx.getApplicationInfo().targetSdkVersion >= 29 ? "36" : "28"; }
+    /** 用户选的：auto / 28 / 36 */
+    String flavorPref() { return prefs().getString("flavor", "auto"); }
+    /** 认定这台机器只能用 36 的原因（系统拒装 28 时记下，之后一直有效）；空 = 没发现 */
+    String only36() { return prefs().getString("only36", ""); }
+    /** 更新要下哪一套：只能 36 就 36；用户明选的照办；自动 = 跟着现在装的走（默认发的是 28，换过 36 的人就留在 36） */
+    String wantFlavor() {
+        if (!only36().isEmpty()) return "36";
+        String p = flavorPref();
+        return "28".equals(p) || "36".equals(p) ? p : flavor();
+    }
+    static String apkName(String flavor) { return "36".equals(flavor) ? "cccodroid-36.apk" : "cccodroid.apk"; }
+    /** 系统拒装 28 的报错：安卓 14 起有「最低可安装 targetSdk」，以后的版本可能抬过 28 */
+    static boolean sdkTooOld(String msg) { return msg != null && msg.contains("DEPRECATED_SDK_VERSION"); }
+    /** 装 28 被系统以 targetSdk 太旧拒掉：记下只能 36，改下 36 那套 */
+    private void markOnly36(String why) {
+        Log.i(TAG, "系统拒装 targetSdk 28 → 以后只用 36：" + why);
+        prefs().edit().putString("only36", why.length() > 200 ? why.substring(0, 200) : why).apply();
+        if (app.file != null) app.file.delete();
+        app.url = null;
+        app.set("unknown", "");
+        checkAsync(false);
+    }
+
     // ── 状态 ───────────────────────────────────────────────────────────
     JSONObject status() throws Exception {
         refreshCurrent();
@@ -134,8 +160,24 @@ final class Updater {
         JSONArray a = new JSONArray();
         for (Item i : new Item[]{app, devkit, claude}) a.put(i.json());
         return new JSONObject().put("ok", true).put("auto", auto()).put("channel", channel()).put("pin", pinVer())
+            .put("flavor", flavor()).put("flavorPref", flavorPref()).put("only36", only36()).put("wantFlavor", wantFlavor())
             .put("lastCheck", prefs().getLong("lastCheck", 0)).put("checking", checking).put("error", lastError).put("items", a)
             .put("verify", lastVerify == null ? JSONObject.NULL : lastVerify);
+    }
+
+    /** 换安装包方案。只能 36 的机器要切 28：拒绝（装上去系统也不认）。返回 null = 已切，否则是拒绝的原因 */
+    String setFlavor(String want) {
+        if (!want.equals("auto") && !want.equals("28") && !want.equals("36")) return Tr.t("未知的安装包方案");
+        if (want.equals("28") && !only36().isEmpty())
+            return Tr.t("这台机器的系统已经不让装 targetSdk 28 的版本，切过去会装不上，所以没有切换。") + "\n" + only36();
+        if (want.equals(flavorPref())) return null;
+        prefs().edit().putString("flavor", want).apply();
+        Log.i(TAG, "安装包方案 → " + want + "（要下 " + wantFlavor() + "，装着 " + flavor() + "）");
+        // 要的和装着的不一样：马上查一次，查到就照自动更新的规则下（用户在设置页点「安装」走系统确认）
+        if (app.file != null && !app.file.getName().endsWith("-" + wantFlavor() + ".apk")) { app.file.delete(); app.url = null; }
+        if (!"downloading".equals(app.state) && !"installing".equals(app.state)) app.set("unknown", "");
+        checkAsync(true);
+        return null;
     }
 
     void set(JSONObject req) {
@@ -305,22 +347,27 @@ final class Updater {
             String tag = r.optString("tag_name");
             if (r.optBoolean("draft") || !tag.matches("v\\d+(\\.\\d+)*")) continue;
             app.latest = tag.substring(1);
-            if (cmpVer(app.latest, app.current) <= 0) { app.set("uptodate", ""); return; }
+            String want = wantFlavor(), name = apkName(want);
+            // 版本相同但要换一套（28 ↔ 36）：也算有更新，同版本号覆盖安装系统是认的
+            int c = cmpVer(app.latest, app.current);
+            boolean swap = c == 0 && !want.equals(flavor());
+            if (c < 0 || c == 0 && !swap) { app.set("uptodate", ""); return; }
             JSONArray as = r.getJSONArray("assets");
             for (int k = 0; k < as.length(); k++) {
                 JSONObject a = as.getJSONObject(k);
-                if (!a.optString("name").equals("cccodroid.apk")) continue;
+                if (!a.optString("name").equals(name)) continue;
                 app.url = a.getString("browser_download_url");
-                app.alt = app.url.startsWith(MIRROR + "/") ? null : MIRROR + "/dl/" + tag + "/cccodroid.apk";
+                app.alt = app.url.startsWith(MIRROR + "/") ? null : MIRROR + "/dl/" + tag + "/" + name;
                 app.size = a.optLong("size");
                 String d = a.optString("digest", "");
                 app.sha = d.startsWith("sha256:") ? d.substring(7) : null;
-                app.file = new File(env.files, "updates/cccodroid-" + app.latest + ".apk");
+                app.file = new File(env.files, "updates/cccodroid-" + app.latest + "-" + want + ".apk");
+                String note = swap ? Tr.f("换成 targetSdk {0} 的安装包", want) : r.optBoolean("prerelease") ? Tr.t("预览版") : "";
                 if (!"downloading".equals(app.state) && !"installing".equals(app.state))
-                    app.set(app.file.isFile() && app.file.length() == app.size ? "ready" : "available", r.optBoolean("prerelease") ? Tr.t("预览版") : "");
+                    app.set(app.file.isFile() && app.file.length() == app.size ? "ready" : "available", note);
                 return;
             }
-            app.set("error", Tr.f("v{0} 里没有 cccodroid.apk", app.latest));
+            app.set("error", Tr.f("v{0} 里没有 {1}", app.latest, name));
             return;
         }
         app.set("uptodate", "");
@@ -610,6 +657,8 @@ final class Updater {
         if (a == null || !ctx.getPackageName().equals(a.packageName)) throw new IOException(Tr.t("下载的不是 cccodroid 安装包"));
         if (!Apk.signer(a).equals(Apk.signer(pm.getPackageInfo(ctx.getPackageName(), Apk.SIG_FLAGS))))
             throw new IOException(Tr.t("安装包签名与本应用不一致，拒绝安装"));
+        String got = a.applicationInfo != null && a.applicationInfo.targetSdkVersion >= 29 ? "36" : "28";
+        if (!got.equals(wantFlavor())) throw new IOException(Tr.f("下载的是 targetSdk {0} 的安装包，要的是 {1}", got, wantFlavor()));
     }
 
     /** 工具包正在下载 / 替换：这时装 APK 会把它拦腰截断 */
@@ -640,6 +689,7 @@ final class Updater {
         if (Priv.granted() && !gatewayBusy()) {
             String out = Priv.pipeInstall(app.file, MainActivity.visible, app.latest);
             Log.i(TAG, "pm install → " + out);     // 走到这里多半说明没装上（装上的话本进程已经没了）
+            if (sdkTooOld(out) && "28".equals(wantFlavor())) { markOnly36(out.trim()); return; }
             if (!out.contains("Success")) app.set("ready", Tr.f("静默安装失败（{0}），点安装走系统确认", out));
             return;
         }
@@ -659,6 +709,7 @@ final class Updater {
     void onInstallResult(String what, boolean ok, String msg) {
         Item it = "app".equals(what) ? app : null;
         if (it == null) return;
+        if (!ok && sdkTooOld(msg) && "28".equals(wantFlavor())) { markOnly36(msg); return; }
         it.set(ok ? "uptodate" : "ready", ok ? "" : msg);
     }
 

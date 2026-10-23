@@ -1983,4 +1983,11 @@ window.I18N_DICT["es"] = {
   "这个版本（targetSdk {n}）只能经加载器运行，不能切到直接执行": "Esta versión (targetSdk {n}) solo funciona mediante el cargador; no puede cambiar a ejecución directa",
   "还有任务在跑，等它们结束再重启": "Aún hay tareas en curso; reinicia cuando terminen",
   "安装包里的 glibc 加载器和工具包里的不是同一版，经加载器暂时用不了：先更新工具包": "El cargador glibc del paquete no es la misma versión que el del kit; por ahora no se puede usar «mediante cargador»: actualiza primero el kit",
+  "安装包方案": "Paquete de instalación",
+  "targetSdk 28 是默认的那套，兼容性最好；targetSdk 36 给系统不让装 28 的新机器用。两套功能一样，数据通用，互相覆盖安装不丢东西。自动：跟着现在装的走，系统拒装 28 时自动换成 36。": "targetSdk 28 es el paquete predeterminado y el más compatible; targetSdk 36 es para equipos nuevos cuyo sistema no permite instalar 28. Ambos funcionan igual y comparten datos, así que instalar uno sobre otro no pierde nada. Auto: sigue con el instalado y cambia a 36 si el sistema rechaza 28.",
+  "现在装的是 targetSdk {n}": "Instalado ahora: targetSdk {n}",
+  "下次更新换成 targetSdk {n}": "La próxima actualización cambia a targetSdk {n}",
+  "系统已不让装 targetSdk 28，只能用 36": "El sistema ya no permite targetSdk 28; aquí solo funciona 36",
+  "换成 targetSdk {n} 的安装包？\n\n会下载同一版本的另一套安装包（约 14 MB）覆盖安装，对话、设置、工具包都保留。安装时应用会重启一次。": "¿Cambiar al paquete targetSdk {n}?\n\nSe descargará el otro paquete de la misma versión (unos 14 MB) y se instalará encima. Se conservan conversaciones, ajustes y el kit de herramientas. La app se reinicia una vez durante la instalación.",
+  "有 {n} 项可更新": "{n} actualización(es) disponible(s)",
 };

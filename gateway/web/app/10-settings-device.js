@@ -186,6 +186,15 @@
     $("upd-field").classList.remove("hidden");
     $("upd-auto").checked = !!st.auto;
     $("upd-channel").value = st.channel === "pinned" ? "pinned" : st.channel || "stable";
+    // 安装包方案（28 / 36）：老外壳没有这几个字段就不显示
+    $("upd-flavor-row").classList.toggle("hidden", !st.flavor);
+    if (st.flavor) {
+      $("upd-flavor").value = st.flavorPref || "auto";
+      let now = t("现在装的是 targetSdk {n}", { n: st.flavor });
+      if (st.wantFlavor && st.wantFlavor !== st.flavor) now += " · " + t("下次更新换成 targetSdk {n}", { n: st.wantFlavor });
+      if (st.only36) now += " · " + t("系统已不让装 targetSdk 28，只能用 36");
+      $("upd-flavor-now").textContent = now;
+    }
     $("upd-channel").querySelector("option[value=pinned]").textContent = st.channel === "pinned" && st.pin ? t("CLI：固定 {v}", { v: st.pin }) : t("CLI：固定版本…");
     let moving = st.checking;
     $("upd-items").innerHTML = st.items.map((it) => {
@@ -367,6 +376,17 @@
   $("upd-check").addEventListener("click", async () => {
     await post("/api/app/upd_check").catch((e2) => toast(e2.message, true));
     followUpd(); setTimeout(loadUpd, 300);
+  });
+  $("upd-flavor").addEventListener("change", async (e) => {
+    const v = e.target.value;
+    if (v !== "auto" && lastUpd && v !== lastUpd.flavor &&
+        !confirm(t("换成 targetSdk {n} 的安装包？\n\n会下载同一版本的另一套安装包（约 14 MB）覆盖安装，对话、设置、工具包都保留。安装时应用会重启一次。", { n: v }))) {
+      e.target.value = (lastUpd && lastUpd.flavorPref) || "auto"; return;
+    }
+    const r = await post("/api/app/upd_set", { flavor: v }).catch((e2) => ({ ok: false, message: e2.message }));
+    if (r.refused) alert(r.message);
+    else if (r.ok === false) toast(r.message, true);
+    followUpd(); loadUpd();
   });
   $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch(() => {}));
   $("upd-channel").addEventListener("change", (e) => {

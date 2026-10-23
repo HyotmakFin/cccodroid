@@ -59,6 +59,8 @@ jobs:
           export CC_ANDROID="$ANDROID_SDK_ROOT/ndk/$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
           export JAVAC=javac D8="$BT/d8" AAPT2="$BT/aapt2" ANDROID_JAR="$ANDROID_SDK_ROOT/platforms/$PLATFORM/android.jar"
           export SIGN=apksigner APKSIGNER="$BT/apksigner" ZIPALIGN="$BT/zipalign"
+          # 双方案：先出 targetSdk 36 的（cccodroid-36.apk），再出默认的 28
+          TARGET_SDK=36 sh scripts/build.sh && mv dist/cccodroid.apk dist/cccodroid-36.apk
           sh scripts/build.sh
           rm -f "$RUNNER_TEMP/key.json"
           # 证书指纹：正式钥匙应当是 README 里写的那一个
@@ -68,5 +70,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cccodroid-${{ env.SIGNED }}-${{ env.SHORT_SHA }}
-          path: dist/cccodroid.apk
+          path: |
+            dist/cccodroid.apk
+            dist/cccodroid-36.apk
           retention-days: 30

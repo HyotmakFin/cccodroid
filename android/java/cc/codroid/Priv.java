@@ -315,7 +315,14 @@ final class Priv {
                 case "upd_status": resp = Updater.get(ctx).status(); break;
                 case "upd_check": Updater.get(ctx).checkAsync(true); resp = Updater.get(ctx).status(); break;
                 case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true, req.optString("version", "")); break;
-                case "upd_set": Updater.get(ctx).set(req); resp = Updater.get(ctx).status(); break;
+                case "upd_set": {
+                    // 换安装包方案（28 / 36）：只能 36 的机器切 28 会被拒，原因原样交给界面弹出来
+                    String no = req.has("flavor") ? Updater.get(ctx).setFlavor(req.optString("flavor")) : null;
+                    Updater.get(ctx).set(req);
+                    resp = Updater.get(ctx).status();
+                    if (no != null) resp.put("ok", false).put("refused", true).put("message", no);
+                    break;
+                }
                 case "upd_verify": resp = Updater.get(ctx).verifyAsync(req.optBoolean("full", true)); break;
                 case "upd_repair": resp = Updater.get(ctx).repair(); break;
                 // 通知（Notify）：两个开关 + 跳系统的通知设置

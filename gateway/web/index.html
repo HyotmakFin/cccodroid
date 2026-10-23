@@ -652,6 +652,10 @@
                 </select>
               </div>
             </div>
+            <div class="srow sub hidden" id="upd-flavor-row">
+              <div class="sl"><b data-i18n>安装包方案</b><p id="upd-flavor-now"></p><p class="clamp" data-i18n>targetSdk 28 是默认的那套，兼容性最好；targetSdk 36 给系统不让装 28 的新机器用。两套功能一样，数据通用，互相覆盖安装不丢东西。自动：跟着现在装的走，系统拒装 28 时自动换成 36。</p></div>
+              <div class="sc"><select id="upd-flavor"><option value="auto" data-i18n>自动</option><option value="28">targetSdk 28</option><option value="36">targetSdk 36</option></select></div>
+            </div>
             <div class="srow sub">
               <div class="sl"><b data-i18n>自动更新</b><p class="clamp" data-i18n>自动更新（默认开）：Claude Code 静默更新；新版应用下载好后提醒安装（有 Shizuku 时空闲自动装）；开发工具包只在 Wi‑Fi 下预先下载，下次打开应用时装上</p></div>
               <div class="sc"><input type="checkbox" class="sw" id="upd-auto"></div>

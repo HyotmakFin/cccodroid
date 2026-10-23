@@ -2017,4 +2017,11 @@ window.I18N_DICT.en = {
   "这个版本（targetSdk {n}）只能经加载器运行，不能切到直接执行": "This build (targetSdk {n}) can only run via the loader; it can’t switch to direct execution",
   "还有任务在跑，等它们结束再重启": "Tasks are still running; restart after they finish",
   "安装包里的 glibc 加载器和工具包里的不是同一版，经加载器暂时用不了：先更新工具包": "The glibc loader in this package is not the same build as the toolkit’s, so “via loader” can’t be used yet: update the toolkit first",
+  "安装包方案": "Install package",
+  "targetSdk 28 是默认的那套，兼容性最好；targetSdk 36 给系统不让装 28 的新机器用。两套功能一样，数据通用，互相覆盖安装不丢东西。自动：跟着现在装的走，系统拒装 28 时自动换成 36。": "targetSdk 28 is the default build and the most compatible; targetSdk 36 is for newer phones whose system won’t install 28. Both work the same and share data, so installing one over the other loses nothing. Auto: stays with what’s installed now, and switches to 36 if the system refuses 28.",
+  "现在装的是 targetSdk {n}": "Installed now: targetSdk {n}",
+  "下次更新换成 targetSdk {n}": "Next update switches to targetSdk {n}",
+  "系统已不让装 targetSdk 28，只能用 36": "The system no longer allows targetSdk 28; only 36 works here",
+  "换成 targetSdk {n} 的安装包？\n\n会下载同一版本的另一套安装包（约 14 MB）覆盖安装，对话、设置、工具包都保留。安装时应用会重启一次。": "Switch to the targetSdk {n} package?\n\nThis downloads the other package of the same version (about 14 MB) and installs it over this one. Conversations, settings and the toolkit are kept. The app restarts once while installing.",
+  "有 {n} 项可更新": "{n} update(s) available",
 };
