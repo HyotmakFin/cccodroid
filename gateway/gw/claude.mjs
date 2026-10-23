@@ -146,16 +146,19 @@ export async function setBridgeUpstream(url) {
 }
 
 // ── claude 进程 ───────────────────────────────────────────────────────
-/** 当前模型在【当前厂商】那边的真实参数（窗口 / 输出上限 / effort 档位） */
-export function currentModelInfo() {
+/** 某个模型（缺省 = 全局设置里的）在【当前厂商】那边的真实参数（窗口 / 输出上限 / effort 档位） */
+export function currentModelInfo(id = SETTINGS.model) {
   const list = withWindows(MODELS || PROVIDER.fallbackModels || []);
   if (!Array.isArray(list) || !list.length) return {};
-  if (!SETTINGS.model) return list[0] || {};
-  return list.find((m) => m.id === SETTINGS.model) || list[0] || {};
+  if (!id) return list[0] || {};
+  return list.find((m) => m.id === id) || list[0] || {};
 }
 
-export function claudeEnv() {
-  const info = currentModelInfo();
+/** o.model：这一轮用的模型（会话自己的、定时任务 / 项目指定的）；不给就按全局设置。
+ *  档位映射、上下文窗口都跟着它走 —— 不然子代理、窗口还是全局那个模型的 */
+export function claudeEnv(o = {}) {
+  const want = o.model !== undefined ? o.model : SETTINGS.model;
+  const info = currentModelInfo(want);
   const p = PROVIDER;
   const env = {
     ...process.env,
@@ -225,7 +228,7 @@ export function claudeEnv() {
 
   // 模型：原生厂商（claude 自己就认识其模型的，如 Anthropic 官方）不覆盖 ——
   // 交给 claude 自己决定默认模型；只有第三方才需要显式指定。
-  const m = SETTINGS.model || p.defaultModel;
+  const m = want || p.defaultModel;
   const TIER_VARS = ["ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"];
   if (!p.nativeModels && m) {
     env.ANTHROPIC_MODEL = m;

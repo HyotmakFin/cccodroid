@@ -60,6 +60,7 @@
           // 新会话还没拿到会话号时连发：告诉网关"跟在上一条后面"，它会接到同一个会话里
           follow: view.sessionId ? null : view.lastRunId,
           projectId: view.sessionId ? null : view.projectId || null,     // 新会话：在项目目录里跑
+          pin: view.sessionId ? null : state.pendingModel || null,       // 新会话在面板里单独选的模型 / 思考强度
           cid,
           mode: mode || "auto",
         }),

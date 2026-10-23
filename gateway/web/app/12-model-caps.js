@@ -6,9 +6,50 @@
     const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)/i.exec(name || "");
     return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2] + "." + m[3] : name || "";
   }
+  // 0.3.16 起模型 / 思考强度按会话记（网关 gw/sessmodel.mjs）。设置页里的是全局默认；
+  // 会话在输入栏面板里单独选过才有自己的值（state.sessModel），没选过就跟着全局默认走。
+  // 还没会话号的新会话：面板里选的先暂存在 state.pendingModel，随第一条消息带给网关（/api/chat 的 pin）
+  const own = () => (view.sessionId ? state.sessModel : state.pendingModel) || null;
+  const pickOr = (k) => { const o = own(); return o && o[k] != null ? o[k] : state.settings && state.settings[k]; };
+  const curModel = () => pickOr("model") || "";
+  const curEffort = () => pickOr("effort") || "";
+  // /api/models 的查询串：老会话给会话号，新会话把暂存的选择带上
+  const sidQ = () => {
+    if (view.sessionId) return "?sid=" + encodeURIComponent(view.sessionId);
+    const p = state.pendingModel, q = [];
+    if (p && p.model != null) q.push("model=" + encodeURIComponent(p.model));
+    if (p && p.effort != null) q.push("effort=" + encodeURIComponent(p.effort));
+    return q.length ? "?" + q.join("&") : "";
+  };
+  let smSeq = 0;
+  async function refreshSessModel() {
+    const id = view.sessionId, my = ++smSeq;
+    let r = null;
+    if (id) try { r = await api("/api/session-model?id=" + encodeURIComponent(id)); } catch {}
+    if (my !== smSeq) return;               // 切得快：只认最后一次
+    state.sessModel = r && r.own ? { model: r.model, effort: r.effort } : null;
+    paintModel(curModel() || state.model || t("默认"));
+    loadCtxModel();                          // 上下文刻度跟着这个会话的模型
+  }
+  // 新会话拿到会话号：暂存的选择就是它记下的（网关在 init 时已记上），不必再问一遍
+  function adoptPendingModel() {
+    if (!state.pendingModel) return;
+    state.sessModel = { model: null, effort: null, ...state.pendingModel };
+    state.pendingModel = null;
+  }
+  // 只改这个会话；patch 为 null 表示回到跟随全局默认
+  async function pickSessModel(patch) {
+    if (!view.sessionId) {
+      state.pendingModel = patch ? { ...(state.pendingModel || {}), ...patch } : null;
+      return;
+    }
+    const r = await api("/api/session-model", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch ? { id: view.sessionId, ...patch } : { id: view.sessionId, reset: true }) });
+    state.sessModel = r.own ? { model: r.model, effort: r.effort } : null;
+  }
   function paintModel(name) {
     state.chipModel = name;
-    const eff = state.settings && state.settings.effort;
+    const eff = curEffort();
     // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度
     const pretty = prettyModel(name);
     modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(eff)}</span>` : ""}`;
@@ -24,11 +65,12 @@
     m.id = "model-pick";
     m.innerHTML = `<div class="sheet-panel mp-panel">
       <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">${uiI("x")}</button></div>
+      <div class="mp-follow"></div>
       <div class="mp-lbl">${t("思考强度")}</div><div class="mp-eff"></div>
       <div class="mp-lbl">${t("模型")}</div>
       <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
-      <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
+      <div class="tiny mp-note">${t("只改这个会话，从下一条消息起生效；没单独选过的会话跟着设置里的默认走。")}</div></div>`;
     OV.open(m, { kind: "modal", anchor: modelEl });   // 宽度真变了由 OV 关；布局补发的假 resize 不算
     const close = () => OV.close(m);
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
@@ -47,10 +89,10 @@
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
     }
     let info;
-    try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
+    try { info = await api("/api/models" + sidQ()); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
     if (!m.isConnected) return;
     MODELS = info.models || MODELS;
-    const cur = () => (state.settings && state.settings.model) || "";
+    const cur = () => info.current || "";
 
     const effBox = m.querySelector(".mp-eff");
     const paintEff = (levels, now) => {
@@ -60,12 +102,29 @@
         : `<span class="tiny">${t("这个模型没有可选的思考强度")}</span>`;
     };
     paintEff(info.effortLevels || [], info.effort || "");
+    // 跟随全局默认：没单独选过时只是说明一句；选过了给个按钮改回去
+    const followBox = m.querySelector(".mp-follow");
+    const paintFollow = () => {
+      const d = state.settings || {}, dm = prettyModel(d.model) || t("默认");
+      followBox.innerHTML = own()
+        ? `<button type="button" class="mp-item mp-reset"><span>${esc(t("改回跟随默认"))}</span><small>${esc(dm + (d.effort ? " · " + d.effort : ""))}</small></button>`
+        : `<div class="tiny">${esc(t("跟随默认：{model}", { model: dm + (d.effort ? " · " + d.effort : "") }))}</div>`;
+    };
+    paintFollow();
+    followBox.addEventListener("click", async (e) => {
+      if (!e.target.closest(".mp-reset")) return;
+      close();
+      try { await pickSessModel(null); } catch (er) { return toast(er.message, true); }
+      paintModel(curModel() || state.model || t("默认"));
+      loadCtxModel();
+    });
     effBox.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-eff]");
       if (!b) return;
-      await saveSettings({ effort: b.dataset.eff });
+      try { await pickSessModel({ effort: b.dataset.eff }); } catch (er) { return toast(er.message, true); }
+      info.effort = b.dataset.eff;
       paintEff(info.effortLevels || [], b.dataset.eff);
-      const se = $("set-effort"); if (se) se.value = b.dataset.eff;
+      paintFollow();
       paintModel(state.chipModel || cur() || t("默认"));
     });
 
@@ -97,15 +156,26 @@
       const id = b.dataset.id;
       if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
       close();
-      if (id === cur()) return;
-      await saveSettings({ model: id });
-      await loadModels();                                // 换模型后思考强度的档位可能不同
-      const sm = $("set-model"); if (sm) sm.value = id;
+      if (id === cur() && own()) return;                // 跟随默认时点同一个也算「单独选」：钉住，默认再改它也不变
+      try { await pickSessModel({ model: id }); } catch (er) { return toast(er.message, true); }
       paintModel(id || state.model || t("默认"));
+      loadCtxModel();
     });
   }
 
-  /** 模型与 effort 档位都从厂商的 /models 实时拉 */
+  // 上下文用量条的满刻度按当前会话的模型；跟随默认时直接用全局那份（loadModels 顺手传进来）
+  let ctxSeq = 0;
+  async function loadCtxModel(g) {
+    const my = ++ctxSeq;
+    let r = g;
+    if (own() || !r) try { r = await api("/api/models" + sidQ()); } catch { return; }
+    if (my !== ctxSeq) return;
+    if (r.contextWindow) state.ctxTotal = r.contextWindow;
+    state.compactAt = Number(r.autoCompactWindow) || 0;
+    updateCtx(state.ctxUsed, state.ctxTotal);
+  }
+
+  /** 模型与 effort 档位都从厂商的 /models 实时拉。设置页的下拉框是全局默认 */
   async function loadModels(refresh) {
     try {
       const r = await api("/api/models" + (refresh ? "?refresh=1" : ""));
@@ -139,15 +209,13 @@
       renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
 
       // 用量条：总刻度用厂商给的真实窗口，但设了压缩窗口就改以它为满刻度
-      if (r.contextWindow) state.ctxTotal = r.contextWindow;
-      state.compactAt = Number(r.autoCompactWindow) || 0;
-      updateCtx(state.ctxUsed, state.ctxTotal);
+      loadCtxModel(r);
       const cur = MODELS.find((m) => m.id === r.current);
       if (cur) {
         const k = (v) => (v ? Math.round(v / 1024) + "k" : "—");
         $("model-info").innerHTML =
                     t("上下文 {n} · 输出上限 {out} · 输入 {mods}", { n: k(cur.context_window), out: k(cur.max_output_tokens), mods: (cur.input_modalities || []).join(" / ") }) +
-          t("｜也可直接打 <code>/model &lt;id&gt;</code>");
+          t("｜这是默认值；单个会话在输入栏下面的模型标签里另选");
         const ac = $("set-autocompact");
         if (ac && document.activeElement !== ac) ac.value = r.autoCompactWindow || "";
       } else if (r.nativeModels) {
@@ -210,7 +278,7 @@
       levels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
     sel.value = current && levels.includes(current) ? current : "";
     $("effort-info").innerHTML =
-      t("档位越高思考越久。也可在输入框打 <code>/effort &lt;level&gt;</code>");
+      t("档位越高思考越久。这是默认值；单个会话在输入栏下面另选");
   }
 
   async function loadSettings() {
@@ -223,7 +291,7 @@
           `<option value="${esc(o.id)}">${esc(o.id)}${o.desc ? " · " + esc(o.desc) : ""}</option>`).join("");
       $("set-style").value = state.settings.outputStyle || "";
       // 没指定模型时别把顶栏写成 "—"：init 报过的真实模型更有用
-      paintModel(state.settings.model || state.model || t("默认"));
+      paintModel(curModel() || state.model || t("默认"));
       setPermChip(state.settings.permissionMode || "default");
       renderPermBar();
       renderDirs();
@@ -263,7 +331,7 @@
         body: JSON.stringify(patch),
       });
       state.settings = { ...state.settings, ...(r.settings || {}) };
-      paintModel(state.settings.model || state.model || t("默认"));
+      paintModel(curModel() || state.model || t("默认"));
       setPermChip(state.settings.permissionMode || "default");
       renderDirs();
             toast(t("已保存"));
@@ -276,10 +344,10 @@
     renderProvCard();
   });
 
+  // 设置页的模型 / 思考强度是全局默认：新会话、没在输入栏面板里单独选过的会话都用它
   $("set-model").addEventListener("change", async (e) => {
-    await saveSettings({ model: e.target.value });
+    if (!(await saveSettings({ model: e.target.value }))) return;
     await loadModels();                                  // 换模型后 effort 档位可能不同
-    $("set-effort").value = state.settings.effort || "";
   });
   $("set-perm").addEventListener("change", (e) => changePermMode(e.target.value));
   $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));

@@ -580,6 +580,9 @@ a.weblink{overflow-wrap:anywhere}
 .mp-item.cur span{color:var(--accent)}
 .mp-item:active{background:var(--bg3)}
 .mp-note{margin:6px 4px 0}
+.mp-follow{margin:0 4px 2px}
+.mp-follow .mp-reset{padding:7px 10px;margin:0 -10px;width:calc(100% + 20px);border:1px dashed var(--line)}
+.mp-follow .mp-reset span{color:var(--accent)}
 
 /* toast */
 #toast{

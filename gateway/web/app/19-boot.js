@@ -114,7 +114,7 @@
       $("btn-share-logs").closest(".srow").classList.toggle("hidden", s.product !== "cccodroid");
       $("btn-issue").closest(".srow").classList.toggle("hidden", s.product !== "cccodroid");
       $("btn-ledger").classList.toggle("hidden", !s.hasLedger);
-      paintModel(s.model || "—");
+      paintModel(curModel() || s.model || "—");
       state.model = s.model;
       $("status-box").textContent =
                 `${t("网关")}     ${s.version} (pid ${s.pid})\n` +

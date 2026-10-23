@@ -44,6 +44,8 @@
   // ── 会话切换 / 历史翻页 ────────────────────────────────────────────
   function resetView(sessionId) {
     view.sessionId = sessionId || null;
+    state.pendingModel = null;               // 新会话面板里暂存的选择只属于那个新会话
+    refreshSessModel();                      // 模型标签换成这个会话自己的（打开、启动、重连都经过这里）
     view.gen++;
     view.cursor = null;
     view.loading = false;
@@ -406,7 +408,7 @@
       }
       case "init": {
         if (!view.runIds.has(ev.runId)) return;
-        if (!view.sessionId && ev.sessionId) { view.sessionId = ev.sessionId; saveUiState(); }
+        if (!view.sessionId && ev.sessionId) { view.sessionId = ev.sessionId; adoptPendingModel(); saveUiState(); }
         if (ev.model) { state.model = ev.model; paintModel(ev.model); }
         if (ev.permissionMode) setPermChip(ev.permissionMode);
         return;
@@ -496,7 +498,7 @@
     const av = rv.av;
     rv.timer?.stop();
     for (const [id, it] of PERMS) if (it.runId === ev.runId && !it.done) permDone(id, "stopped");
-    if (ev.sessionId && !view.sessionId && view.runIds.has(ev.runId)) { view.sessionId = ev.sessionId; saveUiState(); }
+    if (ev.sessionId && !view.sessionId && view.runIds.has(ev.runId)) { view.sessionId = ev.sessionId; adoptPendingModel(); saveUiState(); }
     if (ev.usage?.context_tokens) updateCtx(ev.usage.context_tokens, ev.usage.context_window || state.ctxTotal);
 
     if (ev.localCommand && ev.resultText) {
@@ -505,7 +507,7 @@
             const b = mkMsg("sys", t("命令"), liveEl);
       setHtml(b, `<div class="cmd-card"><div class="cmd-name">${esc("/" + ev.localCommand)}</div>${renderMd(ev.resultText)}</div>`);
       if (ev.localCommand === "context") parseContextText(ev.resultText);
-      if (ev.localCommand === "model" || ev.localCommand === "effort") loadSettings();
+      if (ev.localCommand === "model" || ev.localCommand === "effort") { loadSettings(); refreshSessModel(); }
       // 压缩线的刻度在 loadModels 里刷（以前只有切模型才会调它，所以设完要切一次模型才看得到）
       if (ev.localCommand === "autocompact") loadModels();
     } else {

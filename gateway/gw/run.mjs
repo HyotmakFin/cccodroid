@@ -16,6 +16,7 @@ import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs"
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
+import { sessModel, setSessModel } from "./sessmodel.mjs";
 
 /** 这一轮在哪个目录跑：显式指定 → 接着的会话当初的 cwd（--resume 只在同一 cwd 下找得到）→ 项目目录 → 工作区 */
 const isDirSync = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
@@ -61,7 +62,7 @@ export async function startRun(item) {
   if (local) {
     log(`⌘ 本地命令 /${local[1]}${local[2] ? " " + local[2].trim() : ""}`);
     return handleLocalCommand(local[1], (local[2] || "").trim(),
-      (text, cmd) => endRun(run, { localCommand: cmd || local[1], resultText: text, durationMs: 0, costUsd: 0 }));
+      (text, cmd) => endRun(run, { localCommand: cmd || local[1], resultText: text, durationMs: 0, costUsd: 0 }), run.sessionId);
   }
 
   if (!API_KEY && !PROVIDER.login) {
@@ -82,12 +83,15 @@ export async function startRun(item) {
   const cwd = cwdOf(item, run.sessionId);
   run.cwd = cwd;
   const pdef = projectDefaults(item.projectId ? projectById(item.projectId) : projectOfDir(cwd));
-  if (!item.model && pdef.model) item.model = pdef.model;
   if (!item.permissionMode && pdef.perm) item.permissionMode = pdef.perm;
-  const effort = item.effort || pdef.effort || SETTINGS.effort;
-  // 模型三级取：本次请求指定 → 设置里存的 → 该厂商自己的默认。
+  // 模型 / 思考强度的取值顺序：本次请求指定（定时任务）→ 新会话首条带来的选择（pin）→ 这个会话单独选过的
+  // → 项目默认 → 全局默认（设置页）→ 该厂商自己的默认。选过的 "" 表示「接口默认」，也算选过
   // ⚠️ 不能回落到 CFG.model：那是全局兜底（deepseek-flash），只有内置厂商能碰。
-  let model = (item.model || SETTINGS.model || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
+  const own = sessModel(run.sessionId), pin = item.pin || {};
+  const ownM = pin.model != null ? pin.model : own && own.model != null ? own.model : null;
+  const ownE = pin.effort != null ? pin.effort : own && own.effort != null ? own.effort : null;
+  const effort = item.effort || (ownE != null ? ownE : pdef.effort || SETTINGS.effort) || "";
+  let model = (item.model || (ownM != null ? ownM : pdef.model || SETTINGS.model) || PROVIDER.defaultModel || (PROVIDER.explicit ? "" : CFG.model) || "").trim();
   // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
   if (PROVIDER.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
   let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
@@ -161,7 +165,7 @@ export async function startRun(item) {
   const [cmd0, args0] = claudeCmd(argv);
   const child = spawn(cmd0, args0, {
     cwd,
-    env: claudeEnv(),
+    env: claudeEnv({ model }),
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,            // 当进程组长，中断时好整组带走（见 killTree）
   });
@@ -266,6 +270,7 @@ export async function startRun(item) {
     RUN_SESSIONS.set(run.id, run.sessionId);
     if (RUN_SESSIONS.size > 500) RUN_SESSIONS.delete(RUN_SESSIONS.keys().next().value);
     rememberSession(run.sessionId);
+    if (item.pin) setSessModel(run.sessionId, item.pin);   // 新会话首条带来的选择：有了会话号就记上
     saveRunMark();                       // 标记里补上会话号：被杀之后「继续」要靠它 --resume
     if (!SESSIONS.has(init.session_id)) {
       SESSIONS.set(init.session_id, { id: init.session_id, title: message.slice(0, 60), createdAt: Date.now() });

@@ -4,6 +4,7 @@ import { SETTINGS } from "./settings.mjs";
 import { API_KEY, PROVIDER } from "./providers.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
+import { effectiveModel } from "./sessmodel.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";
 
 // ── 模型清单（按厂商拉，10 分钟缓存，失败用该厂商的 fallback）─────────
@@ -167,15 +168,20 @@ export async function routeModels(req, res, u, p) {
   // ── DeepSeek 模型清单 ──
   if (req.method === "GET" && p === "/api/models") {
     const ms = withWindows(await fetchModels(u.searchParams.get("refresh") === "1"));
-    const cur = ms.find((m) => m.id === SETTINGS.model) || ms[0] || {};
+    // ?sid=：按这个会话记下的模型 / 档位回（0.3.16 起每个会话各用各的）；不给就是全局默认
+    // ?model= / ?effort=：还没会话号的新会话在面板里先选了（前端暂存，随第一条消息带走），按选的回
+    const now = effectiveModel(u.searchParams.get("sid") || "");
+    if (u.searchParams.has("model")) now.model = u.searchParams.get("model");
+    if (u.searchParams.has("effort")) now.effort = u.searchParams.get("effort");
+    const cur = ms.find((m) => m.id === now.model) || ms[0] || {};
     return sendJson(res, 200, {
       models: ms,
-      current: SETTINGS.model,
+      current: now.model || null,
       // 给前端判"这家用不用得着挑模型"：官方账户不挑就是用它的默认
       provider: PROVIDER.id,
       nativeModels: !!PROVIDER.nativeModels,
       defaultModel: PROVIDER.defaultModel || null,
-      effort: SETTINGS.effort || null,
+      effort: now.effort || null,
       effortLevels: effortLevelsOf(cur),
       // 原生厂商的默认档位由 claude 按模型定，我们不知道就别瞎报
       effortDefault: (cur.effort && cur.effort.default_level) || (PROVIDER.nativeModels ? null : "high"),
