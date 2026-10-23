@@ -2024,4 +2024,10 @@ window.I18N_DICT.en = {
   "系统已不让装 targetSdk 28，只能用 36": "The system no longer allows targetSdk 28; only 36 works here",
   "换成 targetSdk {n} 的安装包？\n\n会下载同一版本的另一套安装包（约 14 MB）覆盖安装，对话、设置、工具包都保留。安装时应用会重启一次。": "Switch to the targetSdk {n} package?\n\nThis downloads the other package of the same version (about 14 MB) and installs it over this one. Conversations, settings and the toolkit are kept. The app restarts once while installing.",
   "有 {n} 项可更新": "{n} update(s) available",
+  "上下文压缩线": "Compaction line",
+  "交给 claude": "Let claude decide",
+  "用量逼近这条线时自动摘要历史。线放低更省、记得更少；放高记得多，但每轮更贵、更慢。": "History is summarized automatically when usage nears this line. Lower saves tokens but remembers less; higher remembers more but each turn costs more and runs slower.",
+  "{line} · 窗口的 {pct}%": "{line} · {pct}% of the window",
+  "没设，交给 claude 按窗口决定": "Not set; claude decides from the window",
+  "当前会话已用 {n}": "This session has used {n}",
 };

@@ -295,6 +295,7 @@
         $("model-info").innerHTML =
                     t("该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。");
       }
+      acPaint((cur && cur.context_window) || state.ctxTotal, r.autoCompactWindow);
     } catch (e) {
       $("model-info").textContent = t("拉取模型清单失败：{msg}", { msg: e.message });
     }
@@ -452,6 +453,38 @@
     if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
     saveSettings({ maxParallel: v }).then(() => { e.target.value = state.settings.maxParallel || v; });
   });
+  // ── 压缩线滑块（接口与型号页）：0–100 映射到 [20k, 模型窗口]；没设 = 交给 claude，滑块停在最右、虚线轨道 ──
+  const AC_MIN = 20000;
+  let acWin = 0, acSet = 0;
+  function acStep() { return Math.max(1000, Math.ceil((acWin - AC_MIN) / 100 / 1000) * 1000); }
+  function acTok(p) { return Math.min(acWin, Math.round((AC_MIN + (acWin - AC_MIN) * p / 100) / acStep()) * acStep()); }
+  function acPos(v) { return Math.max(0, Math.min(100, (v - AC_MIN) / (acWin - AC_MIN) * 100)); }
+  function acShow(v) {
+    const rg = $("ac-range"), pct = v ? acPos(v) : 100;
+    rg.style.setProperty("--p", pct + "%");
+    $("ac-range").parentNode.classList.toggle("auto", !v);
+    $("ac-val").textContent = v ? t("{line} · 窗口的 {pct}%", { line: fmtTok(v), pct: Math.round(v / acWin * 100) }) : t("没设，交给 claude 按窗口决定");
+    $("ac-auto").classList.toggle("hidden", !v);
+  }
+  function acPaint(win, set) {
+    const box = $("ac-slide");
+    acWin = Number(win) || 0; acSet = Number(set) || 0;
+    box.classList.toggle("hidden", acWin <= AC_MIN);
+    if (acWin <= AC_MIN) return;
+    const rg = $("ac-range");
+    if (document.activeElement !== rg) rg.value = acSet ? acPos(acSet) : 100;
+    $("ac-min").textContent = fmtTok(AC_MIN); $("ac-max").textContent = fmtTok(acWin);
+    const u = $("ac-used");
+    if (state.ctxUsed > 0) { u.style.display = "block"; u.style.left = "calc(11px + (100% - 22px) * " + Math.min(1, state.ctxUsed / acWin) + ")"; u.title = t("当前会话已用 {n}", { n: fmtTok(state.ctxUsed) }); }
+    else u.style.display = "none";
+    acShow(acSet);
+  }
+  $("ac-range").addEventListener("input", (e) => acShow(acTok(+e.target.value)));
+  $("ac-range").addEventListener("change", (e) => {
+    const v = acTok(+e.target.value);
+    saveSettings({ autoCompactWindow: v }).then(() => loadModels());
+  });
+  $("ac-auto").addEventListener("click", () => saveSettings({ autoCompactWindow: null }).then(() => loadModels()));
   $("set-autocompact").addEventListener("change", (e) => {
     const v = e.target.value.trim();
     saveSettings({ autoCompactWindow: v ? Number(v) : null }).then(() => loadModels());

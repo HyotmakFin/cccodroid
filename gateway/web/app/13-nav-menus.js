@@ -237,6 +237,9 @@
 
   // 侧栏的最近对话：一行一个，分组 置顶 / 今天 / 昨天 / 更早；更早的只列前一段，全部在「对话」整页
   const RECENT_MAX = 40;
+  // 收起了哪几组：用到时才读（renderSideRecent 可能在本段执行前就被调到，var 那时还是 undefined）
+  var sideFold;
+  function folds() { return sideFold ||= new Set((() => { try { return JSON.parse(localStorage.getItem("cc.sideFold") || "[]"); } catch { return []; } })()); }
   function renderSideRecent() {
     const box = $("side-recent"); if (!box) return;
     const list = state.sessions || [];
@@ -244,7 +247,7 @@
     const ask = new Set(srv.runs.filter((x) => x.perms && x.perms.length).map((x) => x.sessionId).filter(Boolean));
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const t0 = d0.getTime(), y0 = t0 - 86400000;
-    const groups = [[t("置顶"), list.filter((x) => x.pinned)], [t("今天"), []], [t("昨天"), []], [t("更早"), []]];
+    const groups = [[t("置顶"), list.filter((x) => x.pinned), "pin"], [t("今天"), [], "today"], [t("昨天"), [], "yday"], [t("更早"), [], "older"]];
     for (const x of list) if (!x.pinned) groups[x.mtime >= t0 ? 1 : x.mtime >= y0 ? 2 : 3][1].push(x);
     const more = groups[3][1].length > RECENT_MAX;
     groups[3][1] = groups[3][1].slice(0, RECENT_MAX);
@@ -252,13 +255,24 @@
     if (cur && cur.title && cur.title !== view.title) { view.title = cur.title; paintTitle(); }
     const row = (x) => `<button class="sr-item${x.id === view.sessionId ? " on" : ""}" data-sid="${esc(x.id)}" title="${esc(x.title)}">${ask.has(x.id) ? '<i class="sr-dot ask"></i>' : live.has(x.id) ? '<i class="sr-dot"></i>' : ""}<span>${esc(x.title)}</span></button>`;
     box.innerHTML = list.length
-      ? groups.filter(([, l]) => l.length).map(([g, l]) => `<h4>${esc(g)}</h4>` + l.map(row).join("")).join("")
-        + (more ? `<button class="sr-all" data-all>${esc(t("全部对话"))}</button>` : "")
+      ? groups.filter(([, l]) => l.length).map(([g, l, k]) => {
+          // 分组可以收起：点标题切换，收起时标出有几个；记在本机
+          const shut = folds().has(k);
+          return `<h4 class="sr-g${shut ? " shut" : ""}" data-fold="${k}" role="button" aria-expanded="${!shut}"><svg viewBox="0 0 24 24"><path d="M8 10l4 4 4-4"/></svg><span>${esc(g)}</span>${shut ? `<em>${l.length}</em>` : ""}</h4>`
+            + (shut ? "" : l.map(row).join("") + (k === "older" && more ? `<button class="sr-all" data-all>${esc(t("全部对话"))}</button>` : ""));
+        }).join("")
         + `<div class="sr-hint">${esc(t("长按会话：置顶、重命名、导出、删除"))}</div>`
       : `<div class="sr-empty">${esc(t("还没有历史会话。"))}</div>`;
   }
   $("side-recent").addEventListener("click", (e) => {
     if (e.target.closest("[data-all]")) return openPage("sessions");
+    const g = e.target.closest("[data-fold]");
+    if (g) {
+      const k = g.dataset.fold;
+      if (folds().has(k)) folds().delete(k); else folds().add(k);
+      try { localStorage.setItem("cc.sideFold", JSON.stringify([...folds()])); } catch {}
+      return renderSideRecent();
+    }
     const it = e.target.closest("[data-sid]"); if (!it) return;
     closeDrawer(); openSession(it.dataset.sid);
   });

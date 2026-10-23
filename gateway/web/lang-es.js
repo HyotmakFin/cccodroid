@@ -1990,4 +1990,10 @@ window.I18N_DICT["es"] = {
   "系统已不让装 targetSdk 28，只能用 36": "El sistema ya no permite targetSdk 28; aquí solo funciona 36",
   "换成 targetSdk {n} 的安装包？\n\n会下载同一版本的另一套安装包（约 14 MB）覆盖安装，对话、设置、工具包都保留。安装时应用会重启一次。": "¿Cambiar al paquete targetSdk {n}?\n\nSe descargará el otro paquete de la misma versión (unos 14 MB) y se instalará encima. Se conservan conversaciones, ajustes y el kit de herramientas. La app se reinicia una vez durante la instalación.",
   "有 {n} 项可更新": "{n} actualización(es) disponible(s)",
+  "上下文压缩线": "Umbral de compactación",
+  "交给 claude": "Que decida claude",
+  "用量逼近这条线时自动摘要历史。线放低更省、记得更少；放高记得多，但每轮更贵、更慢。": "El historial se resume automáticamente cuando el uso se acerca a este umbral. Más bajo ahorra pero recuerda menos; más alto recuerda más, pero cada turno cuesta más y va más lento.",
+  "{line} · 窗口的 {pct}%": "{line} · {pct} % de la ventana",
+  "没设，交给 claude 按窗口决定": "Sin definir; claude decide según la ventana",
+  "当前会话已用 {n}": "Esta sesión ha usado {n}",
 };
