@@ -79,8 +79,17 @@ body{
   border-bottom:1px solid var(--line);flex:0 0 auto;overflow:hidden;
 }
 #ctxfill{height:100%;width:0;background:linear-gradient(90deg,var(--accent-dim),var(--accent));transition:width .4s}
-#ctxbar.warn #ctxfill{background:var(--warn)}
-#ctxbar.danger #ctxfill{background:var(--err)}
+/* 快满 / 满了：不换成纯黄纯红那种跳出来的色块，仍从本主题的强调色渐变过去，终点是按每套主题深浅调过的暖色 / 红色 */
+#ctxbar.warn #ctxfill{background:linear-gradient(90deg,var(--accent-dim),var(--ctx-warn))}
+#ctxbar.danger #ctxfill{background:linear-gradient(90deg,var(--ctx-warn),var(--ctx-err))}
+:root{--ctx-warn:#c98f4e;--ctx-err:#c95f4a}
+html[data-theme="light"]{--ctx-warn:#dba15c;--ctx-err:#cf6a4c}
+html[data-skin="qiusuo"]{--ctx-warn:#b9955f;--ctx-err:#c46a78}
+html[data-skin="qiusuo"][data-theme="light"]{--ctx-warn:#e5b467;--ctx-err:#e07b86}
+html[data-skin="zhuyue"]{--ctx-warn:#a8916b;--ctx-err:#b5675f}
+html[data-skin="zhuyue"][data-theme="light"]{--ctx-warn:#d9bd8c;--ctx-err:#d98a80}
+/* 逐月的强调色是纯黑 / 纯白，整条涂满会盖住上面的字：平常的进度用灰阶，只走到三成浓度 */
+html[data-skin="zhuyue"] #ctxbar:not(.warn):not(.danger) #ctxfill{background:linear-gradient(90deg,var(--bg4),color-mix(in srgb,var(--accent) 30%,var(--bg4)))}
 #ctxtxt{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:10px;color:var(--fg2);letter-spacing:.3px;
@@ -2451,8 +2460,8 @@ html.side-drag .drawer-panel{animation:none;transition:none}
 #ctxbar{cursor:pointer}
 #ctxq:empty{display:none}
 #ctxctx:not(:empty) + #ctxq::before{content:"·";margin:0 6px;color:var(--fg3)}
-#ctxq.warm{color:var(--warn)}
-#ctxq.hot{color:var(--err);font-weight:600}
+#ctxq.warm{color:color-mix(in srgb,var(--ctx-warn) 70%,var(--fg))}
+#ctxq.hot{color:color-mix(in srgb,var(--ctx-err) 75%,var(--fg));font-weight:600}
 .qcard{position:fixed;z-index:90;box-sizing:border-box;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:14px;
   box-shadow:0 10px 32px var(--shadow);padding:12px 14px;animation:fade .12s;font-size:13px}
 .qc-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
