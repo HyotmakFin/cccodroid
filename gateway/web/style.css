@@ -15,6 +15,7 @@
   --tool-bg:#232220; --tool-line:#34332f; --tool-sep:#2e2d2a; --cmd-bg:#25232a;
   --err-bg:#311d1a; --err-line:#6b3229; --err-fg:#f3b1a6; --active-bg:#2c221d;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
+  --on-accent:#fff;   /* 强调色底上的字（逐月深色的强调色是白，字得是黑） */
   --mono:"CC Mono",ui-monospace,"Droid Sans Mono","Noto Sans Mono CJK SC",monospace;
   color-scheme:dark;
   --radius:14px;
@@ -240,7 +241,7 @@ td{color:var(--fg2)}
 .mini-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 #btn-send{
   width:38px;height:38px;flex:0 0 38px;border:0;border-radius:50%;
-  background:var(--accent);color:#fff;display:grid;place-items:center;transition:opacity .15s,background .15s;
+  background:var(--accent);color:var(--on-accent);display:grid;place-items:center;transition:opacity .15s,background .15s;
 }
 #btn-send:disabled{opacity:.35}
 #btn-send svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -299,7 +300,7 @@ td{color:var(--fg2)}
 #perm-bar .mono{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
 #perm-bar .pb-more{font-size:11.5px;color:var(--fg3);padding:0 10px;display:flex;gap:8px;align-items:center}
 #perm-bar button,.perm-acts button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 11px;font-size:12.5px;flex:0 0 auto}
-#perm-bar button.primary,.perm-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+#perm-bar button.primary,.perm-acts button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 #perm-bar .pb-x{background:none;border:none;color:var(--fg3);padding:2px 6px}
 .perm{border:1px solid var(--warn);border-radius:10px;margin:-2px 0 10px;background:var(--bg2);overflow:hidden}
 .perm.busy{opacity:.6;pointer-events:none}
@@ -432,7 +433,7 @@ html.dock-l .side-recent{margin:0 -12px;padding:0 12px 8px}
 .side-acct:hover,.side-acct.on{color:var(--fg)}
 .side-acct.on .acct-av{box-shadow:0 0 0 2px var(--accent)}
 .side-acct>svg{width:18px;height:18px;flex:none}
-.acct-av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
+.acct-av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:14px}
 .acct-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
 .acct-txt b{font-weight:500;font-size:14px;color:var(--fg)}
 .acct-txt small{font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -470,7 +471,7 @@ html.has-right #pages{inset-inline-end:var(--rw)}
 }
 
 .btn{
-  width:100%;margin-top:8px;background:var(--accent);color:#fff;border:0;
+  width:100%;margin-top:8px;background:var(--accent);color:var(--on-accent);border:0;
   border-radius:9px;padding:10px;font:inherit;font-weight:600;font-size:14px;
 }
 .btn:active{opacity:.85}
@@ -558,7 +559,7 @@ a.weblink{overflow-wrap:anywhere}
 .mp-x{background:none;border:0;color:var(--fg3);font-size:16px;padding:6px 10px}
 .mp-lbl{font-size:11.5px;color:var(--fg3);margin:8px 4px 4px}
 .mp-eff{display:flex;flex-wrap:wrap;gap:6px;padding:0 2px}
-.mp-eff .cur{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mp-eff .cur{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .mp-q{margin:2px 0 6px}
 .mp-list{overflow-y:auto;overscroll-behavior:contain;min-height:120px;flex:1}
 .mp-sec{font-size:11px;color:var(--fg3);margin:8px 6px 2px}
@@ -843,7 +844,7 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
   font:500 13px ui-monospace,monospace;touch-action:manipulation;
 }
 .tk:active{background:var(--bg4)}
-.tk.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tk.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 #term-text-pre{
   flex:1;min-height:0;margin:0;overflow:auto;-webkit-overflow-scrolling:touch;
   background:var(--code-bg);border:1px solid var(--line);border-radius:9px;padding:9px;
@@ -1254,7 +1255,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .vw-cellbar:empty{display:none}
 .vw-tabs{display:flex;gap:4px;overflow-x:auto;flex:0 0 auto;padding-bottom:2px}
 .vw-tab{flex:0 0 auto;border:1px solid var(--line);background:var(--bg2);color:var(--fg2);border-radius:7px;padding:4px 10px;font-size:12.5px}
-.vw-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.vw-tab.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
 /* 端侧小模型卡 */
 .local-facts{display:flex;flex-direction:column;gap:2px;margin-top:8px}
@@ -1292,7 +1293,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .rw-note{color:var(--fg3);font-size:12px}
 .rw-acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .rw-acts button{padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:14px}
-.rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 /* 更新说明：更新后第一次打开时主窗口正中的卡片；内容长时卡片内部滚动 */
 #whatsnew,#notice-pop{position:fixed;inset:0;z-index:210;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
 .wn-card{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);width:100%;max-width:560px;max-height:min(80vh,100%);display:flex;flex-direction:column;box-shadow:0 12px 40px var(--shadow);overflow:hidden}
@@ -1344,7 +1345,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .cm-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cm-k{color:var(--fg2);font-size:14px}
 .cm-num{border:1px solid var(--line);background:var(--bg3);color:var(--fg);font:inherit;font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.5px;padding:4px 12px;border-radius:9px;cursor:pointer}
-.cm-num:active{background:var(--accent);color:#fff}
+.cm-num:active{background:var(--accent);color:var(--on-accent)}
 .cm-qr{display:block;width:100%;max-width:260px;margin:10px 0 4px;border-radius:12px}
 .cm-qr.hidden{display:none}
 .cm-box p{margin:8px 0;font-size:14px;line-height:1.6}
@@ -1729,7 +1730,7 @@ html[data-theme="light"]{--panel:#fff}
 /* 按钮（整页、设置里）：描边按钮为主，主操作填色；sm 更紧 */
 :is(#pages,#set-ov) .btn{width:auto;margin:0;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:6px 12px;font-size:14px;font-weight:400;white-space:nowrap}
 :is(#pages,#set-ov) .btn:hover{border-color:var(--accent-dim)}
-:is(#pages,#set-ov) .btn:not(.ghost):not(.danger){background:var(--accent);border-color:var(--accent);color:#fff}
+:is(#pages,#set-ov) .btn:not(.ghost):not(.danger){background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 :is(#pages,#set-ov) .btn.danger{color:var(--err);border-color:var(--err-line);background:var(--bg)}
 :is(#pages,#set-ov) .btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
 :is(#pages,#set-ov) select{border:1px solid var(--line);border-radius:10px;background-color:var(--panel)}
@@ -2105,7 +2106,7 @@ body{line-height:var(--phi)}
 .sb-x svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 /* 带「搜索」键的：键收在框内右侧，文字按钮、强调色 */
 .sb-go{padding-inline-end:4px;margin:var(--g2) 0}
-.sb-btn{flex:none;height:32px;padding:0 var(--g3);border:0;border-radius:var(--g2);background:var(--accent);color:#fff;font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.sb-btn{flex:none;height:32px;padding:0 var(--g3);border:0;border-radius:var(--g2);background:var(--accent);color:var(--on-accent);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 .sb-btn:active{filter:brightness(.92)}
 /* 文件浏览器的过滤框：和旁边控件同高，不要下边距 */
 .fs-tools .fs-sb{flex:1;min-width:0;height:36px;margin:0}
@@ -2251,7 +2252,7 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 #t-until:has(> .hidden + .hidden){display:none}
 .pj-days{display:flex;gap:var(--g1);margin-bottom:var(--g2);flex-wrap:wrap}
 .pj-days button{width:38px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--fg2);font:inherit;font-size:14px;cursor:pointer}
-.pj-days button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pj-days button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .pj-col{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--fg2);font:inherit;font-size:14px;font-weight:600;padding:var(--g2) 0;margin-top:var(--g2);cursor:pointer}
 .pj-col svg.ei{width:16px;height:16px;transition:transform .15s}
 .pj-col[aria-expanded="true"] svg.ei{transform:rotate(90deg)}
@@ -2474,31 +2475,32 @@ html.side-drag .drawer-panel{animation:none;transition:none}
 /* ───────────── 逐月风格（设置 → 外观 → 逐月 · 浅色 / 深色）─────────────
    照 Kimi 手机 App 的观感取色（用户 10-23 给的浅 / 深两套截图逐点取样）：
    浅色是白底、侧栏与整页浅灰 #f5f5f5、卡片纯白；深色是近黑 #111、卡片 #1f1f1f、气泡与输入框 #292929；
-   强调色是同一支亮蓝（浅 #2b80f7 / 深 #2f86f2）。形状上：输入框整条胶囊、用户气泡大圆角无边、
+   主色是黑白本身：按钮、开关、选中项用近黑（深色里反过来用近白、字是黑的），选中底是浅灰；
+   蓝色只做点缀（浅 #2b80f7 / 深 #3a8ef6）：链接、勾选标记、有序列表序号，和截图里一样。形状上：输入框整条胶囊、用户气泡大圆角无边、
    有序列表的序号用强调色。只换颜色和这几处形状，布局与原生一致，没有额外动效。 */
 html[data-skin="zhuyue"]{
   --bg:#111111; --bg2:#1a1a1a; --bg3:#1f1f1f; --bg4:#292929; --line:#2b2b2b;
   --fg:#f2f2f2; --fg2:#bdbdbd; --fg3:#7a7a7a;
-  --accent:#2f86f2; --accent-dim:#1d4f8f;
-  --ok:#3ecf7a; --err:#f25a5a; --warn:#f0a020; --tool:#5aa0ff; --purple:#a78bfa;
+  --accent:#f2f2f2; --accent-dim:#5a5a5a; --on-accent:#111111; --zy-blue:#3a8ef6;
+  --ok:#3ecf7a; --err:#f25a5a; --warn:#f0a020; --tool:#4a95f7; --purple:#a78bfa;
   --bar-bg:#111111; --bar-bg2:#111111; --veil:rgba(17,17,17,.86);
   --strong:#ffffff; --code-bg:#1a1a1a; --think-bg:#1a1a1a; --more-bg:#1f1f1f; --more-line:#333333;
   --user-bg:#292929; --user-line:#292929; --sys-bg:#1a1f27; --sys-line:#2c3a4f;
   --tool-bg:#1a1a1a; --tool-line:#292929; --tool-sep:#1f1f1f; --cmd-bg:#1c1e22;
-  --err-bg:#3a1d1d; --err-line:#6b2b2b; --err-fg:#f6a6a0; --active-bg:#1d2a3d;
+  --err-bg:#3a1d1d; --err-line:#6b2b2b; --err-fg:#f6a6a0; --active-bg:#262626;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
   --panel:#1f1f1f; --input-bg:#292929;
 }
 html[data-skin="zhuyue"][data-theme="light"]{
   --bg:#ffffff; --bg2:#f5f5f5; --bg3:#f0f0f0; --bg4:#e8e8e8; --line:#eeeeee;
   --fg:#141414; --fg2:#5c5c5c; --fg3:#9a9a9a;
-  --accent:#2b80f7; --accent-dim:#b9d5fd;
-  --ok:#16a34a; --err:#dc2626; --warn:#b45309; --tool:#1f6fe0; --purple:#7650c0;
+  --accent:#141414; --accent-dim:#cfcfcf; --on-accent:#ffffff; --zy-blue:#2b80f7;
+  --ok:#16a34a; --err:#dc2626; --warn:#b45309; --tool:#2b80f7; --purple:#7650c0;
   --bar-bg:#ffffff; --bar-bg2:#ffffff; --veil:rgba(255,255,255,.88);
   --strong:#000000; --code-bg:#f7f7f7; --think-bg:#f7f7f7; --more-bg:#f0f0f0; --more-line:#e5e5e5;
   --user-bg:#f5f5f5; --user-line:#f5f5f5; --sys-bg:#f5f7fa; --sys-line:#e3e8ef;
   --tool-bg:#f7f7f7; --tool-line:#eeeeee; --tool-sep:#f2f2f2; --cmd-bg:#f6f8fb;
-  --err-bg:#fdecea; --err-line:#f5c2bb; --err-fg:#ba2723; --active-bg:#e6f0fe;
+  --err-bg:#fdecea; --err-line:#f5c2bb; --err-fg:#ba2723; --active-bg:#eeeeee;
   --shadow:rgba(0,0,0,.08); --scrim:rgba(0,0,0,.24);
   --panel:#ffffff; --input-bg:#ffffff;
 }
@@ -2509,5 +2511,7 @@ html[data-skin="zhuyue"] #composer-inner{background:var(--input-bg);border-radiu
 html[data-skin="zhuyue"] .msg.user .bubble{border-radius:22px;border-color:transparent}
 /* 浅色：整页铺浅灰，卡片是白的（Kimi 设置页的样子） */
 html[data-skin="zhuyue"][data-theme="light"] #pages{background:var(--bg2)}
-/* 有序列表的序号用强调色 */
-html[data-skin="zhuyue"] .bubble ol > li::marker{color:var(--accent);font-weight:600}
+/* 蓝色点缀：有序列表序号、菜单里的勾 */
+html[data-skin="zhuyue"] .bubble ol > li::marker{color:var(--zy-blue);font-weight:600}
+html[data-skin="zhuyue"] .sel-menu button.on{color:var(--fg)}
+html[data-skin="zhuyue"] .sel-menu button.on svg{color:var(--zy-blue)}
