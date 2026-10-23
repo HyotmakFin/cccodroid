@@ -152,6 +152,8 @@ final class Notify {
                 else if ("run_start".equals(type)) runText.put(ev.optString("runId"), ev.optString("text"));
                 else if ("run_end".equals(type)) onRunEnd(ev);
                 else if ("sched_note".equals(type)) onSchedNote(ev);
+                else if ("sched_next".equals(type)) SchedAlarm.set(ctx, ev.optLong("at"));
+                if ("hello".equals(type)) SchedAlarm.fromFile(ctx);   // 事件流（重）连上：按文件补定一次闹钟
             }
         } catch (Exception e) {
             Log.w(TAG, "通知：事件解析失败", e);

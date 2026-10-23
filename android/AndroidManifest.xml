@@ -97,6 +97,8 @@
 
         <!-- 应用内部回调：安装结果、通知栏填的配对码。不导出 -->
         <receiver android:name=".Events" android:exported="false" />
+        <!-- 定时任务的系统闹钟：到点拉起网关。不导出 -->
+        <receiver android:name=".SchedAlarm" android:exported="false" />
         <!-- 系统广播：自更新装完、开机 -->
         <receiver android:name=".SysEvents" android:exported="true">
             <intent-filter>

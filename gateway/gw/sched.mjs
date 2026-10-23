@@ -1,8 +1,9 @@
 // ── 定时任务 ──────────────────────────────────────────────────────────
 // 到点在指定目录里跑一次 Claude（和用户发消息走同一条队列），没人看着：要确认的一律拒绝。
 // 跑完按设置通知、记运行记录，结果存成一个对话（列表里带时钟标记）。
-// 计时在网关里：应用活着（前台或后台常驻）就准点；被系统杀掉期间错过的，下次启动按每个任务的「错过了」处理，
-// 不偷偷补跑。存储：home/ccapp-sched.json（任务 + 设置）、home/ccapp-sched-runs.json（运行记录，留最近 500 条）。
+// 计时在网关里：应用活着（前台或后台常驻）就准点。另外把最近一次的时刻报给外壳（事件 sched_next + 文件
+// ccapp-sched-next），外壳定一个系统闹钟：到点叫醒应用、没在跑就拉起服务，再调 /api/sched/tick 立刻查一遍。
+// 闹钟也没叫醒（被强行停止、厂商拦截）而错过的，下次启动按每个任务的「错过了」处理，不偷偷补跑。存储：home/ccapp-sched.json（任务 + 设置）、home/ccapp-sched-runs.json（运行记录，留最近 500 条）。
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -28,7 +29,17 @@ const DB = { tasks: [], dailyBudget: 0, missed: [], sids: [], lastTick: 0 };   /
 try { Object.assign(DB, JSON.parse(fs.readFileSync(FILE, "utf8"))); } catch {}
 let RUNLOG = [];
 try { RUNLOG = JSON.parse(fs.readFileSync(RUNS_FILE, "utf8")); if (!Array.isArray(RUNLOG)) RUNLOG = []; } catch {}
-const save = () => { try { fs.writeFileSync(FILE + ".tmp", JSON.stringify(DB, null, 1)); fs.renameSync(FILE + ".tmp", FILE); } catch (e) { log("定时任务保存失败: " + e.message); } };
+const save = () => { try { fs.writeFileSync(FILE + ".tmp", JSON.stringify(DB, null, 1)); fs.renameSync(FILE + ".tmp", FILE); } catch (e) { log("定时任务保存失败: " + e.message); } pushNext(); };
+// 最近一次要跑的时刻（毫秒，0 = 没有）→ 外壳的系统闹钟。只在变了的时候报
+const NEXT_FILE = path.join(CFG.home, "ccapp-sched-next");
+let lastNext = -1;
+function pushNext() {
+  const at = DB.tasks.reduce((m, t) => (t.on && t.nextAt && (!m || t.nextAt < m) ? t.nextAt : m), 0);
+  if (at === lastNext) return;
+  lastNext = at;
+  try { fs.writeFileSync(NEXT_FILE, String(at)); } catch {}
+  publish({ type: "sched_next", at });
+}
 const saveRuns = () => { RUNLOG = RUNLOG.slice(-500); try { fs.writeFileSync(RUNS_FILE + ".tmp", JSON.stringify(RUNLOG)); fs.renameSync(RUNS_FILE + ".tmp", RUNS_FILE); } catch {} };
 const byId = (id) => DB.tasks.find((t) => t.id === id) || null;
 
@@ -294,6 +305,8 @@ export async function routeSched(req, res, u, p) {
     log(`⏰ 新定时任务「${t.name}」 下次 ${t.nextAt ? new Date(t.nextAt).toLocaleString() : "—"}`);
     return sendJson(res, 200, { ok: true, task: summary(t) });
   }
+  // 外壳的闹钟响了：立刻查一遍（不用等下一个 30 秒）
+  if (p === "/api/sched/tick" && req.method === "POST") { tick(); return sendJson(res, 200, { ok: true, next: lastNext }); }
   if (p === "/api/sched/budget" && req.method === "PUT") {
     const b = await body(); DB.dailyBudget = Math.max(0, Math.min(1000, +b.daily || 0)); save();
     return sendJson(res, 200, { ok: true });
