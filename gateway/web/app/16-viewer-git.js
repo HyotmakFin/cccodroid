@@ -385,17 +385,20 @@
     $("vw-body").innerHTML = `<div class="vw-empty">
       <div>${t("这种文件没有内置预览。")}</div>
       ${VW.size <= VW_EDIT_MAX ? `<button class="btn ghost sm" data-a="astext">${t("当作文本打开")}</button>` : ""}
-      <a class="btn ghost sm" href="${fileUrl(path, true)}" download>${t("下载")}</a></div>`;
+      <button class="btn ghost sm" data-a="share">${shareIco()}${t("分享")}</button></div>`;
     $("vw-body").querySelector('[data-a="astext"]')?.addEventListener("click", () => { VW.kind = "text"; vwLoadText("edit"); });
   }
 
   /** 顶栏右侧的按钮：[文字, 动作, 是否高亮] */
   function vwActs(list) {
-    const base = [[t("插入 @路径"), "insert"], ["⤓", "download"]];
+    const base = [[t("插入 @路径"), "insert"]];
     $("vw-acts").innerHTML = list.concat(base).map(([l, a, on]) =>
-      `<button class="btn ${on ? "" : "ghost"} sm" data-a="${a}">${esc(l)}</button>`).join("");
+      `<button class="btn ${on ? "" : "ghost"} sm" data-a="${a}">${esc(l)}</button>`).join("") +
+      `<button class="btn ghost sm vw-ico" data-a="share" title="${esc(t("分享"))}" aria-label="${esc(t("分享"))}">${shareIco()}</button>`;
   }
 
+  // 预览不了 / 转换失败时正文里的「分享」按钮
+  $("vw-body").addEventListener("click", (e) => { if (e.target.closest('.vw-empty [data-a="share"]')) shareFile(VW.path); });
   $("vw-acts").addEventListener("click", (e) => {
     const b = e.target.closest("[data-a]");
     if (!b) return;
@@ -405,7 +408,7 @@
       toast(t("已插入文件路径"));
       return closeViewer();
     }
-    if (a === "download") { location.href = fileUrl(VW.path, true); return; }
+    if (a === "share") return shareFile(VW.path);
     if (a === "save") return vwSave(false);
     if (a === "md") { VW.text = vwText(); if (isMd(VW.path)) localStorage.setItem("cc.vw.mdmode", "md"); return vwRenderText("md"); }
     if (a === "edit" && VW.mode === "html") {

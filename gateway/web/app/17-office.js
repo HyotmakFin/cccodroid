@@ -20,7 +20,7 @@
   function vwFail(msg, withPdf) {
     $("vw-body").innerHTML = `<div class="vw-empty"><div>${esc(msg)}</div>
       ${withPdf ? `<button class="btn ghost sm" data-a="aspdf">${t("用 LibreOffice 转成 PDF 看")}</button>` : ""}
-      <a class="btn ghost sm" href="${fileUrl(VW.path, true)}" download>${t("下载")}</a></div>`;
+      <button class="btn ghost sm" data-a="share">${shareIco()}${t("分享")}</button></div>`;
     $("vw-body").querySelector('[data-a="aspdf"]')?.addEventListener("click", () => vwOffice());
   }
 
@@ -185,7 +185,7 @@
     $("vw-body").innerHTML = `<div class="vw-empty">
       <div>${t("看这类文件要先装 LibreOffice（下载约 190 MB，装好约 830 MB）。装一次，以后 PPT、Word、Excel 都能直接看。")}</div>
       <button class="btn sm" data-a="lo-install">${t("安装 LibreOffice")}</button>
-      <a class="btn ghost sm" href="${fileUrl(VW.path, true)}" download>${t("下载")}</a></div>`;
+      <button class="btn ghost sm" data-a="share">${shareIco()}${t("分享")}</button></div>`;
     $("vw-body").querySelector('[data-a="lo-install"]').addEventListener("click", vwOfficeInstall);
     api("/api/office/info").then((j) => { if (j.install && j.install.running) vwOfficeInstall(); }).catch(() => {});
   }

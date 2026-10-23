@@ -909,6 +909,9 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 #vw-info{margin:0;font-size:10.5px}
 .vw-acts{display:flex;gap:5px;flex:0 0 auto;overflow-x:auto;max-width:62vw}
 .vw-acts .btn{width:auto;margin:0;flex:0 0 auto;white-space:nowrap}
+.ico-share{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;vertical-align:-3px;margin-right:4px}
+.vw-ico{padding-left:9px;padding-right:9px}
+.vw-ico .ico-share{margin-right:0;vertical-align:-3px}
 #vw-body{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 .vw-empty{margin:auto;display:flex;flex-direction:column;gap:10px;align-items:center;color:var(--fg2);font-size:13.5px;text-align:center;padding:20px}
 .vw-empty .btn{width:auto;margin:0}

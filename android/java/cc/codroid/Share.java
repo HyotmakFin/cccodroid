@@ -75,6 +75,25 @@ public final class Share extends ContentProvider {
     }
 
     /** 弹系统分享面板 */
+    /** 不在三个允许目录里的文件（工作区、/sdcard 上的）：拷一份到 exports/shared 再分享，别的应用拿到的是这一份的只读授权 */
+    static File shareable(Context c, File f) throws Exception {
+        if (!f.isFile()) throw new FileNotFoundException(Tr.t("文件不存在：") + f);
+        if (uriFor(c, f) != null) return f;
+        if (f.length() > 512L << 20) throw new IOException(Tr.t("文件超过 512 MB，不分享"));
+        File dir = new File(new Env(c).home, "exports/shared");
+        dir.mkdirs();
+        File dst = new File(dir, f.getName());
+        java.nio.file.Files.copy(f.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        return dst;
+    }
+
+    /** 按扩展名猜类型；猜不出就当二进制 */
+    static String mimeOf(File f) {
+        String ext = android.webkit.MimeTypeMap.getFileExtensionFromUrl(Uri.encode(f.getName()));
+        String m = ext == null || ext.isEmpty() ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
+        return m == null ? "application/octet-stream" : m;
+    }
+
     static JSONObject send(Context c, File f, String mime) throws Exception {
         Uri u = uriFor(c, f);
         if (u == null || !f.isFile()) return new JSONObject().put("ok", false).put("message", Tr.t("这个文件不能分享：") + f);

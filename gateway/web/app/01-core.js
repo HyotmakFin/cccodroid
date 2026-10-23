@@ -196,6 +196,17 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     saveAs(p);
   }, true);
 
+  // 查看器 / 图片灯箱里的「分享」：文件本来就在本机，再存一份没意义，交给系统分享面板发到别的应用。
+  // 不在 cccodroid 里（开发端、浏览器）时退回下载
+  async function shareFile(p) {
+    if (!canShare()) { location.href = fileUrl(p, true); return; }
+    try {
+      const j = await post("/api/app/share_file", { path: p });
+      if (!j.ok) toast(j.message || t("分享失败"), true);
+    } catch (e) { toast(t("分享失败") + "：" + e.message, true); }
+  }
+  const shareIco = () => `<svg class="ico-share" viewBox="0 0 24 24">${ICONS.share}</svg>`;
+
   function setStatus(text, cls) { chatStatus = [text, cls || ""]; if (!curPage) { subEl.textContent = text; subEl.className = cls || ""; } }
 
   // ── 跨刷新要记住的东西 ────────────────────────────────────────────
@@ -455,11 +466,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   function openLightbox(path) {
     $("lightbox-img").src = fileUrl(path);
     $("lightbox-cap").textContent = path.split("/").pop();
-    $("lightbox-dl").href = fileUrl(path, true);
+    lightboxEl.dataset.path = path;
+    $("lightbox-dl").innerHTML = shareIco() + esc(t("分享"));
     lightboxEl.classList.remove("hidden");
   }
   lightboxEl.addEventListener("click", (e) => {
     if (e.target === lightboxEl || e.target.id === "lightbox-close") lightboxEl.classList.add("hidden");
+    if (e.target.closest("#lightbox-dl")) shareFile(lightboxEl.dataset.path);
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") lightboxEl.classList.add("hidden");
