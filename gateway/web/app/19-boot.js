@@ -73,15 +73,27 @@
   $("btn-plus").addEventListener("click", openSheet);
   // 布局（layout.js）在浮层开合后会补发一次 resize，窗口其实没变 —— 只有宽度真变了才收，不然一开就闪没
   addEventListener("resize", () => { if (!sheetEl.classList.contains("hidden") && sheetEl.classList.contains("pop") && innerWidth !== sheetW) sheetEl.classList.add("hidden"); });
+  // 截屏格长按 0.5 秒 = 5 秒后截屏（帮助里有写）；长按触发后吞掉随后的那次 click
+  let shotHold = null, shotHeld = false;
+  sheetEl.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest('.sheet-tile[data-act="shot"]')) return;
+    shotHeld = false;
+    clearTimeout(shotHold);
+    shotHold = setTimeout(() => { shotHeld = true; sheetEl.classList.add("hidden"); screenshot(5); }, 500);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) sheetEl.addEventListener(ev, () => clearTimeout(shotHold));
+  sheetEl.addEventListener("contextmenu", (e) => { if (e.target.closest('.sheet-tile[data-act="shot"]')) e.preventDefault(); });
   sheetEl.addEventListener("click", (e) => {
     if (e.target === sheetEl) { sheetEl.classList.add("hidden"); return; }
     const it = e.target.closest(".sheet-item, .sheet-tile");
     if (!it) return;
+    if (shotHeld) { shotHeld = false; return; }
     sheetEl.classList.add("hidden");
     const a = it.dataset.act;
     if (a === "new") return $("btn-new").click();
     if (a === "caps") return openPage("caps");
     if (a === "attach") return pickFiles();
+    if (a === "camera") return $("cam-input").click();
     if (a === "shot" || a === "shot5") return screenshot(a === "shot5" ? 5 : 0);
     if (a === "browse") return openFiles();
     if (a === "model" || a === "effort") return openModelPicker();

@@ -317,6 +317,10 @@ public class MainActivity extends Activity {
     private static String caught(String entry) { return "catch(e){window.__ccErr&&__ccErr(" + org.json.JSONObject.quote(entry) + ",e)}"; }
     private static String guarded(String entry, String code) { return "try{" + code + "}" + caught(entry); }
     /** 页面可能还在启动：等 __cc 就绪再派发（app.js 里有对应的监听） */
+    private static boolean copyQuiet(File a, File b) {
+        try { java.nio.file.Files.copy(a.toPath(), b.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); a.delete(); return true; }
+        catch (Exception e) { return false; }
+    }
     private void toPage(String event, String value) {
         ui.post(() -> {
             if (web == null) return;
@@ -1106,6 +1110,19 @@ public class MainActivity extends Activity {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
+                // ＋ 面板「拍照」：<input capture> 直接开系统相机，不弹文件选择器
+                if (p.isCaptureEnabled() && java.util.Arrays.asList(p.getAcceptTypes()).contains("image/*")) {
+                    try {
+                        File f = Camera.newFile(MainActivity.this);
+                        getSharedPreferences("ui", MODE_PRIVATE).edit().putString("camPending", f.getPath()).apply();
+                        startActivityForResult(Camera.intent(MainActivity.this, f), 9);
+                        return true;
+                    } catch (Exception e) {
+                        fileCb = null;
+                        android.widget.Toast.makeText(MainActivity.this, Tr.f("打不开相机：{0}", e.getMessage()), android.widget.Toast.LENGTH_LONG).show();
+                        return false;
+                    }
+                }
                 try { startActivityForResult(chooserIntent(p), 7); } catch (Exception e) { fileCb = null; return false; }
                 return true;
             }
@@ -1366,6 +1383,36 @@ public class MainActivity extends Activity {
         if (req == 8) {
             if (res == RESULT_OK && data != null && data.getData() != null) finishSaveAs(data.getData());
             else { savePending = null; savedJs(false, "cancel"); }
+            return;
+        }
+        if (req == 9) {
+            // 拍照回来。界面可能在拍的时候被系统收掉重建过：fileCb 没了，就照「分享进来的文件」那样放进 uploads 再递给页面
+            SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+            String path = sp.getString("camPending", null);
+            sp.edit().remove("camPending").apply();
+            ValueCallback<Uri[]> cb = fileCb;
+            fileCb = null;
+            File f = path == null ? null : new File(path);
+            if (res != RESULT_OK || f == null) { if (f != null) f.delete(); if (cb != null) cb.onReceiveValue(null); return; }
+            new Thread(() -> {
+                boolean ok = Camera.shrink(f);
+                ui.post(() -> {
+                    if (!ok) {
+                        f.delete();
+                        if (cb != null) cb.onReceiveValue(null);
+                        android.widget.Toast.makeText(this, Tr.t("没拿到照片"), android.widget.Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    if (cb != null) {
+                        try { cb.onReceiveValue(new Uri[]{Share.uriFor(this, f)}); } catch (Exception e) { cb.onReceiveValue(null); }
+                        return;
+                    }
+                    File dir = new File(env.workspace(), "uploads");
+                    dir.mkdirs();
+                    File out = new File(dir, new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date()) + "-" + f.getName());
+                    if (f.renameTo(out) || copyQuiet(f, out)) toPage("ccapp-attach", out.getPath());
+                });
+            }).start();
             return;
         }
         if (req == 7 && fileCb != null) {

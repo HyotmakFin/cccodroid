@@ -30,6 +30,7 @@ The thin line under the top bar shows **context usage**; the further right, the 
 
 - **Enter sends.** Sending while Claude is busy queues the message; ⚡ interjects into the running turn without stopping it.
 - `/` opens slash commands and `@` references a file. Use Share → cccodroid in other apps to attach files directly.
+- The top row of ＋ next to the input box: Attach file, Take photo, Screenshot, Browse files. Photos are scaled to 2048 px on the long side before they're attached. **Long-press Screenshot to take it in 5 seconds**: switch to the app you want to capture in the meantime, and you'll be brought back afterwards.
 - Tool calls collapse into one line such as "3 steps · done"; tap to see each step. Steps that need you, or that failed, open on their own.
 - Paths in replies open in the viewer; web links open in the in-app browser.
 - Every message has four buttons. Yours: copy, resend, rewind to here, delete. Claude's: copy, share, fork from here, delete.
