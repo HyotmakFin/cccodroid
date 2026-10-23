@@ -4733,20 +4733,28 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (cur.bill && cur.bill.error) cur.bill = null;
     }
     if (seq !== QB.seq) return QB.cur;          // 期间又发了一次（切了接口、连点刷新），以后发的为准
+    if (!cur.login && !cur.bill && QB.cur && QB.cur.id === cur.id && QB.cur.bill) return QB.cur;   // 一时没查到：留着上次的，别把细条上的字清掉
     QB.cur = cur;
     qbPaint();
     qbRemind(cur);
     qcRender();
     return cur;
   }
-  function qbPaint() {
-    const br = qbBrief(QB.cur), el = $("ctxq");
+  function qbPaint(br) {
+    const el = $("ctxq");
     if (!el) return;
+    if (!br) {
+      br = qbBrief(QB.cur);
+      // 记下这次的一句话：下次打开界面先画它，不用等状态和额度接口回来（上下文数字是本地存的，一打开就有，两边一起出）
+      if (QB.cur) try { localStorage.setItem("cc.qbLast", JSON.stringify({ id: QB.cur.id, text: br.text, lvl: br.lvl })); } catch {}
+    }
     el.textContent = br.text;
     el.className = br.lvl === 2 ? "hot" : br.lvl === 1 ? "warm" : "";
     ctxBar.classList.toggle("has-q", !!br.text);
     if (br.text) ctxBar.classList.remove("hidden");
   }
+  const qbLast = (() => { try { return JSON.parse(localStorage.getItem("cc.qbLast") || "null"); } catch { return null; } })();
+  if (qbLast && qbLast.text) qbPaint(qbLast);
   // 快用完时提醒：5 小时 / 每周（或套餐窗口）过 80%、95% 各提醒一次（按重置时间区分窗口）；余额低于设定值每天一次
   function qbRemind(c) {
     const cfg = qbWarnCfg();
@@ -9255,7 +9263,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (s.uiTag) uiTag = s.uiTag;
       if (s.product && document.title !== s.product) document.title = s.product;
       // 接口换了（或第一次拿到状态）：顶栏的额度 / 余额跟着换
-      if (!QB.cur || QB.cur.id !== s.provider || QB.cur.login !== (s.keyMode === "login")) { state.serverStatus = s; qbLoad(false).catch(() => {}); }
+      if (!QB.cur || QB.cur.id !== s.provider || QB.cur.login !== (s.keyMode === "login")) {
+        if ((QB.cur ? QB.cur.id : qbLast && qbLast.id) !== s.provider) qbPaint({ text: "", lvl: 0 });   // 先画的是别家的：撤掉，等新的
+        state.serverStatus = s; qbLoad(false).catch(() => {});
+      }
       state.serverStatus = s;
       paintAcct(s);
       paintSafeMode(s.safeMode);
