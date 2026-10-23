@@ -1995,5 +1995,4 @@ window.I18N_DICT["es"] = {
   "用量逼近这条线时自动摘要历史。线放低更省、记得更少；放高记得多，但每轮更贵、更慢。": "El historial se resume automáticamente cuando el uso se acerca a este umbral. Más bajo ahorra pero recuerda menos; más alto recuerda más, pero cada turno cuesta más y va más lento.",
   "{line} · 窗口的 {pct}%": "{line} · {pct} % de la ventana",
   "没设，交给 claude 按窗口决定": "Sin definir; claude decide según la ventana",
-  "当前会话已用 {n}": "Esta sesión ha usado {n}",
 };

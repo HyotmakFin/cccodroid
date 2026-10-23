@@ -466,10 +466,10 @@
             <div class="sl"><b data-i18n>思考强度（--effort）</b><p id="effort-info" class="clamp" data-i18n-html>档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</p></div>
             <div class="sc"><select id="set-effort"></select></div>
           </div>
-          <!-- 压缩线：拖动设 autoCompactWindow（和「Claude 行为」里的数字框是同一项）。轨道上的小竖线是当前会话已用到哪 -->
+          <!-- 压缩线：拖动设 autoCompactWindow（和「Claude 行为」里的数字框是同一项） -->
           <div class="sblock ac-slide" id="ac-slide">
             <div class="ac-head"><b data-i18n>上下文压缩线</b><span id="ac-val"></span><button class="btn sm ghost" id="ac-auto" data-i18n>交给 claude</button></div>
-            <div class="ac-track"><input type="range" id="ac-range" min="0" max="100" step="1"><i id="ac-used"></i></div>
+            <div class="ac-track"><input type="range" id="ac-range" min="0" max="100" step="1"></div>
             <div class="ac-scale"><span id="ac-min"></span><span id="ac-max"></span></div>
             <p class="tiny" data-i18n>用量逼近这条线时自动摘要历史。线放低更省、记得更少；放高记得多，但每轮更贵、更慢。</p>
           </div>

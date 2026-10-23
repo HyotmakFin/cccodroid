@@ -423,7 +423,6 @@ html.dock-l .side-recent{margin:0 -12px;padding:0 12px 8px}
 .ac-track input:active::-webkit-slider-thumb{transform:scale(1.15)}
 .ac-track.auto input::-webkit-slider-runnable-track{background:repeating-linear-gradient(90deg,var(--bg4) 0 6px,transparent 6px 10px)}
 .ac-track.auto input::-webkit-slider-thumb{border-color:var(--fg3)}
-.ac-track i{position:absolute;top:7px;width:2px;height:14px;border-radius:1px;background:var(--fg2);transform:translateX(-1px);pointer-events:none;z-index:2;display:none}
 .ac-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--fg3);font-variant-numeric:tabular-nums}
 .ac-slide p.tiny{margin:8px 0 0}
 .side-recent h4.sr-g{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;-webkit-user-select:none;border-radius:6px;padding:2px 0}

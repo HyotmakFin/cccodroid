@@ -2029,5 +2029,4 @@ window.I18N_DICT.en = {
   "用量逼近这条线时自动摘要历史。线放低更省、记得更少；放高记得多，但每轮更贵、更慢。": "History is summarized automatically when usage nears this line. Lower saves tokens but remembers less; higher remembers more but each turn costs more and runs slower.",
   "{line} · 窗口的 {pct}%": "{line} · {pct}% of the window",
   "没设，交给 claude 按窗口决定": "Not set; claude decides from the window",
-  "当前会话已用 {n}": "This session has used {n}",
 };

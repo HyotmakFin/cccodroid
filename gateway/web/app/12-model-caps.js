@@ -474,9 +474,6 @@
     const rg = $("ac-range");
     if (document.activeElement !== rg) rg.value = acSet ? acPos(acSet) : 100;
     $("ac-min").textContent = fmtTok(AC_MIN); $("ac-max").textContent = fmtTok(acWin);
-    const u = $("ac-used");
-    if (state.ctxUsed > 0) { u.style.display = "block"; u.style.left = "calc(11px + (100% - 22px) * " + Math.min(1, state.ctxUsed / acWin) + ")"; u.title = t("当前会话已用 {n}", { n: fmtTok(state.ctxUsed) }); }
-    else u.style.display = "none";
     acShow(acSet);
   }
   $("ac-range").addEventListener("input", (e) => acShow(acTok(+e.target.value)));
