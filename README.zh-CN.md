@@ -75,7 +75,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 
 ## 安装
 
-1. 从 [Releases](https://github.com/greyoak111/cccodroid/releases) 下载 `cccodroid.apk` 并安装。
+1. 从 [Releases](https://github.com/greyoak111/cccodroid/releases) 下载 `cccodroid.apk` 并安装。系统提示「与此版本的安卓不兼容」、装不上时，改装同一版本的 `cccodroid-36.apk`（targetSdk 36，功能一样，0.3.17 起提供；两套怎么选见应用内帮助「更新与修复」）。
 2. 打开应用，首次启动会自动完成：
    - 下载开发工具包：先勾要装哪些模块，基础部分必装，默认再加命令行工具和 C/C++ 编译，合计约 330 MB（全部模块约 700 MB）；断点续传，校验 sha256 后解压；
    - 从 Anthropic 官方渠道下载 Claude Code（约 275 MB）。

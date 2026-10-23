@@ -42,6 +42,13 @@ jobs:
           INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
         run: node scripts/sign-modules.mjs out/modules/modules.json
 
+      # 「经加载器」（targetSdk 36）的 APK 要从这个 glibc 包里抽 ld.so（devkit.mjs ldso）。Termux 仓库在 glibc 升版后会删掉旧包，
+      # 所以随 Release 存一份，锁文件里的 sha256 照样核
+      - name: 留存 glibc 包
+        run: |
+          G=$(node -p "require('path').basename(require('./out/devkit.lock.json').packages.find((p) => p.name === 'glibc').file).replace(/:/g, '%3a')")
+          cp "cache/$G" out/glibc.deb
+
       - name: 发布
         if: startsWith(github.ref, 'refs/tags/devkit-')
         env:
@@ -80,4 +87,4 @@ jobs:
           NOTES
           gh release create "$TAG" --title "$TAG" --notes-file notes.md \
             out/devkit-cc.codroid.tar.gz out/devkit.lock.json out/SBOM.tsv \
-            out/modules/*.tar.gz out/modules/module-*.lock.json out/modules/SBOM-*.tsv out/modules/modules.json out/modules/modules.json.sig
+            out/modules/*.tar.gz out/modules/module-*.lock.json out/modules/SBOM-*.tsv out/modules/modules.json out/modules/modules.json.sig out/glibc.deb

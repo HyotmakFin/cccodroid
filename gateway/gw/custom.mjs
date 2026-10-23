@@ -292,6 +292,9 @@ async function customFetchLibs(want, deps, have, log2) {
   return { got, still: [...want].filter((n) => !have.has(n)) };
 }
 
+// patchelf 写进程序的解释器：一律用工具包里的 ld.so —— 路径固定。PATHS.loader 在「经加载器」时是 APK 里那份，
+// 它所在的 /data/app/~~随机名/ 每次更新都变，写进去下次更新就失效。36 版下 exec 这样的程序由 exec-shim 改走 APK 里的 ld.so
+const STABLE_LD = () => path.join(PATHS.glibcLib, "ld-linux-aarch64.so.1");
 const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
 /** 一个入口的包装脚本：按程序类型套上能让它在这里跑起来的那层 */
 function customWrapper(id, p, appDir, libs, opts) {
@@ -385,7 +388,7 @@ async function customInstall(b) {
     // patchelf 方式：直接改程序的解释器和 RUNPATH（/proc/self/exe 才指向程序本身）
     for (const e of entries.filter((x) => x.patchelf)) {
       const f = path.join(appDir, e.rel);
-      const r = await runP(path.join(PREFIX, "bin", "patchelf"), ["--set-interpreter", PATHS.loader, "--set-rpath", libs.join(":"), f]);
+      const r = await runP(path.join(PREFIX, "bin", "patchelf"), ["--set-interpreter", STABLE_LD(), "--set-rpath", libs.join(":"), f]);
       if (r.code) throw new Error(tz("patchelf 改 {p} 失败：{msg}", { p: e.rel, msg: r.err.trim().split("\n").pop() }));
     }
     fs.mkdirSync(CUSTOM_BIN, { recursive: true });
@@ -419,6 +422,13 @@ export function customRefresh() {
       fs.mkdirSync(CUSTOM_BIN, { recursive: true });
       for (const e of r.entries) fs.writeFileSync(path.join(CUSTOM_BIN, e.cmd), customWrapper(r.id, e, path.join(r.dir, "app"), r.libs, { gpu: e.gpu && gpu, patchelf: e.patchelf }), { mode: 0o755 });
     } catch (e) { log(`[custom] ${r.id} 入口重写失败：${e.message}`); }
+    // 早先「经加载器」时装的会把 APK 里 ld.so 的路径写进程序：改回工具包里那份（APK 一更新那个路径就没了）
+    for (const e of r.entries.filter((x) => x.patchelf)) {
+      const f = path.join(r.dir, "app", e.rel), want = STABLE_LD(), info = elfInfo(f);
+      if (!info || !info.interp || info.interp === want) continue;
+      runP(path.join(PREFIX, "bin", "patchelf"), ["--set-interpreter", want, f])
+        .then((x) => log(`[custom] ${r.id}/${e.rel} 解释器 ${info.interp} → ${want}${x.code ? " 失败：" + x.err.trim().split("\n").pop() : ""}`));
+    }
   }
 }
 function customRecords() {

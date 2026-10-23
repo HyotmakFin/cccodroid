@@ -150,6 +150,10 @@ step.fetch = async () => {
   const want = [[lock.gz.file, lock.gz.bytes], ...mods.modules.map((m) => [m.file || m.gz.file, m.bytes || m.gz.bytes])];
   for (const [f, b] of want) if (assets.get(f) !== b) fail(`Release 里 ${f} 大小 ${assets.get(f)} ≠ 清单 ${b}`);
   say(`  ✓ ${want.length} 个 gz 都在 Release 上，大小与清单一致`);
+  // 36 版 APK 要从 glibc 包里抽 ld.so；Termux 仓库删了旧包时 build.sh 退回 Release 上这份（devkit.yml「留存 glibc 包」）
+  const g = lock.packages.find((p) => p.name === "glibc");
+  if (g && assets.get("glibc.deb") !== g.size) fail(`Release 里 glibc.deb 大小 ${assets.get("glibc.deb")} ≠ 锁文件 ${g.size}`);
+  if (g) say("  ✓ glibc.deb 留存在 Release 上");
   // devkit.json 点名要的包都进了（10.22.1 以为 which 在 debianutils 里、实际没有，就是这一步该拦下的）
   const dj = json(path.join(ROOT, "devkit/devkit.json"));
   const names = new Set(lock.packages.map((p) => p.name));

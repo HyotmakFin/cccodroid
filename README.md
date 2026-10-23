@@ -74,7 +74,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
 
 ## Install
 
-1. Download `cccodroid.apk` from [Releases](https://github.com/greyoak111/cccodroid/releases) and install it.
+1. Download `cccodroid.apk` from [Releases](https://github.com/greyoak111/cccodroid/releases) and install it. If Android says it isn’t compatible and won’t install it, use `cccodroid-36.apk` from the same release instead (targets SDK 36, same features, available from 0.3.17; see “Updates and repair” in the in-app help for how the two differ).
 2. Open the app. The first launch automatically:
    - downloads the toolchain: you pick modules first; the base is required, and the command-line tools and C/C++ compilers are ticked by default, about 330 MB in total (all modules about 700 MB); resumable, sha256-verified, then unpacked;
    - downloads Claude Code from Anthropic's official channel (about 275 MB).

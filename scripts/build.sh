@@ -88,7 +88,7 @@ PIN_TARGET=$(node -p 'require(process.argv[1]).target' "$A/assets/devkit-pin.jso
 LOCK="$ROOT/devkit/cache/lock-$(node -p 'require(process.argv[1]).tag' "$A/assets/devkit-pin.json").json"
 mkdir -p "$ROOT/devkit/cache" "$A/build/lib/arm64-v8a"
 [ -s "$LOCK" ] || curl -fsSL --retry 3 -o "$LOCK" "${PIN_BASE}devkit.lock.json"
-node "$ROOT/devkit/devkit.mjs" ldso --lock "$LOCK" --target "$PIN_TARGET" --out "$A/build/lib/arm64-v8a/libldlinux.so"
+node "$ROOT/devkit/devkit.mjs" ldso --lock "$LOCK" --target "$PIN_TARGET" --release "$PIN_BASE" --out "$A/build/lib/arm64-v8a/libldlinux.so"
 
 echo "▸ aapt2 + 签名"
 mkdir -p "$OUT"

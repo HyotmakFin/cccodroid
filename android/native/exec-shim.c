@@ -126,17 +126,23 @@ typedef struct { const char *path; char **argv; char **envp; } plan;
 enum { ENV_KEEP, ENV_BIONIC, ENV_GLIBC };
 
 /* 环境：去掉旧的 LD_PRELOAD，bionic 目标再补上 termux-exec */
-/* self：经 linker64 起的程序的真实路径，记进 TERMUX_EXEC__PROC_SELF_EXE（它的 /proc/self/exe 会是 linker64，见下面的 readlink） */
-static char **fixenv2(char *const *envp, char **ev, int mode, arena *a, const char *self) {
+/*
+ * 经加载器起的程序，/proc/self/exe 指向加载器（bionic：linker64；glibc：APK 里的 ld.so），真实路径记进环境变量
+ * （见下面的 readlink）：bionic 用 termux-exec 的 TERMUX_EXEC__PROC_SELF_EXE，glibc 用 CCAPP_SELF_EXE。
+ * var=要改的变量（"X="），val=新值；val 为 0 表示删掉（程序是谁不知道时，别让旧值冒充）
+ */
+static char **fixenv2(char *const *envp, char **ev, int mode, arena *a, const char *var, const char *val) {
     int n = 0;
     for (int i = 0; envp && envp[i]; i++)
-        if (!pre(envp[i], "LD_PRELOAD=") && !(self && pre(envp[i], "TERMUX_EXEC__PROC_SELF_EXE="))) ev[n++] = envp[i];
+        if (!pre(envp[i], "LD_PRELOAD=") && !(var && pre(envp[i], var))) ev[n++] = envp[i];
     const char *bp = getenv("CCAPP_BIONIC_PRELOAD");
     if (mode == ENV_BIONIC && bp && *bp) { char *s = put(a, "LD_PRELOAD=", bp, 0); if (s) ev[n++] = s; }
-    if (self) { char *s = put(a, "TERMUX_EXEC__PROC_SELF_EXE=", self, 0); if (s) ev[n++] = s; }
+    if (var && val) { char *s = put(a, var, val, 0); if (s) ev[n++] = s; }
     ev[n] = 0;
     return ev;
 }
+#define SELF_B "TERMUX_EXEC__PROC_SELF_EXE="
+#define SELF_G "CCAPP_SELF_EXE="
 static char **fixenv(char *const *envp, char **ev, int mode, arena *a) {
     int n = 0;
     for (int i = 0; envp && envp[i]; i++) if (!pre(envp[i], "LD_PRELOAD=")) ev[n++] = envp[i];
@@ -164,9 +170,9 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
     int scripted = 0;
     for (int depth = 0; depth < 5; depth++) {
         if (streq(cur, ld)) {                        /* 直接 exec APK 里的 ld.so（claude 包装脚本就这样）：原样，环境按 glibc 来（不许带回 bionic 的 LD_PRELOAD） */
-            if (!scripted) { p->path = path; p->argv = (char **)argv; p->envp = fixenv(envp, ev, ENV_GLIBC, a); return 1; }
+            if (!scripted) { p->path = path; p->argv = (char **)argv; p->envp = fixenv2(envp, ev, ENV_GLIBC, a, SELF_G, 0); return 1; }
             av[s] = (char *)cur;
-            p->path = cur; p->argv = av + s; p->envp = fixenv(envp, ev, ENV_GLIBC, a);
+            p->path = cur; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_GLIBC, a, SELF_G, 0);
             return 1;
         }
         if (sysdir(cur)) {                           /* 系统程序：能直接 exec */
@@ -214,22 +220,28 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
             }
             av[s] = abs;
             av[--s] = "/system/bin/linker64";
-            p->path = "/system/bin/linker64"; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_BIONIC, a, abs);
+            p->path = "/system/bin/linker64"; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_BIONIC, a, SELF_B, abs);
             return 1;
         }
         if (k == K_GLIBC) {
             const char *lib = getenv("CCAPP_GLIBC_LIB"), *pl = getenv("CCAPP_GLIBC_PRELOAD");
-            av[s] = (char *)cur;
+            char *abs = (char *)cur;
+            if (cur[0] != '/') {
+                char cwd[512];
+                if (sc(NR_getcwd, (long)cwd, sizeof cwd, 0, 0) <= 0) return 0;
+                abs = put(a, cwd, "/", cur); if (!abs) return 0;
+            }
+            av[s] = abs;
             if (pl && *pl) { av[--s] = (char *)pl; av[--s] = "--preload"; }
             if (lib && *lib) { av[--s] = (char *)lib; av[--s] = "--library-path"; }
             av[--s] = (char *)argv0; av[--s] = "--argv0";
             av[--s] = (char *)ld;
-            p->path = ld; p->argv = av + s; p->envp = fixenv(envp, ev, ENV_GLIBC, a);
+            p->path = ld; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_GLIBC, a, SELF_G, abs);
             return 1;
         }
         if (k == K_LDSO) {                           /* 有人直接 exec 工具包里的 ld.so：换成 APK 里那份 */
             av[s] = (char *)ld;
-            p->path = ld; p->argv = av + s; p->envp = fixenv(envp, ev, ENV_GLIBC, a);
+            p->path = ld; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_GLIBC, a, SELF_G, 0);
             return 1;
         }
         return 0;                                    /* 静态程序 / 不认识的：原样 */
@@ -251,20 +263,25 @@ typedef int (*execve_fn)(const char *, char *const[], char *const[]);
 static execve_fn next_execve;
 #endif
 
-#ifdef BIONIC
 /*
- * 经 linker64 起的程序，/proc/self/exe 指向 /system/bin/linker64。按它找自己目录的程序就找错地方：
+ * 经 linker64 起的程序，/proc/self/exe 指向 /system/bin/linker64（glibc 程序则是 APK 里的 ld.so）。按它找自己目录的程序就找错地方：
  * Chromium 去 /system/bin 找 icudtl.dat（报 Invalid file descriptor to ICU data），Yosys 去 /system/bin 找 yosys-abc；
  * Chromium 拉子进程还直接 exec /proc/self/exe。真实路径在 TERMUX_EXEC__PROC_SELF_EXE（termux-exec 和本库改写时都会写）
  */
 #define NR_readlinkat 78
 static const char *realself(void) {
-    char b[64];
+    char b[512];
     long n = sc(NR_readlinkat, AT_FDCWD, (long)"/proc/self/exe", (long)b, sizeof b - 1);
     if (n <= 0) return 0;
     b[n] = 0;
+#ifdef BIONIC
     if (!ends(b, "/linker64")) return 0;
     const char *e = getenv("TERMUX_EXEC__PROC_SELF_EXE");
+#else
+    const char *ld = getenv("CCAPP_LD");
+    if (!ld || !ends(b, "libldlinux.so") || !ends(ld, "libldlinux.so")) return 0;
+    const char *e = getenv("CCAPP_SELF_EXE");
+#endif
     return e && *e == '/' ? e : 0;
 }
 static ssize_t fakelink(const char *p, char *buf, size_t sz) {
@@ -289,12 +306,9 @@ ssize_t readlinkat(int fd, const char *p, char *buf, size_t sz) {
     if (r < 0) { ERRNO = (int)-r; return -1; }
     return r;
 }
-#endif
 
 int execve(const char *path, char *const argv[], char *const envp[]) {
-#ifdef BIONIC
     if (path && streq(path, "/proc/self/exe")) { const char *e = realself(); if (e) path = e; }
-#endif
     PLAN_SPACE(argv, envp);
     if (mkplan(path, argv, envp, av_, ev_, &ar_, &pl_)) { ERRNO = (int)-raw_execve(pl_.path, pl_.argv, pl_.envp); return -1; }
 #ifdef BIONIC

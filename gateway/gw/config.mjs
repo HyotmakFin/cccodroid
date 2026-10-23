@@ -45,6 +45,7 @@ export const GLIBC_PRELOAD = process.env.CCAPP_GLIBC_PRELOAD || (PATHS.preload &
 export function glibcEnv(env = process.env) {
   const e = { ...env };
   delete e.LD_PRELOAD;
+  delete e.CCAPP_SELF_EXE;      // exec-shim 用它冒充 /proc/self/exe：网关直接拉的 glibc 程序不是它记的那个
   return e;
 }
 

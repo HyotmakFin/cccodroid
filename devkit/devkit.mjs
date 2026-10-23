@@ -600,13 +600,23 @@ const compVersion = (up) => (RECIPE_DIR ? `${COMP.version || up}-r${COMP.revisio
 // ldso：给 APK「经加载器」执行方式抽出 glibc 的 ld.so（build.sh 打进 lib/arm64-v8a/libldlinux.so）。
 // targetSdk 36 不能 exec 数据目录里的 ld.so，只能 exec APK 原生库目录里的文件。
 // 按工具包锁文件记的那个 glibc deb 取并核 sha256：ld.so 与工具包里的 libc.so.6 必须出自同一次构建，否则 GLIBC_PRIVATE 对不上
-//   node devkit.mjs ldso --lock <devkit.lock.json> [--target 包名] [--out 文件]
+// Termux 仓库池里的旧 glibc 包会被删：--release <工具包 Release 目录 URL> 时退回那里留存的 glibc.deb（devkit.yml 传上去的，同样核 sha256）
+//   node devkit.mjs ldso --lock <devkit.lock.json> [--target 包名] [--out 文件] [--release URL/]
 if (cmd === "ldso") {
   const lock = JSON.parse(fs.readFileSync(opt("lock") || (() => { throw new Error("--lock <工具包的 devkit.lock.json> 必填"); })(), "utf8"));
   const target = opt("target", lock.target);
   const rec = lock.packages.find((p) => p.name === "glibc");
   if (!rec) throw new Error("锁文件里没有 glibc");
-  const deb = await fetchDeb({ ...rec, repo: REPOS.find((r) => (r.name || "main") === rec.repo) || REPOS[0] });
+  let deb;
+  try { deb = await fetchDeb({ ...rec, repo: REPOS.find((r) => (r.name || "main") === rec.repo) || REPOS[0] }); }
+  catch (e) {
+    const rel = opt("release");
+    if (!rel) throw e;
+    console.log(`  Termux 仓库取不到 glibc ${rec.version}（${e.message}），改用 ${rel}glibc.deb`);
+    deb = await new Promise((res, rej) => execFile("curl", ["-fsSL", "--retry", "3", rel + "glibc.deb"], { encoding: "buffer", maxBuffer: 64 << 20 },
+      (err, out) => err ? rej(err) : res(out)));
+    if (sha256(deb) !== rec.sha256) throw new Error(`Release 上的 glibc.deb sha256 ${sha256(deb)} 与锁文件 ${rec.sha256} 不符`);
+  }
   const dir = TERMUX.slice(1) + "files/usr/glibc/lib/";
   const ents = [...readTar(await dataTar(deb))];
   let name = "ld-linux-aarch64.so.1", e;
