@@ -59,7 +59,8 @@ export function effectiveModel(sid) {
   const r = sessModel(sid);
   const pin = r && r.model != null;
   return { model: pin ? r.model : SETTINGS.model || "", effort: r && r.effort != null ? r.effort : SETTINGS.effort || "",
-    provider: pin ? r.provider : PROVIDER.id, ownProvider: !!(pin && r.provider !== PROVIDER.id), own: !!r };
+    provider: pin ? r.provider : PROVIDER.id, ownProvider: !!(pin && r.provider !== PROVIDER.id), own: !!r,
+    rec: r ? { model: r.model, effort: r.effort, provider: r.provider } : null };   // 原样的记录：null 的字段是「跟随默认」
 }
 
 // ── 路由：/api/session-model ──

@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { CFG, NO_BRIDGE, PATHS, PREFIX, log, sleep } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { PROVIDER, keyOf } from "./providers.mjs";
-import { MODELS, withWindows } from "./models.mjs";
+import { cachedModels } from "./models.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 
 // ── 给 claude 造一个它认得的 shell ────────────────────────────────────
@@ -147,9 +147,9 @@ export async function setBridgeUpstream(url) {
 
 // ── claude 进程 ───────────────────────────────────────────────────────
 /** 某个模型（缺省 = 全局设置里的）在某家（缺省 = 当前生效的）那边的真实参数（窗口 / 输出上限 / effort 档位）。
- *  别家没有拉过的清单缓存，先用目录里写的 fallbackModels */
+ *  那家的清单没拉过就用目录里写的 fallbackModels */
 export function currentModelInfo(id = SETTINGS.model, p = PROVIDER) {
-  const list = withWindows((p.id === PROVIDER.id ? MODELS : null) || p.fallbackModels || []);
+  const list = cachedModels(p);
   if (!Array.isArray(list) || !list.length) return {};
   if (!id) return list[0] || {};
   return list.find((m) => m.id === id) || list[0] || {};

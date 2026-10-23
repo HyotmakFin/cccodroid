@@ -1970,4 +1970,7 @@ window.I18N_DICT["es"] = {
   "只改这个会话，从下一条消息起生效；没单独选过的会话跟着设置里的默认走。": "Solo cambia esta sesión, a partir del siguiente mensaje; las sesiones sin elección propia siguen el valor predeterminado de Ajustes.",
   "改回跟随默认": "Volver a seguir el predeterminado",
   "跟随默认：{model}": "Sigue el predeterminado: {model}",
+  "点一个模型，这个会话就换到「{name}」": "Toca un modelo para pasar esta sesión a «{name}»",
+  "这个会话改用「{name}」，下一条消息起生效": "Esta sesión usa ahora «{name}», a partir del siguiente mensaje",
+  "这个会话改用「{name}」接着聊？\n\n之前的对话会整段交给新接口的模型重新读：提示缓存从头算，费用按新接口计；个别工具调用记录别家模型可能读不懂。": "¿Seguir esta sesión con «{name}»?\n\nToda la conversación la volverá a leer el modelo del nuevo proveedor: la caché del prompt empieza de cero y se factura según el nuevo proveedor. Algunos registros de herramientas pueden no entenderse en el modelo de otro proveedor.",
 };

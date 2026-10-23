@@ -189,7 +189,8 @@ function autoCompactOff() {
 export function idleArm(sid, flags) {
   idleDisarm(sid);
   const ctx = flags.mainCtx || 0;
-  if (SETTINGS.idleCompaction === false || !PROVIDER.nativeModels || PROVIDER.local) return;
+  const P = sessProvider(sid);           // 按这个会话用的那家（缓存计时只对原生家有意义）
+  if (SETTINGS.idleCompaction === false || !P.nativeModels || P.local) return;
   if (!flags.cache1h || flags.cache5m || ctx < IDLE_MIN_TOKENS || autoCompactOff()) return;
   let size = -1; try { size = fs.statSync(findSessionFile(sid).file).size; } catch { return; }
   const timer = setTimeout(() => idleFire(sid), IDLE_MS);
@@ -200,13 +201,14 @@ export function idleArm(sid, flags) {
 function idleFire(sid) {
   const x = IDLE.get(sid);
   IDLE.delete(sid);
-  if (!x || SETTINGS.idleCompaction === false || !PROVIDER.nativeModels) return;
+  const P = sessProvider(sid);
+  if (!x || SETTINGS.idleCompaction === false || !P.nativeModels) return;
   const why = (() => {
     if (laneRun("s:" + sid)) return "正在跑";
     if (QUEUE.some((q) => sidOfLane(laneOfItem(q)) === sid)) return "有排队的消息";
     try { if (fs.statSync(findSessionFile(sid).file).size !== x.size) return "会话有新内容"; } catch { return "会话文件不见了"; }
     const rl = RATE_LIMITS;
-    if (rl && isLoginMode() && Math.max(rl.fiveHour?.used || 0, rl.sevenDay?.used || 0) >= 90) return "额度逼近上限";
+    if (rl && isLoginMode(P) && Math.max(rl.fiveHour?.used || 0, rl.sevenDay?.used || 0) >= 90) return "额度逼近上限";
     return null;
   })();
   if (why) { log(`⏲ 空闲压缩跳过（${why}）：会话 ${sid.slice(0, 8)}`); return; }
@@ -250,7 +252,7 @@ export function enqueue(body) {
     projectId: body.projectId ? String(body.projectId) : null,
     at: Date.now(),
     // 只有网关自己（定时任务）会带的：前端发来的 /api/chat 不许设这些
-    ...(body.internal ? { cwd: body.cwd || null, effort: body.effort || null, sched: body.sched || null, unattended: !!body.unattended,
+    ...(body.internal ? { cwd: body.cwd || null, effort: body.effort || null, provider: body.provider || null, sched: body.sched || null, unattended: !!body.unattended,
       allowedTools: body.allowedTools || null, disallowedTools: body.disallowedTools || null, timeoutMs: body.timeoutMs || 0 } : {}),
     ...(body.auto ? { auto: body.auto } : {}),
   };

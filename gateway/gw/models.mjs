@@ -1,14 +1,16 @@
 import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { API_KEY, PROVIDER, keyOf } from "./providers.mjs";
+import { PROVIDER, keyOf, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
-import { effectiveModel } from "./sessmodel.mjs";
+import { effectiveModel, sessProvider } from "./sessmodel.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";
 
 // ── 模型清单（按厂商拉，10 分钟缓存，失败用该厂商的 fallback）─────────
+// MODELS 是全局生效那家的清单（老代码直接读它）；每家各自的缓存在 CACHE（0.3.16 起各会话可以用不同的家）
 export let MODELS = null, MODELS_AT = 0, MODELS_FOR = null;
+const CACHE = new Map();   // 厂商 id → { list, at }
 
 /** 把不同厂商的 /models 响应归一成同一种形状。
  *  两家形状不同：DeepSeek 用 context_window/max_output_tokens/effort.supported_levels，
@@ -59,16 +61,16 @@ const LOGIN_MODELS = [
 // claude --effort 认的全部档位（claude --help 原文：low, medium, high, xhigh, max）。
 // 原生厂商的模型不带档位信息时就用这一套 —— 以前回落成 DeepSeek 的三档，medium/xhigh 凭空消失。
 const CLAUDE_EFFORT = ["low", "medium", "high", "xhigh", "max"];
-export function effortLevelsOf(model) {
+export function effortLevelsOf(model, p = PROVIDER) {
   return (model && model.effort && model.effort.supported_levels) ||
-         (PROVIDER.nativeModels ? CLAUDE_EFFORT : ["low", "high", "max"]);
+         (p.nativeModels ? CLAUDE_EFFORT : ["low", "high", "max"]);
 }
 
 // 从 result.modelUsage 学到的真实窗口（按模型 id 记，落盘）—— 官方账户拿不到 /models，只能这样补
 let WINDOWS = {};
 try { WINDOWS = JSON.parse(fs.readFileSync(PATHS.windows, "utf8")); } catch {}
-export function learnWindow(result) {
-  if (!PROVIDER.nativeModels) return;
+export function learnWindow(result, p = PROVIDER) {
+  if (!p.nativeModels) return;
   let changed = false;
   for (const [id, u] of Object.entries((result && result.modelUsage) || {})) {
     const w = { context_window: Number(u && u.contextWindow) || 0, max_output_tokens: Number(u && u.maxOutputTokens) || 0 };
@@ -90,41 +92,41 @@ export function withWindows(list) {
 }
 
 // 清空 / 让它过期：别的模块改不了这几个变量（ES 模块的导入是只读的），走这两个函数
-export function dropModelCache() { MODELS = null; MODELS_AT = 0; MODELS_FOR = null; }
-export function expireModelCache() { MODELS_AT = 0; }
+export function dropModelCache() { MODELS = null; MODELS_AT = 0; MODELS_FOR = null; CACHE.clear(); }
+export function expireModelCache() { MODELS_AT = 0; for (const c of CACHE.values()) c.at = 0; }
 
-export async function fetchModels(force) {
-  const p = PROVIDER;
-  if (!force && MODELS && MODELS_FOR === p.id && Date.now() - MODELS_AT < 600000) return MODELS;
+/** p：哪家（缺省 = 全局生效的）。按家各缓存 10 分钟；全局那家的结果同时放进 MODELS */
+export async function fetchModels(force, p = PROVIDER) {
+  const list = await fetchModelsOf(p, force);
+  if (p.id === PROVIDER.id) { MODELS = list; MODELS_AT = Date.now(); MODELS_FOR = p.id; }
+  return list;
+}
+async function fetchModelsOf(p, force) {
+  const c = CACHE.get(p.id);
+  const keep = (list, ttl = true) => { CACHE.set(p.id, { list, at: ttl ? Date.now() : 0 }); return list; };
+  if (!force && c && c.at && Date.now() - c.at < 600000) return c.list;
 
-  if (p.local) {   // 端侧：模型目录里有什么就是什么（每次现扫，刚放进去的文件马上能选）
-    MODELS = localModels(); MODELS_AT = 0; MODELS_FOR = p.id;
-    return MODELS;
-  }
-  if (isLoginMode(p)) {
-    MODELS = (p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS;
-    MODELS_AT = Date.now(); MODELS_FOR = p.id;
-    return MODELS;
-  }
+  if (p.local) return keep(localModels(), false);   // 端侧：模型目录里有什么就是什么（每次现扫，刚放进去的文件马上能选）
+  if (isLoginMode(p)) return keep((p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS);
 
-  if (p.modelsUrl && (API_KEY || p.modelsAuth === "none")) {
+  const key = keyOf(p);
+  if (p.modelsUrl && (key || p.modelsAuth === "none")) {
     try {
       const headers = {};
-      if (API_KEY) {
+      if (key) {
         if (p.modelsAuth === "x-api-key") {
-          headers["x-api-key"] = API_KEY;
+          headers["x-api-key"] = key;
           headers["anthropic-version"] = "2023-06-01";
         } else if (p.modelsAuth !== "none") {
-          headers.Authorization = `Bearer ${API_KEY}`;
+          headers.Authorization = `Bearer ${key}`;
         }
       }
       const r = await fetch(p.modelsUrl, { headers, signal: AbortSignal.timeout(15000) });
       if (r.ok) {
         const list = mergeKnown(normalizeModels(await r.json()), p.fallbackModels);
         if (list.length) {
-          MODELS = list; MODELS_AT = Date.now(); MODELS_FOR = p.id;
-          log(`[${p.id}] 模型清单：${MODELS.map((m) => m.id).join(", ")}`);
-          return MODELS;
+          log(`[${p.id}] 模型清单：${list.map((m) => m.id).join(", ")}`);
+          return keep(list);
         }
       }
       log(`[${p.id}] 拉模型清单失败 HTTP ${r.status}`);
@@ -132,10 +134,13 @@ export async function fetchModels(force) {
       log(`[${p.id}] 拉模型清单出错: ${e.message}`);
     }
   }
-  MODELS = (MODELS_FOR === p.id && MODELS) ? MODELS
-    : (p.fallbackModels || []).map((m) => ({ context_window: 0, max_output_tokens: 0, input_modalities: ["text"], effort: null, ...m }));
-  MODELS_AT = Date.now(); MODELS_FOR = p.id;
-  return MODELS;
+  return keep(c && c.list ? c.list
+    : (p.fallbackModels || []).map((m) => ({ context_window: 0, max_output_tokens: 0, input_modalities: ["text"], effort: null, ...m })));
+}
+/** 已缓存的那家清单（不发请求）；没拉过就是目录里写的 */
+export function cachedModels(p = PROVIDER) {
+  const c = CACHE.get(p.id);
+  return withWindows((c && c.list) || (p.id === PROVIDER.id && MODELS) || p.fallbackModels || []);
 }
 
 /** 厂商的 /models 多是 OpenAI 形状：不报窗口，还混着向量、语音、画图模型。
@@ -156,9 +161,9 @@ function mergeKnown(list, known) {
 
 /** claude 的 --effort 档位比 DeepSeek 多，收敛到该模型真正支持的档位。
  *  没设过（want 为空）就保持不设 —— 由模型自己决定，别替用户做主。 */
-export function normEffort(model, want) {
+export function normEffort(model, want, p = PROVIDER) {
   if (!want) return null;
-  const ok = effortLevelsOf(model);
+  const ok = effortLevelsOf(model, p);
   if (ok.includes(want)) return want;
   return (model && model.effort && model.effort.default_level) || null;
 }
@@ -167,24 +172,33 @@ export function normEffort(model, want) {
 export async function routeModels(req, res, u, p) {
   // ── DeepSeek 模型清单 ──
   if (req.method === "GET" && p === "/api/models") {
-    const ms = withWindows(await fetchModels(u.searchParams.get("refresh") === "1"));
-    // ?sid=：按这个会话记下的模型 / 档位回（0.3.16 起每个会话各用各的）；不给就是全局默认
-    // ?model= / ?effort=：还没会话号的新会话在面板里先选了（前端暂存，随第一条消息带走），按选的回
-    const now = effectiveModel(u.searchParams.get("sid") || "");
+    // ?sid=：按这个会话记下的接口 / 模型 / 档位回（0.3.16 起每个会话各用各的）；不给就是全局默认
+    // ?model= / ?effort= / ?provider=：还没会话号的新会话在面板里先选了（前端暂存，随第一条消息带走），按选的回
+    // ?browse=接口：面板里点开别的接口看它的模型（只换清单，current 仍是这个会话的）
+    const sid = u.searchParams.get("sid") || "";
+    const now = effectiveModel(sid);
+    let pp = sessProvider(sid);
+    if (u.searchParams.has("provider")) { const x = providerById(u.searchParams.get("provider")); if (x) { pp = x; now.provider = x.id; if (x.id !== PROVIDER.id) now.model = ""; } }
     if (u.searchParams.has("model")) now.model = u.searchParams.get("model");
     if (u.searchParams.has("effort")) now.effort = u.searchParams.get("effort");
-    const cur = ms.find((m) => m.id === now.model) || ms[0] || {};
+    const bp = (u.searchParams.get("browse") && providerById(u.searchParams.get("browse"))) || pp;
+    const ms = withWindows(await fetchModels(u.searchParams.get("refresh") === "1", bp));
+    const own = withWindows(bp === pp ? ms : cachedModels(pp));
+    const cur = own.find((m) => m.id === now.model) || own.find((m) => m.id === pp.defaultModel) || own[0] || {};
     return sendJson(res, 200, {
       models: ms,
       current: now.model || null,
       // 给前端判"这家用不用得着挑模型"：官方账户不挑就是用它的默认
-      provider: PROVIDER.id,
-      nativeModels: !!PROVIDER.nativeModels,
-      defaultModel: PROVIDER.defaultModel || null,
+      provider: pp.id,                       // 这个会话用的那家
+      listProvider: bp.id,                   // models 是哪家的
+      globalProvider: PROVIDER.id,
+      providers: providerBrief(),
+      nativeModels: !!bp.nativeModels,
+      defaultModel: bp.defaultModel || null,
       effort: now.effort || null,
-      effortLevels: effortLevelsOf(cur),
+      effortLevels: effortLevelsOf(cur, pp),
       // 原生厂商的默认档位由 claude 按模型定，我们不知道就别瞎报
-      effortDefault: (cur.effort && cur.effort.default_level) || (PROVIDER.nativeModels ? null : "high"),
+      effortDefault: (cur.effort && cur.effort.default_level) || (pp.nativeModels ? null : "high"),
       // 真实窗口 —— 前端用量条和门限都按它算，不写死
       contextWindow: Number(cur.context_window) || 0,
       maxOutputTokens: Number(cur.max_output_tokens) || 0,

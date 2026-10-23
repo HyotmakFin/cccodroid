@@ -2004,4 +2004,7 @@ window.I18N_DICT.en = {
   "只改这个会话，从下一条消息起生效；没单独选过的会话跟着设置里的默认走。": "Only this session changes, starting with the next message; sessions you haven't set follow the default in Settings.",
   "改回跟随默认": "Back to following the default",
   "跟随默认：{model}": "Following the default: {model}",
+  "点一个模型，这个会话就换到「{name}」": "Tap a model to move this session to “{name}”",
+  "这个会话改用「{name}」，下一条消息起生效": "This session now uses “{name}”, starting with the next message",
+  "这个会话改用「{name}」接着聊？\n\n之前的对话会整段交给新接口的模型重新读：提示缓存从头算，费用按新接口计；个别工具调用记录别家模型可能读不懂。": "Continue this session on “{name}”?\n\nThe whole conversation so far will be re-read by the new provider’s model: the prompt cache starts over and billing follows the new provider. Some tool-call records may not make sense to another provider’s model.",
 };

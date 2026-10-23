@@ -415,7 +415,9 @@
     const s = state.serverStatus;
     if (!s || !s.provider) return null;
     const seq = ++QB.seq;
-    const cur = { id: s.provider, name: provName(s), login: s.keyMode === "login" };
+    // 按当前会话用的那家（0.3.16 起会话可以钉在别家上），不是只看全局
+    const pid = curProv() || s.provider, pb = pid !== s.provider ? provOf(pid) : null;
+    const cur = pb ? { id: pid, name: provLabel(pid), login: pb.keyMode === "login" } : { id: s.provider, name: provName(s), login: s.keyMode === "login" };
     if (cur.login) {
       const st = await api("/api/login/status").catch(() => null);
       cur.limits = st && st.loggedIn ? st.limits || null : null;

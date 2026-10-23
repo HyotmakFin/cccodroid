@@ -174,7 +174,7 @@ async function fire(t, { reason = "due", attempt = 0, trial = false } = {}) {
   const item = enqueue({
     internal: true, message, projectId: p ? p.id : null,
     sessionId: t.session === "same" && t.lastSid ? t.lastSid : null,
-    model: t.model || null, effort: t.effort || null, ...perm,
+    model: t.model || null, effort: t.effort || null, provider: t.provider || null, ...perm,
     unattended: true, timeoutMs: Math.max(1, +t.limitMin || 15) * 60000, sched: { taskId: t.id, key },
   });
   log(`⏰ 定时任务「${t.name}」开跑（${reason}${trial ? "，试跑" : ""}）`);
@@ -245,7 +245,7 @@ const KINDS = ["daily", "weekly", "monthly", "every", "once", "cron"];
 function clean(b, old = {}) {
   const t = { ...old };
   const s = (k, n = 200) => { if (typeof b[k] === "string") t[k] = b[k].trim().slice(0, n); };
-  s("name", 60); s("prompt", 8000); s("tools", 500); s("model", 80); s("effort", 20); s("quiet", 60);
+  s("name", 60); s("prompt", 8000); s("tools", 500); s("model", 80); s("effort", 20); s("provider", 40); s("quiet", 60);
   if ("projectId" in b) t.projectId = b.projectId && projectById(b.projectId) ? b.projectId : null;
   if (b.freq && KINDS.includes(b.freq.kind)) {
     const f = b.freq, o = { kind: f.kind };

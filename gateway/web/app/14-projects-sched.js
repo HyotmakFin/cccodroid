@@ -1,3 +1,14 @@
+  // 0.3.16：项目 / 定时任务也能指定接口；别家的模型清单按需拉一次，缓存在 PJ.pm
+  PJ.pm = {};
+  function provModelsOf(id) {
+    if (!id || id === globalProv()) return Promise.resolve(MODELS);
+    if (PJ.pm[id]) return Promise.resolve(PJ.pm[id]);
+    return api("/api/models?browse=" + encodeURIComponent(id)).then((r) => { if (r.providers) state.provList = r.providers; return (PJ.pm[id] = r.models || []); }).catch(() => []);
+  }
+  const usableProvs = () => (state.provList || []).filter((p) => p.usable);
+  const provChoices = (follow, cur) => [["", follow], ...usableProvs().map((p) => [p.id, provLabel(p.id)]),
+    ...(cur && !usableProvs().some((p) => p.id === cur) ? [[cur, provLabel(cur)]] : [])];
+
   // ── 项目页 ──
   async function renderProjects() {
     const box = $("tab-projects");
@@ -27,7 +38,12 @@
     if (!MODELS.length) api("/api/models").then((r) => { MODELS = r.models || []; PJ.effLevels = r.effortLevels || []; if (PJ.cur === id) renderProject(box); }).catch(() => {});
     const opt = (v, l, cur) => `<option value="${esc(v)}"${v === (cur || "") ? " selected" : ""}>${esc(l)}</option>`;
     const follow = t("跟随全局");
-    const modelSel = `<select data-def="model">${opt("", follow, p.model)}${MODELS.map((m) => opt(m.id, prettyModel(m.id), p.model)).join("")}${p.model && !MODELS.some((m) => m.id === p.model) ? opt(p.model, prettyModel(p.model), p.model) : ""}</select>`;
+    // 项目指定了别家：型号清单换成那家的（没拉过先拉，拉回来重画）
+    const pms = p.provider && p.provider !== globalProv() ? PJ.pm[p.provider] : MODELS;
+    if (!pms) provModelsOf(p.provider).then(() => { if (PJ.cur === id) renderProject(box); });
+    const PMS = pms || [];
+    const provSel = `<select data-def="provider">${provChoices(follow, p.provider).map(([v, l]) => opt(v, l, p.provider)).join("")}</select>`;
+    const modelSel = `<select data-def="model">${opt("", follow, p.model)}${PMS.map((m) => opt(m.id, prettyModel(m.id), p.model)).join("")}${p.model && !PMS.some((m) => m.id === p.model) ? opt(p.model, prettyModel(p.model), p.model) : ""}</select>`;
     const effs = PJ.effLevels && PJ.effLevels.length ? PJ.effLevels : ["low", "medium", "high", "xhigh", "max"];
     const effSel = `<select data-def="effort">${opt("", follow, p.effort)}${effs.map((e) => opt(e, e, p.effort)).join("")}</select>`;
     const permSel = `<select data-def="perm">${opt("", follow, p.perm)}${["default", "acceptEdits", "plan", "auto", "dontAsk"].map((k) => opt(k, t(PERM_SHORT[k]), p.perm)).join("")}</select>`;
@@ -43,6 +59,7 @@
       <div class="pj-save hidden"><button class="btn sm ghost" data-a="instr-undo">${esc(t("还原"))}</button><button class="btn sm" data-a="instr-save">${esc(t("保存"))}</button></div>
       <div class="pj-sec"><span class="grow">${esc(t("默认设置"))} <span class="muted pj-note">${esc(t("（只管这个项目里新开的对话）"))}</span></span></div>
       <div class="panel">
+        ${usableProvs().length > 1 || p.provider ? `<div class="row"><div class="grow"><b>${esc(t("接口"))}</b></div>${provSel}</div>` : ""}
         <div class="row"><div class="grow"><b>${esc(t("型号"))}</b></div>${modelSel}</div>
         <div class="row"><div class="grow"><b>${esc(t("思考强度"))}</b></div>${effSel}</div>
         <div class="row"><div class="grow"><b>${esc(t("权限模式"))}</b></div>${permSel}</div>
@@ -88,7 +105,9 @@
   });
   $("tab-projects").addEventListener("change", async (e) => {
     const k = e.target.dataset.def; const p = PJ.detail && PJ.detail.project; if (!k || !p) return;
-    try { const r = await jsend("/api/projects/" + encodeURIComponent(p.id), { [k]: e.target.value }, "PATCH"); Object.assign(p, r.project); toast(t("已保存")); loadProjects(); }
+    // 换接口时型号一起清掉：旧型号名是给原来那家的
+    const patch = k === "provider" ? { provider: e.target.value, model: "" } : { [k]: e.target.value };
+    try { const r = await jsend("/api/projects/" + encodeURIComponent(p.id), patch, "PATCH"); Object.assign(p, r.project); toast(t("已保存")); loadProjects(); if (k === "provider") renderProject($("tab-projects")); }
     catch (err) { toast(err.message, true); }
   });
   function openProject(id) { PJ.cur = id; PJ.detail = null; if (curPage !== "projects") openPage("projects"); else { renderProjects(); $("page-body").scrollTop = 0; } }
@@ -374,7 +393,7 @@
       frow(t("权限"), rcards("perm", [["ro", t("只读"), esc(t("能看文件、跑查询类命令，不改任何东西（先这样试几天）"))], ["proj", t("可以改项目目录里的文件"), esc(t("目录外的写入、安装软件、删除等一律当作拒绝"))], ["custom", t("自己挑允许的工具"), esc(t("比如只允许 Bash(git *) 和 WebFetch；其余一律拒绝"))]], v.perm) +
         `<input class="pj-field mono${v.perm === "custom" ? "" : " hidden"}" id="t-tools" value="${esc(v.tools || "")}" placeholder="Bash(git *),WebFetch,Read" spellcheck="false">`) +
       `<button type="button" class="pj-col" data-col aria-expanded="false">${pi("chev")}${esc(t("更多设置"))}</button><div class="pj-colbody hidden">` +
-      frow(t("型号"), `<div class="panel">${line(t("型号"), sel("t-model", [["", t("跟随项目 / 全局")], ...models.map((m) => [m.id, prettyModel(m.id)]), ...(v.model && !models.some((m) => m.id === v.model) ? [[v.model, prettyModel(v.model)]] : [])], v.model || ""))}${line(t("思考强度"), sel("t-effort", [["", t("跟随项目 / 全局")], ...effs.map((e) => [e, e])], v.effort || ""))}</div>`) +
+      frow(t("型号"), `<div class="panel">${usableProvs().length > 1 || v.provider ? line(t("接口"), sel("t-prov", provChoices(t("跟随项目 / 全局"), v.provider), v.provider || "")) : ""}${line(t("型号"), sel("t-model", [["", t("跟随项目 / 全局")], ...models.map((m) => [m.id, prettyModel(m.id)]), ...(v.model && !models.some((m) => m.id === v.model) ? [[v.model, prettyModel(v.model)]] : [])], v.model || ""))}${line(t("思考强度"), sel("t-effort", [["", t("跟随项目 / 全局")], ...effs.map((e) => [e, e])], v.effort || ""))}</div>`) +
       frow(t("条件（不满足就跳过这次，记一笔）"), `<div class="panel">${line(t("只在 Wi-Fi 下"), swHtml(v.cond.wifi, 'id="t-wifi"'))}${line(t("只在充电时"), swHtml(v.cond.charging, 'id="t-chg"'))}${line(t("电量低于多少就跳过"), sel("t-bat", [[0, t("不管")], [15, "15%"], [30, "30%"], [50, "50%"]], v.cond.battery || 0))}</div>`) +
       frow(t("到点时有别的对话在跑"), segOf("busy", [["queue", t("排队等它跑完")], ["skip", t("跳过这次")], ["run", t("照跑")]], v.busy), esc(t("「照跑」占一个并行名额（设置 → 后台与并行）；排队最多等 30 分钟，等不到算跳过。"))) +
       frow(t("限制"), `<div class="panel">${line(t("单次花费上限"), sel("t-cost", cost.map((c) => [c, c ? costText(c) : t("不限")]).concat(cost.includes(+v.limitCost) ? [] : [[v.limitCost, costText(v.limitCost)]]), v.limitCost || 0), t("超了就停，记成失败；第三方接口多数不回报花费"))}${line(t("单次时长上限"), sel("t-min", [5, 15, 30, 60, 90, 180].map((n) => [n, n < 60 ? t("{n} 分钟", { n }) : t("{n} 小时", { n: n / 60 })]), v.limitMin || 15))}${line(t("失败了"), sel("t-retry", [[0, t("不重试")], [1, t("重试 1 次")], [2, t("重试 2 次")]], v.retry || 0), t("网络断、接口报错、超上限"))}${line(t("错过了"), sel("t-missed", [["ask", t("下次打开问我")], ["run", t("开机后立刻补跑一次")], ["skip", t("跳过")]], v.missed), t("关机、被系统冻结、没网"))}</div>`) +
@@ -423,7 +442,7 @@
     });
     const collect = () => ({
       name: q("#t-name").value.trim(), prompt: q("#t-prompt").value.trim(), projectId: q("#t-proj").value || null, freq: readFreq(),
-      session: picked(o, "session"), perm: picked(o, "perm"), tools: q("#t-tools").value.trim(), model: q("#t-model").value, effort: q("#t-effort").value,
+      session: picked(o, "session"), perm: picked(o, "perm"), tools: q("#t-tools").value.trim(), model: q("#t-model").value, effort: q("#t-effort").value, provider: q("#t-prov") ? q("#t-prov").value : "",
       cond: { wifi: q("#t-wifi").checked, charging: q("#t-chg").checked, battery: +q("#t-bat").value }, busy: picked(o, "busy"),
       limitCost: +q("#t-cost").value, limitMin: +q("#t-min").value, retry: +q("#t-retry").value, missed: q("#t-missed").value,
       notify: q("#t-notify").value, quiet: q("#t-quiet").value.trim(), saveSession: q("#t-save").checked, carryLast: q("#t-carry").checked,
@@ -443,6 +462,16 @@
       } catch (err) { e.currentTarget.disabled = false; toast(err.message, true); }
     });
     q("#t-try")?.addEventListener("click", () => runTaskNow(x, true));
+    // 换接口：型号下拉换成那家的清单（旧型号名是给原来那家的，清掉）
+    const fillModels = async (keep) => {
+      const pid = q("#t-prov") ? q("#t-prov").value : "", ms = await provModelsOf(pid), msel = q("#t-model");
+      if (!msel) return;
+      const cur = keep ? msel.value : "";
+      msel.innerHTML = [["", t("跟随项目 / 全局")], ...ms.map((m) => [m.id, prettyModel(m.id)]), ...(cur && !ms.some((m) => m.id === cur) ? [[cur, prettyModel(cur)]] : [])]
+        .map(([a, b]) => `<option value="${esc(a)}"${a === cur ? " selected" : ""}>${esc(b)}</option>`).join("");
+    };
+    q("#t-prov")?.addEventListener("change", () => fillModels(false));
+    if (v.provider && v.provider !== globalProv()) fillModels(true);
     if (!MODELS.length) api("/api/models").then((r) => { MODELS = r.models || []; PJ.effLevels = r.effortLevels || []; }).catch(() => {});
     setTimeout(() => (edit ? null : q("#t-name").focus()), 50);
   }

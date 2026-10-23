@@ -46,7 +46,7 @@ export function projectOfDir(dir) {
 export function projectDefaults(p) {
   if (!p) return {};
   const v = (x) => (SAME.includes(x || "") ? undefined : x);
-  return { model: v(p.model), effort: v(p.effort), perm: v(p.perm) };
+  return { model: v(p.model), effort: v(p.effort), perm: v(p.perm), provider: v(p.provider) };   // provider：项目里的会话默认用哪家（模型名是给这家的）
 }
 
 function slugName(name) {
@@ -187,7 +187,7 @@ export async function routeProjects(req, res, u, p) {
     const b = await body();
     if (typeof b.name === "string" && b.name.trim()) proj.name = b.name.trim().slice(0, 60);
     if (typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color)) proj.color = b.color;
-    for (const k of ["model", "effort", "perm"]) if (typeof b[k] === "string") proj[k] = b[k].trim().slice(0, 80);
+    for (const k of ["model", "effort", "perm", "provider"]) if (typeof b[k] === "string") proj[k] = b[k].trim().slice(0, 80);
     save();
     return sendJson(res, 200, { ok: true, project: proj });
   }

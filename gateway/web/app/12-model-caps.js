@@ -6,19 +6,37 @@
     const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)/i.exec(name || "");
     return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2] + "." + m[3] : name || "";
   }
-  // 0.3.16 起模型 / 思考强度按会话记（网关 gw/sessmodel.mjs）。设置页里的是全局默认；
-  // 会话在输入栏面板里单独选过才有自己的值（state.sessModel），没选过就跟着全局默认走。
+  // 0.3.16 起模型 / 思考强度 / 接口按会话记（网关 gw/sessmodel.mjs）。设置页里的是全局默认；
+  // 会话在输入栏面板里单独选过才有自己的值（state.sessModel，网关原样的记录，null 的字段 = 跟随默认），没选过就跟着全局默认走。
+  // 单独选了模型的会话钉在选的那家接口上，全局切接口它也不跟；只选了思考强度的，模型和接口都跟全局。
   // 还没会话号的新会话：面板里选的先暂存在 state.pendingModel，随第一条消息带给网关（/api/chat 的 pin）
   const own = () => (view.sessionId ? state.sessModel : state.pendingModel) || null;
   const pickOr = (k) => { const o = own(); return o && o[k] != null ? o[k] : state.settings && state.settings[k]; };
-  const curModel = () => pickOr("model") || "";
   const curEffort = () => pickOr("effort") || "";
-  // /api/models 的查询串：老会话给会话号，新会话把暂存的选择带上
-  const sidQ = () => {
-    if (view.sessionId) return "?sid=" + encodeURIComponent(view.sessionId);
-    const p = state.pendingModel, q = [];
-    if (p && p.model != null) q.push("model=" + encodeURIComponent(p.model));
-    if (p && p.effort != null) q.push("effort=" + encodeURIComponent(p.effort));
+  // 下面几个用函数声明：09 段的额度速览（qbLoad）也要用，声明会提升
+  function globalProv() { return (state.serverStatus && state.serverStatus.provider) || ""; }
+  /** 这个会话用哪家：单独选过模型就是记下的那家，否则全局生效的那家 */
+  function curProv() { const o = own(); return (o && o.model != null && o.provider) || globalProv(); }
+  function provOf(id) { return (state.provList || []).find((p) => p.id === id) || null; }
+  function provLabel(id) { const p = provOf(id); return p ? (provEn() && p.labelEn) || p.label : id || ""; }
+  /** 模型：钉了就是钉的（"" = 那家的默认）；跟随就是全局默认 */
+  function curModel() {
+    const o = own();
+    if (o && o.model != null) return o.model || (curProv() !== globalProv() && provOf(curProv())?.defaultModel) || "";
+    return (state.settings && state.settings.model) || "";
+  }
+  const chipName = () => curModel() || state.model || t("默认");
+  // /api/models 的查询串：老会话给会话号，新会话把暂存的选择带上；extra 是另加的参数（如 browse=）
+  const sidQ = (extra) => {
+    const q = [];
+    if (view.sessionId) q.push("sid=" + encodeURIComponent(view.sessionId));
+    else {
+      const p = state.pendingModel;
+      if (p && p.provider) q.push("provider=" + encodeURIComponent(p.provider));
+      if (p && p.model != null) q.push("model=" + encodeURIComponent(p.model));
+      if (p && p.effort != null) q.push("effort=" + encodeURIComponent(p.effort));
+    }
+    if (extra) q.push(extra);
     return q.length ? "?" + q.join("&") : "";
   };
   let smSeq = 0;
@@ -27,33 +45,40 @@
     let r = null;
     if (id) try { r = await api("/api/session-model?id=" + encodeURIComponent(id)); } catch {}
     if (my !== smSeq) return;               // 切得快：只认最后一次
-    state.sessModel = r && r.own ? { model: r.model, effort: r.effort } : null;
-    paintModel(curModel() || state.model || t("默认"));
+    state.sessModel = (r && r.rec) || null;
+    paintModel(chipName());
     loadCtxModel();                          // 上下文刻度跟着这个会话的模型
+    provChanged();
   }
+  // 会话用的那家变了：顶栏的额度 / 余额跟着换
+  function provChanged() { if (QB.cur && QB.cur.id !== curProv()) qbLoad(false).catch(() => {}); }
   // 新会话拿到会话号：暂存的选择就是它记下的（网关在 init 时已记上），不必再问一遍
   function adoptPendingModel() {
     if (!state.pendingModel) return;
-    state.sessModel = { model: null, effort: null, ...state.pendingModel };
+    const p = state.pendingModel;
+    state.sessModel = { model: p.model != null ? p.model : p.provider ? "" : null, effort: p.effort != null ? p.effort : null, provider: p.provider || globalProv() };
     state.pendingModel = null;
   }
   // 只改这个会话；patch 为 null 表示回到跟随全局默认
   async function pickSessModel(patch) {
     if (!view.sessionId) {
       state.pendingModel = patch ? { ...(state.pendingModel || {}), ...patch } : null;
+      provChanged();
       return;
     }
     const r = await api("/api/session-model", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(patch ? { id: view.sessionId, ...patch } : { id: view.sessionId, reset: true }) });
-    state.sessModel = r.own ? { model: r.model, effort: r.effort } : null;
+    state.sessModel = r.rec || null;
+    provChanged();
   }
   function paintModel(name) {
     state.chipModel = name;
     const eff = curEffort();
-    // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度
-    const pretty = prettyModel(name);
-    modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(eff)}</span>` : ""}`;
-    modelEl.title = name;
+    // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度；会话用的不是全局那家时前面再加一片接口名
+    const pretty = prettyModel(name), pv = curProv(), other = pv && globalProv() && pv !== globalProv();
+    modelEl.innerHTML = (other ? `<span class="chip chip-prov">${esc(provLabel(pv))}</span>` : "") +
+      `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(eff)}</span>` : ""}`;
+    modelEl.title = (other ? provLabel(pv) + " · " : "") + name;
   }
   modelEl.setAttribute("role", "button");
   modelEl.tabIndex = 0;
@@ -67,6 +92,7 @@
       <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">${uiI("x")}</button></div>
       <div class="mp-follow"></div>
       <div class="mp-lbl">${t("思考强度")}</div><div class="mp-eff"></div>
+      <div class="mp-provwrap hidden"><div class="mp-lbl">${t("接口")}</div><div class="mp-prov"></div></div>
       <div class="mp-lbl">${t("模型")}</div>
       <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
@@ -88,11 +114,22 @@
       p.style.bottom = (fixedH() - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
     }
-    let info;
-    try { info = await api("/api/models" + sidQ()); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
-    if (!m.isConnected) return;
-    MODELS = info.models || MODELS;
-    const cur = () => info.current || "";
+    // browse：模型清单正在看哪家（点上面的接口切换，只是看；点了模型才真换）
+    let info, browse = curProv(), ML = [];
+    const list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
+    async function load() {
+      const want = browse;
+      let r;
+      try { r = await api("/api/models" + sidQ(browse && browse !== curProv() ? "browse=" + encodeURIComponent(browse) : "")); }
+      catch (e) { list.textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return false; }
+      if (!m.isConnected || want !== browse) return false;
+      info = r; ML = r.models || [];
+      if (r.providers) state.provList = r.providers;
+      if (!browse) browse = r.provider;
+      return true;
+    }
+    if (!(await load())) return;
+    const cur = () => (browse === curProv() ? info.current || "" : null);   // 看别家时没有「当前」
 
     const effBox = m.querySelector(".mp-eff");
     const paintEff = (levels, now) => {
@@ -101,21 +138,25 @@
         ? `<div class="seg mp-seg">${opts.map(([v, l]) => `<button type="button" class="${v === now ? "on" : ""}" data-eff="${esc(v)}">${esc(l)}</button>`).join("")}</div>`
         : `<span class="tiny">${t("这个模型没有可选的思考强度")}</span>`;
     };
-    paintEff(info.effortLevels || [], info.effort || "");
+    let effLevels = info.effortLevels || [];
+    paintEff(effLevels, info.effort || "");
     // 跟随全局默认：没单独选过时只是说明一句；选过了给个按钮改回去
     const followBox = m.querySelector(".mp-follow");
     const paintFollow = () => {
-      const d = state.settings || {}, dm = prettyModel(d.model) || t("默认");
+      const d = state.settings || {};
+      const usable = (state.provList || []).filter((p) => p.usable).length;
+      const dm = (usable > 1 ? provLabel(globalProv()) + " · " : "") + (prettyModel(d.model) || t("默认")) + (d.effort ? " · " + d.effort : "");
       followBox.innerHTML = own()
-        ? `<button type="button" class="mp-item mp-reset"><span>${esc(t("改回跟随默认"))}</span><small>${esc(dm + (d.effort ? " · " + d.effort : ""))}</small></button>`
-        : `<div class="tiny">${esc(t("跟随默认：{model}", { model: dm + (d.effort ? " · " + d.effort : "") }))}</div>`;
+        ? `<button type="button" class="mp-item mp-reset"><span>${esc(t("改回跟随默认"))}</span><small>${esc(dm)}</small></button>`
+        : `<div class="tiny">${esc(t("跟随默认：{model}", { model: dm }))}</div>`;
     };
     paintFollow();
     followBox.addEventListener("click", async (e) => {
       if (!e.target.closest(".mp-reset")) return;
+      if (curProv() !== globalProv() && view.sessionId && !confirm(switchWarn(globalProv()))) return;
       close();
       try { await pickSessModel(null); } catch (er) { return toast(er.message, true); }
-      paintModel(curModel() || state.model || t("默认"));
+      paintModel(chipName());
       loadCtxModel();
     });
     effBox.addEventListener("click", async (e) => {
@@ -123,45 +164,67 @@
       if (!b) return;
       try { await pickSessModel({ effort: b.dataset.eff }); } catch (er) { return toast(er.message, true); }
       info.effort = b.dataset.eff;
-      paintEff(info.effortLevels || [], b.dataset.eff);
+      paintEff(effLevels, b.dataset.eff);
       paintFollow();
-      paintModel(state.chipModel || cur() || t("默认"));
+      paintModel(state.chipModel || chipName());
     });
 
-    const list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
+    // 接口：能用的（有 Key、走登录、本机）才列；只有一家就不显示这一行
+    const provWrap = m.querySelector(".mp-provwrap"), provBox = m.querySelector(".mp-prov");
+    const paintProv = () => {
+      const ps = (state.provList || []).filter((p) => p.usable || p.id === curProv());
+      provWrap.classList.toggle("hidden", ps.length < 2);
+      provBox.innerHTML = `<div class="seg mp-seg mp-provseg">${ps.map((p) =>
+        `<button type="button" class="${p.id === browse ? "on" : ""}${p.id === curProv() ? " cur" : ""}" data-prov="${esc(p.id)}">${esc(provLabel(p.id))}</button>`).join("")}</div>` +
+        (browse !== curProv() ? `<div class="tiny mp-provhint">${esc(t("点一个模型，这个会话就换到「{name}」", { name: provLabel(browse) }))}</div>` : "");
+    };
+    paintProv();
+    provBox.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-prov]");
+      if (!b || b.dataset.prov === browse) return;
+      browse = b.dataset.prov;
+      paintProv();
+      list.innerHTML = `<div class="tiny">${t("读取中…")}</div>`;
+      if (await load()) paintList();
+    });
+
     const row = (id, sub) => (sub = typeof sub === "string" ? { text: sub } : sub, `<button type="button" class="mp-item${id === cur() ? " cur" : ""}" data-id="${esc(id)}"><span>${esc(id || t("默认"))}</span>${sub && (sub.text || sub.img) ? `<small>${esc(sub.text || "")}${sub.img ? MM_IMG() : ""}</small>` : ""}</button>`);
     const meta = (md) => {
       if (!md) return null;
       const ctx = md.context_window ? Math.round(md.context_window / 1024) + "k" : "";
       return { text: [md.name && md.name !== md.id ? md.name : "", ctx].filter(Boolean).join(" · "), img: (md.input_modalities || []).includes("image") };
     };
-    const paintList = () => {
+    function paintList() {
       const kw = q.value.trim().toLowerCase();
-      const all = MODELS.filter((md) => !kw || md.id.toLowerCase().includes(kw) || String(md.name || "").toLowerCase().includes(kw));
+      const all = ML.filter((md) => !kw || md.id.toLowerCase().includes(kw) || String(md.name || "").toLowerCase().includes(kw));
       let html = "";
       if (!kw) {
         if (info.nativeModels) html += row("", info.defaultModel ? t("（默认：{model}）", { model: info.defaultModel }) : t("（默认，由 claude 决定）"));
-        const rec = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")).filter((id) => MODELS.some((md) => md.id === id));
-        if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(MODELS.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: MODELS.length })}</div>`;
+        const rec = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")).filter((id) => ML.some((md) => md.id === id));
+        if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(ML.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: ML.length })}</div>`;
       }
       html += all.slice(0, 300).map((md) => row(md.id, meta(md))).join("");
-      if (!all.length) html += `<div class="tiny">${MODELS.length ? t("没有匹配的模型") : t("（该厂商不提供模型清单）")}</div>`;
+      if (!all.length) html += `<div class="tiny">${ML.length ? t("没有匹配的模型") : t("（该厂商不提供模型清单）")}</div>`;
       list.innerHTML = html;
-    };
+    }
     paintList();
     q.addEventListener("input", paintList);
     list.addEventListener("click", async (e) => {
       const b = e.target.closest(".mp-item");
       if (!b) return;
-      const id = b.dataset.id;
+      const id = b.dataset.id, to = browse, switching = to !== curProv();
+      // 会话聊到一半换家：之前的对话要整段交给新模型重读，先说清楚
+      if (switching && view.sessionId && !confirm(switchWarn(to))) return;
       if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
       close();
-      if (id === cur() && own()) return;                // 跟随默认时点同一个也算「单独选」：钉住，默认再改它也不变
-      try { await pickSessModel({ model: id }); } catch (er) { return toast(er.message, true); }
-      paintModel(id || state.model || t("默认"));
+      if (!switching && id === cur() && own() && own().model != null) return;   // 跟随默认时点同一个也算「单独选」：钉住，默认再改它也不变
+      try { await pickSessModel(switching ? { provider: to, model: id } : { model: id }); } catch (er) { return toast(er.message, true); }
+      paintModel(chipName());
       loadCtxModel();
+      if (switching) toast(t("这个会话改用「{name}」，下一条消息起生效", { name: provLabel(to) }));
     });
   }
+  const switchWarn = (to) => t("这个会话改用「{name}」接着聊？\n\n之前的对话会整段交给新接口的模型重新读：提示缓存从头算，费用按新接口计；个别工具调用记录别家模型可能读不懂。", { name: provLabel(to) });
 
   // 上下文用量条的满刻度按当前会话的模型；跟随默认时直接用全局那份（loadModels 顺手传进来）
   let ctxSeq = 0;
@@ -180,6 +243,7 @@
     try {
       const r = await api("/api/models" + (refresh ? "?refresh=1" : ""));
       MODELS = r.models || [];
+      if (r.providers) state.provList = r.providers;
       const sel = $("set-model");
       // 原生厂商（官方账户）：不挑 = 用它自己的默认模型。
       // 这时候列表框里得有个诚实的"默认"项 —— 否则列表第一条（比如 haiku）会顶在上面，

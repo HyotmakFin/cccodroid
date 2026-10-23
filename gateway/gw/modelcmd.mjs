@@ -3,14 +3,16 @@ import { SETTINGS, saveSettings } from "./settings.mjs";
 import { PROVIDER } from "./providers.mjs";
 import { effortLevelsOf, fetchModels, normEffort } from "./models.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";
-import { effectiveModel, setSessModel } from "./sessmodel.mjs";
+import { effectiveModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 
 // ── /model 与 /effort：由网关本地处理 ─────────────────────────────────
 // 为什么不让 claude 自己处理：它自带的 /model 只改「当前会话」，
 // 而 GUI 每次调用都是新进程 —— 下一条消息就忘了。所以由网关记：
 // 0.3.16 起：在会话里打 → 只改这个会话（sid）；新会话里打（还没会话号）→ 改全局默认。
 export async function handleLocalCommand(name, arg, reply, sid) {
-  const models = await fetchModels(true);
+  // 会话钉在别家时，清单、档位、校验都按那家
+  const P = sid ? sessProvider(sid) : PROVIDER;
+  const models = await fetchModels(true, P);
   const now = effectiveModel(sid);
   const curId = now.model, curEff = now.effort;
   const cur = models.find((m) => m.id === curId) || models[0];
@@ -61,7 +63,7 @@ export async function handleLocalCommand(name, arg, reply, sid) {
       // 原生厂商（claude 自己认识模型）：不列清单，也不劝你手选
       if (!models.length) {
         return reply(
-          `当前厂商：**${PROVIDER.label || PROVIDER.id}**（claude 原生）\n\n` +
+          `当前厂商：**${P.label || P.id}**（claude 原生）\n\n` +
           `> 该厂商由 claude 自己决定模型，未提供可切换的模型清单 —— \`/model\` 在此不适用。\n` +
           `> 若要指定，可直接写进 \`ccapp-providers.json\` 的 \`defaultModel\`。`,
           "model"
@@ -74,11 +76,11 @@ export async function handleLocalCommand(name, arg, reply, sid) {
         return `${on}\`${m.id}\` — ${m.name || ""}\n　　上下文 ${Math.round((m.context_window || 0) / 1024)}k${img} · effort ${eff}`;
       }).join("\n\n");
       return reply(
-        `当前厂商：**${PROVIDER.label || PROVIDER.id}**\n` +
+        `当前厂商：**${P.label || P.id}**\n` +
         `当前模型：**${curId || "(由 claude 决定)"}**　（effort **${curEff || "默认"}**）\n\n` +
         `可用模型：\n\n${lines}\n\n` +
         `用法：\`/model <id>\`　切换思考强度：\`/effort\`\n\n` +
-        (PROVIDER.nativeModels
+        (P.nativeModels
           ? `> 模型名由 claude 自己解析，写错会直接报错。`
           : `> 第三方厂商对不认识的名字**可能静默回落**，所以这里挡一道，免得你以为切成功了。`),
         "model"
@@ -91,18 +93,18 @@ export async function handleLocalCommand(name, arg, reply, sid) {
     if (!target) {
       if (!models.length) {
         return reply(
-          `当前厂商（**${PROVIDER.label || PROVIDER.id}**）未提供模型清单，\`/model\` 不适用。\n` +
+          `当前厂商（**${P.label || P.id}**）未提供模型清单，\`/model\` 不适用。\n` +
           `> 原生厂商由 claude 自己决定模型；要指定就改 \`ccapp-providers.json\` 的 \`defaultModel\`。`,
           "model"
         );
       }
       return reply(
         `没有模型 \`${arg}\`。\n\n可用：${models.map((m) => "`" + m.id + "`").join("、")}\n\n` +
-        `（${PROVIDER.label || PROVIDER.id} 收到不认识的名字可能静默回落，所以这里挡住，免得你以为切成功了）`,
+        `（${P.label || P.id} 收到不认识的名字可能静默回落，所以这里挡住，免得你以为切成功了）`,
         "model"
       );
     }
-    const eff = normEffort(target, curEff);
+    const eff = normEffort(target, curEff, P);
     const effChanged = eff !== curEff;
     commit({ model: target.id, effort: eff || "" });
     return reply(
@@ -118,7 +120,7 @@ export async function handleLocalCommand(name, arg, reply, sid) {
 
   // ── /effort ──
   if (name === "effort") {
-    const levels = effortLevelsOf(cur);
+    const levels = effortLevelsOf(cur, P);
     const dflt = cur && cur.effort && cur.effort.default_level;
     if (!arg) {
       const lines = levels.map((l) =>

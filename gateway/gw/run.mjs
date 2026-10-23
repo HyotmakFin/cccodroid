@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { PERM_MODES, PROVIDER, billAfterRun, keyOf, noteTokens, providerById } from "./providers.mjs";
-import { ALIAS_SEEN, isLoginMode } from "./models.mjs";
-import { claudeCmd, claudeEnv, ensureBridge, settingsArgs } from "./claude.mjs";
+import { ALIAS_SEEN, effortLevelsOf, fetchModels, isLoginMode, normEffort } from "./models.mjs";
+import { claudeCmd, claudeEnv, currentModelInfo, ensureBridge, settingsArgs } from "./claude.mjs";
 import { tasksCheck } from "./goal.mjs";
 import { setLastInit } from "./caps.mjs";
 import { RUNS, SESSIONS, rememberSession, runFlag, runList } from "./runs.mjs";
@@ -30,9 +30,16 @@ function cwdOf(item, sessionId) {
 // ── 跑一轮 ────────────────────────────────────────────────────────────
 // 和 HTTP 请求完全脱钩：前端断了也接着跑，结果照样落进 transcript、照样广播。
 export async function startRun(item) {
-  // 这一轮用哪家：新会话首条带来的选择（pin）→ 这个会话钉的 → 全局生效的。整轮都按它（地址、密钥、模型名规则）
+  // 这一轮用哪家：定时任务指定的 → 新会话首条带来的选择（pin）→ 这个会话钉的 → 项目默认 → 全局生效的。
+  // 整轮都按它（地址、密钥、模型名规则）
   const sid0 = item.sessionId || (item.follow && RUN_SESSIONS.get(item.follow)) || null;
-  const P = (item.pin && item.pin.provider && providerById(item.pin.provider)) || sessProvider(sid0);
+  const pdef0 = projectDefaults(item.projectId ? projectById(item.projectId) : projectOfDir(cwdOf(item, sid0)));
+  const rec0 = sessModel(sid0);
+  const P = (item.provider && providerById(item.provider))
+    || (item.pin && item.pin.provider && providerById(item.pin.provider))
+    || (rec0 && rec0.model != null ? sessProvider(sid0) : null)
+    || (pdef0.provider && providerById(pdef0.provider))
+    || sessProvider(sid0);
   const KEY = keyOf(P);
   const run = {
     id: item.id,
@@ -96,12 +103,18 @@ export async function startRun(item) {
   const own = own0 && (own0.model == null || own0.provider === P.id) ? own0 : null;
   const ownM = pin.model != null ? pin.model : own && own.model != null ? own.model : null;
   const ownE = pin.effort != null ? pin.effort : own && own.effort != null ? own.effort : null;
-  const effort = item.effort || (ownE != null ? ownE : pdef.effort || SETTINGS.effort) || "";
-  // 用的不是全局那家：项目默认、全局默认的模型名都是给全局那家的，不作数，走这家自己的默认
-  const fallM = P.id === PROVIDER.id ? pdef.model || SETTINGS.model : "";
+  let effort = item.effort || (ownE != null ? ownE : pdef.effort || SETTINGS.effort) || "";
+  // 项目默认的模型名是给项目那家的（没指定家就是全局那家），全局默认的是给全局那家的；对不上的不作数，走这家自己的默认
+  const fallM = (P.id === (pdef.provider || PROVIDER.id) ? pdef.model : "") || (P.id === PROVIDER.id ? SETTINGS.model : "");
   let model = (item.model || (ownM != null ? ownM : fallM) || P.defaultModel || (P.explicit ? "" : CFG.model) || "").trim();
   // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
   if (P.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
+  // 别家的清单拉一次（10 分钟缓存）：窗口、档位映射要用。思考强度是跟着全局 / 项目来的、这家模型不支持时，换成它支持的
+  if (P.id !== PROVIDER.id && !P.local) await fetchModels(false, P).catch(() => {});
+  if (effort && !P.local) {
+    const mi = currentModelInfo(model, P);
+    if (!effortLevelsOf(mi, P).includes(effort)) effort = normEffort(mi, effort, P) || "";
+  }
   let permMode = String(item.permissionMode || SETTINGS.permissionMode || "default").trim();
   if (!PERM_MODES.includes(permMode)) permMode = "default";
 
@@ -347,7 +360,7 @@ export async function startRun(item) {
       emit({ type: "run_busy", startedAt: Date.now() });
       publishState();
     }
-    translate(ev, { sse: emit, flags, onInit, onResult, onReplay });
+    translate(ev, { sse: emit, flags, onInit, onResult, onReplay, provider: P });
   };
 
   child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // 按流解码：多字节字符跨块不会被拆坏
@@ -398,7 +411,7 @@ export async function startRun(item) {
           ? {
               output_tokens: lastResult.usage.output_tokens || 0,
               context_tokens: flags.contextTokens || 0,   // 真实占用（累计和不算）
-              context_window: contextWindowOf(lastResult),
+              context_window: contextWindowOf(lastResult, P, model || undefined),
             }
           : null,
         subtype: lastResult.subtype,

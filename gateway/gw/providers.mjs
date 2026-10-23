@@ -454,6 +454,17 @@ export function providerById(id) {
   if (PROVIDERS_CFG && PROVIDERS_CFG.providers[id]) return pickProvider(id);
   return id === BUILTIN_PROVIDER.id ? BUILTIN_PROVIDER : null;
 }
+/** 各家能不能用（有钥匙 / 走登录 / 本机），给输入栏的模型面板按接口分组用。钥匙本身不出网关 */
+export function providerBrief() {
+  const ids = PROVIDERS_CFG ? Object.keys(PROVIDERS_CFG.providers) : [BUILTIN_PROVIDER.id];
+  if (!ids.includes(PROVIDER.id)) ids.unshift(PROVIDER.id);
+  return ids.map((id) => {
+    const p = providerById(id);
+    return p && { id, label: p.label || id, labelEn: p.labelEn || "", login: !!p.login, local: !!p.local,
+      nativeModels: !!p.nativeModels, usable: !!(p.login || p.local || keyOf(p)), active: id === PROVIDER.id,
+      keyMode: keyOf(p) ? "key" : p.login ? "login" : "none", defaultModel: p.defaultModel || null };
+  }).filter(Boolean);
+}
 /** 这一家的密钥：生效的那家用已解析好的 API_KEY，别家现取（同样的回落规则，见 loadApiKey） */
 export function keyOf(p) {
   if (!p || p === PROVIDER || p.id === PROVIDER.id) return API_KEY;
