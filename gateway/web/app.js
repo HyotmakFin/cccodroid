@@ -1579,7 +1579,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (pct >= 100) ctxBar.classList.add("danger");
     else if (pct >= 85) ctxBar.classList.add("warn");
     ctxFill.style.width = pct + "%";
-    ctxTxt.textContent = line > 0
+    $("ctxctx").textContent = line > 0
       ? t("上下文 {used} / 压缩线 {line} · {pct}%", { used: fmtTok(state.ctxUsed), line: fmtTok(line), pct })
       : t("上下文 {used} / {total} · {pct}%", { used: fmtTok(state.ctxUsed), total: fmtTok(state.ctxTotal), pct });
     saveUiState();
@@ -1974,7 +1974,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
         return;
       }
       case "run_end": refreshQuota(); return onRunEnd(ev);
-      case "quota": return refreshQuota();
+      case "quota": case "billing": return refreshQuota();
       case "perm_mode":
         state.settings.permissionMode = ev.mode;
         setPermChip(ev.mode);
@@ -4537,15 +4537,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   }
   // 额度看得见的地方（用量页、设置里的用量行 / 登录卡片、第三方的余额卡片）只在打开时拉过一次，
   // 之后要切页面才更新。现在：网关记下新额度时推 quota、每轮跑完、回到前台，都把看得见的那几处重画一遍
-  let quotaT = 0, billAt = 0;
+  let quotaT = 0;
   function refreshQuota() {
     clearTimeout(quotaT);
     quotaT = setTimeout(() => {
       if (document.hidden) return;
       const usageOpen = curPage === "usage" && !$("pages").classList.contains("hidden");
       if (setOpen || usageOpen) loadQuota().catch(() => {});
-      const rb = setOpen && $("pc-bill") && $("pc-bill").querySelector('[data-bill="refresh"]');
-      if (rb && Date.now() - billAt > 30e3) { billAt = Date.now(); rb.click(); }   // 厂商余额接口别打太勤
+      if (usageOpen) loadAcctCard(false).catch(() => {}); else qbLoad(false).catch(() => {});   // 顶栏细条、速览卡
     }, 800);
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshQuota(); });
@@ -4612,14 +4611,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     return { v: from === "CNY" ? v / fx.rate : v * fx.rate, cur: to, approx: true };
   }
   const compact = (n) => { try { return new Intl.NumberFormat(I18N.lang, { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch { return String(n); } };
-  let billTimer = 0;
-  async function loadBill(p, force) {
-    const el = $("pc-bill"); if (!el) return;
-    if (!el.innerHTML) el.innerHTML = `<div class="tiny">${t("查询余额…")}</div>`;
-    let b;
-    try { b = await api(`/api/billing?id=${encodeURIComponent(p.id)}${force ? "&refresh=1" : ""}`); }
-    catch (e) { el.innerHTML = `<div class="tiny">${esc(t("查询失败：{msg}", { msg: e.message }))}</div>`; return; }
-    if (state.provView !== p.id || !$("pc-bill")) return;
+  /** 余额与消费的明细行（用量页、顶栏速览卡共用）。brief = 速览卡：省掉说明性的小字 */
+  function billRows(b, p, brief) {
     const fx = b.fx;
     const fmt = (v, cur) => { const d = toDisp(v, cur, fx); return (d.approx ? "≈ " : "") + money(d.v, d.cur); };
     const rows = [];
@@ -4645,7 +4638,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           }).join("")}<div class="tiny">${t("Coding Plan 套餐额度（智谱没有公开的余额接口，按量计费的 Key 查不到）")}</div></div>`
         : `<div class="tiny">${t("这把 Key 没有 Coding Plan 套餐额度；智谱没有公开的按量余额接口，请到控制台查看")}</div>`);
     }
-    if (b.kind === "none") rows.push(`<div class="tiny">${esc(p.id === "qwen"
+    if (b.kind === "none" && !brief) rows.push(`<div class="tiny">${esc(p.id === "qwen"
       ? t("百炼的余额挂在阿里云主账号上，API Key 查不到，请到百炼控制台查看。下面是本机记录的 token 用量。")
       : t("这个平台没有开放余额查询接口。下面是本机记录的 token 用量。"))}</div>`);
     // 消费（按余额变化记的）
@@ -4656,7 +4649,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const total = (b.spentOld || 0) + sp.reduce((a, x) => a + x[1], 0);
       rows.push(`<div class="bill-grid"><span>${t("今日消费")}</span><b>${fmt(today, b.ledgerCurrency)}</b>
         <span>${t("累计消费")}</span><b>${fmt(total, b.ledgerCurrency)}</b></div>
-        <div class="tiny">${esc(t("按余额变化记账，{date} 起；充值不算消费。同一把 Key 在别处用掉的也算在内。", { date: new Date(b.since).toLocaleDateString() }))}</div>`);
+        ${brief ? "" : `<div class="tiny">${esc(t("按余额变化记账，{date} 起；充值不算消费。同一把 Key 在别处用掉的也算在内。", { date: new Date(b.since).toLocaleDateString() }))}</div>`}`);
     }
     // token
     const tk = b.tok || [];
@@ -4667,16 +4660,249 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     rows.push(`<div class="bill-grid"><span>${t("今日 token")}</span><span>${tk.length ? tl(td) : "—"}</span>
       <span>${t("累计 token")}</span><span>${tk.length || old.in ? tl([all[0] + old.in, all[1] + old.out, all[2] + old.cache]) : "—"}</span></div>
       ${tk.length ? "" : `<div class="tiny">${t("用这个接口跑完一轮后开始记录")}</div>`}`);
-    if (fx && fx.rate && [b.currency, b.ledgerCurrency].some((c) => c && c !== billCur()))
+    if (!brief && fx && fx.rate && [b.currency, b.ledgerCurrency].some((c) => c && c !== billCur()))
       rows.push(`<div class="tiny">${esc(t("按 1 美元 ≈ {r} 人民币换算（{src}，{time}）", { r: fx.rate.toFixed(3), src: fx.src, time: new Date(fx.at).toLocaleString() }))}</div>`);
     if (b.balanceAt && b.ledgerCurrency) rows.push(`<div class="tiny">${esc(t("{time} 查询；平台扣费有几分钟延迟，跑完会自动补查", { time: new Date(b.balanceAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }))}</div>`);
-    el.innerHTML = `<div class="bill-head"><span class="sub">${t("余额与消费")}</span>
-      <button class="btn sm ghost" data-bill="refresh">${t("刷新")}</button></div>${rows.join("")}`;
-    el.querySelector('[data-bill="refresh"]').onclick = (e) => { e.stopPropagation(); loadBill(p, true); };
-    // 卡片开着就每分钟重拉一次（网关有 60 秒缓存，跑完后的补查结果也会被带出来）
-    clearTimeout(billTimer);
-    billTimer = setTimeout(() => { if (state.provView === p.id && $("pc-bill") && !document.hidden) loadBill(p); }, 60e3);
+    return rows.join("");
   }
+  // 一句话摘要：顶栏细条、设置里的密钥卡、用量页「其他接口」那一行都用它。lvl：0 正常 / 1 偏紧 / 2 告急
+  function billBrief(b) {
+    if (!b) return { text: "", lvl: 0 };
+    const fmt = (v, cur) => { const d = toDisp(v, cur, b.fx); return (d.approx ? "≈ " : "") + money(d.v, d.cur); };
+    if (Number.isFinite(b.balance)) {
+      const d = toDisp(b.balance, b.currency, b.fx), lim = qbWarnCfg().bal;
+      return { text: t("余额 {v}", { v: fmt(b.balance, b.currency) }), lvl: lim > 0 && d.cur === billCur() && d.v < lim ? 2 : 0 };
+    }
+    if (Array.isArray(b.plan) && b.plan.length) {
+      const W = { "5h": t("5 小时"), week: t("每周"), month: t("每月") };
+      const top = Math.max(...b.plan.map((x) => +x.pct || 0));
+      return { text: b.plan.map((x) => (W[x.window] || x.window) + " " + Math.round(x.pct) + "%").join(" · "), lvl: top >= 90 ? 2 : top >= 70 ? 1 : 0 };
+    }
+    if (b.kind === "openrouter" && Number.isFinite(b.usage)) return { text: t("已用 {v}", { v: fmt(b.usage, "USD") }), lvl: 0 };
+    if (b.balanceError) return { text: t("余额查询失败"), lvl: 0 };
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const td = (b.tok || []).filter((x) => x[0] + 3600e3 > midnight.getTime()).reduce((a, x) => a + x[1] + x[2] + x[3], 0);
+    return { text: t("今日 {n} tokens", { n: compact(td) }), lvl: 0 };
+  }
+  // 设置里的密钥卡底部只留一行摘要，明细在用量页（「额度与消费」）
+  async function loadBill(p, force) {
+    const el = $("pc-bill"); if (!el) return;
+    if (!el.innerHTML) el.innerHTML = `<div class="tiny">${t("查询余额…")}</div>`;
+    let b;
+    try { b = await api(`/api/billing?id=${encodeURIComponent(p.id)}${force ? "&refresh=1" : ""}`); }
+    catch (e) { el.innerHTML = `<div class="tiny">${esc(t("查询失败：{msg}", { msg: e.message }))}</div>`; return; }
+    if (state.provView !== p.id || !$("pc-bill")) return;
+    const br = billBrief(b);
+    el.innerHTML = `<div class="bill-head"><span class="sub">${t("余额与消费")}</span>
+      <button class="btn sm ghost" data-gopage="usage">${t("在用量页查看")}</button></div>
+      <div class="bill-big${br.lvl === 2 ? " hot" : ""}">${esc(br.text || "—")}</div>`;
+  }
+
+  // ── 额度与余额速览 ──
+  // 顶栏细条（上下文用量）后半段写当前接口还剩多少：账户登录 → 5 小时 / 每周已用；能查余额的厂商 → 余额；
+  // 智谱套餐 → 各窗口已用；都查不了 → 今天的 token。点细条弹速览卡，卡里「查看用量」去用量页的「额度与消费」。
+  // 数据：账户额度是 claude 每轮回报的（网关记着，不另查）；余额走 /api/billing（网关缓存 60 秒；
+  // 跑完一轮会在 30 秒 / 3 分钟 / 10 分钟补查并推 billing 事件），所以常驻显示不会多打厂商接口。
+  // 速览卡的交互（以前在弹层上翻过车，照这几条来）：
+  //   - 只在对话这一栏里摆（colRect）：右侧浏览器是原生视图，摆出栏外会被它盖住
+  //   - 再点细条 = 收起；点卡外收起（pointerdown 捕获，细条本身留给 click 去切换，不然先关又开）；返回键 / Esc 收起
+  //   - 打开整页、设置、弹出菜单时先收起；layout.js 浮层开合后会补发假 resize，这里只重摆位置，不因 resize 关掉
+  const QB = { cur: null, seq: 0 };
+  function qbWarnCfg() {
+    try { return { quota: true, bal: 0, ...JSON.parse(localStorage.getItem("cc.qbWarn") || "{}") }; }
+    catch { return { quota: true, bal: 0 }; }
+  }
+  function loginBrief(l) {
+    if (!l) return { text: "", lvl: 0 };
+    const ws = [[t("5 小时"), l.fiveHour], [t("每周"), l.sevenDay]].filter((x) => x[1]);
+    const top = Math.max(0, ...ws.map((x) => +x[1].used || 0));
+    return { text: ws.map((x) => x[0] + " " + Math.round(x[1].used) + "%").join(" · "), lvl: top >= 90 ? 2 : top >= 70 ? 1 : 0 };
+  }
+  const qbBrief = (c) => (!c ? { text: "", lvl: 0 } : c.login ? loginBrief(c.limits) : billBrief(c.bill));
+  /** 拉当前接口的额度 / 余额，画到细条上；速览卡、用量页开着就一起重画 */
+  async function qbLoad(force) {
+    const s = state.serverStatus;
+    if (!s || !s.provider) return null;
+    const seq = ++QB.seq;
+    const cur = { id: s.provider, name: provName(s), login: s.keyMode === "login" };
+    if (cur.login) {
+      const st = await api("/api/login/status").catch(() => null);
+      cur.limits = st && st.loggedIn ? st.limits || null : null;
+    } else {
+      cur.bill = await api(`/api/billing?id=${encodeURIComponent(cur.id)}${force ? "&refresh=1" : ""}`).catch(() => null);
+      if (cur.bill && cur.bill.error) cur.bill = null;
+    }
+    if (seq !== QB.seq) return QB.cur;          // 期间又发了一次（切了接口、连点刷新），以后发的为准
+    QB.cur = cur;
+    qbPaint();
+    qbRemind(cur);
+    qcRender();
+    return cur;
+  }
+  function qbPaint() {
+    const br = qbBrief(QB.cur), el = $("ctxq");
+    if (!el) return;
+    el.textContent = br.text;
+    el.className = br.lvl === 2 ? "hot" : br.lvl === 1 ? "warm" : "";
+    ctxBar.classList.toggle("has-q", !!br.text);
+    if (br.text) ctxBar.classList.remove("hidden");
+  }
+  // 快用完时提醒：5 小时 / 每周（或套餐窗口）过 80%、95% 各提醒一次（按重置时间区分窗口）；余额低于设定值每天一次
+  function qbRemind(c) {
+    const cfg = qbWarnCfg();
+    let warned = {};
+    try { warned = JSON.parse(localStorage.getItem("cc.qbWarned") || "{}") || {}; } catch {}
+    const say = [];
+    const when = (ms) => {
+      if (!ms) return "";
+      const d = new Date(ms), hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return d.toDateString() === new Date().toDateString() ? hm : d.toLocaleDateString([], { month: "numeric", day: "numeric" }) + " " + hm;
+    };
+    const win = (key, label, pct, resetMs) => {
+      const lv = pct >= 95 ? 95 : pct >= 80 ? 80 : 0;
+      if (!lv || (warned[key] || 0) >= lv) return;
+      warned[key] = lv;
+      say.push(t("{win}额度已用 {n}%", { win: label, n: Math.round(pct) }) + (resetMs ? " · " + t("{time} 重置", { time: when(resetMs) }) : ""));
+    };
+    if (cfg.quota && c.login && c.limits) {
+      const l = c.limits;
+      if (l.fiveHour) win("5h:" + (l.fiveHour.resetsAt || 0), t("5 小时"), +l.fiveHour.used || 0, l.fiveHour.resetsAt * 1000);
+      if (l.sevenDay) win("wk:" + (l.sevenDay.resetsAt || 0), t("每周"), +l.sevenDay.used || 0, l.sevenDay.resetsAt * 1000);
+    }
+    const b = c.bill;
+    if (cfg.quota && b && Array.isArray(b.plan)) {
+      const W = { "5h": t("5 小时"), week: t("每周"), month: t("每月") };
+      for (const x of b.plan) win("plan:" + c.id + ":" + x.window + ":" + (x.resetsAt || 0), W[x.window] || x.window, +x.pct || 0, x.resetsAt);
+    }
+    if (cfg.bal > 0 && b && Number.isFinite(b.balance)) {
+      const d = toDisp(b.balance, b.currency, b.fx), key = "bal:" + c.id + ":" + new Date().toDateString();
+      if (d.cur === billCur() && d.v < cfg.bal && !warned[key]) {
+        warned[key] = 1;
+        say.push(t("{name} 余额只剩 {v}", { name: c.name, v: (d.approx ? "≈ " : "") + money(d.v, d.cur) }));
+      }
+    }
+    if (!say.length) return;
+    const keys = Object.keys(warned);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete warned[k];   // 只留最近的
+    localStorage.setItem("cc.qbWarned", JSON.stringify(warned));
+    toast(say.join("\n"), true);
+  }
+
+  // 速览卡
+  let qcEl = null;
+  const qcOpen = () => !!(qcEl && qcEl.isConnected);
+  function qcClose() { if (qcEl) { qcEl.remove(); qcEl = null; } }
+  function qcToggle() {
+    if (qcOpen()) return qcClose();
+    closeMenu();
+    const el = qcEl = document.createElement("div");
+    el.className = "qcard";
+    el.setAttribute("role", "dialog");
+    document.body.appendChild(el);
+    el.addEventListener("click", (e) => {
+      const a = e.target.closest("[data-qc]");
+      if (!a) return;
+      if (a.dataset.qc === "refresh") { a.disabled = true; qbLoad(true); return; }
+      qcClose(); closeSettings(); openPage("usage");
+    });
+    qcRender();
+    qbLoad(false);
+    setTimeout(() => addEventListener("pointerdown", function off(e) {
+      if (qcEl !== el) return removeEventListener("pointerdown", off, true);
+      if (el.contains(e.target) || ctxBar.contains(e.target)) return;
+      removeEventListener("pointerdown", off, true);
+      qcClose();
+    }, true));
+  }
+  function qcRender() {
+    if (!qcOpen()) return;
+    const c = QB.cur;
+    const body = !c ? `<div class="tiny">${t("读取中…")}</div>`
+      : c.login ? quotaHtml(c.limits)
+      : c.bill ? billRows(c.bill, { id: c.id }, true)
+      : `<div class="tiny">${t("查不到这个接口的额度")}</div>`;
+    qcEl.innerHTML = `<div class="qc-h"><b>${esc(c ? c.name : "")}</b><span class="grow"></span>
+      <button class="btn sm ghost" data-qc="refresh">${t("刷新")}</button></div>
+      <div class="qc-body">${body}</div>
+      <div class="qc-foot"><button class="btn sm" data-qc="usage">${t("查看用量")}</button></div>`;
+    qcPlace();
+  }
+  function qcPlace() {
+    if (!qcOpen()) return;
+    const col = colRect(), b = ctxBar.getBoundingClientRect();
+    const w = Math.max(220, Math.min(380, col.width - 16));
+    qcEl.style.width = w + "px";
+    qcEl.style.left = Math.max(8, col.left + (col.width - w) / 2) + "px";
+    qcEl.style.top = (b.bottom + 6) + "px";
+    qcEl.style.maxHeight = Math.max(160, fixedH() - b.bottom - 20) + "px";
+  }
+  ctxBar.addEventListener("click", qcToggle);
+  addEventListener("resize", qcPlace);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && qcOpen()) qcClose(); });
+
+  // 用量页「额度与消费」：当前接口的明细 + 其他配过的接口各一行（点开看明细）+ 提醒设置
+  const usOther = new Map();   // id → { login, limits } / { bill }
+  async function loadAcctCard(force) {
+    if (!$("us-acct")) return;
+    const cur = await qbLoad(force);
+    if (curPage !== "usage") return;
+    $("us-acct-name").textContent = cur ? cur.name : "";
+    $("us-acct-cur").innerHTML = !cur ? "" : cur.login ? quotaHtml(cur.limits)
+      : cur.bill ? billRows(cur.bill, { id: cur.id }) : `<div class="tiny">${t("查不到这个接口的额度")}</div>`;
+    let list = [];
+    try { list = (await api("/api/providers")).providers || []; } catch {}
+    const others = list.filter((p) => !p.active && !p.local && (p.login || p.hasKey));
+    const box = $("us-acct-others");
+    const keep = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.id));
+    box.innerHTML = others.length ? `<div class="sub">${t("其他接口")}</div>` + others.map((p) =>
+      `<details class="qb-row" data-id="${esc(p.id)}"${keep.has(p.id) ? " open" : ""}><summary><span>${esc(pLabel(p))}</span><span class="grow"></span><span class="qb-brief tiny">${t("读取中…")}</span></summary><div class="qb-detail"></div></details>`).join("") : "";
+    const fill = (d) => {
+      const x = usOther.get(d.dataset.id), det = d.querySelector(".qb-detail");
+      if (!x) return;
+      det.innerHTML = x.login ? quotaHtml(x.limits) : x.bill ? billRows(x.bill, { id: d.dataset.id }) : "";
+    };
+    box.querySelectorAll("details").forEach((d) => d.addEventListener("toggle", () => { if (d.open) fill(d); }));
+    await Promise.all(others.map(async (p) => {
+      let x;
+      if (p.login) {
+        const st = await api("/api/login/status").catch(() => null);
+        x = { login: true, limits: st && st.loggedIn ? st.limits || null : null, out: !(st && st.loggedIn) };
+      } else {
+        const b = await api(`/api/billing?id=${encodeURIComponent(p.id)}${force ? "&refresh=1" : ""}`).catch(() => null);
+        x = { bill: b && !b.error ? b : null };
+      }
+      usOther.set(p.id, x);
+      const d = box.querySelector(`details[data-id="${CSS.escape(p.id)}"]`);
+      if (!d) return;
+      if (x.out) { d.remove(); return; }          // 官方账户没登录：不列
+      const br = x.login ? loginBrief(x.limits) : billBrief(x.bill);
+      const el = d.querySelector(".qb-brief");
+      el.textContent = br.text || (x.login ? t("发一条消息后显示") : "—");
+      el.classList.toggle("hot", br.lvl === 2);
+      if (d.open) fill(d);
+    }));
+    if (!box.querySelector("details")) box.innerHTML = "";
+  }
+  // 提醒设置
+  (function () {
+    const q = $("qb-warn-quota"), bal = $("qb-warn-bal");
+    if (!q || !bal) return;
+    const paint = () => {
+      const c = qbWarnCfg();
+      q.checked = c.quota !== false;
+      bal.value = c.bal > 0 ? c.bal : "";
+      $("qb-warn-cur").textContent = billCur() === "CNY" ? "¥" : "$";
+    };
+    const save = () => {
+      const v = parseFloat(bal.value);
+      localStorage.setItem("cc.qbWarn", JSON.stringify({ quota: q.checked, bal: v > 0 ? v : 0 }));
+      qbPaint();
+    };
+    q.addEventListener("change", save);
+    bal.addEventListener("change", save);
+    $("us-acct-ref").addEventListener("click", () => loadAcctCard(true));
+    paint();
+  })();
 
   function renderKeyCard(box, p) {
     box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
@@ -6166,6 +6392,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 宽屏时侧栏和右侧窗格都留着、整页只占对话那一块；窄屏整页盖住对话，返回键回到对话。
   function openDrawer(tab) {
     if (tab && tab !== "sessions") return openPage(tab);
+    qcClose();
     drawerEl.classList.remove("hidden");
     refreshStatus();
     loadSessions();
@@ -6295,7 +6522,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     // 同一个按钮再点一次 = 收起（侧栏账户、项目标签、⋯ 这些都走这里）
     const open = document.querySelector(".pop-menu");
     if (open && anchor && open._anchor === anchor) { closeMenu(); return null; }
-    closeMenu();
+    closeMenu(); qcClose();
     const m = document.createElement("div");
     m.className = "pop-menu";
     m._anchor = anchor;
@@ -6326,7 +6553,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 「能看图」标记（多模态）：图片框 + 山 + 太阳，不用 emoji
   const MM_IMG = () => `<svg class="mm-img" viewBox="0 0 24 24" role="img" aria-label="${esc(t("能看图"))}"><title>${esc(t("能看图"))}</title><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-8.5 8"/></svg>`;
   function selMenu(sel) {
-    closeMenu();
+    closeMenu(); qcClose();
     const items = [];
     for (const n of sel.children) {
       if (n.tagName === "OPTGROUP") {
@@ -7046,6 +7273,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   /** 打开整页：窄屏收起侧栏、盖住对话；宽屏侧栏照旧常驻，高亮当前项 */
   function openPage(name, cat) {
     if (!PAGES[name] || name === "settings") return openSettings(cat);
+    qcClose();
     const prev = curPage;
     curPage = name;
     $("pages").classList.remove("hidden");
@@ -7062,7 +7290,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     if (SUBNAVS[name]) paintSubnav(name);
     if (name === "help") loadHelp();
     if (name === "changelog") loadChangelog();
-    if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); }
+    if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); loadAcctCard(false); }
     if (name !== "projects" && name !== "sched") pageTitleOv = "";
     if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }
     if (name === "sched") { renderSched(); loadSched(); loadProjects(); }
@@ -7087,6 +7315,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 设置：弹窗。宽屏居中（左分类、右内容）；窄屏铺满，先列分类，点进去看一类，返回键回分类 ──
   var setOpen = false;
   function openSettings(cat) {
+    qcClose();
     setOpen = true;
     $("set-ov").classList.remove("hidden");
     setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general");
@@ -9025,6 +9254,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       }
       if (s.uiTag) uiTag = s.uiTag;
       if (s.product && document.title !== s.product) document.title = s.product;
+      // 接口换了（或第一次拿到状态）：顶栏的额度 / 余额跟着换
+      if (!QB.cur || QB.cur.id !== s.provider || QB.cur.login !== (s.keyMode === "login")) { state.serverStatus = s; qbLoad(false).catch(() => {}); }
       state.serverStatus = s;
       paintAcct(s);
       paintSafeMode(s.safeMode);
@@ -9149,6 +9380,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
   window.__ccBack = guardHook("__ccBack", () => {
     const open = (id) => !$(id).classList.contains("hidden");
+    if (qcOpen()) { qcClose(); return true; }
     if (document.querySelector(".pop-menu")) { closeMenu(); return true; }
     const ov = document.querySelector(".pj-ov"); if (ov) { ov.remove(); return true; }
     const steps = [

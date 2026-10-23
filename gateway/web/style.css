@@ -2445,3 +2445,28 @@ html.wel-narrow .wl-hero{gap:var(--g2)}
 html.side-drag .drawer-split::after{background:var(--accent)}
 html.dock-l .drawer-split{display:none}
 html.side-drag .drawer-panel{animation:none;transition:none}
+
+/* ── 额度与余额速览：顶栏细条后半段 + 点开的小卡片；用量页「额度与消费」 ── */
+#ctxbar{cursor:pointer}
+#ctxq:empty{display:none}
+#ctxctx:not(:empty) + #ctxq::before{content:"·";margin:0 6px;color:var(--fg3)}
+#ctxq.warm{color:var(--warn)}
+#ctxq.hot{color:var(--err);font-weight:600}
+.qcard{position:fixed;z-index:90;box-sizing:border-box;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 10px 32px var(--shadow);padding:12px 14px;animation:fade .12s;font-size:13px}
+.qc-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.qc-h .grow,.qb-row summary .grow{flex:1;min-width:0}
+.qc-body .quota{margin-top:2px}
+.qc-foot{display:flex;justify-content:flex-end;margin-top:10px}
+.bill-big.hot b,.bill-big.hot{color:var(--err)}
+#us-acct .sub{font-size:12px;color:var(--fg2);margin:12px 0 4px;font-weight:600}
+.qb-row{border-top:1px solid var(--line)}
+.qb-row summary{display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;list-style:none}
+.qb-row summary::-webkit-details-marker{display:none}
+.qb-row summary::after{content:"";width:6px;height:6px;border:solid var(--fg3);border-width:0 1.5px 1.5px 0;transform:rotate(45deg);margin:0 4px 3px}
+.qb-row[open] summary::after{transform:rotate(-135deg);margin-bottom:-3px}
+.qb-brief.hot{color:var(--err)}
+.qb-detail{padding:0 0 10px}
+.qb-warn{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--fg2)}
+.qb-warn label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qb-warn input[type=number]{width:7em;margin:0;padding:4px 8px}

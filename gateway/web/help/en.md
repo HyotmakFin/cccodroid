@@ -24,7 +24,7 @@ The six buttons on the right of the top bar are the shortcuts you will use most:
 
 The menu button at the top left opens the sidebar: places to go at the top (Chats, Projects, Scheduled tasks, with Extensions, Capabilities, Usage and Help under More), recent chats in the middle, and the account row at the bottom, which opens Settings.
 
-The thin line under the top bar shows **context usage**; the further right, the fuller. In the input area, ＋ opens common actions and the paperclip attaches files. The row below shows the model, thinking effort and permission mode; tap any of them to change it.
+The thin line under the top bar shows **context usage**; the further right, the fuller. Its second half shows what is left on the current provider: the share of the 5-hour and weekly limits used when you sign in with a Claude account, or the balance for DeepSeek, Kimi and similar. Tap the line for details; every provider’s quota and spending, plus low-quota reminders, are under **Quota and spending** at the top of the Usage page. In the input area, ＋ attaches files and opens common actions. The row below shows the model, thinking effort and permission mode; tap any of them to change it.
 
 ## Conversations
 

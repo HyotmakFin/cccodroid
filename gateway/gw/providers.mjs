@@ -394,7 +394,9 @@ export function billAfterRun(id) {
   const v = PROVIDERS_CFG.providers[id];
   if (!v || billKind(v).kind === "none" || !String(v.apiKey || "").trim()) return;
   for (const t of billPending.get(id) || []) clearTimeout(t);
-  billPending.set(id, [30e3, 180e3, 600e3].map((ms) => { const t = setTimeout(() => billingInfo(id, true).catch(() => {}), ms); t.unref?.(); return t; }));
+  // 查完推一条 billing：顶栏的余额速览、用量页跟着更新（bus.mjs 间接引用本文件，这里按需加载免得循环引用）
+  const done = () => import("./bus.mjs").then((m) => m.publish({ type: "billing", id })).catch(() => {});
+  billPending.set(id, [30e3, 180e3, 600e3].map((ms) => { const t = setTimeout(() => billingInfo(id, true).then(done, () => {}), ms); t.unref?.(); return t; }));
 }
 
 export let PROVIDER = BUILTIN_PROVIDER;
