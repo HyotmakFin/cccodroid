@@ -14,6 +14,7 @@ window.I18N_DICT.en = {
   // ── chat / messages ──
   "读不到：{path}": "Cannot read: {path}",
   "已复制": "Copied",
+  "复制失败": "Copy failed",
   "复制": "Copy",
   "你": "You",
   "命令": "Command",

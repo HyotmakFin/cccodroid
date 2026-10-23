@@ -129,6 +129,9 @@ pre{
   padding:10px 12px;overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch;position:relative;
 }
 pre code{background:none;border:0;padding:0;font-size:12.5px;line-height:1.6}
+/* 复制键挂在外层 .code-wrap 上：放在 pre 里会跟着横向滚动跑走 */
+.code-wrap{position:relative;margin:8px 0}
+.code-wrap>pre{margin:0;padding-inline-end:56px}
 .copy-btn{
   position:absolute;top:6px;inset-inline-end:6px;background:var(--bg3);border:0;
   color:var(--fg2);border-radius:7px;font-size:10.5px;padding:3px 8px;opacity:.85;

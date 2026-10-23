@@ -1013,6 +1013,15 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void shareText(String text) {
                 if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
             }
+            /** 复制到剪贴板：WebView 里 navigator.clipboard.writeText 常被拒（NotAllowedError，页面没焦点或权限策略），走系统剪贴板稳 */
+            @android.webkit.JavascriptInterface public boolean copyText(String text) {
+                if (text == null) return false;
+                try {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("cccodroid", text));
+                    return true;
+                } catch (Exception e) { return false; }
+            }
             /** 冻结脱困：WebView 偶发把这个文档的触摸滚动整个吞掉，同站重载不好，跨站跳一次再回来才好。见 bounce() */
             /** 更新卡片的「从本地文件安装」：弹系统文件选择器，选好后由 applyLocalDevkitUi 接手 */
             @android.webkit.JavascriptInterface public void pickDevkit() {
@@ -1248,17 +1257,39 @@ public class MainActivity extends Activity {
             root.addView(pane, new FrameLayout.LayoutParams(0, 0));
             pane.load(url);
             tickPaneBack();
+            // 页面先报位置、后叫开窗格（raise 里同步报，paneOpen 排在后面）：那次位置到的时候窗格还没建，被丢了，
+            // 页面那边位置没变就不会再报 —— 窗格一直藏着，看着是一片空白，拖一下边缘才出来（群友 10-23 报）
+            if (paneBox != null) placePane(paneBox[0], paneBox[1], paneBox[2], paneBox[3]);
         } else if (url != null && !url.isEmpty()) pane.load(url);
     }
+    private float[] paneBox;   // 页面最近一次报的位置，窗格还没建时也记着
     private void placePane(float x, float y, float w, float h) {
+        paneBox = new float[] { x, y, w, h };
         if (pane == null) return;
         if (w <= 0 || h <= 0) { pane.setVisibility(View.GONE); return; }
         float d = getResources().getDisplayMetrics().density;
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) pane.getLayoutParams();
         lp.leftMargin = Math.round(x * d); lp.topMargin = Math.round(y * d);
-        lp.width = Math.round(w * d); lp.height = Math.round(h * d);
+        int pw = Math.round(w * d), ph = Math.round(h * d);
+        boolean wasHidden = pane.getVisibility() != View.VISIBLE;
+        lp.width = pw; lp.height = ph;
         pane.setLayoutParams(lp);
         pane.setVisibility(View.VISIBLE);
+        // 从藏着（新建时 0×0、或被浮层盖住时 GONE）变成显示：WebView 常常不重画，整块空白，要拖一下边缘改了尺寸才出来
+        // （群友 10-23 报）。照着那个绕法做：先少 1px 摆一帧，下一帧再摆回真尺寸，逼它重新布局、重建画面
+        if (wasHidden && ph > 1) {
+            lp.height = ph - 1;
+            pane.setLayoutParams(lp);
+            final BrowserPane p = pane;
+            pane.postDelayed(() -> {
+                if (pane != p) return;
+                FrameLayout.LayoutParams l2 = (FrameLayout.LayoutParams) p.getLayoutParams();
+                if (l2.height != ph - 1) return;   // 这期间页面又报了新位置，以那个为准
+                l2.height = ph;
+                p.setLayoutParams(l2);
+                p.web.invalidate();
+            }, 48);
+        }
     }
     /** 系统分享面板。正文太长会撑爆 Binder 事务（约 1 MB），截到 100k 字符 */
     private void shareTextNow(String text) {
@@ -1273,6 +1304,7 @@ public class MainActivity extends Activity {
         root.removeView(pane);
         pane.destroy();
         pane = null;
+        paneBox = null;
         paneCanBack = false;
         if (fromPane && web != null) web.evaluateJavascript(guarded("__ccBrowserClosed", "window.__ccBrowserClosed&&__ccBrowserClosed()"), null);
     }

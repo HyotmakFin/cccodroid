@@ -11,6 +11,7 @@ window.I18N_DICT["es"] = {
   "界面脚本出错：{msg}": "Error del script de la interfaz: {msg}",
   "读不到：{path}": "No se puede leer: {path}",
   "已复制": "Copiado",
+  "复制失败": "No se pudo copiar",
   "复制": "Copiar",
   "你": "Tú",
   "命令": "Comando",

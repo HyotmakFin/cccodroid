@@ -43,6 +43,19 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   const $ = (id) => document.getElementById(id);
+  // 复制到剪贴板：外壳的系统剪贴板优先（WebView 里 navigator.clipboard.writeText 常被拒，拒了还会变成顶栏的「界面脚本出错」），
+  // 再试 Clipboard API，最后退回 execCommand。不抛错，结果是 true / false
+  async function copyText(text) {
+    text = String(text ?? "");
+    try { if (window.CCApp && window.CCApp.copyText && window.CCApp.copyText(text)) return true; } catch {}
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand("copy"); ta.remove(); return ok;
+    } catch { return false; }
+  }
   // 项目 / 定时任务的状态（模块在 openPage 前；这两个要在启动早期就可用）
   var PJ = { list: [], colors: [], ws: "", cur: null, detail: null, loaded: false, effLevels: [] };
   var SC = { data: null, cur: null, detail: null, flt: "all", rflt: "all" };
@@ -264,7 +277,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const fence = raw.match(/^\s*```(\w*)\s*$/);
       if (fence) {
         if (inCode) {
-          out += `<pre><code>${esc(codeBuf.join("\n"))}</code><button class="copy-btn">${t("复制")}</button></pre>`;
+          out += `<div class="code-wrap"><pre><code>${esc(codeBuf.join("\n"))}</code></pre><button class="copy-btn">${t("复制")}</button></div>`;
           codeBuf = []; inCode = false;
         } else { closeList(); flushTable(); inCode = true; }
         continue;
@@ -397,8 +410,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const b = e.target.closest(".copy-btn");
     if (!b) return;
     const code = b.parentElement.querySelector("code");
-    if (code) navigator.clipboard?.writeText(code.textContent).then(() => {
-      b.textContent = t("已复制"); setTimeout(() => (b.textContent = t("复制")), 1400);
+    if (code) copyText(code.textContent).then((ok) => {
+      b.textContent = ok ? t("已复制") : t("复制失败"); setTimeout(() => (b.textContent = t("复制")), 1400);
     });
   };
   chatEl.addEventListener("click", onCopyBtn);
@@ -569,7 +582,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("del", t("删除"));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a;
-      if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
+      if (a === "copy") { copyText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
       if (a === "rewind") rewindTo(b.parentElement);
       if (a === "del") deleteMsg(b.parentElement, "user");
@@ -1260,11 +1273,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")) + actBtn("del", t("删除")));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a, text = getText();
-      if (a === "copy") { navigator.clipboard?.writeText(text); toast(t("已复制")); }
+      if (a === "copy") { copyText(text); toast(t("已复制")); }
       if (a === "share") {
         if (window.CCApp && CCApp.shareText) CCApp.shareText(text);
         else if (navigator.share) navigator.share({ text }).catch(() => {});
-        else { navigator.clipboard?.writeText(text); toast(t("这里没有系统分享，已复制到剪贴板")); }
+        else { copyText(text); toast(t("这里没有系统分享，已复制到剪贴板")); }
       }
       if (a === "fork") forkFrom(msgEl);
       if (a === "del") deleteMsg(msgEl, "bot");
@@ -4166,8 +4179,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const g = e.target.closest("[data-g]");
     if (g && !g.disabled) {
       const a = g.dataset.g;
-      if (a === "copy") { navigator.clipboard?.writeText(g.textContent.trim()); return toast(t("已复制")); }
-      if (a === "open") { navigator.clipboard?.writeText(g.dataset.code); toast(t("一次性码已复制，在打开的页面里粘贴")); return openExternal(g.dataset.url); }
+      if (a === "copy") { copyText(g.textContent.trim()); return toast(t("已复制")); }
+      if (a === "open") { copyText(g.dataset.code); toast(t("一次性码已复制，在打开的页面里粘贴")); return openExternal(g.dataset.url); }
       if (a === "logout" && !confirm(t("退出 GitHub 账号 {name}？gh 会删掉它保存的令牌。", { name: g.dataset.user }))) return;
       g.disabled = true;
       const r = await post("/api/gh/" + a, { user: g.dataset.user || "" }).catch((err) => ({ ok: false, message: err.message }));
@@ -4428,7 +4441,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (act === "use") return useProvider(p);
       if (act === "refresh") return renderLocalCard(box, p);
       if (act === "stop") { await post("/api/local", { stop: true }).catch((e2) => toast(e2.message, true)); return renderLocalCard(box, p); }
-      if (act === "copy") { navigator.clipboard?.writeText(cmdText); return toast(t("已复制")); }
+      if (act === "copy") { copyText(cmdText); return toast(t("已复制")); }
     };
     box.querySelectorAll('input[name="lm"]').forEach((r) => r.addEventListener("change", async () => {
       await post("/api/local", { mode: r.value }).catch((e2) => toast(e2.message, true));
@@ -6905,7 +6918,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       { label: t("立刻跑一次"), icon: PI.play, fn: () => runTaskNow(x) },
       { label: t("编辑"), icon: PI.edit, fn: () => taskDlg(x) },
       { label: t("复制一份"), icon: PI.copy, fn: () => taskDlg({ ...x, id: null, name: x.name + " " + t("（副本）") }) },
-      { label: t("导出 JSON（复制到剪贴板）"), icon: SM.export, fn: () => { const { id, last, runs, nextAt, lastFiredAt, runsDone, created, lastSid, ...rest } = x; navigator.clipboard?.writeText(JSON.stringify(rest, null, 2)); toast(t("已复制")); } },
+      { label: t("导出 JSON（复制到剪贴板）"), icon: SM.export, fn: () => { const { id, last, runs, nextAt, lastFiredAt, runsDone, created, lastSid, ...rest } = x; copyText(JSON.stringify(rest, null, 2)); toast(t("已复制")); } },
       "hr",
       { label: t("删除"), icon: PI.trash, danger: true, fn: async () => {
         if (!confirm(t("删除定时任务「{n}」？运行记录留着，存下的对话不受影响。", { n: x.name }))) return;
@@ -7196,7 +7209,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     root.addEventListener("click", (e) => {
       const b = e.target.closest("[data-cm]"), a = e.target.closest(".cm-links a");
       if (b && b.dataset.cm === "copy") {
-        navigator.clipboard?.writeText(COMMUNITY.qq).then(() => toast(t("已复制群号 {n}", { n: COMMUNITY.qq })), () => toast(COMMUNITY.qq));
+        copyText(COMMUNITY.qq).then((ok) => toast(ok ? t("已复制群号 {n}", { n: COMMUNITY.qq }) : COMMUNITY.qq));
       } else if (b && b.dataset.cm === "qr") {
         const img = b.closest(".cm-box").querySelector(".cm-qr");
         img.classList.toggle("hidden");
@@ -8896,7 +8909,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
   $("term-text-copy").addEventListener("click", () => {
     const sel = String(getSelection() || "");
-    navigator.clipboard?.writeText(sel || $("term-text-pre").textContent);
+    copyText(sel || $("term-text-pre").textContent);
     toast(sel ? t("已复制选中内容") : t("已复制全部"));
   });
   $("term-text-close").addEventListener("click", () => $("term-textview").classList.add("hidden"));
