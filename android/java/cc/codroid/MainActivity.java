@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
     private LinearLayout chooser, chooserFoot;
     private ScrollView chooserScroll;
     static final int REQ_DEVKIT = 10;
+    static final int REQ_CAMERA = 11;     // 7 网页选文件、8 保存到、9 浏览器窗格选文件、10 首装选工具包
     /** 首装选本地文件时，boot 线程在这等系统文件选择器回来；null = 是更新卡片发起的 */
     private volatile CountDownLatch pickWait;
     private volatile Uri picked;
@@ -1115,7 +1116,7 @@ public class MainActivity extends Activity {
                     try {
                         File f = Camera.newFile(MainActivity.this);
                         getSharedPreferences("ui", MODE_PRIVATE).edit().putString("camPending", f.getPath()).apply();
-                        startActivityForResult(Camera.intent(MainActivity.this, f), 9);
+                        startActivityForResult(Camera.intent(MainActivity.this, f), REQ_CAMERA);
                         return true;
                     } catch (Exception e) {
                         fileCb = null;
@@ -1385,7 +1386,7 @@ public class MainActivity extends Activity {
             else { savePending = null; savedJs(false, "cancel"); }
             return;
         }
-        if (req == 9) {
+        if (req == REQ_CAMERA) {
             // 拍照回来。界面可能在拍的时候被系统收掉重建过：fileCb 没了，就照「分享进来的文件」那样放进 uploads 再递给页面
             SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
             String path = sp.getString("camPending", null);
