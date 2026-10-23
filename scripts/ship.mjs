@@ -151,6 +151,14 @@ const S = {
     run("priv", [`cat '${APK}' | pm install -r -S ${size}`]);
     const v = sh("priv", ["dumpsys package cc.codroid | grep -m1 versionName"]);
     console.log("  已装：" + v.trim());
+    // 装完把应用打开（和应用内更新一样）：刚装完系统可能还在做安装后扫描、头一次启动会被丢掉，起不来就再拉
+    for (let i = 1; i <= 3; i++) {
+      spawnSync("sleep", ["2"]);
+      sh("priv", ["am start -n cc.codroid/.MainActivity >/dev/null 2>&1"]);
+      spawnSync("sleep", ["2"]);
+      if (/ResumedActivity.*cc\.codroid\//.test(sh("priv", ["dumpsys activity activities | grep ResumedActivity"]))) { console.log("  已打开"); return; }
+    }
+    console.log("  没能自动打开，手动点开就好");
   },
 };
 

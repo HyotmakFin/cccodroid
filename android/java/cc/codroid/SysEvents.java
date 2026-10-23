@@ -10,11 +10,40 @@ import android.content.Intent;
  *   BOOT_COMPLETED       开机 → 仅当用户开着"开机自动激活 Shizuku"且配对过，才启动服务去重新激活
  */
 public class SysEvents extends BroadcastReceiver {
+    /**
+     * 更新前界面开着（Updater 记的 reopenAt，10 分钟内有效）就把界面拉回来。
+     * 广播里直接 startActivity 在安卓 10+ 多半被「后台启动界面」限制拦掉，所以先试一下，再等 Shizuku 的 binder
+     * （本进程刚被拉起，binder 一两秒内到）用 shell 身份 am start，shell 不受这条限制。都不行就发条通知点开。
+     * Shizuku 静默装那条路由 Priv.pipeInstall 里的 shell 自己拉界面，不记 reopenAt，不走这里。
+     */
+    private void reopenUi(Context c) {
+        android.content.SharedPreferences sp = c.getSharedPreferences("upd", Context.MODE_PRIVATE);
+        long at = sp.getLong("reopenAt", 0);
+        if (at == 0) return;
+        sp.edit().remove("reopenAt").apply();
+        if (System.currentTimeMillis() - at > 10 * 60_000) return;
+        Intent ui = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { c.startActivity(ui); } catch (Throwable ignored) {}
+        PendingResult pr = goAsync();
+        Priv.start(c);
+        new Thread(() -> {
+            try {
+                for (int i = 0; i < 16 && !MainActivity.visible; i++) {
+                    Thread.sleep(500);
+                    if (i >= 2 && Priv.granted()) { Priv.run("am start -n " + c.getPackageName() + "/.MainActivity"); Thread.sleep(1500); break; }
+                }
+                if (!MainActivity.visible) Notify.updatedTapToOpen(c);
+            } catch (Throwable ignored) {
+            } finally { pr.finish(); }
+        }, "reopen-ui").start();
+    }
+
     @Override public void onReceive(Context c, Intent i) {
         String a = i.getAction();
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
             Installer.deleteTree(new java.io.File(c.getFilesDir(), "updates"));
             if (new Env(c).devkitReady()) GatewayService.start(c);
+            reopenUi(c);
         } else if (Intent.ACTION_BOOT_COMPLETED.equals(a)) {
             ShizukuSetup s = ShizukuSetup.get(c);
             s.prefs().edit().putLong("bootSeen", System.currentTimeMillis()).apply();

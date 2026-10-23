@@ -643,6 +643,8 @@ final class Updater {
             if (!out.contains("Success")) app.set("ready", Tr.f("静默安装失败（{0}），点安装走系统确认", out));
             return;
         }
+        // 走系统安装确认：装完系统把我们整个杀掉，界面不会自己回来 —— 记一笔，SysEvents 收到 MY_PACKAGE_REPLACED 时把界面拉起来
+        if (MainActivity.visible) ctx.getSharedPreferences("upd", Context.MODE_PRIVATE).edit().putLong("reopenAt", System.currentTimeMillis()).apply();
         try { Apk.install(ctx, app.file, "app"); }
         catch (Exception e) { app.set("error", Tr.t("安装失败：") + e.getMessage()); }
     }

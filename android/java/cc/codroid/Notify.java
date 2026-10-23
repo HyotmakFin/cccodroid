@@ -270,6 +270,20 @@ final class Notify {
         return b.build();
     }
 
+    /** 更新装完、界面没能自己回来（系统拦了后台启动）：发一条点开就回来的通知 */
+    static void updatedTapToOpen(Context c) {
+        Notify n = get(c);
+        String v = "";
+        try { v = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName; } catch (Exception ignored) {}
+        n.nm.notify(TAG_DONE, 0x5eed, new Notification.Builder(c, CH_DONE)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(Tr.f("cccodroid 已更新到 v{0}", v))
+            .setContentText(Tr.t("点此打开即可继续使用"))
+            .setContentIntent(n.openIntent("", 5))
+            .setAutoCancel(true)
+            .build());
+    }
+
     /** 会话号：JSON 里是 null 时 optString 会给出字符串 "null"，要单独判 */
     private static String sidOf(JSONObject o) { return o.isNull("sessionId") ? "" : o.optString("sessionId", ""); }
 
