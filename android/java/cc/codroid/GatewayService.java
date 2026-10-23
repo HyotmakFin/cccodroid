@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
@@ -43,7 +44,8 @@ public class GatewayService extends Service {
 
     static void start(Context c) {
         Intent i = new Intent(c, GatewayService.class);
-        c.startForegroundService(i);
+        // targetSdk ≥ 31：后台（非精确闹钟、没在电池优化白名单）拉前台服务会抛 ForegroundServiceStartNotAllowedException，别让它崩掉调用方
+        try { c.startForegroundService(i); } catch (RuntimeException e) { Log.w(TAG, "拉起网关服务被系统拒绝", e); }
     }
 
     @Override public IBinder onBind(Intent i) { return null; }
@@ -57,7 +59,9 @@ public class GatewayService extends Service {
         ch.setDescription(Tr.t("保持网关与正在进行的任务在后台运行"));
         ch.setShowBadge(false);
         nm.createNotificationChannel(ch);
-        startForeground(1, note(Tr.t("正在启动…")));
+        // 34 起要带类型（与清单的 specialUse 对应）；早的系统用两参数版
+        if (Build.VERSION.SDK_INT >= 34) startForeground(1, note(Tr.t("正在启动…")), 0x40000000 /* FOREGROUND_SERVICE_TYPE_SPECIAL_USE */);
+        else startForeground(1, note(Tr.t("正在启动…")));
 
         PowerManager pm = getSystemService(PowerManager.class);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cccodroid:gateway");

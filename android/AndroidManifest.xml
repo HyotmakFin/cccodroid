@@ -4,7 +4,8 @@
     android:versionCode="60"
     android:versionName="0.3.16">
 
-    <!-- targetSdk 28：29 起禁止执行应用可写目录里的程序（W^X），整套原生工具链就跑不了 -->
+    <!-- targetSdk 28：29 起禁止执行应用可写目录里的程序（W^X），工具链只能「经加载器」跑（Env.applyLoader）。
+         build.sh 的 TARGET_SDK=36 会改这一行出 36 的包；下面为 36 加的声明在 28 的包里都不改变行为 -->
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="28" />
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -29,6 +30,27 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- 设备工具 open(kind=alarm/timer)：只是把闹钟应用打开并预填，普通权限，装时自动给 -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- 以下为 targetSdk 36：前台服务类型（34 起必须声明）、定时任务的精确闹钟（31 起要权限，用户在设置里给）、
+         共享目录 /sdcard/cccodroid（30 起分区存储，旧的存储权限不再管用，要「所有文件访问」） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+    <!-- 软件包可见性（30 起）：查 Shizuku 装没装、设备工具列应用 / 打开别的应用 -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="http" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="geo" /></intent>
+        <intent><action android:name="android.intent.action.DIAL" /><data android:scheme="tel" /></intent>
+        <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="mailto" /></intent>
+        <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
+        <intent><action android:name="android.intent.action.INSERT" /><data android:mimeType="vnd.android.cursor.dir/event" /></intent>
+        <intent><action android:name="android.intent.action.SET_ALARM" /></intent>
+        <intent><action android:name="android.intent.action.SET_TIMER" /></intent>
+        <intent><action android:name="android.intent.action.SEND" /><data android:mimeType="*/*" /></intent>
+    </queries>
 
     <application
         android:label="cccodroid"
@@ -42,6 +64,7 @@
         android:largeHeap="true"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
+        android:enableOnBackInvokedCallback="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <!-- 应用内浏览器（系统 WebView，见 BrowserActivity.java）：分屏 / 转屏不重建，免得页面重载 -->
@@ -110,10 +133,15 @@
         <!-- 网关的宿主：前台服务。界面关了、切后台、锁屏，正在跑的任务都不断 -->
         <!-- 导出但要求 INTERACT_ACROSS_USERS_FULL：只有 shell / 系统能启动（静默自更新装完由 shell 拉起服务，
              国产 ROM 会拦掉 MY_PACKAGE_REPLACED）。普通应用拿不到这个权限 -->
+        <!-- specialUse：本地开发服务器 + 长任务，归不进系统列的那几类；没有 dataSync 那样的 6 小时上限 -->
         <service
             android:name=".GatewayService"
             android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local gateway that runs the user's coding-agent sessions and their tool processes in the background" />
+        </service>
 
         <!-- 设备工具的读屏 / 点按（A11y.java）。默认关；只有系统能绑定（BIND_ACCESSIBILITY_SERVICE） -->
         <service

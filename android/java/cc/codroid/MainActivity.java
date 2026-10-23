@@ -92,7 +92,8 @@ public class MainActivity extends Activity {
         edgeToEdge();
         pending = getIntent();
         java.util.List<String> want = new java.util.ArrayList<>();
-        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        // targetSdk ≥ 30 时这两个存储权限已经不管用（分区存储），改由 askAllFiles 要「所有文件访问」，不挡启动
+        if (getApplicationInfo().targetSdkVersion < 30 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             want.add(Manifest.permission.READ_EXTERNAL_STORAGE);
             want.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
@@ -101,7 +102,8 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) {
-        boot();   // 没给也照样跑：工作区退回私有目录
+        if (code == 1) boot();   // 没给也照样跑：工作区退回私有目录
+        else if (code == 2) askAllFiles();   // 通知权限问完，接着问共享存储（两个系统框别叠在一起）
     }
 
     /**
@@ -775,10 +777,21 @@ public class MainActivity extends Activity {
      * 本该由系统在"界面在前台时建第一个通知渠道"那一刻代问 —— 但我们的渠道由前台服务建，常常错过时机，
      * 之后系统就再也不问，通知被整个屏蔽（实测 Android 14：发了 15 条、显示 0 条）。只问一次。
      */
-    private void askNotifications() {
+    private void askPerms() { if (!askNotifications()) askAllFiles(); }
+
+    /** @return 这次弹了东西（系统权限框或引导框） */
+    private boolean askNotifications() {
         android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
         SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
-        if (nm.areNotificationsEnabled() || sp.getBoolean("askedNotifySettings", false)) return;
+        // targetSdk ≥ 33 的包可以直接弹系统的通知权限框（28 的包不行，见上）
+        if (Build.VERSION.SDK_INT >= 33 && getApplicationInfo().targetSdkVersion >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+                && !sp.getBoolean("askedNotifyPerm", false)) {
+            sp.edit().putBoolean("askedNotifyPerm", true).apply();
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 2);
+            return true;
+        }
+        if (nm.areNotificationsEnabled() || sp.getBoolean("askedNotifySettings", false)) return false;
         sp.edit().putBoolean("askedNotifySettings", true).apply();
         new android.app.AlertDialog.Builder(this)
             .setTitle(Tr.t("开启通知"))
@@ -789,6 +802,31 @@ public class MainActivity extends Activity {
                 } catch (Exception e) {
                     startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
                 }
+            })
+            .setNegativeButton(Tr.t("以后再说"), null)
+            .show();
+        return true;
+    }
+
+    /**
+     * targetSdk ≥ 30：共享目录 /sdcard/cccodroid（交付 APK、截图、本地工具包）要「所有文件访问」。
+     * Shizuku 已授权就用 appops 直接给；否则问一次，带去系统设置页。给了以后重启网关才进 CCAPP_SHARED
+     */
+    private void askAllFiles() {
+        if (getApplicationInfo().targetSdkVersion < 30 || Build.VERSION.SDK_INT < 30 || android.os.Environment.isExternalStorageManager()) return;
+        if (Priv.granted()) {
+            new Thread(() -> android.util.Log.i("cccodroid", "所有文件访问（Shizuku）：" + Priv.run("appops set --uid " + getPackageName() + " MANAGE_EXTERNAL_STORAGE allow"))).start();
+            return;
+        }
+        SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
+        if (sp.getBoolean("askedAllFiles", false)) return;
+        sp.edit().putBoolean("askedAllFiles", true).apply();
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(Tr.t("允许访问共享存储"))
+            .setMessage(Tr.t("cccodroid 和其他应用交换文件（交付的 APK、截图、离线工具包）用的是 /sdcard/cccodroid。这个版本的安卓要你在设置里打开「所有文件访问」才能读写它。\n\n不开也能用，只是这些文件只留在应用私有目录里。"))
+            .setPositiveButton(Tr.t("去开启"), (d, w) -> {
+                try { startActivity(new Intent("android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION", Uri.parse("package:" + getPackageName()))); }
+                catch (Exception e) { try { startActivity(new Intent("android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION")); } catch (Exception ignored) {} }
             })
             .setNegativeButton(Tr.t("以后再说"), null)
             .show();
@@ -942,7 +980,7 @@ public class MainActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void showWeb() {
-        askNotifications();
+        askPerms();
         // 网页调试默认关：开着时任何连上 adb 的电脑都能读页面（含网关令牌）。
         // 要调试就在终端里 touch ~/.webdebug，重开应用生效；只有本机终端写得进私有目录
         WebView.setWebContentsDebuggingEnabled(new File(env.home, ".webdebug").exists());

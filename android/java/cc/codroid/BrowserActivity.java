@@ -35,6 +35,9 @@ public class BrowserActivity extends Activity implements BrowserPane.Host {
         getWindow().setNavigationBarColor(bg);
         if (!night) getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         pane = new BrowserPane(this, this, 8);
+        // targetSdk 35 起窗口强制画到系统栏底下，设的栏色也不再生效：内容按系统栏留白，留白处用同一个底色
+        getWindow().getDecorView().setBackgroundColor(bg);
+        pane.setFitsSystemWindows(true);
         setContentView(pane);
         if (b != null) pane.restoreState(b);
         else load(getIntent());

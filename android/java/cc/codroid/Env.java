@@ -90,7 +90,8 @@ final class Env {
 
     File bin(String name) { return new File(usr, "bin/" + name); }
 
-    boolean devkitReady() { return new File(usr, ".devkit-ok").isFile() && bin("node").canExecute(); }
+    // 经加载器时程序不会被直接执行，只看文件在不在（canExecute 走 access(X_OK)，不该拿它判断能不能跑）
+    boolean devkitReady() { return new File(usr, ".devkit-ok").isFile() && (loader ? bin("node").isFile() : bin("node").canExecute()); }
 
     /** 已装工具包的来历（Installer 写的 JSON：base、sha256）。早期版本里只有一行 "ok" → 空对象 */
     org.json.JSONObject devkitInfo() {
@@ -101,7 +102,7 @@ final class Env {
     /** 官方 Claude Code：install-claude.sh 装好后写下的版本指针 */
     File claude() { return new File(home, ".local/share/cccodroid/claude/current/claude"); }
 
-    boolean claudeReady() { return claude().canExecute(); }
+    boolean claudeReady() { return loader ? claude().isFile() : claude().canExecute(); }
 
     /** 用户在设置里卸了 Claude Code：有这个标记就别自动装回去（启动、换渠道都不装），等用户点「安装…」自己选版本 */
     File claudeOffFlag() { return new File(files, ".claude-uninstalled"); }

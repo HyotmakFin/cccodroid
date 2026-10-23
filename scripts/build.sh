@@ -90,8 +90,16 @@ node "$ROOT/devkit/devkit.mjs" ldso --lock "$LOCK" --target "$PIN_TARGET" --out 
 echo "▸ aapt2 + 签名"
 mkdir -p "$OUT"
 $AAPT2 compile --dir "$A/res" -o "$A/build/res.zip"
+# TARGET_SDK=36：出 targetSdk 36 的包（工具链全走「经加载器」，见 Env.applyLoader）。默认照清单里的 28
+MANIFEST="$A/AndroidManifest.xml"
+if [ -n "$TARGET_SDK" ]; then
+  MANIFEST="$A/build/AndroidManifest.xml"
+  sed "s/android:targetSdkVersion=\"[0-9]*\"/android:targetSdkVersion=\"$TARGET_SDK\"/" "$A/AndroidManifest.xml" > "$MANIFEST"
+  grep -q "android:targetSdkVersion=\"$TARGET_SDK\"" "$MANIFEST" || { echo "✗ 清单里改不动 targetSdkVersion"; exit 1; }
+  echo "  targetSdk $TARGET_SDK"
+fi
 $AAPT2 link -o "$A/build/unsigned.apk" -I "$AJAR" \
-  --manifest "$A/AndroidManifest.xml" -A "$A/assets" "$A/build/res.zip"
+  --manifest "$MANIFEST" -A "$A/assets" "$A/build/res.zip"
 if [ "$SIGN" = apksigner ]; then
   # SDK 的 apksigner：先把 classes.dex 塞进包、对齐，再签（最低 API 26，它自己决定出 v2 / v3）
   ( cd "$A/build" && zip -q unsigned.apk classes.dex && zip -q -0 unsigned.apk lib/arm64-v8a/libldlinux.so )

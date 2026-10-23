@@ -82,7 +82,8 @@ final class Usb {
                 done.countDown();
             }
         };
-        c.registerReceiver(r, new IntentFilter(ACTION));
+        if (android.os.Build.VERSION.SDK_INT >= 33) c.registerReceiver(r, new IntentFilter(ACTION), 4 /* RECEIVER_NOT_EXPORTED */);
+        else c.registerReceiver(r, new IntentFilter(ACTION));
         try {
             Intent i = new Intent(ACTION).setPackage(c.getPackageName());
             // 系统要往这个 Intent 里填 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED，所以必须可变
