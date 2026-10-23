@@ -27,7 +27,7 @@
   const $ = (id) => document.getElementById(id);
   const tr = (s) => (window.I18N && I18N.t ? I18N.t(s) : s);
 
-  let tier = 1, avoid = null, hooks = {};
+  let tier = 1, avoid = null, hooks = {}, ovCover = false;   // ovCover：app.js 的浮层管理说有弹层盖着
   const recent = [];                                       // 打开顺序，最后一个在最上面
   const isOpen = (id) => { const el = $(id); return !!el && !el.classList.contains("hidden"); };
   const rtl = () => root.getAttribute("dir") === "rtl";
@@ -98,7 +98,7 @@
     if (!(window.CCApp && CCApp.paneBounds)) return;
     let r = null;
     const open = recent.filter(isOpen);
-    const covered = COVERS.some((id) => isOpen(id)
+    const covered = ovCover || COVERS.some((id) => isOpen(id)
       && !(id === "drawer" && root.classList.contains("dock-l"))     // 常驻左栏不挡
       && !(id === "popup" && tier >= 2));                            // 宽屏时补全弹窗挪到了窗格左边
     if (isOpen("browser") && open[open.length - 1] === "browser" && !covered) {
@@ -243,6 +243,7 @@
     },
     collapse() { if (tier >= 3) localStorage.setItem(LS_DOCK, "0"); apply(); },
     setAvoid(x) { avoid = x == null ? null : +x; apply(); },
+    cover(on) { ovCover = !!on; placeBrowser(); },
     apply,
   };
 })();

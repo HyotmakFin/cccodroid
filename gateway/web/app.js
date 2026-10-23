@@ -56,6 +56,62 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const ok = document.execCommand("copy"); ta.remove(); return ok;
     } catch { return false; }
   }
+  // ── 浮层统一管理：弹出菜单、下拉菜单、速览卡、权限菜单、型号 / 版本面板、项目弹层都登记在这里 ──
+  // kind "menu"：轻浮层，同时只开一个；点外面就关（按在锚点上不算，留给锚点自己的 click 去切换）
+  // kind "modal"：弹层，开它先关掉所有浮层；点外面不管（各自的遮罩自己处理）
+  // 返回键 / Esc 关最上面那个；打开整页、设置、侧栏时全关；布局补发的假 resize 只重摆，innerWidth 真变才关（keep 的不关）
+  // cover：开着时让原生浏览器窗格让位（它是原生视图，总盖在网页上面）
+  const OV = (() => {
+    let stack = [];   // { el, kind, anchor, onClose, place, keep, cover, w0 }
+    let covered = false;
+    const live = () => (stack = stack.filter((it) => it.el.isConnected));
+    const find = (el) => stack.find((it) => it.el === el);
+    function sync() {
+      const c = live().some((it) => it.cover);
+      if (c === covered) return;
+      covered = c;
+      if (window.CCLayout && CCLayout.cover) CCLayout.cover(c);
+    }
+    function drop(it) {
+      stack = stack.filter((x) => x !== it);
+      it.el.remove();
+      try { it.onClose && it.onClose(); } catch (e) { console.error(e); }
+    }
+    function close(el) { const it = el && find(el); if (it) drop(it); else if (el) el.remove(); sync(); }
+    function closeAll(kind) { for (const it of live().slice().reverse()) if (!kind || it.kind === kind) drop(it); sync(); }
+    function open(el, o = {}) {
+      const kind = o.kind || "menu";
+      closeAll(kind === "modal" ? null : "menu");
+      if (!el.isConnected) document.body.appendChild(el);
+      stack.push({ el, kind, anchor: o.anchor || null, onClose: o.onClose, place: o.place, keep: !!o.keep, cover: !!o.cover, w0: innerWidth });
+      sync();
+      return el;
+    }
+    // 锚点上开着的菜单（同一个按钮再点 = 收起）
+    const at = (anchor) => { const it = anchor && live().find((x) => x.anchor === anchor); return it ? it.el : null; };
+    const top = () => { const s = live(); return s.length ? s[s.length - 1].el : null; };
+    function back() { const el = top(); if (!el) return false; close(el); return true; }
+    // 点外面：从上往下关菜单，碰到点中的那层就停（菜单开在弹层里时，点弹层只关菜单）
+    addEventListener("pointerdown", (e) => {
+      for (const it of live().slice().reverse()) {
+        if (it.el.contains(e.target) || (it.anchor && it.anchor.contains && it.anchor.contains(e.target))) return;
+        if (it.kind !== "menu") return;
+        drop(it);
+      }
+      sync();
+    }, true);
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && top()) { e.stopPropagation(); back(); } }, true);
+    addEventListener("resize", () => {
+      for (const it of live().slice()) {
+        if (innerWidth !== it.w0 && !it.keep) drop(it);
+        else if (it.place) try { it.place(); } catch (e) { console.error(e); }
+      }
+      sync();
+    });
+    // 别处直接 remove() 掉的也要跟上（窗格让位状态别卡住）
+    new MutationObserver(() => { if (stack.length) sync(); }).observe(document.body, { childList: true });
+    return { open, close, closeAll, at, top, back, isOpen: (el) => !!(el && el.isConnected && find(el)) };
+  })();
   // 项目 / 定时任务的状态（模块在 openPage 前；这两个要在启动早期就可用）
   var PJ = { list: [], colors: [], ws: "", cur: null, detail: null, loaded: false, effLevels: [] };
   var SC = { data: null, cur: null, detail: null, flt: "all", rflt: "all" };
@@ -1215,11 +1271,9 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   });
 
   // 顶栏（输入框下）的权限标签：点开切模式，对应官方 TUI 的 Shift+Tab
-  permEl.addEventListener("click", (e) => {
-    e.stopPropagation();
-    let m = $("perm-menu");
-    if (m) { m.remove(); return; }
-    m = document.createElement("div");
+  permEl.addEventListener("click", () => {
+    if (OV.at(permEl)) return OV.close(OV.at(permEl));
+    const m = document.createElement("div");
     m.id = "perm-menu";
     const desc = {
       default: t("读文件不问；改文件、跑命令、联网前先问你"),
@@ -1231,7 +1285,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     m.innerHTML = MODE_KEYS.map((k) => `
       <button data-mode="${k}" class="${k === state.permissionMode ? "cur" : ""}${k === "bypassPermissions" ? " danger" : ""}">
         <b>${modeLabel(k)}</b><small>${desc[k]}</small></button>`).join("");
-    document.body.appendChild(m);
+    OV.open(m, { anchor: permEl });
     const r = permEl.getBoundingClientRect(), col = colRect(), mw = Math.min(m.offsetWidth, col.width - 16);
     m.style.maxWidth = (col.width - 16) + "px";
     m.style.bottom = (fixedH() - r.top + 6) + "px";
@@ -1241,11 +1295,10 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     m.addEventListener("click", async (ev) => {
       const b = ev.target.closest("button");
       if (!b) return;
-      m.remove();
+      OV.close(m);
       changePermMode(b.dataset.mode);
     });
   });
-  document.addEventListener("click", (e) => { const m = $("perm-menu"); if (m && !m.contains(e.target)) m.remove(); });
 
   async function changePermMode(mode) {
     if (!mode || mode === state.permissionMode) return;
@@ -1382,13 +1435,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
           <button data-c="">${esc(t("取消"))}</button>
         </div>
         <p class="rw-note">${esc(t("回到这里会另开一个会话，原会话保留。"))}</p></div>`;
-      const close = (c) => { ov.remove(); resolve(c || null); };
+      const close = (c) => { resolve(c || null); OV.close(ov); };
       ov.addEventListener("click", (e) => {
         if (e.target === ov) return close(null);
         const b = e.target.closest("button[data-c]");
         if (b) close(b.dataset.c);
       });
-      document.body.appendChild(ov);
+      OV.open(ov, { kind: "modal", keep: true, cover: true, onClose: () => resolve(null) });   // 返回键 = 取消
     });
   }
 
@@ -1886,12 +1939,12 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const o = e.target.closest("[data-open]");
       if (o) return openExternal(list[+o.dataset.open].link);
       if (!e.target.closest("[data-act=ok]")) return;
-      el.remove();
+      OV.close(el);
       for (const n of list) {
         try { await api("/api/notices/dismiss", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: n.id }) }); } catch {}
       }
     });
-    document.body.appendChild(el);
+    OV.open(el, { kind: "modal", keep: true, cover: true });   // 返回键只是先收起，没点「知道了」下回还在
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { noticeHold = false; loadNotices(); } });
 
@@ -4798,15 +4851,14 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // 速览卡
   let qcEl = null;
-  const qcOpen = () => !!(qcEl && qcEl.isConnected);
-  function qcClose() { if (qcEl) { qcEl.remove(); qcEl = null; } }
+  const qcOpen = () => OV.isOpen(qcEl);
+  function qcClose() { if (qcEl) OV.close(qcEl); }
   function qcToggle() {
     if (qcOpen()) return qcClose();
-    closeMenu();
     const el = qcEl = document.createElement("div");
     el.className = "qcard";
     el.setAttribute("role", "dialog");
-    document.body.appendChild(el);
+    OV.open(el, { anchor: ctxBar, place: qcPlace, keep: true, onClose: () => { if (qcEl === el) qcEl = null; } });
     el.addEventListener("click", (e) => {
       const a = e.target.closest("[data-qc]");
       if (!a) return;
@@ -4815,12 +4867,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     });
     qcRender();
     qbLoad(false);
-    setTimeout(() => addEventListener("pointerdown", function off(e) {
-      if (qcEl !== el) return removeEventListener("pointerdown", off, true);
-      if (el.contains(e.target) || ctxBar.contains(e.target)) return;
-      removeEventListener("pointerdown", off, true);
-      qcClose();
-    }, true));
   }
   function qcRender() {
     if (!qcOpen()) return;
@@ -4845,8 +4891,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     qcEl.style.maxHeight = Math.max(160, fixedH() - b.bottom - 20) + "px";
   }
   ctxBar.addEventListener("click", qcToggle);
-  addEventListener("resize", qcPlace);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && qcOpen()) qcClose(); });
 
   // 用量页「额度与消费」：当前接口的明细 + 其他配过的接口各一行（点开看明细）+ 提醒设置
   const usOther = new Map();   // id → { login, limits } / { bill }
@@ -5208,8 +5252,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input class="mp-q" type="search" inputmode="decimal" autocomplete="off" placeholder="${t("搜索版本号")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
       <div class="tiny mp-note">${t("登录、会话和设置不受影响；版本越旧，越可能缺新功能。")}</div></div>`;
-    document.body.appendChild(m);
-    const close = () => m.remove();
+    OV.open(m, { kind: "modal", keep: true, cover: true });
+    const close = () => OV.close(m);
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
     let info;
     try { info = await api("/api/claude/versions"); } catch (e) { info = { ok: false, message: e.message, versions: [] }; }
@@ -6000,10 +6044,8 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}"></label>
       <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
       <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
-    document.body.appendChild(m);
-    const w0 = innerWidth;
-    const close = () => { m.remove(); removeEventListener("resize", onRz); };
-    const onRz = () => { if (innerWidth !== w0) close(); };   // 布局补发的假 resize 不算
+    OV.open(m, { kind: "modal", anchor: modelEl });   // 宽度真变了由 OV 关；布局补发的假 resize 不算
+    const close = () => OV.close(m);
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
     // 宽屏：卡片宽 420、最高 宽×φ，对齐输入栏下的型号按钮，底边落在按钮上方 8px；都只在对话这一栏里摆
     const col = colRect();
@@ -6018,7 +6060,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       p.style.left = Math.max(col.left + 16, Math.min(x0, col.right - w - 16)) + "px";
       p.style.bottom = (fixedH() - ar.top + 8) + "px";
       p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
-      addEventListener("resize", onRz);
     }
     let info;
     try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
@@ -6400,7 +6441,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 宽屏时侧栏和右侧窗格都留着、整页只占对话那一块；窄屏整页盖住对话，返回键回到对话。
   function openDrawer(tab) {
     if (tab && tab !== "sessions") return openPage(tab);
-    qcClose();
+    OV.closeAll();
     drawerEl.classList.remove("hidden");
     refreshStatus();
     loadSessions();
@@ -6525,18 +6566,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   var acctEmail = "", acctEmailAt = 0, acctWeek = null;
 
   // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
-  function closeMenu() { document.querySelectorAll(".pop-menu").forEach((m) => m.remove()); }
+  function closeMenu() { OV.closeAll("menu"); }
   function popMenu(anchor, items, place) {
     // 同一个按钮再点一次 = 收起（侧栏账户、项目标签、⋯ 这些都走这里）
-    const open = document.querySelector(".pop-menu");
-    if (open && anchor && open._anchor === anchor) { closeMenu(); return null; }
-    closeMenu(); qcClose();
+    if (anchor && OV.at(anchor)) { closeMenu(); return null; }
     const m = document.createElement("div");
     m.className = "pop-menu";
-    m._anchor = anchor;
     m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head">${esc(it.head)}</div>`
       : `<button data-i="${i}" class="${it.danger ? "danger" : ""}">${it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
-    document.body.appendChild(m);
+    OV.open(m, { anchor });
     const ar = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
     let x, y;
     if (place === "up") {
@@ -6546,13 +6584,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
-    m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; closeMenu(); items[+b.dataset.i].fn(); });
-    // 点菜单外面收起；点的是弹出它的那个按钮就留给 click 去切换（否则这里先关、click 又开，永远收不回去）
-    setTimeout(() => addEventListener("pointerdown", function off(e) {
-      if (!m.isConnected) return removeEventListener("pointerdown", off, true);
-      if (m.contains(e.target) || (anchor && anchor.contains && anchor.contains(e.target))) return;
-      closeMenu(); removeEventListener("pointerdown", off, true);
-    }, true));
+    m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; OV.close(m); items[+b.dataset.i].fn(); });
     return m;
   }
   // 下拉框不用系统弹出的选择器（深色、和主题不搭），换成同一套菜单：当前项打勾，optgroup 成小标题，
@@ -6561,7 +6593,6 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 「能看图」标记（多模态）：图片框 + 山 + 太阳，不用 emoji
   const MM_IMG = () => `<svg class="mm-img" viewBox="0 0 24 24" role="img" aria-label="${esc(t("能看图"))}"><title>${esc(t("能看图"))}</title><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-8.5 8"/></svg>`;
   function selMenu(sel) {
-    closeMenu(); qcClose();
     const items = [];
     for (const n of sel.children) {
       if (n.tagName === "OPTGROUP") {
@@ -6571,12 +6602,11 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     }
     const m = document.createElement("div");
     m.className = "pop-menu sel-menu";
-    m._sel = sel;     // 记住是哪个下拉框开的：再点它本身就是收起
     m.innerHTML = items.map((it, i) => it.head != null ? `<div class="pm-head">${esc(it.head)}</div>`
       : `<button type="button" data-i="${i}" class="${it.selected ? "on" : ""}"${it.disabled ? " disabled" : ""}>`
         + (it.selected ? `<svg viewBox="0 0 24 24">${CHECK}</svg>` : '<span class="pm-pad"></span>')
         + `<span>${esc(it.textContent)}</span>${it.dataset && it.dataset.img ? MM_IMG() : ""}</button>`).join("");
-    document.body.appendChild(m);
+    OV.open(m, { anchor: sel });     // 锚点记住是哪个下拉框开的：再点它本身就是收起
     const ar = sel.getBoundingClientRect(), W = innerWidth, H = innerHeight;
     m.style.minWidth = Math.min(ar.width, W - 16) + "px";
     m.style.maxHeight = Math.max(160, Math.min(H * 0.6, Math.max(H - ar.bottom, ar.top) - 14)) + "px";
@@ -6588,19 +6618,13 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
     const on = m.querySelector("button.on"); if (on) m.scrollTop = on.offsetTop - (m.clientHeight - on.offsetHeight) / 2;
     m.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-i]"); if (!b || b.disabled) return;
-      closeMenu();
+      OV.close(m);
       const o = items[+b.dataset.i];
       if (o.selected) return;
       sel.value = o.value;
       sel.dispatchEvent(new Event("input", { bubbles: true }));
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    // 点外面收起；按在自己这个下拉框上不算（交给下面的 click：同一个 = 收起）
-    setTimeout(() => addEventListener("pointerdown", function off(e) {
-      if (!m.isConnected) return removeEventListener("pointerdown", off, true);
-      if (m.contains(e.target) || sel.contains(e.target)) return;
-      closeMenu(); removeEventListener("pointerdown", off, true);
-    }, true));
   }
   // 捕获阶段拦住：mousedown / 触摸的 pointerdown 不让系统选择器弹出，click 打开我们的菜单；回车 / 空格同样打开。
   // 带 data-native 的保留系统选择器
@@ -6611,8 +6635,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   addEventListener("click", (e) => {
     const s = selOf(e); if (!selOk(s)) return;
     e.preventDefault();
-    const open = document.querySelector(".sel-menu");
-    if (open) { const same = open._sel === s; closeMenu(); if (same) return; }   // 点同一个：收起；点另一个：换成它的
+    if (OV.at(s)) { closeMenu(); return; }   // 点同一个：收起；点另一个：selMenu 打开时自动换掉旧的
     selMenu(s);
   }, true);
   addEventListener("keydown", (e) => {
@@ -6935,16 +6958,15 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
 
   // ── 弹层：宽屏居中（宽 560、高不过宽×φ），窄屏整页推入；返回键先关它 ──
   function dlg(title, body, foot) {
-    document.querySelectorAll(".pj-ov").forEach((x) => x.remove());
     const narrow = innerWidth < 680;
     const o = document.createElement("div");
     o.className = "pj-ov" + (narrow ? " narrow" : "");
     const xb = `<button class="icon-btn" data-close aria-label="${esc(t(narrow ? "返回" : "关闭"))}"><svg viewBox="0 0 24 24">${narrow ? PI.back : PI.x}</svg></button>`;
     o.innerHTML = `<div class="pj-sheet" role="dialog" aria-modal="true"><div class="pj-shead">${narrow ? xb : ""}<h3>${esc(title)}</h3>${narrow ? "" : xb}</div>
       <div class="pj-smain">${body}</div><div class="pj-sfoot">${foot}</div></div>`;
-    document.body.appendChild(o);
+    OV.open(o, { kind: "modal", keep: true, cover: true });   // 填了一半的表单，转屏也别丢
     o.addEventListener("click", (e) => {
-      if ((e.target === o && !narrow) || e.target.closest("[data-close]")) return o.remove();
+      if ((e.target === o && !narrow) || e.target.closest("[data-close]")) return OV.close(o);
       const rc = e.target.closest(".pj-rc");
       if (rc && !rc.classList.contains("on")) { rc.parentNode.querySelectorAll(":scope > .pj-rc").forEach((x) => x.classList.toggle("on", x === rc)); rc.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
       const sb = e.target.closest(".pj-seg button");
@@ -6982,7 +7004,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const body = { name: name.value.trim(), mode, path: o.querySelector("#np-dir").value.trim(), url: o.querySelector("#np-url").value.trim(), instr: o.querySelector("#np-instr").value };
       if (!body.name) return toast(t("项目名不能为空"), true);
       b.disabled = true; b.textContent = mode === "git" ? t("正在克隆…") : t("创建中…");
-      try { const r = await jsend("/api/projects", body); o.remove(); await loadProjects(); toast(t("已创建项目")); openProject(r.project.id); }
+      try { const r = await jsend("/api/projects", body); OV.close(o); await loadProjects(); toast(t("已创建项目")); openProject(r.project.id); }
       catch (err) { b.disabled = false; b.textContent = t("创建"); toast(err.message, true); }
     });
   }
@@ -6996,7 +7018,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       if (withDir && !confirm(t("目录 {p} 会被直接删掉，不能恢复。确定？", { p: p.path }))) return;
       try { await api(`/api/projects/${encodeURIComponent(p.id)}${withDir ? "?withDir=1" : ""}`, { method: "DELETE" }); }
       catch (err) { return toast(err.message, true); }
-      o.remove(); PJ.cur = null; PJ.detail = null; await loadProjects(); loadSessions(); renderProjects(); toast(t("已删除项目"));
+      OV.close(o); PJ.cur = null; PJ.detail = null; await loadProjects(); loadSessions(); renderProjects(); toast(t("已删除项目"));
     });
   }
 
@@ -7257,7 +7279,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       e.currentTarget.disabled = true;
       try {
         const r = edit ? await jsend("/api/sched/" + encodeURIComponent(x.id), b, "PATCH") : await jsend("/api/sched", b);
-        o.remove(); toast(edit ? t("已保存") : t("已创建：{f}", { f: freqText(r.task.freq) }));
+        OV.close(o); toast(edit ? t("已保存") : t("已创建：{f}", { f: freqText(r.task.freq) }));
         SC.cur = r.task.id; SC.detail = null; await loadSched();
         if (curPage !== "sched") openPage("sched"); else renderSched();
       } catch (err) { e.currentTarget.disabled = false; toast(err.message, true); }
@@ -7281,7 +7303,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   /** 打开整页：窄屏收起侧栏、盖住对话；宽屏侧栏照旧常驻，高亮当前项 */
   function openPage(name, cat) {
     if (!PAGES[name] || name === "settings") return openSettings(cat);
-    qcClose();
+    OV.closeAll();
     const prev = curPage;
     curPage = name;
     $("pages").classList.remove("hidden");
@@ -7323,7 +7345,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // ── 设置：弹窗。宽屏居中（左分类、右内容）；窄屏铺满，先列分类，点进去看一类，返回键回分类 ──
   var setOpen = false;
   function openSettings(cat) {
-    qcClose();
+    OV.closeAll();
     setOpen = true;
     $("set-ov").classList.remove("hidden");
     setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general");
@@ -9391,9 +9413,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
   window.__ccBack = guardHook("__ccBack", () => {
     const open = (id) => !$(id).classList.contains("hidden");
-    if (qcOpen()) { qcClose(); return true; }
-    if (document.querySelector(".pop-menu")) { closeMenu(); return true; }
-    const ov = document.querySelector(".pj-ov"); if (ov) { ov.remove(); return true; }
+    if (OV.back()) return true;     // 菜单、速览卡、弹层：关最上面那个
     const steps = [
       ["lightbox", () => $("lightbox").classList.add("hidden")],
       ["term-textview", () => $("term-textview").classList.add("hidden")],
@@ -9467,7 +9487,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       <div class="wn-body">${list.map((x) => `<section><div class="wn-ver">v${esc(x.v)}</div><div class="bubble wn-md">${renderMd(x.md)}</div></section>`).join("")}
         <section class="wn-cm"><div class="wn-ver">${esc(t("交流与反馈"))}</div>${communityHtml(true)}</section></div>
       <div class="wn-foot"><button class="btn ghost" data-act="log">${esc(t("更新日志"))}</button><button class="btn" data-act="ok">${esc(t("知道了"))}</button></div></div>`;
-    const close = () => el.remove();
+    const close = () => OV.close(el);
     communityBind(el);
     el.addEventListener("click", (e) => {
       if (e.target.closest("[data-act=log]")) { close(); openPage("changelog"); }
@@ -9477,7 +9497,7 @@ if (/[?&]t=/.test(location.search)) history.replaceState(null, "", location.path
       const u = a.getAttribute("href") || "";
       if (/^https?:\/\//.test(u) && A.openUrl) { e.preventDefault(); A.openUrl(u); }
     }));
-    document.body.appendChild(el);
+    OV.open(el, { kind: "modal", keep: true, cover: true });
     try { A.whatsNewSeen(); } catch {}
     return true;
   }
