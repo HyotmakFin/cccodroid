@@ -82,6 +82,8 @@ body{
 /* 快满 / 满了：不换成纯黄纯红那种跳出来的色块，仍从本主题的强调色渐变过去，终点是按每套主题深浅调过的暖色 / 红色 */
 #ctxbar.warn #ctxfill{background:linear-gradient(90deg,var(--accent-dim),var(--ctx-warn))}
 #ctxbar.danger #ctxfill{background:linear-gradient(90deg,var(--ctx-warn),var(--ctx-err))}
+/* 这时字压在暖色 / 红色上：换正文色，加一圈页面底色描边，压在条上、落在空白处都看得清（scripts/contrast.mjs 核过） */
+#ctxbar:is(.warn,.danger) #ctxtxt{color:var(--fg);text-shadow:0 0 2px var(--bg),0 0 3px var(--bg),0 0 5px var(--bg)}
 :root{--ctx-warn:#c98f4e;--ctx-err:#c95f4a}
 html[data-theme="light"]{--ctx-warn:#dba15c;--ctx-err:#cf6a4c}
 html[data-skin="qiusuo"]{--ctx-warn:#b9955f;--ctx-err:#c46a78}
@@ -597,7 +599,7 @@ a.weblink{overflow-wrap:anywhere}
 .inline-img{display:block;margin:8px 0}
 .inline-img img{
   max-width:100%;max-height:340px;border-radius:10px;border:1px solid var(--line);
-  background:#000;display:block;cursor:zoom-in;
+  background:#000;display:block;cursor:zoom-in;   /* 对比度：固定（看图黑底） */
 }
 .missing-img{
   display:inline-block;font-size:11.5px;color:var(--fg3);
@@ -607,7 +609,7 @@ a.weblink{overflow-wrap:anywhere}
 
 /* ── 图片查看器 ── */
 #lightbox{
-  position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.94);
+  position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.94);   /* 对比度：固定 */
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
 }
 #lightbox-img{max-width:96vw;max-height:82vh;object-fit:contain;border-radius:8px}
@@ -626,7 +628,7 @@ a.weblink{overflow-wrap:anywhere}
   background:var(--bg2);border:1px solid var(--line);border-radius:10px;
   padding:5px 5px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;
 }
-.att img{width:54px;height:54px;object-fit:cover;border-radius:7px;background:#000;cursor:zoom-in}
+.att img{width:54px;height:54px;object-fit:cover;border-radius:7px;background:#000;cursor:zoom-in}   /* 对比度：固定 */
 .att-ico{
   width:54px;height:54px;display:grid;place-items:center;border-radius:7px;
   background:var(--bg4);color:var(--fg3);font-size:11px;font-family:var(--mono);
@@ -704,7 +706,7 @@ a.weblink{overflow-wrap:anywhere}
 .fs-ico{flex:0 0 22px;text-align:center;font-size:15px}
 .fs-thumb{
   width:34px;height:34px;flex:0 0 34px;object-fit:cover;border-radius:6px;
-  background:#000;border:1px solid var(--line);
+  background:#000;border:1px solid var(--line);   /* 对比度：固定 */
 }
 .fs-item .it-title{flex:1;min-width:0;font-size:13.5px}
 .fs-meta{flex:0 0 auto;font-size:10.5px;color:var(--fg3)}
@@ -919,18 +921,18 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .vw-img.zoom{display:block}
 .vw-img.zoom img{max-width:none;max-height:none;cursor:zoom-out;margin:0}
 /* HTML 预览：网页自己决定背景，这里铺白底（多数网页默认就是白的） */
-.vw-html{flex:1;min-height:0;width:100%;border:1px solid var(--line);border-radius:9px;background:#fff}
+.vw-html{flex:1;min-height:0;width:100%;border:1px solid var(--line);border-radius:9px;background:#fff}   /* 对比度：固定（网页预览的白纸） */
 .vw-media{margin:auto;width:100%;display:flex;justify-content:center}
 .vw-media video{max-width:100%;max-height:80vh;border-radius:9px}
 .vw-media audio{width:100%}
 .vw-pdf{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--bg3);border-radius:9px;padding:8px}
 .vw-pages{display:flex;flex-direction:column;align-items:center;gap:8px}
 .vw-pdf.wide .vw-pages{align-items:flex-start}
-.vw-page{background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.25);flex:0 0 auto}
+.vw-page{background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.25);flex:0 0 auto}   /* 对比度：固定（PDF 白纸） */
 .vw-page canvas{width:100%;height:100%;display:block}
 .vw-pageno{
   position:absolute;bottom:10px;inset-inline-end:14px;margin:0;padding:3px 9px;border-radius:10px;
-  background:rgba(0,0,0,.55);color:#fff;font-size:11.5px;pointer-events:none;
+  background:rgba(0,0,0,.55);color:#fff;font-size:11.5px;pointer-events:none;   /* 对比度：固定（图上角标） */
 }
 
 /* 回复里的本机路径：点了在查看器打开 */
@@ -1291,7 +1293,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .llm-url-row { display: flex; gap: 6px; margin-top: 4px; }
 .llm-url-row input { flex: 1; min-width: 0; }
 /* 回退弹窗 */
-.rw-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.rw-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}   /* 对比度：固定（遮罩） */
 .rw-dlg{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:14px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:16px 18px;font-size:14px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 .rw-dlg h3{margin:0 0 10px;font-size:16px}
 .rw-dlg p{margin:8px 0}
@@ -1493,10 +1495,10 @@ html[data-skin="qiusuo"] #sub-title:is(.warn,.live){
 /* 拨动开关：复选框换皮，JS 照旧读 .checked、听 change */
 input[type=checkbox].sw{appearance:none;-webkit-appearance:none;width:42px;height:24px;min-height:24px;padding:0;box-sizing:border-box;margin:0;border-radius:999px;background:var(--bg4);position:relative;
   flex:none;cursor:pointer;transition:background .15s;border:0;outline:0}
-input[type=checkbox].sw::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:18px;height:18px;border-radius:50%;background:#fff;
+input[type=checkbox].sw::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:18px;height:18px;border-radius:50%;background:#fff;   /* 对比度：固定（未开时的白滑块） */
   box-shadow:0 1px 2px rgba(0,0,0,.3);transition:inset-inline-start .15s}
 input[type=checkbox].sw:checked{background:var(--accent)}
-input[type=checkbox].sw:checked::after{inset-inline-start:21px}
+input[type=checkbox].sw:checked::after{inset-inline-start:21px;background:var(--on-accent)}   /* 逐月深色强调色是白：滑块跟着变黑，不然看不见 */
 input[type=checkbox].sw:disabled{opacity:.45;cursor:default}
 /* 窄：控件掉到说明下面整行 */
 #tab-settings.set-one .srow:has(.sc select),#tab-settings.set-one .srow:has(.sc input:not(.sw):not(.narrow)){flex-direction:column;align-items:stretch;gap:8px}
@@ -2235,7 +2237,7 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 .pj-sfoot .btn,.pj-smain .btn{width:auto;margin:0}
 .pj-sfoot .btn.sm{padding:8px 16px;font-size:14px;border-radius:10px}
 .pj-sfoot .btn.ghost{color:var(--fg)}
-.btn.danger-fill{background:var(--err);color:#fff}
+.btn.danger-fill{background:var(--err);color:#fff}   /* 对比度：固定（红底白字） */
 .pj-frow{margin:var(--g3) 0}
 .pj-frow > label{display:block;font-size:13px;font-weight:600;color:var(--fg2);margin-bottom:var(--g1)}
 .pj-hint{font-size:12px;color:var(--fg3);margin-top:var(--g1);line-height:1.5}
@@ -2502,7 +2504,7 @@ html[data-skin="zhuyue"]{
 }
 html[data-skin="zhuyue"][data-theme="light"]{
   --bg:#ffffff; --bg2:#f5f5f5; --bg3:#f0f0f0; --bg4:#e8e8e8; --line:#eeeeee;
-  --fg:#141414; --fg2:#5c5c5c; --fg3:#9a9a9a;
+  --fg:#141414; --fg2:#5c5c5c; --fg3:#888888;
   --accent:#141414; --accent-dim:#cfcfcf; --on-accent:#ffffff; --zy-blue:#2b80f7;
   --ok:#16a34a; --err:#dc2626; --warn:#b45309; --tool:#2b80f7; --purple:#7650c0;
   --bar-bg:#ffffff; --bar-bg2:#ffffff; --veil:rgba(255,255,255,.88);
