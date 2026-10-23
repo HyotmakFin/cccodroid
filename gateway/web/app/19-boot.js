@@ -293,6 +293,54 @@
     };
     chatEl.addEventListener("touchend", end, { passive: true });
     chatEl.addEventListener("touchcancel", end, { passive: true });
+
+    // 收回：侧栏开着时，在侧栏或遮罩上从右往左推（RTL 反过来），侧栏跟手退回去；推过三分之一或甩得快就收起，否则弹回。
+    // 同样先判方向（横向明显大于竖向才接管，竖着滑照常滚对话列表）；拖宽度的把手、输入框、能往左滚的横向内容不接管
+    let c = null;
+    const hScrollableIn = (el) => {
+      for (; el && el !== drawerEl; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)
+            && (rtl() ? el.scrollLeft > -(el.scrollWidth - el.clientWidth) + 1 : el.scrollLeft < el.scrollWidth - el.clientWidth - 1)) return true;
+      return false;
+    };
+    drawerEl.addEventListener("touchstart", (e) => {
+      c = null;
+      if (e.touches.length !== 1 || drawerEl.classList.contains("hidden") || (window.CCLayout && CCLayout.docked()) || OV.top()) return;
+      if (e.target.closest("textarea,input,select,.drawer-split") || String(getSelection() || "").length || hScrollableIn(e.target)) return;
+      const p = e.touches[0];
+      c = { x: p.clientX, y: p.clientY, on: false, w: 0, dx: 0, lastX: p.clientX, lastT: performance.now(), v: 0 };
+    }, { passive: true });
+    drawerEl.addEventListener("touchmove", (e) => {
+      if (!c || e.touches.length !== 1) { c = null; return; }
+      const p = e.touches[0], dx = (c.x - p.clientX) * (rtl() ? -1 : 1), dy = p.clientY - c.y;   // dx > 0：往收起的方向推
+      if (!c.on) {
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+        if (!(dx > 0 && dx > 1.6 * Math.abs(dy)) || !e.cancelable) { c = null; return; }
+        c.on = true;
+        c.w = panel.getBoundingClientRect().width || 300;
+        panel.style.animation = "none";               // 别让收起途中再播滑入动画
+        panel.style.transition = drawerEl.style.transition = "none";
+      }
+      e.preventDefault();
+      const now = performance.now();
+      c.v = ((c.lastX - p.clientX) * (rtl() ? -1 : 1)) / Math.max(1, now - c.lastT);
+      c.lastX = p.clientX; c.lastT = now;
+      c.dx = Math.max(0, Math.min(c.w, dx - 12));
+      panel.style.transform = `translateX(${(rtl() ? 1 : -1) * c.dx}px)`;
+      scrim(1 - c.dx / c.w);
+    }, { passive: false });
+    const endClose = () => {
+      const s = c; c = null;
+      if (!s || !s.on) return;
+      const shut = s.dx > s.w / 3 || s.v > 0.5;
+      panel.style.transition = "transform .18s ease";
+      drawerEl.style.transition = "background-color .18s ease";
+      panel.style.transform = shut ? `translateX(${(rtl() ? 1 : -1) * s.w}px)` : "translateX(0)";
+      scrim(shut ? 0 : 0.999);
+      setTimeout(() => { if (shut) closeDrawer(true); else reset(); }, 190);
+    };
+    drawerEl.addEventListener("touchend", endClose, { passive: true });
+    drawerEl.addEventListener("touchcancel", endClose, { passive: true });
   })();
 
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。
