@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
+import { CFG, GLIBC_PRELOAD, PATHS, PREFIX, glibcEnv, log, tz } from "./config.mjs";
 import { ledger } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";
@@ -28,8 +28,8 @@ const cmpVer = (a, b) => {
 /** 跑某个 claude 二进制的 --version（新下载的那个在换上去之前先这样试跑一次） */
 function claudeVersionOf(bin) {
   return new Promise((ok) => {
-    const pre = PATHS.preload && fs.existsSync(PATHS.preload) ? ["--preload", PATHS.preload] : [];
-    execFile(PATHS.loader, ["--library-path", PATHS.glibcLib, ...pre, bin, "--version"], { timeout: 30000 }, (e, out) => {
+    const pre = GLIBC_PRELOAD ? ["--preload", GLIBC_PRELOAD] : [];
+    execFile(PATHS.loader, ["--library-path", PATHS.glibcLib, ...pre, bin, "--version"], { timeout: 30000, env: glibcEnv() }, (e, out) => {
       const m = String(out || "").match(/\d+\.\d+\.\d+/);
       ok(m ? m[0] : "");
     });

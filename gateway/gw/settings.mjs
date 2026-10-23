@@ -97,6 +97,39 @@ applyProvider();
 // ── 路由：/api/settings ──
 export async function routeSettings(req, res, u, p) {
   // ── 设置 ──
+  // 执行方式（targetSdk 28 / 36 双方案）：偏好写在 files/.exec-mode，由 Env.java 读，GatewayService 每次拉起网关都重读 ——
+  // 所以改完重启网关就生效。targetSdk ≥ 29 的包只能经加载器，选「直接」会被拒
+  if (p === "/api/exec-mode") {
+    const f = path.join(CFG.runtime, ".exec-mode");
+    const sdk = Number(process.env.CCAPP_TARGET_SDK || 0), must = sdk >= 29;
+    const pref = () => { try { return fs.readFileSync(f, "utf8").trim() || "auto"; } catch { return "auto"; } };
+    if (req.method === "GET") {
+      // 选了经加载器却没切过去，多半是 APK 里的 ld.so 和工具包里现装的不是同一份（Env.ldsoMatches）：把原因交给界面
+      let ldso = "";
+      if (process.env.CCAPP_NATIVE_LIB) {
+        const a = path.join(process.env.CCAPP_NATIVE_LIB, "libldlinux.so"), b = path.join(PATHS.glibcLib, "ld-linux-aarch64.so.1");
+        try { ldso = fs.readFileSync(a).equals(fs.readFileSync(b)) ? "same" : "differ"; } catch { ldso = "missing"; }
+      }
+      return sendJson(res, 200, { pref: pref(), active: process.env.CCAPP_EXEC || "direct", must, targetSdk: sdk, ldso });
+    }
+    if (req.method === "POST") {
+      const b = JSON.parse((await readBody(req)) || "{}");
+      if ("mode" in b) {
+        const m = String(b.mode);
+        if (!["auto", "direct", "loader"].includes(m)) return sendJson(res, 400, { error: "bad mode" });
+        if (must && m === "direct") return sendJson(res, 409, { error: tz("这个版本（targetSdk {n}）只能经加载器运行，不能切到直接执行", { n: sdk }) });
+        if (m === "auto") fs.rmSync(f, { force: true }); else fs.writeFileSync(f, m + "\n");
+        log(`执行方式偏好改为 ${m}`);
+      }
+      if (b.restart) {
+        if (RUNS.size) return sendJson(res, 409, { error: tz("还有任务在跑，等它们结束再重启") });
+        log("按设置重启网关（执行方式）");
+        setTimeout(() => process.kill(process.pid, "SIGTERM"), 300);   // 走正常收尾；GatewayService 会马上再拉起
+      }
+      return sendJson(res, 200, { ok: true, pref: pref(), restart: !!b.restart });
+    }
+  }
+
   if (p === "/api/settings") {
     if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, maxParallel: maxParallel(), maxParallelCap: MAX_PARALLEL_CAP, workspace: CFG.workspace, outputStyles: outputStyles() });
     if (req.method === "POST") {

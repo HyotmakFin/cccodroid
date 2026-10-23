@@ -250,8 +250,11 @@ else {
 // ── 5. 先试跑新版，跑得起来才换上，留一版旧的 ─────────────────────
 // 先换 current 再试跑的话，试跑失败会让 current 指着一个跑不起来的版本，旧版明明还在却用不上
 fs.chmodSync(BIN, 0o755);
-const P = process.env.CCAPP_CLAUDE_PRELOAD && fs.existsSync(process.env.CCAPP_CLAUDE_PRELOAD) ? ["--preload", process.env.CCAPP_CLAUDE_PRELOAD] : [];
-const r = spawnSync(path.join(PREFIX, "glibc/lib/ld-linux-aarch64.so.1"), ["--library-path", path.join(PREFIX, "glibc/lib"), ...P, BIN, "--version"], { stdio: "inherit" });
+// 经加载器时（targetSdk 36）用 APK 里的 ld.so、多挂 exec-shim.so，并摘掉 bionic 的 LD_PRELOAD（见 Env.java applyLoader）
+const PL = process.env.CCAPP_GLIBC_PRELOAD || (process.env.CCAPP_CLAUDE_PRELOAD && fs.existsSync(process.env.CCAPP_CLAUDE_PRELOAD) ? process.env.CCAPP_CLAUDE_PRELOAD : "");
+const P = PL ? ["--preload", PL] : [];
+const GENV = { ...process.env }; delete GENV.LD_PRELOAD;
+const r = spawnSync(process.env.CCAPP_LD || path.join(PREFIX, "glibc/lib/ld-linux-aarch64.so.1"), ["--library-path", path.join(PREFIX, "glibc/lib"), ...P, BIN, "--version"], { stdio: "inherit", env: GENV });
 if (r.status !== 0) die("新版本试跑失败（--version 没跑通），没有换上，继续用原来的版本");
 const cur = path.join(DEST, "current");
 let prev = ""; try { prev = fs.readlinkSync(cur); } catch {}

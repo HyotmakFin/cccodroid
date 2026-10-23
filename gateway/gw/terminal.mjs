@@ -80,6 +80,8 @@ export function termEnv() {
   const loc = path.join(PATHS.toolchain, "dshtc", "prefix", "glibc", "lib", "locale");
   if (!PREFIX && !env.LOCPATH && fs.existsSync(loc)) env.LOCPATH = loc;
   env.CCAPP_TERMINAL = "1";
+  // 经加载器：claudeEnv 摘掉了 LD_PRELOAD（给 glibc 用的），终端这边全是 bionic，得挂回 termux-exec，ptyhost 才拉得起 shell
+  if (process.env.CCAPP_BIONIC_PRELOAD) env.LD_PRELOAD = process.env.CCAPP_BIONIC_PRELOAD;
   return env;
 }
 

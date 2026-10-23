@@ -30,7 +30,8 @@ const TERMUX = "/data/data/com.termux/";
 const TARGET = "/data/data/" + (FILES.match(/^\/data\/(?:data|user\/\d+)\/([^/]+)\/files$/) || [])[1] + "/";
 const BIN = (n) => path.join(PREFIX, "bin", n);
 if (TARGET.length !== TERMUX.length) { console.error(`pkg：本应用的包名必须恰好 10 个字符才能等长改写（现在是 ${TARGET}）`); process.exit(1); }
-const ENV = { ...process.env, PATH: [path.join(PREFIX, "bin"), process.env.PATH].join(":"), LD_PRELOAD: "" };
+// 经加载器（targetSdk 36）时 dpkg 脚本等仍要 termux-exec 的 linker 版，才能起数据目录里的程序
+const ENV = { ...process.env, PATH: [path.join(PREFIX, "bin"), process.env.PATH].join(":"), LD_PRELOAD: process.env.CCAPP_BIONIC_PRELOAD || "" };
 
 // 和工具包用同一组仓库（devkit/devkit.json 的 repos）
 const REPOS = [

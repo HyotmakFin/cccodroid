@@ -534,6 +534,10 @@
             <div class="sl"><b data-i18n>静态程序兼容</b><p data-i18n>罩住 claude 拉起的所有程序</p><p class="clamp" data-i18n>网上下载的静态程序（多是 Go 写的命令行工具和 MCP 服务器）会用到安卓禁止的新系统调用，直接被系统杀掉。开着它，这些调用会改成「不支持」，程序自己退回老办法接着跑。每次启动子程序多一点点开销；遇到怪问题可以关掉试试，下一条消息生效。</p></div>
             <div class="sc"><input type="checkbox" class="sw" id="set-static"></div>
           </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>执行方式</b><p id="exec-now"></p><p class="clamp" data-i18n>自动：按安装包定。直接执行：工具包里的程序直接运行（targetSdk 28 的安装包）。经加载器：借系统加载器间接运行，targetSdk 36 的安装包只能这样；28 的也能选，用来排查问题。改完重启网关才生效。</p></div>
+            <div class="sc"><select id="set-exec"><option value="auto" data-i18n>自动</option><option value="direct" data-i18n>直接执行</option><option value="loader" data-i18n>经加载器</option></select></div>
+          </div>
           <!-- 内存管家（cc-mem）：重活前清场、压住杀了又活的后台应用。默认关，经 Shizuku -->
           <div class="sblock" id="mem-field">
             <div class="srow head">

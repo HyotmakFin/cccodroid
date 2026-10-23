@@ -152,9 +152,12 @@ public class GatewayService extends Service {
     }
 
     private void spawnGateway() throws Exception {
+        env = new Env(this);                 // 每次重读：执行方式（files/.exec-mode）改了，重启网关就生效
+        Log.i(TAG, "执行方式 pref=" + Env.execPref(this) + " targetSdk=" + env.targetSdk + " loader=" + env.loader + " ldso=" + env.ldsoMatches());
         File server = new File(env.app, "server.mjs");
-        ProcessBuilder pb = new ProcessBuilder(env.bin("node").getPath(), server.getPath(), String.valueOf(Env.PORT));
+        ProcessBuilder pb = new ProcessBuilder(env.cmd(env.bin("node").getPath(), server.getPath(), String.valueOf(Env.PORT)));
         env.apply(pb.environment());
+        if (env.loader) pb.environment().put("TERMUX_EXEC__PROC_SELF_EXE", env.bin("node").getPath());   // 给 execpath.cjs
         pb.directory(env.app);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(env.home, "gateway.out")));

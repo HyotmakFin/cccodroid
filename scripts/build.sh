@@ -58,6 +58,11 @@ $CC_ANDROID -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack 
 $CC_ANDROID -O2 -o "$A/assets/app/lib/seccomp-enosys-run" "$A/native/seccomp-enosys-run.c"
 # 应用内终端的伪终端（node 没有 pty）：stdin/stdout 与 pty 对转，fd 3 收窗口大小
 $CC_ANDROID -O2 -o "$A/assets/app/lib/ptyhost" "$A/native/ptyhost.c"
+# 「经加载器」执行方式（targetSdk 36 只能这样）：glibc 程序拉子进程时的 exec 改写垫片，和 seccomp-enosys.so 一起 --preload 给 claude；
+# execpath.cjs 给经 linker64 起的 node 纠正 process.execPath（NODE_OPTIONS --require）
+$CC_ANDROID -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
+  -o "$A/assets/app/lib/exec-shim.so" "$A/native/exec-shim.c"
+cp "$A/native/execpath.cjs" "$A/assets/app/lib/"
 TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/gw/"* "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
@@ -73,6 +78,15 @@ echo "▸ d8"
 $D8 --release --min-api 26 \
   --lib "$AJAR" --output "$A/build" $(find "$A/build/classes" -name '*.class') "$ROOT"/third_party/shizuku/*.jar
 
+# 「经加载器」要的 glibc ld.so：targetSdk 36 只能 exec APK 原生库目录里的文件，ld.so 就以 libldlinux.so 进 lib/。
+# 取钉住那一版工具包锁文件里的同一个 glibc 包（核 sha256）—— ld.so 与工具包里的 libc.so.6 必须出自同一次构建
+PIN_BASE=$(node -p 'require(process.argv[1]).base' "$A/assets/devkit-pin.json")
+PIN_TARGET=$(node -p 'require(process.argv[1]).target' "$A/assets/devkit-pin.json")
+LOCK="$ROOT/devkit/cache/lock-$(node -p 'require(process.argv[1]).tag' "$A/assets/devkit-pin.json").json"
+mkdir -p "$ROOT/devkit/cache" "$A/build/lib/arm64-v8a"
+[ -s "$LOCK" ] || curl -fsSL --retry 3 -o "$LOCK" "${PIN_BASE}devkit.lock.json"
+node "$ROOT/devkit/devkit.mjs" ldso --lock "$LOCK" --target "$PIN_TARGET" --out "$A/build/lib/arm64-v8a/libldlinux.so"
+
 echo "▸ aapt2 + 签名"
 mkdir -p "$OUT"
 $AAPT2 compile --dir "$A/res" -o "$A/build/res.zip"
@@ -80,7 +94,7 @@ $AAPT2 link -o "$A/build/unsigned.apk" -I "$AJAR" \
   --manifest "$A/AndroidManifest.xml" -A "$A/assets" "$A/build/res.zip"
 if [ "$SIGN" = apksigner ]; then
   # SDK 的 apksigner：先把 classes.dex 塞进包、对齐，再签（最低 API 26，它自己决定出 v2 / v3）
-  ( cd "$A/build" && zip -q unsigned.apk classes.dex )
+  ( cd "$A/build" && zip -q unsigned.apk classes.dex && zip -q -0 unsigned.apk lib/arm64-v8a/libldlinux.so )
   ${ZIPALIGN:-zipalign} -p -f 4 "$A/build/unsigned.apk" "$A/build/aligned.apk"
   if [ -n "$KS" ]; then
     ${APKSIGNER:-apksigner} sign --ks "$KS" --ks-pass "pass:${KS_PASS:-android}" --out "$OUT/cccodroid.apk" "$A/build/aligned.apk"
@@ -98,7 +112,8 @@ else
 node --input-type=module -e "
 import fs from 'node:fs'; import { signApk } from '$B/apklib.mjs';
 const r = signApk('$A/build/unsigned.apk', '$OUT/cccodroid.apk',
-  [{ name: 'classes.dex', data: fs.readFileSync('$A/build/classes.dex'), method: 8 }], '$KEY');
+  [{ name: 'classes.dex', data: fs.readFileSync('$A/build/classes.dex'), method: 8 },
+   { name: 'lib/arm64-v8a/libldlinux.so', data: fs.readFileSync('$A/build/lib/arm64-v8a/libldlinux.so'), method: 0 }], '$KEY');
 console.log('  ' + r.entries + ' 个条目 · ' + (r.size / 1048576).toFixed(2) + ' MB');
 "
 fi

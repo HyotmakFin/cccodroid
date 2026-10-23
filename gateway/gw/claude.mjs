@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { CFG, NO_BRIDGE, PATHS, PREFIX, log, sleep } from "./config.mjs";
+import { CFG, GLIBC_PRELOAD, NO_BRIDGE, PATHS, PREFIX, glibcEnv, log, sleep } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { PROVIDER, keyOf } from "./providers.mjs";
 import { cachedModels } from "./models.mjs";
@@ -36,7 +36,8 @@ export function ensureShell() {
     // 直接执行都是 bad interpreter。termux-exec 在 execve 时把这些解释器改指到 $PREFIX/bin。
     // 必须在 bash 启动前就设上 —— 已经在跑的 bash 后来再 export 也救不了它自己的 exec（实测）。
     // 代价：glibc 程序继承到它会起不来（claude 本体就是），所以 app/bin/claude 包装里会先清掉。
-    const tx = PREFIX ? path.join(PREFIX, "lib", "libtermux-exec-ld-preload.so") : "";
+    // 经加载器时用 termux-exec 的 linker 版（Env.java 给的 CCAPP_BIONIC_PRELOAD）：数据目录里的程序都改成经 linker64 起
+    const tx = process.env.CCAPP_BIONIC_PRELOAD || (PREFIX ? path.join(PREFIX, "lib", "libtermux-exec-ld-preload.so") : "");
     const pre = tx && fs.existsSync(tx) ? 'export LD_PRELOAD="' + tx + '"\n' : "";
     const body = '#!/system/bin/sh\nunset CLAUDE_CODE_EXECPATH\n' + pre + 'exec "' + real + '" "$@"\n';
     let need = true;
@@ -280,12 +281,12 @@ export function claudeEnv(o = {}) {
   for (const [k, v] of Object.entries(p.extraEnv || {})) {
     if (/^[A-Z_][A-Z0-9_]*$/.test(k) && !/^ANTHROPIC_(BASE_URL|API_KEY|AUTH_TOKEN)$/.test(k)) env[k] = String(v);
   }
-  return env;
+  return glibcEnv(env);
 }
 
 /** claude 是 glibc 程序，必须经 loader 启动 */
 export function claudeArgv(extra) {
-  const pre = PATHS.preload && fs.existsSync(PATHS.preload) ? ["--preload", PATHS.preload] : [];
+  const pre = GLIBC_PRELOAD ? ["--preload", GLIBC_PRELOAD] : [];
   return ["--library-path", PATHS.glibcLib, ...pre, PATHS.claude, ...extra];
 }
 

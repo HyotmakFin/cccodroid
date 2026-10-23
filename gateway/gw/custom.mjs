@@ -3,7 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
+import { CFG, GLIBC_PRELOAD, PATHS, PREFIX, glibcEnv, log, tz } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { enosysRun } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
@@ -301,7 +301,7 @@ function customWrapper(id, p, appDir, libs, opts) {
   const erLine = `ER=${shq(er)}; [ -n "$ER" ] && [ -x "$ER" ] || ER=\n`;
   if (p.kind === "glibc") {
     if (opts.gpu) { const own = libs.filter((l) => l !== PATHS.glibcLib); return head + `exec ${shq(path.join(PREFIX, "bin", "lgpu-run"))}${own.length ? " -L " + shq(own.join(":")) : ""} -- ${shq(prog)} "$@"\n`; }
-    const pre = PATHS.preload && fs.existsSync(PATHS.preload) ? ` --preload ${shq(PATHS.preload)}` : "";
+    const pre = GLIBC_PRELOAD ? ` --preload ${shq(GLIBC_PRELOAD)}` : "";
     if (opts.patchelf) return head + `unset LD_PRELOAD LD_LIBRARY_PATH\n` + erLine + `exec $ER \${ER:+-f} ${shq(prog)} "$@"\n`;
     // 摘掉 termux-exec 的 bionic 垫片（glibc 的 ld.so 带不了它）；库路径里只放 glibc 的目录
     return head + `unset LD_PRELOAD LD_LIBRARY_PATH\n` + erLine +

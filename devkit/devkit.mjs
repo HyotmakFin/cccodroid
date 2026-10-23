@@ -597,6 +597,33 @@ function loadRecipe(dir) {
 // 发布版本：上游版本（配方可用 version 自己指定，fetch 型组件就靠它）+ 配方修订号 —— 修订号一直生效，
 // 上游没变、只改了 skill 或包装脚本时加一就能发新版。预置组件（devkit.json）没有修订号。
 const compVersion = (up) => (RECIPE_DIR ? `${COMP.version || up}-r${COMP.revision || 1}` : COMP.version || up);
+// ldso：给 APK「经加载器」执行方式抽出 glibc 的 ld.so（build.sh 打进 lib/arm64-v8a/libldlinux.so）。
+// targetSdk 36 不能 exec 数据目录里的 ld.so，只能 exec APK 原生库目录里的文件。
+// 按工具包锁文件记的那个 glibc deb 取并核 sha256：ld.so 与工具包里的 libc.so.6 必须出自同一次构建，否则 GLIBC_PRIVATE 对不上
+//   node devkit.mjs ldso --lock <devkit.lock.json> [--target 包名] [--out 文件]
+if (cmd === "ldso") {
+  const lock = JSON.parse(fs.readFileSync(opt("lock") || (() => { throw new Error("--lock <工具包的 devkit.lock.json> 必填"); })(), "utf8"));
+  const target = opt("target", lock.target);
+  const rec = lock.packages.find((p) => p.name === "glibc");
+  if (!rec) throw new Error("锁文件里没有 glibc");
+  const deb = await fetchDeb({ ...rec, repo: REPOS.find((r) => (r.name || "main") === rec.repo) || REPOS[0] });
+  const dir = TERMUX.slice(1) + "files/usr/glibc/lib/";
+  const ents = [...readTar(await dataTar(deb))];
+  let name = "ld-linux-aarch64.so.1", e;
+  for (let hop = 0; hop < 4; hop++) {
+    e = ents.find((x) => x.name.replace(/^\.\//, "") === dir + name);
+    if (!e || e.type !== "2") break;
+    name = path.basename(e.link);           // 软链：跟到同目录的真文件
+  }
+  if (!e || e.type !== "0") throw new Error("glibc 包里没找到 ld-linux-aarch64.so.1");
+  const [buf, n] = relocator(target).swap(e.data);
+  const out = opt("out", path.join(OUT, `ldso-${target}.so`));
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, buf, { mode: 0o755 });
+  console.log(`✓ ${out}  glibc ${rec.version} · ${buf.length} 字节 · 前缀改写 ${n} 处 · sha256 ${sha256(buf)}`);
+  process.exit(0);
+}
+
 const BASE = COMP ? JSON.parse(fs.readFileSync(opt("base") || (() => { throw new Error("--base <工具包的 devkit.lock.json> 必填"); })(), "utf8")) : null;
 // build --plan：用划分时冻结下来的包记录，不再拉索引。同一个 Release 的整包和各块因此一定出自同一份快照
 // （deb 进了缓存，后面几次打包不再联网；Termux 中途更新也不会让整包和模块对不上）

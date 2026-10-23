@@ -135,6 +135,12 @@ server.listen(CFG.port, "127.0.0.1", () => {
   log(`  模型   ${SETTINGS.model}   权限 ${SETTINGS.permissionMode}`);
   if (!fs.existsSync(PATHS.claude)) log(`  ⚠️ 未找到 claude: ${PATHS.claude}`);
   if (!fs.existsSync(PATHS.loader)) log(`  ⚠️ 未找到 glibc loader: ${PATHS.loader}`);
+  if (process.env.CCAPP_EXEC === "loader") {
+    // 经加载器（targetSdk 36）：APK 里的 ld.so 必须和工具包里的 libc 同版本，不同就是 APK 先升了、工具包还没跟上
+    let same = false;
+    try { same = fs.readFileSync(PATHS.loader).equals(fs.readFileSync(path.join(PATHS.glibcLib, "ld-linux-aarch64.so.1"))); } catch {}
+    log(`  执行方式 经加载器 · ld.so ${same ? "与工具包一致" : "⚠️ 与工具包里的不一致，claude 可能起不来：更新工具包"}`);
+  }
   log(`  历史会话 ${listSessions(500).length} 个`);
   try { reapOrphans(); } catch (e) { log("孤儿进程清理失败: " + e.message); }
   try { expireTrash(); } catch (e) { log("回收站清理失败: " + e.message); }

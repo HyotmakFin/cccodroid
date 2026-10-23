@@ -620,7 +620,7 @@ final class Installer {
     }
 
     int run(String... cmd) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(cmd);
+        ProcessBuilder pb = new ProcessBuilder(env.cmd(cmd));
         env.apply(pb.environment());
         pb.directory(env.home);
         pb.redirectErrorStream(true);

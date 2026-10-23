@@ -373,6 +373,7 @@
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
       $("set-static").checked = state.settings.staticCompat !== false;
       $("set-idlecompact").checked = state.settings.idleCompaction !== false;
+      loadExecMode();
     } catch {}
   }
 
@@ -424,6 +425,27 @@
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
 
   $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
+  // 执行方式：存在 files/.exec-mode，重启网关生效（36 的包选「直接执行」网关会拒）
+  async function loadExecMode() {
+    try {
+      const r = await api("/api/exec-mode");
+      $("set-exec").value = r.pref;
+      $("set-exec").querySelector('option[value="direct"]').disabled = !!r.must;
+      let now = t("现在是：{mode}", { mode: t(r.active === "loader" ? "经加载器" : "直接执行") });
+      if (r.ldso === "differ" || r.ldso === "missing") now += " · " + t("安装包里的 glibc 加载器和工具包里的不是同一版，经加载器暂时用不了：先更新工具包");
+      $("exec-now").textContent = now;
+    } catch {}
+  }
+  $("set-exec").addEventListener("change", async (e) => {
+    try {
+      await api("/api/exec-mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: e.target.value }) });
+      if (confirm(t("执行方式已保存。现在重启网关让它生效吗？打开的终端会断开。"))) {
+        await api("/api/exec-mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restart: true }) });
+        toast(t("网关重启中…"));
+      }
+    } catch (err) { toast(err.message || String(err)); }
+    loadExecMode();
+  });
   $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));

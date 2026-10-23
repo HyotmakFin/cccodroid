@@ -30,14 +30,62 @@ final class Env {
     }
 
     final File files, usr, home, app, log;
+    /** 「经加载器」执行方式：数据目录里的程序一律经 /system/bin/linker64（bionic）或 APK 里的 glibc ld.so 起 */
+    final boolean loader;
+    /** APK 原生库目录（libldlinux.so 在这里；targetSdk 36 只能 exec 这里的文件） */
+    final String nativeLib;
+    final String pkg;
+    final int targetSdk;
+    static final String LINKER = "/system/bin/linker64";
 
     Env(Context c) {
         files = c.getFilesDir();
+        nativeLib = c.getApplicationInfo().nativeLibraryDir;
+        pkg = c.getPackageName();
+        targetSdk = c.getApplicationInfo().targetSdkVersion;
         usr = new File(files, "usr");
         home = new File(files, "home");
         app = new File(files, "app");
         log = new File(home, "gateway.log");
         tokenFile = new File(home, ".gateway-token");
+        loader = useLoader(c) && (mustLoader(c) || ldsoMatches());   // 放最后：ldsoMatches 要用到 usr
+    }
+
+    /**
+     * 执行方式。files/.exec-mode 里写 direct / loader，没有就按 targetSdk 定：≥ 29 的包不能直接 exec 数据目录里的文件，只能经加载器。
+     * targetSdk ≥ 29 时写了 direct 也不认（那样什么都起不来）。改了要重启网关才生效
+     */
+    static boolean mustLoader(Context c) { return c.getApplicationInfo().targetSdkVersion >= 29; }
+    static String execPref(Context c) {
+        try { return new String(java.nio.file.Files.readAllBytes(new File(c.getFilesDir(), ".exec-mode").toPath()), "UTF-8").trim(); }
+        catch (Exception e) { return ""; }
+    }
+    static boolean useLoader(Context c) { return mustLoader(c) || "loader".equals(execPref(c)); }
+
+    /**
+     * APK 里的 ld.so 和工具包里现装的是不是同一份。glibc 要求 ld.so 与 libc.so.6 出自同一次构建：
+     * APK 先升级、工具包还没跟上时两者会不一致 —— 28 包此时退回直接执行；36 包没得退，网关日志里会报（见 server.mjs 启动自检）
+     */
+    boolean ldsoMatches() {
+        try {
+            byte[] a = java.nio.file.Files.readAllBytes(new File(nativeLib, "libldlinux.so").toPath());
+            byte[] b = java.nio.file.Files.readAllBytes(new File(usr, "glibc/lib/ld-linux-aarch64.so.1").toPath());
+            return java.util.Arrays.equals(a, b);
+        } catch (Exception e) { return false; }
+    }
+
+    /** 拼要起的命令：经加载器时，数据目录里的 ELF 程序前面加上 linker64 */
+    java.util.List<String> cmd(String... argv) {
+        java.util.List<String> l = new java.util.ArrayList<>(java.util.Arrays.asList(argv));
+        if (loader && isElf(l.get(0)) && !l.get(0).startsWith("/system/")) l.add(0, LINKER);
+        return l;
+    }
+
+    private static boolean isElf(String p) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(p)) {
+            byte[] h = new byte[4];
+            return in.read(h) == 4 && h[0] == 0x7f && h[1] == 'E' && h[2] == 'L' && h[3] == 'F';
+        } catch (Exception e) { return false; }
     }
 
     File bin(String name) { return new File(usr, "bin/" + name); }
@@ -108,5 +156,30 @@ final class Env {
         e.put("CCAPP_LEDGER", Ledger.file(this).getPath());   // 修复账本：网关记安全模式、界面能翻
         e.put("CCAPP_SEED", new File(home, "seed.json").getPath());
         e.put("CCAPP_BIN", new File(app, "bin").getPath());   // 应用自带的小工具（priv）
+        e.put("CCAPP_TARGET_SDK", String.valueOf(targetSdk));
+        e.put("CCAPP_EXEC", loader ? "loader" : "direct");
+        e.put("CCAPP_NATIVE_LIB", nativeLib);
+        if (loader) applyLoader(e);
+    }
+
+    /**
+     * 「经加载器」的环境（与直接执行的差别全在这里）：
+     *  - bionic：LD_PRELOAD 挂 termux-exec 的 linker 版，exec 数据目录里的程序时自动改成 linker64 起；强制模式，28 包上也照样走（便于验证）
+     *  - glibc：claude 经 APK 里的 libldlinux.so 起，--preload 再加 exec-shim.so，Bun 拉子进程时同样改写（见 native/exec-shim.c）
+     *  - node：经 linker64 起时 process.execPath 是 linker64，execpath.cjs 改回真实路径
+     * glibc 进程不能继承 LD_PRELOAD（bionic 库，ld.so 直接报 invalid ELF header）：网关拉 claude 前会摘掉
+     */
+    private void applyLoader(Map<String, String> e) {
+        String ld = new File(nativeLib, "libldlinux.so").getPath();
+        String tx = new File(usr, "lib/libtermux-exec-linker-ld-preload.so").getPath();
+        e.put("CCAPP_LD", ld);
+        e.put("CCAPP_LOADER", ld);
+        e.put("CCAPP_GLIBC_PRELOAD", new File(app, "lib/seccomp-enosys.so").getPath() + ":" + new File(app, "lib/exec-shim.so").getPath());
+        e.put("CCAPP_BIONIC_PRELOAD", tx);
+        e.put("LD_PRELOAD", tx);
+        e.put("TERMUX_APP__DATA_DIR", files.getParent());
+        e.put("TERMUX_APP__LEGACY_DATA_DIR", "/data/data/" + pkg);
+        e.put("TERMUX_EXEC__SYSTEM_LINKER_EXEC__MODE", "force");
+        e.put("NODE_OPTIONS", "--require=" + new File(app, "lib/execpath.cjs").getPath());
     }
 }

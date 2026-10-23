@@ -39,6 +39,15 @@ export const PATHS = {
   projects: path.join(CFG.home, ".claude", "projects"),
 };
 
+// 给 glibc 程序 --preload 的库（冒号分隔）。经加载器时 Env.java 给的是 seccomp-enosys.so + exec-shim.so
+export const GLIBC_PRELOAD = process.env.CCAPP_GLIBC_PRELOAD || (PATHS.preload && fs.existsSync(PATHS.preload) ? PATHS.preload : "");
+/** glibc 进程的环境：摘掉 LD_PRELOAD —— 经加载器时网关环境里挂着 termux-exec（bionic 库），glibc 的 ld.so 读到直接报 invalid ELF header */
+export function glibcEnv(env = process.env) {
+  const e = { ...env };
+  delete e.LD_PRELOAD;
+  return e;
+}
+
 // ── 工具函数 ──────────────────────────────────────────────────────────
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TS = () => new Date().toISOString().slice(11, 19);

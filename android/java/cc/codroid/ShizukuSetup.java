@@ -437,7 +437,7 @@ final class ShizukuSetup {
         List<String> cmd = new ArrayList<>();
         cmd.add(env.bin("adb").getPath());
         Collections.addAll(cmd, args);
-        ProcessBuilder pb = new ProcessBuilder(cmd);
+        ProcessBuilder pb = new ProcessBuilder(env.cmd(cmd.toArray(new String[0])));
         env.apply(pb.environment());
         pb.directory(env.home);
         pb.redirectErrorStream(true);
