@@ -2470,3 +2470,44 @@ html.side-drag .drawer-panel{animation:none;transition:none}
 .qb-warn{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;color:var(--fg2)}
 .qb-warn label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .qb-warn input[type=number]{width:7em;margin:0;padding:4px 8px}
+
+/* ───────────── 逐月风格（设置 → 外观 → 逐月 · 浅色 / 深色）─────────────
+   照 Kimi 手机 App 的观感取色（用户 10-23 给的浅 / 深两套截图逐点取样）：
+   浅色是白底、侧栏与整页浅灰 #f5f5f5、卡片纯白；深色是近黑 #111、卡片 #1f1f1f、气泡与输入框 #292929；
+   强调色是同一支亮蓝（浅 #2b80f7 / 深 #2f86f2）。形状上：输入框整条胶囊、用户气泡大圆角无边、
+   有序列表的序号用强调色。只换颜色和这几处形状，布局与原生一致，没有额外动效。 */
+html[data-skin="zhuyue"]{
+  --bg:#111111; --bg2:#1a1a1a; --bg3:#1f1f1f; --bg4:#292929; --line:#2b2b2b;
+  --fg:#f2f2f2; --fg2:#bdbdbd; --fg3:#7a7a7a;
+  --accent:#2f86f2; --accent-dim:#1d4f8f;
+  --ok:#3ecf7a; --err:#f25a5a; --warn:#f0a020; --tool:#5aa0ff; --purple:#a78bfa;
+  --bar-bg:#111111; --bar-bg2:#111111; --veil:rgba(17,17,17,.86);
+  --strong:#ffffff; --code-bg:#1a1a1a; --think-bg:#1a1a1a; --more-bg:#1f1f1f; --more-line:#333333;
+  --user-bg:#292929; --user-line:#292929; --sys-bg:#1a1f27; --sys-line:#2c3a4f;
+  --tool-bg:#1a1a1a; --tool-line:#292929; --tool-sep:#1f1f1f; --cmd-bg:#1c1e22;
+  --err-bg:#3a1d1d; --err-line:#6b2b2b; --err-fg:#f6a6a0; --active-bg:#1d2a3d;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
+  --panel:#1f1f1f; --input-bg:#292929;
+}
+html[data-skin="zhuyue"][data-theme="light"]{
+  --bg:#ffffff; --bg2:#f5f5f5; --bg3:#f0f0f0; --bg4:#e8e8e8; --line:#eeeeee;
+  --fg:#141414; --fg2:#5c5c5c; --fg3:#9a9a9a;
+  --accent:#2b80f7; --accent-dim:#b9d5fd;
+  --ok:#16a34a; --err:#dc2626; --warn:#b45309; --tool:#1f6fe0; --purple:#7650c0;
+  --bar-bg:#ffffff; --bar-bg2:#ffffff; --veil:rgba(255,255,255,.88);
+  --strong:#000000; --code-bg:#f7f7f7; --think-bg:#f7f7f7; --more-bg:#f0f0f0; --more-line:#e5e5e5;
+  --user-bg:#f5f5f5; --user-line:#f5f5f5; --sys-bg:#f5f7fa; --sys-line:#e3e8ef;
+  --tool-bg:#f7f7f7; --tool-line:#eeeeee; --tool-sep:#f2f2f2; --cmd-bg:#f6f8fb;
+  --err-bg:#fdecea; --err-line:#f5c2bb; --err-fg:#ba2723; --active-bg:#e6f0fe;
+  --shadow:rgba(0,0,0,.08); --scrim:rgba(0,0,0,.24);
+  --panel:#ffffff; --input-bg:#ffffff;
+}
+/* 顶栏、输入区不画分隔线；输入框整条胶囊，浅色带一层很淡的投影 */
+html[data-skin="zhuyue"] #composer{border-top-color:transparent}
+html[data-skin="zhuyue"] #topbar{border-bottom-color:transparent}
+html[data-skin="zhuyue"] #composer-inner{background:var(--input-bg);border-radius:28px;border-color:var(--line);box-shadow:0 4px 18px var(--shadow)}
+html[data-skin="zhuyue"] .msg.user .bubble{border-radius:22px;border-color:transparent}
+/* 浅色：整页铺浅灰，卡片是白的（Kimi 设置页的样子） */
+html[data-skin="zhuyue"][data-theme="light"] #pages{background:var(--bg2)}
+/* 有序列表的序号用强调色 */
+html[data-skin="zhuyue"] .bubble ol > li::marker{color:var(--accent);font-weight:600}

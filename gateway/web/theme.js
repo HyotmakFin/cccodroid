@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
-//  theme.js —— 外观：两套风格（原生 / 求索）× 浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
+//  theme.js —— 外观：三套风格（原生 / 求索 / 逐月）× 浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
 //
-//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"，求索风格加前缀 "qs-"。
-//  结果写到 <html data-theme="light|dark" data-skin="native|qiusuo">，样式只认这两个属性（style.css 里的变量表）。
+//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"，求索风格加前缀 "qs-"，逐月加 "zy-"。
+//  结果写到 <html data-theme="light|dark" data-skin="native|qiusuo|zhuyue">，样式只认这两个属性（style.css 里的变量表）。
 //
 //  「跟随系统」靠什么判断：
 //    · 壳里有 CCApp.nightMode() 就以它为准 —— 应用主题固定是深色时，WebView 的
@@ -13,9 +13,12 @@
 // ─────────────────────────────────────────────────────────────────────
 (function () {
   const LS = "ccapp.theme";
-  const MODES = ["auto", "light", "dark", "qs-auto", "qs-light", "qs-dark"];
+  const MODES = ["auto", "light", "dark", "qs-auto", "qs-light", "qs-dark", "zy-auto", "zy-light", "zy-dark"];
+  const PREFIX = { native: "", qiusuo: "qs-", zhuyue: "zy-" };
+  const skinOf = (p) => (p.startsWith("qs-") ? "qiusuo" : p.startsWith("zy-") ? "zhuyue" : "native");
+  const modeOf = (p) => p.replace(/^(qs|zy)-/, "");
   // 状态栏 / 导航栏底色要和页面底色一致（壳那边也有一份同样的表：BrowserPane.bg）
-  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" } };
+  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" }, zhuyue: { dark: "#111111", light: "#ffffff" } };
   const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
   const app = () => (window.CCApp && typeof window.CCApp.nightMode === "function" ? window.CCApp : null);
 
@@ -32,8 +35,8 @@
   }
 
   function apply() {
-    const skin = pref.startsWith("qs-") ? "qiusuo" : "native";
-    const mode = pref.replace(/^qs-/, "");
+    const skin = skinOf(pref);
+    const mode = modeOf(pref);
     const dark = mode === "dark" || (mode === "auto" && systemDark());
     const name = dark ? "dark" : "light";
     const root = document.documentElement;
@@ -76,8 +79,8 @@
   document.addEventListener("change", (e) => { if (e.target && e.target.id === "set-theme") set(e.target.value); }, true);
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("#seg-skin [data-sk], #seg-mode [data-md]"); if (!b) return;
-    const skin = b.dataset.sk || (pref.startsWith("qs-") ? "qiusuo" : "native"), mode = b.dataset.md || pref.replace(/^qs-/, "");
-    set((skin === "qiusuo" ? "qs-" : "") + mode);
+    const skin = b.dataset.sk || skinOf(pref), mode = b.dataset.md || modeOf(pref);
+    set((PREFIX[skin] || "") + mode);
   });
   document.addEventListener("DOMContentLoaded", apply);
 

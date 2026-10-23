@@ -1996,4 +1996,9 @@ window.I18N_DICT.en = {
   "额度与消费": "Quota and spending",
   "额度用到 80% 和 95% 时提醒": "Remind me at 80% and 95% of a limit",
   "余额低于这个数时提醒": "Remind me when the balance drops below",
+  "逐月": "Zhuyue",
+  "逐月 · 跟随系统": "Zhuyue · Follow system",
+  "逐月 · 浅色": "Zhuyue · Light",
+  "逐月 · 深色": "Zhuyue · Dark",
+  "原生、「求索」或「逐月」配色": "Native, Qiusuo or Zhuyue colors",
 };

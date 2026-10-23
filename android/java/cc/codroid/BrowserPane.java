@@ -179,12 +179,16 @@ public class BrowserPane extends LinearLayout {
     }
 
     /** 外壳自己画的东西（状态栏、安装页、对话框、浏览器工具条）和界面同一套色。
-     *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）。
+     *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）| zhuyue（Kimi 式的白 / 近黑 + 亮蓝）。
      *  键：bg 页面底 / card 对话框 / field 输入框 / line 分隔线 / fg 正文 / dim 次要字 / hint 提示字 / accent 强调色 */
     static int pal(Context c, boolean night, String k) {
-        boolean qs = "qiusuo".equals(c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("skin", "native"));
+        String skin = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("skin", "native");
+        boolean qs = "qiusuo".equals(skin);
         String[] keys = { "bg", "card", "field", "line", "fg", "dim", "hint", "accent" };
-        String[] v = qs
+        String[] v = "zhuyue".equals(skin)
+            ? (night ? new String[] { "#111111", "#1f1f1f", "#292929", "#2b2b2b", "#f2f2f2", "#bdbdbd", "#7a7a7a", "#2f86f2" }
+                     : new String[] { "#ffffff", "#ffffff", "#f5f5f5", "#eeeeee", "#141414", "#5c5c5c", "#9a9a9a", "#2b80f7" })
+            : qs
             ? (night ? new String[] { "#151517", "#232324", "#2c2c2e", "#2f3033", "#f9fafb", "#cfd3d6", "#81858c", "#5686fe" }
                      : new String[] { "#ffffff", "#ffffff", "#f1f3f5", "#e5e7eb", "#0f1115", "#61666b", "#81858c", "#4176e6" })
             : (night ? new String[] { "#1f1e1d", "#262624", "#2f2e2b", "#3a3935", "#ece9e1", "#aaa59b", "#7f7a70", "#d97757" }

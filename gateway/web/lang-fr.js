@@ -1962,4 +1962,9 @@ window.I18N_DICT["fr"] = {
   "额度与消费": "Quota et dépenses",
   "额度用到 80% 和 95% 时提醒": "Me prévenir à 80 % et 95 % d’une limite",
   "余额低于这个数时提醒": "Me prévenir quand le solde passe sous",
+  "逐月": "Zhuyue",
+  "逐月 · 跟随系统": "Zhuyue · Suivre le système",
+  "逐月 · 浅色": "Zhuyue · Clair",
+  "逐月 · 深色": "Zhuyue · Sombre",
+  "原生、「求索」或「逐月」配色": "Couleurs natives, Qiusuo ou Zhuyue",
 };
