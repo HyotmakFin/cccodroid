@@ -172,7 +172,8 @@ final class Env {
      */
     private void applyLoader(Map<String, String> e) {
         String ld = new File(nativeLib, "libldlinux.so").getPath();
-        String tx = new File(usr, "lib/libtermux-exec-linker-ld-preload.so").getPath();
+        // bionic 进程：先过 exec-shim-bionic（glibc 程序 / glibc ld.so 改走 APK 里的 ld.so），其余交给 termux-exec 的 linker 版
+        String tx = new File(app, "lib/exec-shim-bionic.so").getPath() + ":" + new File(usr, "lib/libtermux-exec-linker-ld-preload.so").getPath();
         e.put("CCAPP_LD", ld);
         e.put("CCAPP_LOADER", ld);
         e.put("CCAPP_GLIBC_PRELOAD", new File(app, "lib/seccomp-enosys.so").getPath() + ":" + new File(app, "lib/exec-shim.so").getPath());

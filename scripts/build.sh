@@ -62,6 +62,9 @@ $CC_ANDROID -O2 -o "$A/assets/app/lib/ptyhost" "$A/native/ptyhost.c"
 # execpath.cjs 给经 linker64 起的 node 纠正 process.execPath（NODE_OPTIONS --require）
 $CC_ANDROID -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
   -o "$A/assets/app/lib/exec-shim.so" "$A/native/exec-shim.c"
+# 同一份源码的 bionic 版：排在 termux-exec 前面，把 bionic 进程里 exec glibc 程序 / glibc ld.so 改走 APK 里的 ld.so
+$CC_ANDROID -DBIONIC -O2 -shared -fPIC -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
+  -o "$A/assets/app/lib/exec-shim-bionic.so" "$A/native/exec-shim.c" -ldl
 cp "$A/native/execpath.cjs" "$A/assets/app/lib/"
 TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/gw/"* "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"

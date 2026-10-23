@@ -21,13 +21,24 @@
  *
  * 和 seccomp-enosys.so 一样不链 libc（-nostdlib），只在运行时从 glibc 取 getenv / dlsym / __errno_location，
  * 其余用裸系统调用。execve 可能在 vfork 出来的子进程里被调，所以全程只用栈，不 malloc。
+ *
+ * 同一份源码加 -DBIONIC 编出 exec-shim-bionic.so，挂在 bionic 进程的 LD_PRELOAD 里、排在 termux-exec 前面：
+ * termux-exec 的 linker 模式把一切都改成「linker64 <程序>」，可 glibc 程序和 glibc 的 ld.so 交给 linker64 只会报
+ * "Could not find a PHDR"。所以 bionic 这边接三种：glibc 程序、直接 exec 工具包里的 ld.so（组件脚本常这么起），
+ * 改走 $CCAPP_LD；系统程序原样 exec 但保住 LD_PRELOAD（termux-exec 起系统脚本时会摘掉它）。其余交给下一个 execve（termux-exec）。
  */
 typedef unsigned long size_t;
 typedef long ssize_t;
 
 extern char *getenv(const char *);
 extern void *dlsym(void *, const char *);
+#ifdef BIONIC
+extern int *__errno(void);
+#define ERRNO (*__errno())
+#else
 extern int *__errno_location(void);
+#define ERRNO (*__errno_location())
+#endif
 
 #define RTLD_NEXT ((void *)-1l)
 #define AT_FDCWD -100
@@ -53,6 +64,7 @@ static long sc(long n, long a, long b, long c, long d) {
 static size_t slen(const char *s) { size_t n = 0; while (s[n]) n++; return n; }
 static int pre(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
 static int ends(const char *s, const char *t) { size_t a = slen(s), b = slen(t); return a >= b && pre(s + a - b, t); }
+static int streq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 static int has(const char *s, char c) { for (; *s; s++) if (*s == c) return 1; return 0; }
 static int exists(const char *p) { return sc(NR_faccessat, AT_FDCWD, (long)p, 0, 0) == 0; }
 
@@ -114,6 +126,17 @@ typedef struct { const char *path; char **argv; char **envp; } plan;
 enum { ENV_KEEP, ENV_BIONIC, ENV_GLIBC };
 
 /* 环境：去掉旧的 LD_PRELOAD，bionic 目标再补上 termux-exec */
+/* self：经 linker64 起的程序的真实路径，记进 TERMUX_EXEC__PROC_SELF_EXE（它的 /proc/self/exe 会是 linker64，见下面的 readlink） */
+static char **fixenv2(char *const *envp, char **ev, int mode, arena *a, const char *self) {
+    int n = 0;
+    for (int i = 0; envp && envp[i]; i++)
+        if (!pre(envp[i], "LD_PRELOAD=") && !(self && pre(envp[i], "TERMUX_EXEC__PROC_SELF_EXE="))) ev[n++] = envp[i];
+    const char *bp = getenv("CCAPP_BIONIC_PRELOAD");
+    if (mode == ENV_BIONIC && bp && *bp) { char *s = put(a, "LD_PRELOAD=", bp, 0); if (s) ev[n++] = s; }
+    if (self) { char *s = put(a, "TERMUX_EXEC__PROC_SELF_EXE=", self, 0); if (s) ev[n++] = s; }
+    ev[n] = 0;
+    return ev;
+}
 static char **fixenv(char *const *envp, char **ev, int mode, arena *a) {
     int n = 0;
     for (int i = 0; envp && envp[i]; i++) if (!pre(envp[i], "LD_PRELOAD=")) ev[n++] = envp[i];
@@ -140,7 +163,15 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
     const char *cur = path, *argv0 = argc ? argv[0] : path;
     int scripted = 0;
     for (int depth = 0; depth < 5; depth++) {
+        if (streq(cur, ld)) {                        /* 直接 exec APK 里的 ld.so（claude 包装脚本就这样）：原样，环境按 glibc 来（不许带回 bionic 的 LD_PRELOAD） */
+            if (!scripted) { p->path = path; p->argv = (char **)argv; p->envp = fixenv(envp, ev, ENV_GLIBC, a); return 1; }
+            av[s] = (char *)cur;
+            p->path = cur; p->argv = av + s; p->envp = fixenv(envp, ev, ENV_GLIBC, a);
+            return 1;
+        }
         if (sysdir(cur)) {                           /* 系统程序：能直接 exec */
+            /* bionic 这边也自己来：termux-exec 起系统脚本（如 /system/bin/pm）时会摘掉 LD_PRELOAD，
+               脚本里再拉工具包里的同名程序（$PREFIX/bin/cmd）就被直接 exec、Permission denied */
             if (!scripted) {                         /* 原样执行，只把 termux-exec 塞进环境 */
                 if (!getenv("CCAPP_BIONIC_PRELOAD")) return 0;
                 p->path = path; p->argv = (char **)argv; p->envp = fixenv(envp, ev, ENV_BIONIC, a);
@@ -172,6 +203,9 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
             continue;
         }
         if (k == K_BIONIC) {
+#ifdef BIONIC
+            return 0;
+#endif
             char *abs = (char *)cur;
             if (cur[0] != '/') {
                 char cwd[512];
@@ -180,7 +214,7 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
             }
             av[s] = abs;
             av[--s] = "/system/bin/linker64";
-            p->path = "/system/bin/linker64"; p->argv = av + s; p->envp = fixenv(envp, ev, ENV_BIONIC, a);
+            p->path = "/system/bin/linker64"; p->argv = av + s; p->envp = fixenv2(envp, ev, ENV_BIONIC, a, abs);
             return 1;
         }
         if (k == K_GLIBC) {
@@ -207,16 +241,67 @@ static int mkplan(const char *path, char *const *argv, char *const *envp, char *
     int ac_ = 0, ec_ = 0;                                                   \
     while ((argv) && (argv)[ac_]) ac_++;                                    \
     while ((envp) && (envp)[ec_]) ec_++;                                    \
-    char *av_[ac_ + 24]; /* 前 20 格留给加载器和解释器 */ char *ev_[ec_ + 2]; char buf_[2048];               \
+    char *av_[ac_ + 24]; /* 前 20 格留给加载器和解释器 */ char *ev_[ec_ + 3]; char buf_[2048];               \
     arena ar_ = { buf_, 0, sizeof buf_ }; plan pl_
 
 static long raw_execve(const char *p, char *const *a, char *const *e) { return sc(NR_execve, (long)p, (long)a, (long)e, 0); }
 
+#ifdef BIONIC
+typedef int (*execve_fn)(const char *, char *const[], char *const[]);
+static execve_fn next_execve;
+#endif
+
+#ifdef BIONIC
+/*
+ * 经 linker64 起的程序，/proc/self/exe 指向 /system/bin/linker64。按它找自己目录的程序就找错地方：
+ * Chromium 去 /system/bin 找 icudtl.dat（报 Invalid file descriptor to ICU data），Yosys 去 /system/bin 找 yosys-abc；
+ * Chromium 拉子进程还直接 exec /proc/self/exe。真实路径在 TERMUX_EXEC__PROC_SELF_EXE（termux-exec 和本库改写时都会写）
+ */
+#define NR_readlinkat 78
+static const char *realself(void) {
+    char b[64];
+    long n = sc(NR_readlinkat, AT_FDCWD, (long)"/proc/self/exe", (long)b, sizeof b - 1);
+    if (n <= 0) return 0;
+    b[n] = 0;
+    if (!ends(b, "/linker64")) return 0;
+    const char *e = getenv("TERMUX_EXEC__PROC_SELF_EXE");
+    return e && *e == '/' ? e : 0;
+}
+static ssize_t fakelink(const char *p, char *buf, size_t sz) {
+    if (!streq(p, "/proc/self/exe")) return -1;
+    const char *e = realself();
+    if (!e) return -1;
+    size_t n = slen(e); if (n > sz) n = sz;
+    for (size_t i = 0; i < n; i++) buf[i] = e[i];
+    return (ssize_t)n;
+}
+ssize_t readlink(const char *p, char *buf, size_t sz) {
+    ssize_t n = fakelink(p, buf, sz);
+    if (n >= 0) return n;
+    long r = sc(NR_readlinkat, AT_FDCWD, (long)p, (long)buf, (long)sz);
+    if (r < 0) { ERRNO = (int)-r; return -1; }
+    return r;
+}
+ssize_t readlinkat(int fd, const char *p, char *buf, size_t sz) {
+    ssize_t n = p && p[0] == '/' ? fakelink(p, buf, sz) : -1;
+    if (n >= 0) return n;
+    long r = sc(NR_readlinkat, fd, (long)p, (long)buf, (long)sz);
+    if (r < 0) { ERRNO = (int)-r; return -1; }
+    return r;
+}
+#endif
+
 int execve(const char *path, char *const argv[], char *const envp[]) {
+#ifdef BIONIC
+    if (path && streq(path, "/proc/self/exe")) { const char *e = realself(); if (e) path = e; }
+#endif
     PLAN_SPACE(argv, envp);
-    long r = mkplan(path, argv, envp, av_, ev_, &ar_, &pl_) ? raw_execve(pl_.path, pl_.argv, pl_.envp)
-                                                           : raw_execve(path, argv, envp);
-    *__errno_location() = (int)-r;
+    if (mkplan(path, argv, envp, av_, ev_, &ar_, &pl_)) { ERRNO = (int)-raw_execve(pl_.path, pl_.argv, pl_.envp); return -1; }
+#ifdef BIONIC
+    if (!next_execve) next_execve = (execve_fn)dlsym(RTLD_NEXT, "execve");
+    if (next_execve) return next_execve(path, argv, envp);
+#endif
+    ERRNO = (int)-raw_execve(path, argv, envp);
     return -1;
 }
 
@@ -247,12 +332,13 @@ static const char *which(const char *f, char *out, size_t cap) {
 int execvpe(const char *file, char *const argv[], char *const envp[]) {
     char tmp[1024];
     const char *p = which(file, tmp, sizeof tmp);
-    if (!p) { *__errno_location() = ENOENT_; return -1; }
+    if (!p) { ERRNO = ENOENT_; return -1; }
     return execve(p, argv, envp);
 }
 
 int execvp(const char *file, char *const argv[]) { return execvpe(file, argv, environ); }
 
+#ifndef BIONIC   /* bionic 的 posix_spawn 在 libc 里头直接 execve，拦不到也不用拦 */
 typedef int (*spawn_fn)(int *, const char *, const void *, const void *, char *const[], char *const[]);
 static spawn_fn real_spawn, real_spawnp;
 
@@ -270,3 +356,4 @@ int posix_spawnp(int *pid, const char *file, const void *fa, const void *at, cha
     if (!p) return real_spawnp(pid, file, fa, at, argv, envp);
     return posix_spawn(pid, p, fa, at, argv, envp);
 }
+#endif
