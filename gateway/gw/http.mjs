@@ -69,10 +69,26 @@ export function uiTag() {
   let t = 0;
   let files = [];
   try { files = fs.readdirSync(PATHS.web); } catch {}
+  files = files.concat(appParts().map((f) => "app/" + f));   // app.js 的分段改了也算
   for (const f of files) {
     try { t = Math.max(t, fs.statSync(path.join(PATHS.web, f)).mtimeMs); } catch {}
   }
   return Math.round(t);
+}
+
+// app.js 的源码按功能拆在 web/app/ 下（文件名带序号），这里按文件名顺序原样拼成一个文件下发：
+// 浏览器拿到的仍是同一个闭包，和拆之前逐字节相同。报错里的 app.js 行号用 node scripts/appjs.mjs --line N 对回分段
+export function appParts() {
+  try { return fs.readdirSync(path.join(PATHS.web, "app")).filter((f) => f.endsWith(".js")).sort(); } catch { return []; }
+}
+let appCache = { key: "", data: null };
+export function appJs() {
+  const dir = path.join(PATHS.web, "app"), parts = appParts();
+  if (!parts.length) return null;
+  const st = parts.map((f) => fs.statSync(path.join(dir, f)));
+  const key = parts.map((f, i) => `${f}:${st[i].mtimeMs}:${st[i].size}`).join("|");
+  if (appCache.key !== key) appCache = { key, data: Buffer.concat(parts.map((f) => fs.readFileSync(path.join(dir, f)))) };
+  return appCache.data;
 }
 
 export function sendJson(res, code, obj) {
@@ -86,6 +102,13 @@ export function serveStatic(req, res, urlPath) {
   let rel = urlPath === "/" ? "/index.html" : urlPath;
   rel = rel.replace(/^\/+/, "");
   if (rel.includes("..")) return sendJson(res, 403, { error: "forbidden" });
+  if (rel === "app.js") {
+    const data = appJs();
+    if (data) {
+      res.writeHead(200, { "content-type": MIME[".js"], "content-length": data.length, "cache-control": "no-store" });
+      return res.end(data);
+    }
+  }
   const full = path.join(PATHS.web, rel);
   if (!full.startsWith(PATHS.web) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
     log(`404 ${rel}`);

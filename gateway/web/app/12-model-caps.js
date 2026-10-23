@@ -1,0 +1,423 @@
+  // ── 模型标签与快速切换（输入栏下面那一行最左边）──
+  // 标签写「模型 · 思考强度」；点它从底部弹面板：上面一排思考强度，下面搜索 + 最近用过 + 全部模型。
+  // 不占输入区的地方。OpenRouter 这类几十上百个模型的，靠搜索框过滤。
+  const RECENT_KEY = "cc.recentModels";
+  function prettyModel(name) {
+    const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)/i.exec(name || "");
+    return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2] + "." + m[3] : name || "";
+  }
+  function paintModel(name) {
+    state.chipModel = name;
+    const eff = state.settings && state.settings.effort;
+    // 照设计稿拆成两片：型号（claude-opus-5-5 显示成 Opus 5.5）、思考强度
+    const pretty = prettyModel(name);
+    modelEl.innerHTML = `<span class="chip">${esc(pretty)}</span>${eff ? `<span class="chip">${esc(eff)}</span>` : ""}`;
+    modelEl.title = name;
+  }
+  modelEl.setAttribute("role", "button");
+  modelEl.tabIndex = 0;
+  modelEl.addEventListener("click", (e) => { e.stopPropagation(); openModelPicker(); });
+
+  async function openModelPicker() {
+    if ($("model-pick")) return;
+    const m = document.createElement("div");
+    m.id = "model-pick";
+    m.innerHTML = `<div class="sheet-panel mp-panel">
+      <div class="mp-head"><b>${t("模型与思考强度")}</b><button class="mp-x" type="button" aria-label="${t("关闭")}">${uiI("x")}</button></div>
+      <div class="mp-lbl">${t("思考强度")}</div><div class="mp-eff"></div>
+      <div class="mp-lbl">${t("模型")}</div>
+      <label class="searchbox mp-sb"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="mp-q" type="search" autocomplete="off" placeholder="${t("搜索模型")}"></label>
+      <div class="mp-list"><div class="tiny">${t("读取中…")}</div></div>
+      <div class="tiny mp-note">${t("从下一条消息起生效。")}</div></div>`;
+    OV.open(m, { kind: "modal", anchor: modelEl });   // 宽度真变了由 OV 关；布局补发的假 resize 不算
+    const close = () => OV.close(m);
+    m.addEventListener("click", (e) => { if (e.target === m || e.target.closest(".mp-x")) close(); });
+    // 宽屏：卡片宽 420、最高 宽×φ，对齐输入栏下的型号按钮，底边落在按钮上方 8px；都只在对话这一栏里摆
+    const col = colRect();
+    if (col.width < 560) { m.style.left = col.left + "px"; m.style.right = (innerWidth - col.right) + "px"; }
+    if (col.width >= 560) {
+      m.classList.add("pop");
+      // 首屏里 #model-chip 是 display:contents，自己没有盒子，量里面第一片
+      const p = m.querySelector(".mp-panel"), ar = (modelEl.getBoundingClientRect().height ? modelEl : modelEl.firstElementChild || modelEl).getBoundingClientRect();
+      const w = Math.min(420, col.width - 32);
+      p.style.width = w + "px";
+      const x0 = ar.left + ar.width / 2 > col.left + col.width / 2 ? ar.right - w : ar.left;   // 按钮在右半边就右对齐
+      p.style.left = Math.max(col.left + 16, Math.min(x0, col.right - w - 16)) + "px";
+      p.style.bottom = (fixedH() - ar.top + 8) + "px";
+      p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 8 - 16) + "px";
+    }
+    let info;
+    try { info = await api("/api/models"); } catch (e) { m.querySelector(".mp-list").textContent = t("拉取模型清单失败：{msg}", { msg: e.message }); return; }
+    if (!m.isConnected) return;
+    MODELS = info.models || MODELS;
+    const cur = () => (state.settings && state.settings.model) || "";
+
+    const effBox = m.querySelector(".mp-eff");
+    const paintEff = (levels, now) => {
+      const opts = [["", t("默认")], ...levels.map((l) => [l, l])];
+      effBox.innerHTML = levels.length
+        ? `<div class="seg mp-seg">${opts.map(([v, l]) => `<button type="button" class="${v === now ? "on" : ""}" data-eff="${esc(v)}">${esc(l)}</button>`).join("")}</div>`
+        : `<span class="tiny">${t("这个模型没有可选的思考强度")}</span>`;
+    };
+    paintEff(info.effortLevels || [], info.effort || "");
+    effBox.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-eff]");
+      if (!b) return;
+      await saveSettings({ effort: b.dataset.eff });
+      paintEff(info.effortLevels || [], b.dataset.eff);
+      const se = $("set-effort"); if (se) se.value = b.dataset.eff;
+      paintModel(state.chipModel || cur() || t("默认"));
+    });
+
+    const list = m.querySelector(".mp-list"), q = m.querySelector(".mp-q");
+    const row = (id, sub) => (sub = typeof sub === "string" ? { text: sub } : sub, `<button type="button" class="mp-item${id === cur() ? " cur" : ""}" data-id="${esc(id)}"><span>${esc(id || t("默认"))}</span>${sub && (sub.text || sub.img) ? `<small>${esc(sub.text || "")}${sub.img ? MM_IMG() : ""}</small>` : ""}</button>`);
+    const meta = (md) => {
+      if (!md) return null;
+      const ctx = md.context_window ? Math.round(md.context_window / 1024) + "k" : "";
+      return { text: [md.name && md.name !== md.id ? md.name : "", ctx].filter(Boolean).join(" · "), img: (md.input_modalities || []).includes("image") };
+    };
+    const paintList = () => {
+      const kw = q.value.trim().toLowerCase();
+      const all = MODELS.filter((md) => !kw || md.id.toLowerCase().includes(kw) || String(md.name || "").toLowerCase().includes(kw));
+      let html = "";
+      if (!kw) {
+        if (info.nativeModels) html += row("", info.defaultModel ? t("（默认：{model}）", { model: info.defaultModel }) : t("（默认，由 claude 决定）"));
+        const rec = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")).filter((id) => MODELS.some((md) => md.id === id));
+        if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(MODELS.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: MODELS.length })}</div>`;
+      }
+      html += all.slice(0, 300).map((md) => row(md.id, meta(md))).join("");
+      if (!all.length) html += `<div class="tiny">${MODELS.length ? t("没有匹配的模型") : t("（该厂商不提供模型清单）")}</div>`;
+      list.innerHTML = html;
+    };
+    paintList();
+    q.addEventListener("input", paintList);
+    list.addEventListener("click", async (e) => {
+      const b = e.target.closest(".mp-item");
+      if (!b) return;
+      const id = b.dataset.id;
+      if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
+      close();
+      if (id === cur()) return;
+      await saveSettings({ model: id });
+      await loadModels();                                // 换模型后思考强度的档位可能不同
+      const sm = $("set-model"); if (sm) sm.value = id;
+      paintModel(id || state.model || t("默认"));
+    });
+  }
+
+  /** 模型与 effort 档位都从厂商的 /models 实时拉 */
+  async function loadModels(refresh) {
+    try {
+      const r = await api("/api/models" + (refresh ? "?refresh=1" : ""));
+      MODELS = r.models || [];
+      const sel = $("set-model");
+      // 原生厂商（官方账户）：不挑 = 用它自己的默认模型。
+      // 这时候列表框里得有个诚实的"默认"项 —— 否则列表第一条（比如 haiku）会顶在上面，
+      // 让人以为正在用的就是它，其实 claude 用的是自己挑的那个。
+      const dfltOpt = r.nativeModels
+        ? (r.defaultModel ? `<option value="">${t("（默认：{model}）", { model: esc(r.defaultModel) })}</option>`
+                           : `<option value="">${t("（默认，由 claude 决定）")}</option>`)
+        : "";
+      sel.innerHTML = (dfltOpt + (MODELS.length
+        ? MODELS.map((m) => {
+            const img = (m.input_modalities || []).includes("image") ? ' data-img="1"' : "";
+            // 官方 /v1/models 只报能力，不报窗口 —— 报不出来就别写 "0k"
+            const ctx = m.context_window ? Math.round(m.context_window / 1024) + "k" : "—";
+            return `<option value="${esc(m.id)}"${img}>${esc(m.id)} · ${esc(m.name || "")} · ${ctx}</option>`;
+          }).join("")
+        : (dfltOpt ? "" : '<option value="">' + t("（该厂商不提供模型清单）") + '</option>')));
+      if (r.current) {
+        sel.value = r.current;
+        // 当前模型不在厂商 /models 的清单里（比如 DeepSeek 的 deepseek-flash 是兼容端点认的别名）：
+        // 不补一项的话下拉框会显示空白，像是没选模型
+        if (sel.value !== r.current) {
+          sel.insertAdjacentHTML("afterbegin", `<option value="${esc(r.current)}">${esc(r.current)} · ${t("（当前，不在厂商清单里）")}</option>`);
+          sel.value = r.current;
+        }
+      } else if (r.nativeModels) sel.value = "";
+      $("model-count").textContent = t("{n} 个", { n: MODELS.length });
+      renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
+
+      // 用量条：总刻度用厂商给的真实窗口，但设了压缩窗口就改以它为满刻度
+      if (r.contextWindow) state.ctxTotal = r.contextWindow;
+      state.compactAt = Number(r.autoCompactWindow) || 0;
+      updateCtx(state.ctxUsed, state.ctxTotal);
+      const cur = MODELS.find((m) => m.id === r.current);
+      if (cur) {
+        const k = (v) => (v ? Math.round(v / 1024) + "k" : "—");
+        $("model-info").innerHTML =
+                    t("上下文 {n} · 输出上限 {out} · 输入 {mods}", { n: k(cur.context_window), out: k(cur.max_output_tokens), mods: (cur.input_modalities || []).join(" / ") }) +
+          t("｜也可直接打 <code>/model &lt;id&gt;</code>");
+        const ac = $("set-autocompact");
+        if (ac && document.activeElement !== ac) ac.value = r.autoCompactWindow || "";
+      } else if (r.nativeModels) {
+        $("model-info").innerHTML =
+                    t("没指定模型 → <b>由 claude 自己决定</b>（官方账户当前默认 <code>{model}</code>）。", { model: esc(r.defaultModel || t("claude 内置默认")) }) +
+          t("<br>上面的清单就是账户里能用的全部型号，挑一个即锁定。");
+      } else if (!MODELS.length) {
+        $("model-info").innerHTML =
+                    t("该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。");
+      }
+    } catch (e) {
+      $("model-info").textContent = t("拉取模型清单失败：{msg}", { msg: e.message });
+    }
+  }
+
+  // 下拉框换成分段（照稿）：下拉框留着当真身，分段只是它的镜子 —— 选项变了、代码里改了 value 都跟着重画
+  // 输入框也能挂（opts 给定选项，输入框留着填别的数）
+  function segMirror(sel, label, opts) {
+    const seg = document.createElement("span");
+    seg.className = "seg seg-mirror";
+    if (opts) sel.before(seg); else { sel.after(seg); sel.classList.add("hidden"); }
+    const list = () => opts ? opts.map((v) => ({ value: v })) : [...sel.options];
+    let more = false;   // 输入框模式：值不在选项里、或点了「更多」才露出输入框
+    const paint = () => {
+      const hit = list().some((o) => o.value === String(sel.value));
+      seg.innerHTML = list().map((o) => `<button data-v="${esc(o.value)}" class="${o.value === String(sel.value) ? "on" : ""}">${esc(label(o))}</button>`).join("")
+        + (opts ? `<button data-v="__more" class="${hit ? "" : "on"}">${esc(t("更多"))}</button>` : "");
+      if (opts) sel.classList.toggle("hidden", hit && !more);
+    };
+    const d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(sel), "value");
+    Object.defineProperty(sel, "value", { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); paint(); } });
+    if (!opts) new MutationObserver(paint).observe(sel, { childList: true });
+    sel.addEventListener("change", paint);
+    seg.addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === sel.value) return;
+      if (b.dataset.v === "__more") { more = true; paint(); sel.focus(); return; }
+      more = false; sel.value = b.dataset.v; sel.dispatchEvent(new Event("change")); });
+    paint();
+  }
+  segMirror($("set-effort"), (o) => o.value || t("默认"));
+  const PERM_SHORT = { default: "问我", acceptEdits: "接受编辑", plan: "计划", auto: "自动", dontAsk: "不问就拒", bypassPermissions: "全部放行" };
+  segMirror($("set-perm"), (o) => t(PERM_SHORT[o.value] || o.value));
+  segMirror($("set-parallel"), (o) => o.value, ["1", "2", "3", "4"]);
+  // 设置里的「打开用量页」
+  $("set-ov").addEventListener("click", (e) => { const b = e.target.closest("[data-gopage]"); if (b) { closeSettings(); openPage(b.dataset.gopage); } });
+  function paintSetUsage() {
+    const q = usDash.quota, e = $("set-us-quota");
+    $("set-us-quota-row").classList.toggle("hidden", !q);
+    if (!q) return;
+    e.textContent = Math.round(q.used) + "%";
+    const at = q.resetsAt ? new Date(q.resetsAt * 1000) : null;
+    $("set-us-quota-sub").textContent = at ? t("{time} 重置", { time: at.toLocaleDateString([], { weekday: "short" }) + " " + at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }) : "";
+  }
+
+  function renderEffort(levels, current, dflt) {
+    const sel = $("set-effort");
+    // 留一个"不指定"：没设过档位时 claude 按模型自己的默认走。
+    // 以前没这一项，下拉框会显示第一档 low，让人以为正在用 low，而且一旦选过就再也撤不回默认
+    sel.innerHTML = (dflt ? `<option value="">${t("（默认：{model}）", { model: esc(dflt) })}</option>`
+                            : `<option value="">${t("（默认，由 claude 按模型决定）")}</option>`) +
+      levels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
+    sel.value = current && levels.includes(current) ? current : "";
+    $("effort-info").innerHTML =
+      t("档位越高思考越久。也可在输入框打 <code>/effort &lt;level&gt;</code>");
+  }
+
+  async function loadSettings() {
+    try {
+      state.settings = await api("/api/settings");
+      $("set-perm").value = state.settings.permissionMode || "default";
+      // 输出风格清单由网关列（内置 + 自定义 .md），不再写死 —— 以前写死的 concise 根本不存在
+      $("set-style").innerHTML = '<option value="">' + t("（默认）") + '</option>' +
+        (state.settings.outputStyles || []).map((o) =>
+          `<option value="${esc(o.id)}">${esc(o.id)}${o.desc ? " · " + esc(o.desc) : ""}</option>`).join("");
+      $("set-style").value = state.settings.outputStyle || "";
+      // 没指定模型时别把顶栏写成 "—"：init 报过的真实模型更有用
+      paintModel(state.settings.model || state.model || t("默认"));
+      setPermChip(state.settings.permissionMode || "default");
+      renderPermBar();
+      renderDirs();
+      fillMem();
+      await loadProviders();
+      await loadModels();
+      $("set-model").value = state.settings.model || "";
+      $("set-effort").value = state.settings.effort || "";
+      const pe = $("set-parallel");
+      if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
+      $("set-static").checked = state.settings.staticCompat !== false;
+      $("set-idlecompact").checked = state.settings.idleCompaction !== false;
+    } catch {}
+  }
+
+
+  function renderDirs() {
+    const dirs = state.settings.addDirs || [];
+    $("dir-toggle").textContent = t("{n} 个", { n: dirs.length });
+    $("dir-list").innerHTML = dirs.length
+      ? dirs.map((d, i) => `<div class="item"><div class="it-title">${esc(d)}</div>
+          <div class="it-acts"><button data-i="${i}">${t("移除")}</button></div></div>`).join("")
+      : '<div class="tiny">' + t("（没有附加目录）") + '</div>';
+    $("dir-list").querySelectorAll("button").forEach((b) => b.addEventListener("click", async () => {
+      const dirs2 = (state.settings.addDirs || []).filter((_, i) => i !== Number(b.dataset.i));
+      await saveSettings({ addDirs: dirs2 });
+    }));
+  }
+
+  // 附加目录照稿收成一个「N 个」按钮，点开才是清单和添加框
+  $("dir-toggle").addEventListener("click", () => document.querySelectorAll("#dir-field .dir-more").forEach((x) => x.classList.toggle("hidden")));
+
+  async function saveSettings(patch) {
+    try {
+      const r = await api("/api/settings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      state.settings = { ...state.settings, ...(r.settings || {}) };
+      paintModel(state.settings.model || state.model || t("默认"));
+      setPermChip(state.settings.permissionMode || "default");
+      renderDirs();
+            toast(t("已保存"));
+      return r;
+    } catch (e) { toast(e.message || t("保存失败"), true); }
+  }
+
+  $("set-provider").addEventListener("change", (e) => {
+    state.provView = e.target.value; provOpen = null;
+    renderProvCard();
+  });
+
+  $("set-model").addEventListener("change", async (e) => {
+    await saveSettings({ model: e.target.value });
+    await loadModels();                                  // 换模型后 effort 档位可能不同
+    $("set-effort").value = state.settings.effort || "";
+  });
+  $("set-perm").addEventListener("change", (e) => changePermMode(e.target.value));
+  $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));
+  $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
+
+  $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
+  $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
+  $("set-parallel").addEventListener("change", (e) => {
+    const v = Math.round(Number(e.target.value));
+    if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
+    saveSettings({ maxParallel: v }).then(() => { e.target.value = state.settings.maxParallel || v; });
+  });
+  $("set-autocompact").addEventListener("change", (e) => {
+    const v = e.target.value.trim();
+    saveSettings({ autoCompactWindow: v ? Number(v) : null }).then(() => loadModels());
+  });
+  $("btn-add-dir").addEventListener("click", () => {
+    const v = $("inp-dir").value.trim();
+    if (!v) return;
+    saveSettings({ addDirs: [...(state.settings.addDirs || []), v] });
+    $("inp-dir").value = "";
+  });
+  $("btn-cli-doctor").addEventListener("click", async () => {
+    const box = $("cli-out");
+    box.classList.remove("hidden");
+    box.textContent = t("正在运行 claude doctor…");
+    try {
+      const r = await api("/api/cli?cmd=" + encodeURIComponent("doctor"));
+      box.textContent = (r.out || "") + (r.err ? "\n" + r.err : "") || t("(无输出)");
+    } catch (e) { box.textContent = t("失败：{msg}", { msg: e.message }); }
+  });
+
+  // ── 能力面板 ──────────────────────────────────────────────────────
+  function cacheCapsFromInit(ev) {
+    state.caps = state.caps || {};
+    state.caps.tools = ev.tools || state.caps.tools || [];
+    state.caps.skills = ev.skills || state.caps.skills || [];
+    state.caps.agents = ev.agents || state.caps.agents || [];
+    state.caps.mcpServers = ev.mcpServers || state.caps.mcpServers || [];
+    state.caps.slashCommands = (ev.slashCommands || []).filter((c) => !String(c).startsWith("__"))
+      .map((c) => (typeof c === "string" ? { name: c, cat: t("其他"), desc: "" } : c));
+    renderCaps();
+  }
+
+  async function loadCaps() {
+    try {
+      state.caps = await api("/api/capabilities");
+      renderCaps();
+    } catch {}
+  }
+
+  function chips(el, arr, hl) {
+    el.innerHTML = arr?.length
+      ? arr.map((x) => `<span class="chip ${hl ? "hl" : ""}">${esc(x)}</span>`).join("")
+      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
+  }
+
+  // 工具的权限：规则优先（deny > ask > allow，Bash(git:*) 这种带括号的算「按规则」），否则看权限模式；只读的工具默认允许
+  const READ_TOOLS = new Set(["Read", "Grep", "Glob", "LS", "TodoWrite", "TodoRead", "Task", "Agent", "NotebookRead", "ExitPlanMode", "BashOutput", "KillShell", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]);
+  const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+  function toolPerm(name, mode, rules) {
+    const hit = (list) => (list || []).some((r) => r === name || (r.endsWith("*") && name.startsWith(r.slice(0, -1))));
+    const part = (list) => (list || []).some((r) => r.startsWith(name + "("));
+    if (hit(rules.deny)) return "deny";
+    if (hit(rules.ask)) return "ask";
+    if (hit(rules.allow)) return "allow";
+    if (mode === "bypassPermissions") return "allow";
+    if (mode === "plan" && (EDIT_TOOLS.has(name) || name === "Bash")) return "deny";
+    if (mode === "acceptEdits" && EDIT_TOOLS.has(name)) return "allow";
+    if (READ_TOOLS.has(name)) return "allow";
+    if (part(rules.allow) || part(rules.deny)) return "rule";
+    return "ask";
+  }
+  const permPill = (p) => ({ allow: `<span class="pill ok"><svg class="ei" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg> ${t("允许")}</span>`, ask: `<span class="pill">${t("询问")}</span>`,
+    deny: `<span class="pill err"><svg class="ei" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg> ${t("拒绝")}</span>`, rule: `<span class="pill acc">${t("按规则")}</span>` }[p]);
+  const capRows = (arr, fn) => arr?.length ? arr.map(fn).join("") : '<div class="row"><span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + "</span></div>";
+
+  function renderCaps() {
+    const c = state.caps || {};
+    setPageSub("caps", c.version ? t("Claude Code {ver} · 这一轮能用的", { ver: c.version }) : t("这一轮 Claude 能用的"));
+    const cmds = c.slashCommands || [];
+    const mcp = (c.mcpServers || []).map((m) => typeof m === "string" ? { name: m } : m);
+    const mcpOk = mcp.filter((m) => /^connected$/i.test(m.status || "")).length;
+    const N = { cmd: cmds.length, tool: (c.tools || []).length, skill: (c.skills || []).length, agent: (c.agents || []).length, mcp: mcp.length && mcpOk < mcp.length ? mcpOk + "/" + mcp.length : mcp.length, plugin: (c.plugins || []).length };
+    // 计数格：图标 + 大号数字 + 名字；点了跳到那一节
+    const icoOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .icobox`)?.innerHTML || "";
+    const nameOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-h h3`)?.textContent || k;
+    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="tile" data-sec="${k}"><span class="icobox">${icoOf(k)}</span><span class="n num">${N[k]}</span><span class="k">${esc(nameOf(k))}</span></button>`).join("");
+    // 斜杠命令：卡片（命令 + 说明），点一下插进输入框
+    $("caps-cmds").innerHTML = cmds.length
+      ? cmds.map((x) => { const n = "/" + (x.name || x); return `<button class="cmd-card" data-cmd="${esc(n)}"><span class="mono">${esc(n)}</span><span>${esc(x.desc ? t(x.desc) : "")}</span></button>`; }).join("")
+      : '<span class="tiny">' + t("（暂无数据，先发一条消息即可从 CLI 获取）") + '</span>';
+    const mode = state.permissionMode || c.permissionMode || "default", rules = c.rules || { allow: [], ask: [], deny: [] };
+    const nRules = rules.allow.length + rules.ask.length + rules.deny.length;
+    $("caps-permline").textContent = t("权限模式：{m} · 规则 {n} 条", { m: modeLabel(mode), n: nRules });
+    $("caps-tools").innerHTML = capRows(c.tools, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span>${permPill(toolPerm(x, mode, rules))}</div>`);
+    $("caps-skills").innerHTML = capRows(c.skills, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
+    $("caps-agents").innerHTML = capRows(c.agents, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
+    $("caps-mcp").innerHTML = capRows(mcp, (m) => { const ok = /^connected$/i.test(m.status || ""), bad = /fail|error|disconn/i.test(m.status || "");
+      return `<div class="row"><span class="mono grow">${esc(m.name)}</span>${sdot(ok ? "ok" : bad ? "err" : "", ok ? t("已连接") : bad ? t("没连上") : m.status || "—")}</div>`; });
+    $("caps-plugins").innerHTML = capRows(c.plugins, (x) => `<div class="row"><span class="mono grow">${esc(x)}</span></div>`);
+    filterCaps();
+  }
+  // 搜索：同时筛命令卡片和各节的标签；一节里一个都不剩就整节先藏起来
+  function filterCaps() {
+    const q = ($("caps-q").value || "").trim().toLowerCase();
+    for (const sec of document.querySelectorAll("#tab-caps > .ext-sec-plain")) {
+      let any = !q;
+      for (const el of sec.querySelectorAll(".cmd-card, .panel > .row")) {
+        const hit = !q || el.textContent.toLowerCase().includes(q);
+        el.classList.toggle("hidden", !hit); any ||= hit;
+      }
+      sec.classList.toggle("hidden", !any);
+    }
+  }
+  $("caps-q").addEventListener("input", filterCaps);
+  $("caps-rules").addEventListener("click", () => openSettings("claude"));
+  $("cap-tiles").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sec]"), x = b && document.querySelector(`#tab-caps > [data-sec="${b.dataset.sec}"]`); if (!x) return;
+    const body = $("page-body");
+    body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - 12, behavior: "smooth" });
+  });
+  $("caps-cmds").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cmd]"); if (!b) return;
+    closePage();
+    inputEl.value = b.dataset.cmd + " "; autoGrow(); inputEl.focus();
+  });
+
+  $("btn-refresh-mcp").addEventListener("click", async () => {
+    $("caps-mcp").innerHTML = '<div class="row"><span class="tiny">' + esc(t("查询中…")) + "</span></div>";
+    try {
+      const r = await api("/api/cli?cmd=" + encodeURIComponent("mcp list"));
+      const lines = (r.out || "").split("\n").map((s) => s.trim()).filter(Boolean);
+      // claude mcp list 一行一个：「名字: 命令 - ✓ Connected」/「✗ Failed to connect」
+      $("caps-mcp").innerHTML = capRows(lines.filter((l) => /:\s/.test(l) && /connect|fail|need/i.test(l)).slice(0, 40), (l) => {
+        const name = l.split(":")[0], ok = /✓|connected/i.test(l) && !/fail|✗/i.test(l);
+        return `<div class="row"><span class="mono grow">${esc(name)}</span>${sdot(ok ? "ok" : "err", ok ? t("已连接") : t("没连上"))}</div>`;
+      }) || '<div class="row"><span class="tiny">' + esc(t("(无 MCP 服务器)")) + "</span></div>";
+    } catch (e) { $("caps-mcp").innerHTML = '<div class="row"><span class="tiny">' + esc(t("查询失败：{msg}", { msg: e.message })) + "</span></div>"; }
+  });
+
