@@ -2456,7 +2456,7 @@ html.wel-narrow .wl-hero{gap:var(--g2)}
 .drawer-split:hover::after{background:var(--line)}
 html.side-drag .drawer-split::after{background:var(--accent)}
 html.dock-l .drawer-split{display:none}
-html.side-drag .drawer-panel{animation:none;transition:none}
+html.side-drag .drawer-panel{transition:none}   /* 别写 animation:none：松手去掉它，滑入动画会重播一遍（侧栏「再弹出一次」） */
 
 /* ── 额度与余额速览：顶栏细条后半段 + 点开的小卡片；用量页「额度与消费」 ── */
 #ctxbar{cursor:pointer}
