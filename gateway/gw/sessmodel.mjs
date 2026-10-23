@@ -11,6 +11,9 @@ import { CFG } from "./config.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { PROVIDER, providerById } from "./providers.mjs";
 import { SETTINGS } from "./settings.mjs";
+import { cachedModels, effortLevelsOf, normEffort } from "./models.mjs";
+import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
+import { findSessionFile, peekSession } from "./sessions.mjs";
 
 const FILE = path.join(CFG.home, "ccapp-session-models.json");
 let DB = {};
@@ -54,22 +57,48 @@ export function setSessModel(sid, patch) {
   DB[sid] = r;
   save();
 }
-/** 界面上显示的「这个会话现在用什么」：记过的 → 全局默认 */
-export function effectiveModel(sid) {
-  const r = sessModel(sid);
+/** 这个会话所在的项目（按会话当初的目录找）；新会话由前端给项目号 */
+function projectFor(sid, projectId) {
+  if (projectId) return projectById(projectId);
+  if (!sid) return null;
+  try { const f = findSessionFile(String(sid)); const c = f && peekSession(f.file).cwd; return c ? projectOfDir(c) : null; } catch { return null; }
+}
+/** 界面上显示的「这个会话现在用什么」，和 run.mjs 开跑时的取值顺序一致：
+ *  会话钉的 → 项目默认（项目指定了接口就用那家，模型名是给那家的）→ 全局默认。
+ *  over：新会话还没会话号，前端暂存的选择 { provider, model, effort }。
+ *  effortRun：真跑时的思考强度 —— 跟来的档位那家模型不支持时，换成它支持的（标签上显示这个） */
+export function effectiveModel(sid, projectId, over) {
+  let r = sessModel(sid);
+  if (over && (over.provider || over.model != null || over.effort != null)) {
+    const p = over.provider && providerById(over.provider);
+    r = { model: over.model != null ? over.model : p ? "" : null, effort: over.effort != null ? over.effort : null, provider: p ? p.id : PROVIDER.id };
+  }
   const pin = r && r.model != null;
-  return { model: pin ? r.model : SETTINGS.model || "", effort: r && r.effort != null ? r.effort : SETTINGS.effort || "",
-    provider: pin ? r.provider : PROVIDER.id, ownProvider: !!(pin && r.provider !== PROVIDER.id), own: !!r,
+  const pdef = projectDefaults(projectFor(sid, projectId));
+  const pp = (pin && providerById(r.provider)) || (pdef.provider && providerById(pdef.provider)) || PROVIDER;
+  const model = pin ? r.model
+    : (pp.id === (pdef.provider || PROVIDER.id) ? pdef.model : "") || (pp.id === PROVIDER.id ? SETTINGS.model || "" : "");
+  const effort = (r && r.effort != null ? r.effort : pdef.effort || SETTINGS.effort) || "";
+  let effortRun = effort;
+  if (effort && !pp.local) {
+    const list = cachedModels(pp), mi = list.find((m) => m.id === (model || pp.defaultModel)) || list[0] || {};
+    if (!effortLevelsOf(mi, pp).includes(effort)) effortRun = normEffort(mi, effort, pp) || "";
+  }
+  return { model, effort, effortRun, provider: pp.id, ownProvider: pp.id !== PROVIDER.id, own: !!r,
+    defaultModel: pp.defaultModel || null,
     rec: r ? { model: r.model, effort: r.effort, provider: r.provider } : null };   // 原样的记录：null 的字段是「跟随默认」
 }
 
 // ── 路由：/api/session-model ──
-//   GET  ?id=会话号                      → { model, effort, own }
+//   GET  ?id=会话号 / ?project=&provider=&model=&effort=（新会话） → { model, effort, effortRun, provider, own, rec }
 //   POST { id, model?, effort?, provider? } → 记到这个会话上（不动全局默认）；只给 provider = 换家、用它的默认模型
 //   POST { id, reset: true }             → 清掉，回到跟随全局默认
 export async function routeSessModel(req, res, u, p) {
   if (p !== "/api/session-model") return NEXT;
-  if (req.method === "GET") return sendJson(res, 200, effectiveModel(u.searchParams.get("id") || ""));
+  if (req.method === "GET") {
+    const q = (k) => (u.searchParams.has(k) ? u.searchParams.get(k) : null);
+    return sendJson(res, 200, effectiveModel(q("id") || "", q("project"), { provider: q("provider"), model: q("model"), effort: q("effort") }));
+  }
   if (req.method === "POST") {
     let b = {};
     try { b = JSON.parse((await readBody(req)) || "{}"); } catch {}

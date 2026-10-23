@@ -4,7 +4,7 @@ import { SETTINGS } from "./settings.mjs";
 import { PROVIDER, keyOf, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
-import { effectiveModel, sessProvider } from "./sessmodel.mjs";
+import { effectiveModel } from "./sessmodel.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";
 
 // ── 模型清单（按厂商拉，10 分钟缓存，失败用该厂商的 fallback）─────────
@@ -175,12 +175,9 @@ export async function routeModels(req, res, u, p) {
     // ?sid=：按这个会话记下的接口 / 模型 / 档位回（0.3.16 起每个会话各用各的）；不给就是全局默认
     // ?model= / ?effort= / ?provider=：还没会话号的新会话在面板里先选了（前端暂存，随第一条消息带走），按选的回
     // ?browse=接口：面板里点开别的接口看它的模型（只换清单，current 仍是这个会话的）
-    const sid = u.searchParams.get("sid") || "";
-    const now = effectiveModel(sid);
-    let pp = sessProvider(sid);
-    if (u.searchParams.has("provider")) { const x = providerById(u.searchParams.get("provider")); if (x) { pp = x; now.provider = x.id; if (x.id !== PROVIDER.id) now.model = ""; } }
-    if (u.searchParams.has("model")) now.model = u.searchParams.get("model");
-    if (u.searchParams.has("effort")) now.effort = u.searchParams.get("effort");
+    const sid = u.searchParams.get("sid") || "", q = (k) => (u.searchParams.has(k) ? u.searchParams.get(k) : null);
+    const now = effectiveModel(sid, q("project"), { provider: q("provider"), model: q("model"), effort: q("effort") });
+    const pp = providerById(now.provider) || PROVIDER;
     const bp = (u.searchParams.get("browse") && providerById(u.searchParams.get("browse"))) || pp;
     const ms = withWindows(await fetchModels(u.searchParams.get("refresh") === "1", bp));
     const own = withWindows(bp === pp ? ms : cachedModels(pp));
@@ -195,7 +192,7 @@ export async function routeModels(req, res, u, p) {
       providers: providerBrief(),
       nativeModels: !!bp.nativeModels,
       defaultModel: bp.defaultModel || null,
-      effort: now.effort || null,
+      effort: now.effortRun || null,          // 真跑时的档位（跟来的档位那家不支持时已换过）
       effortLevels: effortLevelsOf(cur, pp),
       // 原生厂商的默认档位由 claude 按模型定，我们不知道就别瞎报
       effortDefault: (cur.effort && cur.effort.default_level) || (pp.nativeModels ? null : "high"),

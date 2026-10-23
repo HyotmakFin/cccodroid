@@ -12,15 +12,18 @@
   // 还没会话号的新会话：面板里选的先暂存在 state.pendingModel，随第一条消息带给网关（/api/chat 的 pin）
   const own = () => (view.sessionId ? state.sessModel : state.pendingModel) || null;
   const pickOr = (k) => { const o = own(); return o && o[k] != null ? o[k] : state.settings && state.settings[k]; };
-  const curEffort = () => pickOr("effort") || "";
+  // state.sessEff：网关算好的「这个会话真跑时用什么」（/api/session-model，含项目默认、按那家换过的思考强度）。
+  // 标签、额度都按它；还没回来时按本地记录凑合
+  const curEffort = () => (state.sessEff ? state.sessEff.effortRun || "" : pickOr("effort") || "");
   // 下面几个用函数声明：09 段的额度速览（qbLoad）也要用，声明会提升
   function globalProv() { return (state.serverStatus && state.serverStatus.provider) || ""; }
   /** 这个会话用哪家：单独选过模型就是记下的那家，否则全局生效的那家 */
-  function curProv() { const o = own(); return (o && o.model != null && o.provider) || globalProv(); }
+  function curProv() { if (state.sessEff && state.sessEff.provider) return state.sessEff.provider; const o = own(); return (o && o.model != null && o.provider) || globalProv(); }
   function provOf(id) { return (state.provList || []).find((p) => p.id === id) || null; }
   function provLabel(id) { const p = provOf(id); return p ? (provEn() && p.labelEn) || p.label : id || ""; }
   /** 模型：钉了就是钉的（"" = 那家的默认）；跟随就是全局默认 */
   function curModel() {
+    if (state.sessEff) return state.sessEff.model || state.sessEff.defaultModel || "";
     const o = own();
     if (o && o.model != null) return o.model || (curProv() !== globalProv() && provOf(curProv())?.defaultModel) || "";
     return (state.settings && state.settings.model) || "";
@@ -32,6 +35,7 @@
     if (view.sessionId) q.push("sid=" + encodeURIComponent(view.sessionId));
     else {
       const p = state.pendingModel;
+      if (view.projectId) q.push("project=" + encodeURIComponent(view.projectId));   // 项目里的新会话按项目默认
       if (p && p.provider) q.push("provider=" + encodeURIComponent(p.provider));
       if (p && p.model != null) q.push("model=" + encodeURIComponent(p.model));
       if (p && p.effort != null) q.push("effort=" + encodeURIComponent(p.effort));
@@ -43,9 +47,10 @@
   async function refreshSessModel() {
     const id = view.sessionId, my = ++smSeq;
     let r = null;
-    if (id) try { r = await api("/api/session-model?id=" + encodeURIComponent(id)); } catch {}
+    try { r = await api("/api/session-model" + (id ? "?id=" + encodeURIComponent(id) : sidQ())); } catch {}
     if (my !== smSeq) return;               // 切得快：只认最后一次
-    state.sessModel = (r && r.rec) || null;
+    if (id) state.sessModel = (r && r.rec) || null;
+    state.sessEff = r && r.provider ? r : null;
     paintModel(chipName());
     loadCtxModel();                          // 上下文刻度跟着这个会话的模型
     provChanged();
@@ -63,12 +68,12 @@
   async function pickSessModel(patch) {
     if (!view.sessionId) {
       state.pendingModel = patch ? { ...(state.pendingModel || {}), ...patch } : null;
-      provChanged();
-      return;
+      return refreshSessModel();
     }
     const r = await api("/api/session-model", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(patch ? { id: view.sessionId, ...patch } : { id: view.sessionId, reset: true }) });
     state.sessModel = r.rec || null;
+    state.sessEff = r.provider ? r : null;
     provChanged();
   }
   function paintModel(name) {
@@ -396,6 +401,7 @@
       });
       state.settings = { ...state.settings, ...(r.settings || {}) };
       paintModel(curModel() || state.model || t("默认"));
+      if ("model" in patch || "effort" in patch) refreshSessModel();   // 跟随默认的会话，标签跟着变
       setPermChip(state.settings.permissionMode || "default");
       renderDirs();
             toast(t("已保存"));

@@ -201,7 +201,10 @@
 
   // ── 输入栏下的项目标签 + 新会话的项目选择 ──
   function curProject() { return view.sessionId ? pjOfSession(view.sessionId) : pjById(view.projectId); }
+  let projForModel;
   function paintProjChip() {
+    // 新会话换了项目：项目可能指定了自己的接口 / 型号，模型标签跟着换
+    if (!view.sessionId && projForModel !== (view.projectId || null)) { projForModel = view.projectId || null; refreshSessModel(); }
     const el = $("proj-chip"); if (!el) return;
     const p = curProject(), wel = document.documentElement.classList.contains("wel") && !view.sessionId && PJ.list.length > 0;
     el.classList.toggle("hidden", !p && !wel);

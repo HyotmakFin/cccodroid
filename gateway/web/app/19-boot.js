@@ -226,6 +226,75 @@
     }, { capture: true, passive: true });
   })();
 
+  // ── 竖屏横滑拉出侧栏 ───────────────────────────────────────────────
+  //  在对话区里从左往右滑（RTL 反过来）：侧栏跟着手指出来，松手时过了三分之一或甩得快就展开，否则缩回去。
+  //  贴边那一条留给系统的返回手势（安卓会先吃掉），这里管的是对话区里面起手的横滑。
+  //  不抢的情况：常驻左栏（宽屏）、侧栏 / 整页 / 浮层已开、多指、在输入框 / 终端里、在拖选文字、
+  //  手指下有还能往右滚的横向内容（代码块、表格滚过了就先让它滚回去）。
+  //  起手 12px 内判方向：横向明显大于竖向才接管，接管后拦掉这次的竖向滚动；否则整个手势交还系统。
+  (() => {
+    const panel = drawerEl.querySelector(".drawer-panel");
+    if (!panel) return;
+    const rtl = () => document.documentElement.dir === "rtl";
+    const hScrollable = (el) => {
+      for (; el && el !== chatEl; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)
+            && (rtl() ? el.scrollLeft < 0 : el.scrollLeft > 0)) return true;
+      return false;
+    };
+    let g = null;
+    // 遮罩跟着手指由浅到深（只改 #drawer 的底色，别动 opacity —— 那会让侧栏本身也半透明）
+    const scrim = (k) => { drawerEl.style.background = `color-mix(in srgb, var(--scrim) ${Math.round(k * 100)}%, transparent)`; drawerEl.style.backdropFilter = k >= 1 ? "" : "none"; };
+    const reset = () => { panel.style.transition = ""; panel.style.transform = ""; drawerEl.style.transition = ""; drawerEl.style.background = ""; drawerEl.style.backdropFilter = ""; };
+    // 手势开出来的侧栏把滑入动画关了（不然展开后再播一遍）；收起时还原，下次点菜单键照常有动画
+    new MutationObserver(() => { if (drawerEl.classList.contains("hidden")) { panel.style.animation = ""; reset(); } })
+      .observe(drawerEl, { attributes: true, attributeFilter: ["class"] });
+    chatEl.addEventListener("touchstart", (e) => {
+      g = null;
+      if (e.touches.length !== 1 || !drawerEl.classList.contains("hidden") || !$("pages").classList.contains("hidden")) return;
+      if ((window.CCLayout && CCLayout.docked()) || OV.top() || document.querySelector("#sheet:not(.hidden), #popup:not(.hidden)")) return;
+      if (e.target.closest("textarea,input,select,.xterm") || String(getSelection() || "").length || hScrollable(e.target)) return;
+      const p = e.touches[0];
+      g = { x: p.clientX, y: p.clientY, t: performance.now(), on: false, w: 0, dx: 0, lastX: p.clientX, lastT: performance.now(), v: 0 };
+    }, { passive: true });
+    chatEl.addEventListener("touchmove", (e) => {
+      if (!g || e.touches.length !== 1) { g = null; return; }
+      const p = e.touches[0], dx = (p.clientX - g.x) * (rtl() ? -1 : 1), dy = p.clientY - g.y;
+      if (!g.on) {
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+        if (!(dx > 0 && dx > 1.6 * Math.abs(dy)) || !e.cancelable) { g = null; return; }
+        g.on = true;
+        panel.style.animation = "none";
+        panel.style.transition = drawerEl.style.transition = "none";
+        panel.style.transform = rtl() ? "translateX(100%)" : "translateX(-100%)";   // 先藏在屏外再显示，别闪一下全开
+        scrim(0);
+        openDrawer();
+        g.w = panel.getBoundingClientRect().width || 300;
+        panel.style.transition = drawerEl.style.transition = "none";
+      }
+      e.preventDefault();
+      const now = performance.now();
+      g.v = ((p.clientX - g.lastX) * (rtl() ? -1 : 1)) / Math.max(1, now - g.lastT);
+      g.lastX = p.clientX; g.lastT = now;
+      g.dx = Math.max(0, Math.min(g.w, dx - 12));
+      const k = g.dx / g.w;
+      panel.style.transform = `translateX(${(rtl() ? 1 : -1) * (g.w - g.dx)}px)`;
+      scrim(k);
+    }, { passive: false });
+    const end = () => {
+      const s = g; g = null;
+      if (!s || !s.on) return;
+      const open = s.dx > s.w / 3 || s.v > 0.5;
+      panel.style.transition = "transform .18s ease";
+      drawerEl.style.transition = "background-color .18s ease";
+      panel.style.transform = open ? "translateX(0)" : `translateX(${(rtl() ? 1 : -1) * s.w}px)`;
+      scrim(open ? 0.999 : 0);
+      setTimeout(() => { if (open) reset(); else closeDrawer(true); }, 190);
+    };
+    chatEl.addEventListener("touchend", end, { passive: true });
+    chatEl.addEventListener("touchcancel", end, { passive: true });
+  })();
+
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
   window.__ccBack = guardHook("__ccBack", () => {
