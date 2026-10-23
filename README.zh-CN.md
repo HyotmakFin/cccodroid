@@ -200,6 +200,7 @@ cccodroid 本身以 [Apache License 2.0](LICENSE) 发布（另见 [NOTICE](NOTIC
 
 - **Claude Code**：Anthropic 的专有软件，**不随本项目分发**。使用时须遵守 [Anthropic 的条款](https://code.claude.com/docs/en/legal-and-compliance)。
 - **开发工具包**：取自 Termux 官方仓库，各组件按各自的许可证分发（含 GPL 等）。版本、哈希与构建配方见每个 Release 附带的 `devkit.lock.json` / `SBOM.tsv`。需要源码副本的，请在 Issues 中提出。
+- **glibc 动态加载器**（`lib/arm64-v8a/libldlinux.so`，随 APK 分发）：取自 Termux 的 glibc 包，LGPL-2.1-or-later，见 [android/prebuilt/glibc](android/prebuilt/glibc/README.md)。
 - **Shizuku-API**：MIT，见 [third_party/shizuku/LICENSE](third_party/shizuku/LICENSE)。
 - **xz-decompress**（devkit 构建期使用）：MIT。
 - **[xterm.js](https://xtermjs.org)**（终端）：MIT，见 [ThirdPartyLicenses/xterm.js](ThirdPartyLicenses/xterm.js/LICENSE)。

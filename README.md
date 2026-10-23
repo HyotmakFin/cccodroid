@@ -196,6 +196,7 @@ cccodroid itself is released under the [Apache License 2.0](LICENSE) (see also [
 
 - **Claude Code**: proprietary software by Anthropic, **not distributed with this project**. Its use is subject to [Anthropic's terms](https://code.claude.com/docs/en/legal-and-compliance).
 - **Toolchain**: taken from the official Termux repositories; each component is distributed under its own license (including GPL). Versions, hashes and build recipes are in the `devkit.lock.json` / `SBOM.tsv` attached to each release. If you need a copy of the source, ask in Issues.
+- **glibc dynamic loader** (`lib/arm64-v8a/libldlinux.so`, shipped in the APK): from Termux's glibc package, LGPL-2.1-or-later. See [android/prebuilt/glibc](android/prebuilt/glibc/README.md).
 - **Shizuku-API**: MIT, see [third_party/shizuku/LICENSE](third_party/shizuku/LICENSE).
 - **xz-decompress** (used at toolchain build time): MIT.
 - **[xterm.js](https://xtermjs.org)** (terminal): MIT, see [ThirdPartyLicenses/xterm.js](ThirdPartyLicenses/xterm.js/LICENSE).
