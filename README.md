@@ -215,6 +215,7 @@ Layout:
 - **[CCB-Fox](https://github.com/CCB-Fox)**: the Dimensity GPU driver component ([cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)), which led to Mali support in 0.3.3.
 - **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
 - **[gogoiPhone](https://github.com/gogoiPhone)**: a Redmi K70 Ultra device report with their own Vulkan compute test ([#14](https://github.com/greyoak111/cccodroid/issues/14)).
+- **[Slingerspir](https://github.com/Slingerspir)**: suggested a GitHub acceleration route and multi-threaded downloads ([discussion #15](https://github.com/greyoak111/cccodroid/discussions/15)); 0.4.1 added segmented parallel downloads and a gh-proxy fallback.
 
 Reports, device testing and code review are contributions too, and they're recorded here.
 

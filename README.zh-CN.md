@@ -219,6 +219,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[CCB-Fox](https://github.com/CCB-Fox)**：天玑 GPU 驱动组件（[cccodroid-components#46](https://github.com/greyoak111/cccodroid-components/pull/46)），促成了 0.3.3 的 Mali 机型支持。
 - **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
 - **[gogoiPhone](https://github.com/gogoiPhone)**：Redmi K70 Ultra 机型报告，附自写的 Vulkan 计算实测（[#14](https://github.com/greyoak111/cccodroid/issues/14)）。
+- **[Slingerspir](https://github.com/Slingerspir)**：建议下载时加 GitHub 加速线路和多线程下载（[讨论区 #15](https://github.com/greyoak111/cccodroid/discussions/15)），0.4.1 加上了分段并行下载和 gh-proxy 备用线。
 
 报告问题、测试机型、审查代码同样是贡献，都会记在这里。
 
