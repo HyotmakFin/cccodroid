@@ -120,7 +120,7 @@ RedMagic / ZTE: App info → App battery usage → Battery optimization → **Ba
 
 **Offline install**: put `devkit-cc.codroid.tar.gz` in `/sdcard/cccodroid/`; the first launch uses it instead of downloading.
 
-**Versions**: v0.3.0 is the first stable release. Later 0.3.x releases build on it; install over the old version and your data and installed tools are kept.
+**Versions**: v0.3.0 was the first stable release. Each minor series runs 21 releases (0.3.0–0.3.20, now 0.4.x); every release installs over the old one and keeps your data and installed tools.
 
 ## Community and contributing
 
