@@ -2076,5 +2076,13 @@ window.I18N_DICT.en = {
   "订阅账户 · 不会跑": "Subscription · won't run",
   "用订阅账户跑定时任务？\n\n定时任务会在没人看着的时候自动跑。无人值守使用以 Anthropic 条款为准，请自己确认你的用法符合条款；条款以后收紧，这一项可能要关掉。": "Run scheduled tasks on your subscription account?\n\nScheduled tasks run on their own while nobody is watching. Unattended use is subject to Anthropic's terms — please make sure your use complies. If the terms get stricter, you may need to turn this off.",
   "已允许用订阅账户跑定时任务": "Scheduled tasks may now run on the subscription account",
-  "已关闭：订阅账户不跑定时任务": "Off: scheduled tasks won't run on the subscription account"
+  "已关闭：订阅账户不跑定时任务": "Off: scheduled tasks won't run on the subscription account",
+  "「已验证」：维护者在真机上跑过这一版（下载、调用工具、接着上次的会话）。标了「有已知问题」的版本，自动更新不会装。": "\"Verified\": the maintainer ran this version on a real device (download, tool calls, resuming a session). Versions marked \"known issue\" are skipped by auto-update.",
+  "真机验证过：{who}": "Verified on: {who}",
+  "有已知问题：{why}": "Known issue: {why}",
+  "{v} 已修": "fixed in {v}",
+  "已验证": "Verified",
+  "还没验证": "not verified yet",
+  "{v} 有已知问题：{why}\n\n仍然换到这一版？": "{v} has a known issue: {why}\n\nSwitch to this version anyway?",
+  "等 {n} 台": "({n} devices)"
 };

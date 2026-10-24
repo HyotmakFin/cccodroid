@@ -615,6 +615,8 @@ a.weblink{overflow-wrap:anywhere}
 .mp-item small{display:block;color:var(--fg3);font-size:11px;margin-top:1px}
 .mp-item.cur{background:var(--bg3)}
 .mp-item.cur span{color:var(--accent)}
+.mp-item .ccv-ok{color:var(--ok);font-weight:600}
+.mp-item small.ccv-bad{color:var(--warn)}
 .mp-item:active{background:var(--bg3)}
 .mp-note{margin:6px 4px 0}
 .mp-follow{margin:0 4px 2px}

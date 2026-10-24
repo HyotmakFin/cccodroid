@@ -2000,7 +2000,6 @@ window.I18N_DICT["fr"] = {
   "长按：5 秒后截屏": "Appui long : capture dans 5 s",
   "展开工具": "Afficher les outils",
   "收起工具": "Masquer les outils",
-  // ── 能力页：斜杠命令的说明与分类（gw/caps.mjs）──
   "查看上下文窗口占用与技能清单": "Voir l'occupation du contexte et les skills",
   "压缩对话历史，释放上下文空间": "Compresser l'historique pour libérer du contexte",
   "清空当前会话上下文，另起一段": "Vider le contexte et repartir de zéro",
@@ -2042,5 +2041,13 @@ window.I18N_DICT["fr"] = {
   "订阅账户 · 不会跑": "Abonnement · ne s'exécutera pas",
   "用订阅账户跑定时任务？\n\n定时任务会在没人看着的时候自动跑。无人值守使用以 Anthropic 条款为准，请自己确认你的用法符合条款；条款以后收紧，这一项可能要关掉。": "Exécuter les tâches planifiées avec votre compte d'abonnement ?\n\nLes tâches planifiées s'exécutent seules, sans personne pour surveiller. L'usage sans surveillance relève des conditions d'Anthropic : assurez-vous que votre usage les respecte. Si elles se durcissent, il faudra peut-être désactiver cette option.",
   "已允许用订阅账户跑定时任务": "Les tâches planifiées peuvent maintenant utiliser le compte d'abonnement",
-  "已关闭：订阅账户不跑定时任务": "Désactivé : les tâches planifiées n'utiliseront pas le compte d'abonnement"
+  "已关闭：订阅账户不跑定时任务": "Désactivé : les tâches planifiées n'utiliseront pas le compte d'abonnement",
+  "「已验证」：维护者在真机上跑过这一版（下载、调用工具、接着上次的会话）。标了「有已知问题」的版本，自动更新不会装。": "« Vérifiée » : le mainteneur a testé cette version sur un vrai appareil (téléchargement, appels d'outils, reprise d'une session). Les versions marquées « problème connu » ne sont pas installées par la mise à jour automatique.",
+  "真机验证过：{who}": "Vérifiée sur : {who}",
+  "有已知问题：{why}": "Problème connu : {why}",
+  "{v} 已修": "corrigé dans {v}",
+  "已验证": "Vérifiée",
+  "还没验证": "pas encore vérifiée",
+  "{v} 有已知问题：{why}\n\n仍然换到这一版？": "{v} a un problème connu : {why}\n\nPasser quand même à cette version ?",
+  "等 {n} 台": "({n} appareils)",
 };

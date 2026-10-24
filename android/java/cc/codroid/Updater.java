@@ -499,6 +499,7 @@ final class Updater {
         // 版本号：官方 → cccodroid.net 镜像 → npm 镜像的 dist-tags（Anthropic 在 npm 上用同名的 stable / latest 标签）。
         // 这里只是「有没有新版」；真正下载时 install-claude.mjs 会按官方清单的 sha256 或 npm 签名校验
         String v = null, why = "";
+        claudeHeld = false;
         // 固定版本时只顺带查 stable 到了哪一版（提示用），查不到也不算错
         final String ch = pinned() ? "stable" : channel();
         String[] urls = { "https://downloads.claude.ai/claude-code-releases/" + ch, "https://cccodroid.net/claude-code/" + ch, "https://dl.cccodroid.net/claude-code/" + ch,
@@ -535,11 +536,34 @@ final class Updater {
             if (c == 0) claude.set("uptodate", tag);
             else if (c > 0 || claude.current.isEmpty()) claude.set("available", tag);
             else claude.set("available", Tr.f("切回 {0} 渠道：将换成 {1}（比当前的 {2} 旧）", channel(), v, claude.current));
+            // 维护者标成「有已知问题」的版本：先不自动装，写明原因；用户自己点更新照样装
+            String bad = c != 0 ? knownBad(v) : null;
+            claudeHeld = bad != null;
+            if (bad != null) claude.set("available", Tr.f("{0} 有已知问题，没有自动更新：{1}", v, bad));
         }
         // 当初只能靠 npm 签名装上、后来按官方清单补核又对不上的（网关 install-claude.mjs --recheck 留下 .mismatch）：
         // 当成「有更新」，点更新（或自动更新）就从头重下这一版，装之前按官方清单核 sha256
         if (!"installing".equals(claude.state) && new File(env.home, ".local/share/cccodroid/claude/current/.mismatch").isFile())
             claude.set("available", Tr.t("这一版与官方清单的 sha256 对不上，点更新重新下载"));
+    }
+
+    /** 渠道上的新版被标成有问题时为 true：autoApply 不装它 */
+    private volatile boolean claudeHeld;
+
+    /**
+     * 维护者标成「有已知问题」的 Claude Code 版本（scripts/claude-verified.mjs 发布、网关 gw/ccverified.mjs 验过签存在 home 里的那份）。
+     * 返回原因（按界面语言，中文以外都用英文），没标就返回 null。文件不在、读不了都当没标：只少一道提醒，不挡更新
+     */
+    private String knownBad(String v) {
+        try {
+            File f = new File(env.home, ".cache/cccodroid/claude-verified.json");
+            if (!f.isFile()) return null;
+            JSONObject bad = new JSONObject(new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8)).optJSONObject("bad");
+            JSONObject e = bad == null ? null : bad.optJSONObject(v);
+            if (e == null) return null;
+            String zh = e.optString("zh", ""), en = e.optString("en", "");
+            return Tr.lang().startsWith("zh") && !zh.isEmpty() ? zh : !en.isEmpty() ? en : zh;
+        } catch (Exception ex) { return null; }
     }
 
     /** 发布列表地址。home/.config/cccodroid/update-feed 里写了地址就用它（测试更新流程用，形状同 GitHub API） */
@@ -553,7 +577,7 @@ final class Updater {
     /** 自动模式的规则：见类注释 */
     private void autoApply() {
         boolean unmetered = !ctx.getSystemService(ConnectivityManager.class).isActiveNetworkMetered();
-        if ("available".equals(claude.state) && unmetered) apply("claude", false);
+        if ("available".equals(claude.state) && unmetered && !claudeHeld) apply("claude", false);
         if ("available".equals(app.state)) apply("app", false);              // 几 MB，什么网都下
         else if ("ready".equals(app.state)) maybeSilentInstallApp();
         if ("available".equals(devkit.state) && unmetered) apply("devkit", false);

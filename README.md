@@ -198,6 +198,7 @@ Layout:
 | `docs/known-issues.md` | Known issues and unresolved risks, plus test actions that create fake bugs |
 | `docs/download-sources.md` | Every download chain: sources, trust anchors, server mirrors, how to check and maintain them |
 | `docs/permissions.md` | What each permission is for, when you're asked, what happens if you refuse, and the risks of the three heavy ones |
+| `docs/claude-code-versions.md` | On-device verification of new Claude Code releases, the Verified / Known issue marks and how auto-update uses them, and the maintainer workflow |
 | `docs/operit2-on-device-build.md` | Case study: building Operit2 (Flutter + Rust) from source into an APK on a phone, with every gap and fix |
 | `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → light / dark PNG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |
