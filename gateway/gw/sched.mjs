@@ -60,7 +60,8 @@ function cronField(spec, lo, hi) {
 export function parseCron(expr) {
   const f = String(expr || "").trim().split(/\s+/);
   if (f.length !== 5) throw new Error(tz("cron 要五段：分 时 日 月 周"));
-  const dow = cronField(f[4].replace(/7/g, "0"), 0, 6);
+  // 星期按 0..7 展开，再把 7（星期日的别名）并进 0。先替换字符串再展开会把 1-7 变成 1-0，范围就空了（issue #16）
+  const dow = new Set([...cronField(f[4], 0, 7)].map((d) => (d === 7 ? 0 : d)));
   return { min: cronField(f[0], 0, 59), hour: cronField(f[1], 0, 23), dom: cronField(f[2], 1, 31), mon: cronField(f[3], 1, 12), dow, domAny: f[2] === "*", dowAny: f[4] === "*" };
 }
 export function nextAt(task, from = Date.now()) {
