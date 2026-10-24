@@ -2371,6 +2371,8 @@ html:not(.dock-l) .drawer-panel{border-start-end-radius:var(--g4);border-end-end
 /* 设置卡片是模态：遮罩盖住整个窗口（侧栏、右侧窗格一起压暗），卡片浮在所有窗格之上、居中；
    之前 z 56 低于窗格的 70，宽屏开着终端时卡片被窗格切掉一截 */
 #set-ov{z-index:80}
+/* Claude Code 版本选单是从设置里开的，得压在设置卡片（80）之上；原先 56，打开了却被设置挡在下面，像是选不了 */
+#ccv-pick{z-index:90}
 .pj-card{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
 
 /* ── 字体（自带，不受系统字体主题影响）──────────────────────────────
