@@ -9,7 +9,10 @@ import { safeFilePath } from "./files.mjs";
 // 查看器里渲染 HTML：另起一个只读的小服务（随机端口，地址用 localhost），和界面（127.0.0.1:端口）不同站点——
 // 预览页里的脚本拿不到界面的 Cookie，也过不了 /api 的 Origin 校验，Claude 写的网页随便跑也碰不到网关。
 // 每次预览发一张随机凭证，只能读那个 HTML 所在目录里的东西；路径照样过 safeFilePath（密钥、私有目录照旧拦）。
-// 网址形如 http://localhost:<端口>/<凭证>/index.html，相对路径自然解析；"/assets/x.js" 这种站点绝对路径按 Referer 里的凭证找回来
+// 网址形如 http://localhost:<端口>/<凭证>/index.html，相对路径自然解析；"/assets/x.js" 这种站点绝对路径按 Referer 里的凭证找回来。
+// "../assets/x.css"（页面在子目录、资源在上级，生成的网站常这样）会被浏览器规整成 /assets/x.css，同样走 Referer；
+// 这两种在页面目录里找不到时往上逐级找，最多 UP_LEVELS 层，每层照样过 safeFilePath 和真实路径检查
+const UP_LEVELS = 3;
 const PREVIEW = { server: null, port: 0, starting: null, caps: new Map() };
 function previewStart() {
   if (PREVIEW.port) return Promise.resolve(PREVIEW.port);
@@ -41,22 +44,34 @@ function previewServe(req, res) {
   let pathname;
   try { pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { return fail(400, "bad path"); }
   const segs = pathname.split("/").filter(Boolean);
-  let cap = segs[0], rel = segs.slice(1);
+  let cap = segs[0], rel = segs.slice(1), viaRef = false;
   if (!PREVIEW.caps.has(cap)) {
-    // 站点绝对路径（/assets/x.js）：从引用它的页面找回凭证
+    // 站点绝对路径（/assets/x.js）或规整后的 ../：从引用它的页面找回凭证
     let ref = ""; try { ref = new URL(String(req.headers.referer || "")).pathname.split("/")[1] || ""; } catch {}
     if (!PREVIEW.caps.has(ref)) return fail(404, "preview expired — reopen the file");
-    cap = ref; rel = segs;
+    cap = ref; rel = segs; viaRef = true;
   }
   const g = PREVIEW.caps.get(cap);
   if (g.exp < Date.now()) { PREVIEW.caps.delete(cap); return fail(404, "preview expired — reopen the file"); }
-  let full = path.resolve(g.root, ...rel);
-  if (full !== g.root && !full.startsWith(g.root + path.sep)) return fail(403, "outside preview folder");
-  try { if (fs.statSync(full).isDirectory()) full = path.join(full, "index.html"); } catch {}
-  const r = safeFilePath(full);
+  // 在 base 下找 rel：字面路径和解析过符号链接的真实路径都得在 base 里
+  const lookup = (base) => {
+    let full = path.resolve(base, ...rel);
+    if (full !== base && !full.startsWith(base + path.sep)) return { status: 403, error: "outside preview folder" };
+    try { if (fs.statSync(full).isDirectory()) full = path.join(full, "index.html"); } catch {}
+    const r = safeFilePath(full);
+    if (r.error) return r;
+    if (r.file !== base && !r.file.startsWith(base + path.sep)) return { status: 403, error: "outside preview folder" };
+    return r;
+  };
+  let r = lookup(g.root);
+  for (let base = g.root, i = 0; viaRef && r.error && i < UP_LEVELS; i++) {
+    const up = path.dirname(base);
+    if (up === base || up === "/") break;
+    base = up;
+    const t = lookup(base);
+    if (!t.error) r = t;
+  }
   if (r.error) return fail(r.status || 404, r.error);
-  // 上面比的是字面路径；目录里的符号链接能指到外面去，解析过的真实路径也得在预览目录里
-  if (r.file !== g.root && !r.file.startsWith(g.root + path.sep)) return fail(403, "outside preview folder");
   const head = { "content-type": MIME[path.extname(r.file).toLowerCase()] || "application/octet-stream",
     "cache-control": "no-store", "x-content-type-options": "nosniff", "accept-ranges": "bytes" };
   // 音视频要 Range 才能拖进度
