@@ -2032,5 +2032,15 @@ window.I18N_DICT["es"] = {
   "深度研究": "Investigación a fondo",
   "编排多代理工作流": "Orquestar un flujo multiagente",
   "上下文": "Contexto",
-  "状态": "Estado"
+  "状态": "Estado",
+  "用订阅账户跑定时任务默认关闭": "Por defecto, las tareas programadas no se ejecutan con una cuenta de suscripción",
+  "「{n}」要用订阅账户跑：到定时任务页底部「订阅账户」里打开（无人值守使用以 Anthropic 条款为准），或给任务换一个用 API Key 的接口": "«{n}» se ejecutaría con una cuenta de suscripción. Actívalo en «Cuenta de suscripción», al final de la página Programadas (el uso desatendido se rige por los términos de Anthropic), o usa un proveedor con clave API",
+  "订阅账户": "Cuenta de suscripción",
+  "允许用订阅账户跑": "Permitir ejecutar con una cuenta de suscripción",
+  "官方登录的订阅账户默认不跑定时任务。打开前请自己确认：无人值守使用以 Anthropic 条款为准。用 API Key 的接口不受影响。": "Por defecto, las tareas programadas no se ejecutan con una cuenta de suscripción iniciada. Antes de activarlo, compruébalo tú: el uso desatendido se rige por los términos de Anthropic. Los proveedores con clave API no se ven afectados.",
+  "{n} 个任务会用订阅账户，现在不会跑": "{n} tarea(s) usarían la cuenta de suscripción y por ahora no se ejecutarán",
+  "订阅账户 · 不会跑": "Suscripción · no se ejecutará",
+  "用订阅账户跑定时任务？\n\n定时任务会在没人看着的时候自动跑。无人值守使用以 Anthropic 条款为准，请自己确认你的用法符合条款；条款以后收紧，这一项可能要关掉。": "¿Ejecutar las tareas programadas con tu cuenta de suscripción?\n\nLas tareas programadas se ejecutan solas mientras nadie mira. El uso desatendido se rige por los términos de Anthropic: asegúrate de que tu uso los cumple. Si los términos se endurecen, puede que tengas que desactivarlo.",
+  "已允许用订阅账户跑定时任务": "Las tareas programadas ya pueden usar la cuenta de suscripción",
+  "已关闭：订阅账户不跑定时任务": "Desactivado: las tareas programadas no usarán la cuenta de suscripción"
 };

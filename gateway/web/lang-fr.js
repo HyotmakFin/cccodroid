@@ -2032,5 +2032,15 @@ window.I18N_DICT["fr"] = {
   "深度研究": "Recherche approfondie",
   "编排多代理工作流": "Orchestrer un workflow multi-agents",
   "上下文": "Contexte",
-  "状态": "État"
+  "状态": "État",
+  "用订阅账户跑定时任务默认关闭": "Par défaut, les tâches planifiées ne s'exécutent pas avec un compte d'abonnement",
+  "「{n}」要用订阅账户跑：到定时任务页底部「订阅账户」里打开（无人值守使用以 Anthropic 条款为准），或给任务换一个用 API Key 的接口": "« {n} » utiliserait un compte d'abonnement. Activez-le sous « Compte d'abonnement » en bas de la page Planifié (l'usage sans surveillance relève des conditions d'Anthropic), ou choisissez un fournisseur à clé API",
+  "订阅账户": "Compte d'abonnement",
+  "允许用订阅账户跑": "Autoriser l'exécution avec un compte d'abonnement",
+  "官方登录的订阅账户默认不跑定时任务。打开前请自己确认：无人值守使用以 Anthropic 条款为准。用 API Key 的接口不受影响。": "Par défaut, les tâches planifiées ne s'exécutent pas avec un compte d'abonnement connecté. Avant d'activer, vérifiez par vous-même : l'usage sans surveillance relève des conditions d'Anthropic. Les fournisseurs à clé API ne sont pas concernés.",
+  "{n} 个任务会用订阅账户，现在不会跑": "{n} tâche(s) utiliseraient le compte d'abonnement et ne s'exécuteront pas pour l'instant",
+  "订阅账户 · 不会跑": "Abonnement · ne s'exécutera pas",
+  "用订阅账户跑定时任务？\n\n定时任务会在没人看着的时候自动跑。无人值守使用以 Anthropic 条款为准，请自己确认你的用法符合条款；条款以后收紧，这一项可能要关掉。": "Exécuter les tâches planifiées avec votre compte d'abonnement ?\n\nLes tâches planifiées s'exécutent seules, sans personne pour surveiller. L'usage sans surveillance relève des conditions d'Anthropic : assurez-vous que votre usage les respecte. Si elles se durcissent, il faudra peut-être désactiver cette option.",
+  "已允许用订阅账户跑定时任务": "Les tâches planifiées peuvent maintenant utiliser le compte d'abonnement",
+  "已关闭：订阅账户不跑定时任务": "Désactivé : les tâches planifiées n'utiliseront pas le compte d'abonnement"
 };

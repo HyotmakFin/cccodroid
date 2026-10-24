@@ -2066,5 +2066,15 @@ window.I18N_DICT.en = {
   "深度研究": "Deep research",
   "编排多代理工作流": "Orchestrate a multi-agent workflow",
   "上下文": "Context",
-  "状态": "Status"
+  "状态": "Status",
+  "用订阅账户跑定时任务默认关闭": "Scheduled tasks don't run on a subscription account by default",
+  "「{n}」要用订阅账户跑：到定时任务页底部「订阅账户」里打开（无人值守使用以 Anthropic 条款为准），或给任务换一个用 API Key 的接口": "\"{n}\" would run on a subscription account. Turn it on under \"Subscription account\" at the bottom of the Scheduled page (unattended use is subject to Anthropic's terms), or give the task a provider that uses an API key",
+  "订阅账户": "Subscription account",
+  "允许用订阅账户跑": "Allow running on a subscription account",
+  "官方登录的订阅账户默认不跑定时任务。打开前请自己确认：无人值守使用以 Anthropic 条款为准。用 API Key 的接口不受影响。": "Scheduled tasks don't run on a signed-in subscription account by default. Before turning this on, check for yourself: unattended use is subject to Anthropic's terms. Providers that use an API key aren't affected.",
+  "{n} 个任务会用订阅账户，现在不会跑": "{n} task(s) would use the subscription account and won't run for now",
+  "订阅账户 · 不会跑": "Subscription · won't run",
+  "用订阅账户跑定时任务？\n\n定时任务会在没人看着的时候自动跑。无人值守使用以 Anthropic 条款为准，请自己确认你的用法符合条款；条款以后收紧，这一项可能要关掉。": "Run scheduled tasks on your subscription account?\n\nScheduled tasks run on their own while nobody is watching. Unattended use is subject to Anthropic's terms — please make sure your use complies. If the terms get stricter, you may need to turn this off.",
+  "已允许用订阅账户跑定时任务": "Scheduled tasks may now run on the subscription account",
+  "已关闭：订阅账户不跑定时任务": "Off: scheduled tasks won't run on the subscription account"
 };
