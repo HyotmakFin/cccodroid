@@ -207,24 +207,15 @@
     fillSetupGuide(b.querySelector(".setup-guide"));
     paintWelBelow();
   }
-  // 输入框下方：三个示例（点一下只填进输入框，不直接发）+ 使用提示（进帮助页）
+  // 输入框下方：只留「使用提示」（进帮助页）；原先还有三条示例，用户嫌不好看，去掉了
   const wlBelow = document.createElement("div");
   wlBelow.id = "wl-below";
   $("composer").after(wlBelow);
   function paintWelBelow() {
-    const examples = [
-      t("看看这台设备上装了哪些开发工具，挑三个各演示一下"),
-      t("用 Python 统计工作区里各类文件的数量和总大小，整理成表格"),
-      t("写一个单文件的贪吃蛇网页小游戏，做好后在浏览器里打开给我看"),
-    ];
-    wlBelow.innerHTML = `<div class="wl-ex">${examples.map((x) => `<button class="wl-chip" data-ex><span>${esc(x)}</span></button>`).join("")}
-      <button class="wl-chip wl-tips" data-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6M12 17v.01"/></svg>${esc(t("使用提示"))}</button></div>`;
+    wlBelow.innerHTML = `<div class="wl-ex"><button class="wl-chip wl-tips" data-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6M12 17v.01"/></svg>${esc(t("使用提示"))}</button></div>`;
   }
   wlBelow.addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.help != null) return openPage("help");
-    inputEl.value = b.textContent.trim();
-    autoGrow(); syncInterject(); inputEl.focus();
+    const b = e.target.closest("button[data-help]"); if (b) openPage("help");
   });
   function welSync() {
     const w = histEl.childElementCount === 1 && !!histEl.querySelector(":scope > .msg.welcome") && !liveEl.childElementCount;
@@ -232,7 +223,7 @@
     document.documentElement.classList.toggle("wel", w);
     syncPlaceholder(); paintProjChip(); welNarrow();
   }
-  // 对话栏窄（开着右侧窗格、分屏）：示例只留两条，免得把使用提示挤出屏幕
+  // 对话栏窄（开着右侧窗格、分屏）：首屏排得紧一点
   function welNarrow() { document.documentElement.classList.toggle("wel-narrow", colRect().width < 600); }
   addEventListener("resize", welNarrow);
   new MutationObserver(welSync).observe(histEl, { childList: true });
