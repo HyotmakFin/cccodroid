@@ -176,6 +176,9 @@
       append(t) { text += t; if (!timer) timer = setTimeout(() => paint(false), PAINT_TICK); },
       set(t) { text = t; if (live) { if (!timer) timer = setTimeout(() => paint(false), PAINT_TICK); } else paint(true); },
       finish() { if (live) paint(true); },
+      /** 从末尾删掉 n 个字（流断了、那半截不算数）；冻结的段落可能也在里面，整块重画 */
+      drop(n) { text = text.slice(0, Math.max(0, text.length - n)); frozen.innerHTML = ""; fz = 0; paint(!live); return text.length; },
+      remove() { if (timer) { clearTimeout(timer); timer = 0; } el.remove(); },
       get text() { return text; },
     };
   }
@@ -227,6 +230,8 @@
       el,
       append(t) { thinking += t; if (!done) el.classList.add("live"); tick(); },
       set(t) { thinking = t; done = true; el.classList.remove("live"); label.textContent = fmtChars(thinking.length); },
+      drop(n) { thinking = thinking.slice(0, Math.max(0, thinking.length - n)); label.textContent = fmtChars(thinking.length); if (el.open) render("tail"); return thinking.length; },
+      remove() { if (timer) { clearTimeout(timer); timer = 0; } el.remove(); },
       finish() {
         if (timer) { clearTimeout(timer); timer = 0; }
         done = true;

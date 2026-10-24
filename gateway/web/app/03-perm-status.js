@@ -594,6 +594,16 @@
       text(t) { push(TextBlock(bubble, live)).set(t); },
       thinkDelta(t) { thinkB().append(t); },
       thinking(t) { (inGroup() ? groupThink() : push(ThinkBlock(bubble))).set(t); },
+      /** 流断了重来：删掉上一次请求逐字推出、却没进对话的半截（正文在最后一块，思考在它前面或步骤组里） */
+      discard(nText, nThink) {
+        const dropTop = (b, n) => { if (b.drop(n) > 0) return; b.remove(); blocks.splice(blocks.indexOf(b), 1); last = blocks[blocks.length - 1] || null; };
+        if (nText > 0 && last && last.kind === "text") dropTop(last, nText);
+        if (nThink > 0) {
+          if (last && last.kind === "think") dropTop(last, nThink);
+          else if (inGroup() && last.lastInner && last.lastInner.kind === "think") last.lastInner.drop(nThink);
+        }
+        if (!blocks.length && live) { any = false; if (!dots) { bubble.insertAdjacentHTML("afterbegin", DOTS); dots = bubble.firstChild; } phPlace(); }
+      },
       tool(id, name, input) {
         if (live) { pendTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
         let g = last;

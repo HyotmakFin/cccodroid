@@ -424,6 +424,7 @@
       case "assistant_text": av.text(ev.text); break;
       case "thinking_delta": av.thinkDelta(ev.text); break;
       case "thinking":       av.thinking(ev.text); break;
+      case "discard_partial": av.discard(ev.text || 0, ev.think || 0); break;
       case "tool_use": {
         const pc = ev.parent && TOOL_CARDS.get(ev.parent);
         if (pc && pc.isAgent) { pc.sub(ev.id, ev.name, ev.input); break; }
