@@ -2428,7 +2428,12 @@ html.wel #wl-below{display:block;flex:1 1 0;min-height:0;overflow:auto;padding:v
 html.wel .msg.welcome{width:100%;margin-bottom:var(--g4)}
 html.wel .msg.welcome .who,html.wel .msg.welcome + .msg-acts,html.wel .msg.welcome .msg-acts{display:none}
 .wl-hero{display:flex;align-items:center;justify-content:center;gap:var(--g3);text-align:center;flex-wrap:wrap}
-.wl-mark{width:52px;height:52px;flex:none;background:var(--accent);-webkit-mask:url(mark.png) center/contain no-repeat;mask:url(mark.png) center/contain no-repeat}
+.wl-mark{width:52px;height:52px;flex:none;fill:none;stroke:var(--fg);stroke-width:2.6;stroke-linecap:round}
+.wl-mark circle{fill:var(--zy-blue,var(--accent));stroke:none;transform-origin:24px 24px;animation:wl-dot .18s ease-out both}
+.wl-mark path{stroke-dasharray:1;stroke-dashoffset:1;animation:wl-draw .42s cubic-bezier(.22,.61,.36,1) forwards}
+.wl-mark path:nth-of-type(1){animation-delay:.15s}.wl-mark path:nth-of-type(2){animation-delay:.28s}.wl-mark path:nth-of-type(3){animation-delay:.41s}
+@keyframes wl-draw{to{stroke-dashoffset:0}}@keyframes wl-dot{from{transform:scale(.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.wl-mark path,.wl-mark circle{animation:none;stroke-dashoffset:0}}
 .wl-greet{margin:0;font-family:var(--font-serif);font-weight:400;font-size:clamp(19px,4.2cqi,31px);line-height:1.3;letter-spacing:.01em;color:var(--fg)}
 html.wel .msg.welcome .setup-guide{text-align:start;margin-top:var(--g4)}
 /* 首屏的输入框更舒展：两行高，像一张卡片 */

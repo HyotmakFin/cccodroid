@@ -62,6 +62,13 @@ public class MainActivity extends Activity {
     private ScrollView logScroll;
     private ProgressBar bar;
     private TextView stat;
+    /** 平时启动（工具包已装好）：只有居中的标识和一行小字，安装页的日志藏在 setupCol 里，出错 / 要下载 / 要选东西时才展开 */
+    private View splash;
+    private Mark splashMark;
+    private TextView splashStat;
+    private LinearLayout setupCol;
+    /** 交给网页时盖在 WebView 上的标识层，页面加载完再收起（不然中间有一下空白） */
+    private View handoff;
     private WebView web;
     /** 宽屏时嵌在右侧工作区的浏览器（null = 没开）。位置、显隐全听页面的（layout.js → CCApp.paneBounds） */
     private BrowserPane pane;
@@ -89,7 +96,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 31) getSplashScreen().setOnExitAnimationListener(v -> v.remove());
         syncSplash();
         env = new Env(this);
-        buildSetupUi();
+        buildSetupUi(env.devkitReady() && !secondaryUser(this));
         edgeToEdge();
         pending = getIntent();
         java.util.List<String> want = new java.util.ArrayList<>();
@@ -157,6 +164,8 @@ public class MainActivity extends Activity {
                     installFirstDevkit(ins);
                     say(Tr.t("✓ 开发工具包就绪"));
                     Ledger.add(env, "install", true, Tr.t("首次安装开发工具包"), null);
+                    // 旧版在首装期间可能已经按「全部模块」下好了一份同版本的更新：装好以后它就是多余的，别在下面被当成更新装上
+                    Updater.get(this).dropStagedIfInstalled();
                 }
                 deployAssets();
                 if (!env.claudeReady() && !env.claudeOff()) {      // 用户自己卸的不装回，等他在设置里选版本
@@ -447,6 +456,7 @@ public class MainActivity extends Activity {
 
     /** 选项和日志区二选一占剩余高度；选完回到日志 */
     private void showChooser(boolean on) {
+        if (on) expandSetup();
         chooser.setVisibility(on ? View.VISIBLE : View.GONE);
         chooserScroll.setVisibility(on ? View.VISIBLE : View.GONE);
         chooserFoot.setVisibility(on && chooserFoot.getChildCount() > 0 ? View.VISIBLE : View.GONE);
@@ -870,21 +880,30 @@ public class MainActivity extends Activity {
     }
 
     // ── 界面 ───────────────────────────────────────────────────────────
-    private void buildSetupUi() {
+    private void buildSetupUi() { buildSetupUi(false); }
+    /** quick = 平时启动：先只露出居中的标识，安装页整套控件照样建好、藏着，需要时 expandSetup() 换上来 */
+    private void buildSetupUi(boolean quick) {
         boolean dark = uiDark();
         int accent = BrowserPane.pal(this, dark, "accent");
         root = new FrameLayout(this);
         root.setBackgroundColor(BrowserPane.pal(this, dark, "bg"));
         LinearLayout col = new LinearLayout(this);
+        setupCol = col;
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(20), dp(40), dp(20), dp(20));
+        // 标题行：标识（一直在扫，表示还在忙）+ cccodroid
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        head.setPadding(0, 0, 0, dp(12));
+        head.addView(new Mark(this, BrowserPane.pal(this, dark, "fg"), Mark.dotColor(this, dark)), new LinearLayout.LayoutParams(dp(34), dp(34)));
         TextView title = new TextView(this);
         title.setText("cccodroid");
-        title.setTextSize(26);
+        title.setTextSize(24);
         title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        title.setPadding(0, 0, 0, dp(10));
-        title.setTextColor(accent);
-        col.addView(title);
+        title.setPadding(dp(12), 0, 0, 0);
+        title.setTextColor(BrowserPane.pal(this, dark, "fg"));
+        head.addView(title);
+        col.addView(head);
         bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setIndeterminate(true);
         bar.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
@@ -941,13 +960,41 @@ public class MainActivity extends Activity {
         acts.addView(stuck, new LinearLayout.LayoutParams(-2, -2));
         col.addView(acts, new LinearLayout.LayoutParams(-1, -2));
         root.addView(col);
+        splash = null; splashMark = null; splashStat = null;
+        if (quick) {
+            col.setVisibility(View.GONE);
+            LinearLayout sp = new LinearLayout(this);
+            sp.setOrientation(LinearLayout.VERTICAL);
+            sp.setGravity(android.view.Gravity.CENTER);
+            splashMark = new Mark(this, BrowserPane.pal(this, dark, "fg"), Mark.dotColor(this, dark));
+            sp.addView(splashMark, new LinearLayout.LayoutParams(dp(88), dp(88)));
+            splashStat = new TextView(this);
+            splashStat.setTextColor(BrowserPane.pal(this, dark, "hint"));
+            splashStat.setTextSize(12.5f);
+            splashStat.setGravity(android.view.Gravity.CENTER);
+            splashStat.setSingleLine(true);
+            splashStat.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            splashStat.setPadding(dp(24), dp(22), dp(24), 0);
+            sp.addView(splashStat, new LinearLayout.LayoutParams(-1, -2));
+            splash = sp;
+            root.addView(sp, new FrameLayout.LayoutParams(-1, -1));
+        }
         setContentView(root);
         applyBars(dark);
+    }
+
+    /** 平时启动途中碰上要看细节的事（出错、要下载、要选来源）：收起居中标识，换回完整的安装页 */
+    private void expandSetup() {
+        if (splash == null || splash.getVisibility() != View.VISIBLE) return;
+        splash.setVisibility(View.GONE);
+        setupCol.setVisibility(View.VISIBLE);
     }
 
     private void say(String m) {
         android.util.Log.i("cccodroid-setup", m);      // 安装 / 更新出问题时，logcat 里能看到走到了哪一步
         ui.post(() -> {
+            if (splashStat != null) splashStat.setText(m);
+            if (m.startsWith("✗")) expandSetup();
             log.append(m + "\n");
             if (log.getLineCount() > 400) log.setText(log.getText().subSequence(log.getText().length() / 2, log.getText().length()));
             logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
@@ -976,12 +1023,26 @@ public class MainActivity extends Activity {
         }
         final String line = txt;
         ui.post(() -> {
+            expandSetup();
             if (t <= 0) bar.setIndeterminate(true);
             else { bar.setIndeterminate(false); bar.setProgress((int) (d * 100 / t)); }
             stat.setText(line);
         });
     }
     private static String mb(long b) { return String.format(java.util.Locale.ROOT, b >= 100 << 20 ? "%.0f MB" : "%.1f MB", b / 1048576.0); }
+
+    private Mark handoffMark;
+    /** 网关页面落地后收起标识层：标识收缩淡出，底色同时淡掉 */
+    private void dropHandoff() {
+        final View ho = handoff;
+        if (ho == null) return;
+        handoff = null;
+        if (handoffMark != null) handoffMark.finish(null);
+        handoffMark = null;
+        ho.animate().alpha(0).setStartDelay(120).setDuration(260).withEndAction(() -> {
+            if (ho.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) ho.getParent()).removeView(ho);
+        }).start();
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private void showWeb() {
@@ -1026,6 +1087,7 @@ public class MainActivity extends Activity {
                 // 网关页面落地就清历史：脱困跳转、看门狗重载留下的条目都没有回去的意义
                 if (url != null && url.startsWith("http://127.0.0.1:")) v.clearHistory();
                 pushInsets();
+                if (handoff != null && url != null && url.startsWith("http://127.0.0.1:")) ui.postDelayed(MainActivity.this::dropHandoff, 180);
             }
         });
         web.addJavascriptInterface(new Object() {
@@ -1140,8 +1202,27 @@ public class MainActivity extends Activity {
             }
         });
         web.loadUrl(Env.uiUrl());
+        // 平时启动沿用正在扫的那个标识（不重播进场）；从安装页过来就新起一个居中的
+        boolean dark = uiDark();
+        View keep = splash != null && splash.getVisibility() == View.VISIBLE ? splash : null;
+        Mark hm = keep != null ? splashMark : null;
         root.removeAllViews();
         root.addView(web);
+        FrameLayout ho = new FrameLayout(this);
+        ho.setBackgroundColor(BrowserPane.pal(this, dark, "bg"));
+        ho.setClickable(true);              // 收起前别让点击漏到底下还没画好的页面
+        if (keep != null) {
+            if (splashStat != null) splashStat.setText("");
+            ho.addView(keep, new FrameLayout.LayoutParams(-1, -1));
+        } else {
+            hm = new Mark(this, BrowserPane.pal(this, dark, "fg"), Mark.dotColor(this, dark));
+            ho.addView(hm, new FrameLayout.LayoutParams(dp(88), dp(88), android.view.Gravity.CENTER));
+        }
+        handoffMark = hm;
+        handoff = ho;
+        root.addView(ho, new FrameLayout.LayoutParams(-1, -1));
+        splash = null; splashMark = null; splashStat = null;
+        ui.postDelayed(this::dropHandoff, 6000);   // 页面迟迟不落地也别一直挡着
         root.requestApplyInsets();            // 顶部留白交给页面（--safe-t）
         // 首次启动：安装界面的原生控件刚被整个拿掉，紧接着还可能弹「开启通知」对话框。WebView 没拿到焦点时，
         // 点输入框键盘起不来 / 字打不进去，只有脱困（整页重载）才好。这里主动要焦点，窗口回到前台时再补一次（onWindowFocusChanged）
