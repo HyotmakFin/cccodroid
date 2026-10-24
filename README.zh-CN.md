@@ -4,6 +4,19 @@
 
 **在安卓手机上运行 Claude Code 的开发启动台。** 不 root、不换系统、不走 chroot / proot / 虚拟机。
 
+[![版本](https://img.shields.io/github/v/release/greyoak111/cccodroid?color=c96442&label=版本)](https://github.com/greyoak111/cccodroid/releases/latest)
+[![下载](https://img.shields.io/github/downloads/greyoak111/cccodroid/total?color=c96442&label=下载)](https://github.com/greyoak111/cccodroid/releases)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)
+[![许可](https://img.shields.io/github/license/greyoak111/cccodroid?label=许可)](LICENSE)
+
+<p align="center"><img src="docs/assets/hero.jpg" width="880" alt="cccodroid 在平板上：侧栏、带输入框的首屏，以及列着 Blender、Godot、Cloudflare 等可装工具的组件页"></p>
+
+<p align="center">
+  <a href="https://cccodroid.net/dl/cccodroid.apk"><b>下载安装包</b></a>（国内直连）
+  &nbsp;·&nbsp; <a href="https://github.com/greyoak111/cccodroid/releases/latest/download/cccodroid.apk">GitHub 下载</a>
+  &nbsp;·&nbsp; <a href="#安装">安装说明</a>
+</p>
+
 安卓底层本来就是 Linux 内核。只要工具能在这套内核上原生跑起来，手机就能直接用来做 AI 辅助开发：
 写代码、编译 C/C++、跑 Python / Node、打 APK、用 git 推送，全部在手机上完成。
 
@@ -20,6 +33,8 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 详见 **[设计哲学](docs/design-philosophy.zh-CN.md)**。
 
 ## 能做什么
+
+<p align="center"><img src="docs/assets/gallery.jpg" width="880" alt="四张手机界面：可选组件、新建定时任务、通用设置（外观与字体）、内置帮助"></p>
 
 - **官方 Claude Code + 图形界面**：对话、流式输出、思考过程、工具调用、文件浏览器、历史会话。
   - 生成中发的消息停在对话末尾、标「排队中」；点「立即发送」递进正在跑的这一轮，不打断。**停止键只管停止**：排队的消息挂起，不会自动发出。

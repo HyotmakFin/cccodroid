@@ -4,6 +4,19 @@
 
 **A development launcher that runs Claude Code on Android phones.** No root, no custom ROM, no chroot / proot / VM.
 
+[![Release](https://img.shields.io/github/v/release/greyoak111/cccodroid?color=c96442&label=release)](https://github.com/greyoak111/cccodroid/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/greyoak111/cccodroid/total?color=c96442)](https://github.com/greyoak111/cccodroid/releases)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84)
+[![License](https://img.shields.io/github/license/greyoak111/cccodroid)](LICENSE)
+
+<p align="center"><img src="docs/assets/hero.jpg" width="880" alt="cccodroid on a tablet: the sidebar, the welcome screen with the input box, and the components page listing Blender, Godot, Cloudflare and other installable tools"></p>
+
+<p align="center">
+  <a href="https://github.com/greyoak111/cccodroid/releases/latest/download/cccodroid.apk"><b>Download the APK</b></a>
+  &nbsp;·&nbsp; <a href="https://cccodroid.net/dl/cccodroid.apk">Mirror (cccodroid.net)</a>
+  &nbsp;·&nbsp; <a href="#install">Install guide</a>
+</p>
+
 Android already runs on a Linux kernel. Once the tools run natively on that kernel, a phone can do real AI-assisted development:
 write code, compile C/C++, run Python / Node, build APKs and push with git — all on the phone.
 
@@ -19,6 +32,8 @@ The approach is not tied to one agent — any command-line AI agent that runs on
 See **[Design philosophy](docs/design-philosophy.md)**.
 
 ## Features
+
+<p align="center"><img src="docs/assets/gallery.jpg" width="880" alt="Four phone screens: optional components, a new scheduled task, general settings with appearance and fonts, and the built-in help"></p>
 
 - **Official Claude Code with a GUI**: chat, streaming output, thinking, tool calls, file browser, session history.
   - Messages sent while Claude is working wait at the end of the chat marked *Queued*; **Send now** delivers one into the running turn without interrupting it. **Stop only stops** — queued messages are paused, never sent automatically.
