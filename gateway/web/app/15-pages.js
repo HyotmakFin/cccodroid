@@ -140,7 +140,7 @@
   // 「## 」小节各包成一个 section：宽屏左边是固定目录、窄屏是顶上一排横向目录，滚动时高亮当前节；
   // 搜索框按节过滤。顶栏按钮那张表换成真图标的图例（md 里写的是字符，各语言共用一份映射）。
   let helpLang = "";
-  const HELP_TOPBAR = { "☰": "btn-menu", "📁": "btn-files", ">_": "btn-term", "🌐": "btn-web", "‹›": "btn-palette", "❄": "btn-unfreeze", "＋": "btn-new" };
+  const HELP_TOPBAR = { "☰": "btn-menu", "📁": "btn-files", ">_": "btn-term", "🌐": "btn-web", "‹›": "btn-palette", "⋯": "btn-more", "＋": "btn-new" };
   function helpIcon(id) {
     const sv = $(id)?.querySelector("svg");
     return sv ? sv.outerHTML : "";

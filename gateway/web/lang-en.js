@@ -2030,5 +2030,7 @@ window.I18N_DICT.en = {
   "{line} · 窗口的 {pct}%": "{line} · {pct}% of the window",
   "没设，交给 claude 按窗口决定": "Not set; claude decides from the window",
   "拍照": "Take photo",
-  "长按：5 秒后截屏": "Long-press: screenshot in 5 s"
+  "长按：5 秒后截屏": "Long-press: screenshot in 5 s",
+  "展开工具": "Show tools",
+  "收起工具": "Hide tools"
 };

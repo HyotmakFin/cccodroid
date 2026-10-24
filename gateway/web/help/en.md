@@ -11,7 +11,7 @@ cccodroid runs the **official, unmodified Claude Code** on your phone, wraps it 
 
 ## The screen
 
-The six buttons on the right of the top bar are the shortcuts you will use most:
+The right end of the top bar normally shows just ⋯. Tap it and the shortcuts you use most slide out to its left; tap it again (it is now ›) to tuck them away. The app remembers which way you left it.
 
 | Button | What it does |
 |---|---|
@@ -19,8 +19,8 @@ The six buttons on the right of the top bar are the shortcuts you will use most:
 | >_ | Terminal: the same toolchain Claude uses |
 | 🌐 | Browser: local servers and links from replies; docks on the right on a tablet |
 | ‹› | Command palette: slash commands, skills and common actions |
-| ❄ | Unfreeze: tap it when nothing scrolls |
 | ＋ | New conversation |
+| ⋯ | Show or hide the buttons above |
 
 The menu button at the top left opens the sidebar: places to go at the top (Chats, Projects, Scheduled tasks, with Extensions, Capabilities, Usage and Help under More), recent chats in the middle, and the account row at the bottom, which opens Settings.
 
@@ -108,7 +108,7 @@ Layout follows the window width, not orientation:
 ## Known issues
 
 - Fixed · All · **Pinyin input not reaching the box on first launch**: fixed in 0.3.7. On older versions, tap outside the input box and back.
-- Workaround · All · **Nothing scrolls anywhere**: a bug in the system WebView. The app detects it and recovers in about a second, restoring unsent text; if it does not, tap ❄ in the top bar.
+- Workaround · All · **Nothing scrolls anywhere**: a bug in the system WebView. The app detects it and recovers in about a second, restoring unsent text; if it does not, press and hold the title in the top bar (the conversation name) for about a second; the title fades, the phone gives a short buzz and recovery starts.
 - Workaround · Red Magic / Nubia · **Frozen after about 90 s in the background**: App info → Battery usage → allow background activity, and allow auto-start.
 - Workaround · Xiaomi / OPPO / vivo / Huawei · **Aggressive background cleaning**: set battery saving to unrestricted, allow auto-start and lock the card in recents. Per-brand steps are on the website's Known issues page.
 - Workaround · ZUI · **"Split screen not supported"**: the system's split-screen blocklist is stale. Reinstall over the top or reboot.

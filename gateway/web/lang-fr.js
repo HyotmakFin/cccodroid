@@ -1996,5 +1996,7 @@ window.I18N_DICT["fr"] = {
   "{line} · 窗口的 {pct}%": "{line} · {pct} % de la fenêtre",
   "没设，交给 claude 按窗口决定": "Non défini ; claude décide selon la fenêtre",
   "拍照": "Prendre une photo",
-  "长按：5 秒后截屏": "Appui long : capture dans 5 s"
+  "长按：5 秒后截屏": "Appui long : capture dans 5 s",
+  "展开工具": "Afficher les outils",
+  "收起工具": "Masquer les outils"
 };

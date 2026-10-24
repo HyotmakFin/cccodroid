@@ -25,6 +25,22 @@
   });
 
   $("btn-files").addEventListener("click", () => openFiles());
+  // 顶栏工具键横向折叠：「⋯」点开、「›」收回，记住上次的状态。展开时按可见顺序倒着编号（--i），离「⋯」最近的先出来
+  (() => {
+    const more = $("btn-more"), KEY = "cc.tbOpen", root = document.documentElement;
+    const set = (open) => {
+      [...document.querySelectorAll("#tb-tools .icon-btn:not(.hidden)")].reverse().forEach((b, i) => b.style.setProperty("--i", i));
+      root.classList.toggle("tb-open", open);
+      more.setAttribute("aria-expanded", String(open));
+      more.setAttribute("aria-label", t(open ? "收起工具" : "展开工具"));
+      try { localStorage.setItem(KEY, open ? "1" : "0"); } catch {}
+    };
+    // 打开应用时按上次的样子直接摆好，不放动画
+    root.classList.add("tb-still");
+    set((() => { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } })());
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("tb-still")));
+    more.addEventListener("click", () => set(!root.classList.contains("tb-open")));
+  })();
   $("btn-palette").addEventListener("click", () => { openCmdPalette(""); inputEl.focus(); });
   $("btn-close-drawer").addEventListener("click", () => { if (window.CCLayout && CCLayout.docked()) CCLayout.collapse(); closeDrawer(true); });
   drawerEl.addEventListener("click", (e) => { if (e.target === drawerEl) closeDrawer(); });
@@ -191,7 +207,24 @@
       if (window.CCApp && window.CCApp.unfreeze) { toast(t("正在重新挂载界面…")); window.CCApp.unfreeze(); }
       else toast(t("这个版本的应用还不能脱困，请更新应用；临时办法是重启网关"), true);
     }
-    $("btn-unfreeze").addEventListener("click", () => unfreeze("manual"));
+    // 手动脱困：长按顶栏标题 0.6 秒（按住时标题慢慢变淡，到点轻振一下）。冻住时点按照常能用，触摸事件也都收得到；
+    // 手指挪开 10px 或松手就取消。不另占一个按钮
+    (() => {
+      const tb = $("title-block");
+      let timer = 0, x0 = 0, y0 = 0;
+      const stop = () => { clearTimeout(timer); timer = 0; tb.classList.remove("lp"); };
+      tb.addEventListener("touchstart", (e) => {
+        if (e.touches.length !== 1) return stop();
+        x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+        tb.classList.add("lp");
+        clearTimeout(timer);
+        timer = setTimeout(() => { timer = 0; tb.classList.remove("lp"); try { navigator.vibrate && navigator.vibrate(12); } catch {} unfreeze("manual"); }, 600);
+      }, { passive: true });
+      tb.addEventListener("touchmove", (e) => { const p = e.touches[0]; if (timer && p && Math.hypot(p.clientX - x0, p.clientY - y0) > 10) stop(); }, { passive: true });
+      tb.addEventListener("touchend", stop);
+      tb.addEventListener("touchcancel", stop);
+      tb.addEventListener("contextmenu", (e) => e.preventDefault());
+    })();
     window.__ccUnfreeze = unfreeze;
 
     // 自动判定：单指竖向拖了 60px 以上、手指下的滚动容器明明还能往那个方向滚，
