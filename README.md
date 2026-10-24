@@ -216,6 +216,9 @@ Layout:
 - **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
 - **[gogoiPhone](https://github.com/gogoiPhone)**: a Redmi K70 Ultra device report with their own Vulkan compute test ([#14](https://github.com/greyoak111/cccodroid/issues/14)).
 - **[Slingerspir](https://github.com/Slingerspir)**: suggested a GitHub acceleration route and multi-threaded downloads ([discussion #15](https://github.com/greyoak111/cccodroid/discussions/15)); 0.4.1 added segmented parallel downloads and a gh-proxy fallback.
+- **[ThinkReally114](https://github.com/ThinkReally114)**: feedback and bug reports in the community group throughout 0.3.x.
+- **[wangxp12](https://github.com/wangxp12)**: feedback and bug reports in the community group throughout 0.3.x.
+- **[unoyg](https://github.com/unoyg)**: feedback and bug reports in the community group throughout 0.3.x.
 
 Reports, device testing and code review are contributions too, and they're recorded here.
 

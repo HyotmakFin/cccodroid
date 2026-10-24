@@ -220,6 +220,9 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
 - **[gogoiPhone](https://github.com/gogoiPhone)**：Redmi K70 Ultra 机型报告，附自写的 Vulkan 计算实测（[#14](https://github.com/greyoak111/cccodroid/issues/14)）。
 - **[Slingerspir](https://github.com/Slingerspir)**：建议下载时加 GitHub 加速线路和多线程下载（[讨论区 #15](https://github.com/greyoak111/cccodroid/discussions/15)），0.4.1 加上了分段并行下载和 gh-proxy 备用线。
+- **[ThinkReally114](https://github.com/ThinkReally114)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
+- **[wangxp12](https://github.com/wangxp12)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
+- **[unoyg](https://github.com/unoyg)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 
 报告问题、测试机型、审查代码同样是贡献，都会记在这里。
 
