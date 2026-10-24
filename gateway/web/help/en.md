@@ -35,7 +35,7 @@ The thin line under the top bar shows **context usage**; the further right, the 
 - Paths in replies open in the viewer; web links open in the in-app browser.
 - Every message has four buttons. Yours: copy, resend, rewind to here, delete. Claude's: copy, share, fork from here, delete.
 - **Rewind to here** first lists the files changed since, then lets you undo just the code, or the code and the conversation. Files changed by shell commands are not restored.
-- `/goal <condition>` keeps Claude working turn after turn until the condition is met. Background tasks and the task list appear above the input box, and each can be stopped.
+- `/goal <condition>` keeps Claude working turn after turn until the condition is met. Background tasks and the task list appear above the input box, and each can be stopped; several background tasks fold into one line, tap it to expand.
 - The Chats page searches message content, filters, and exports or imports zips. Deleted chats stay in the trash for 30 days.
 
 ## Permissions and safety
