@@ -103,6 +103,13 @@ final class Installer {
                     url = next; onUrl = 0;
                     continue;
                 }
+                // 慢但没断、又没别的来源可换：不算失败次数，接着续传（已下的不丢）——总比报错强
+                if (e instanceof SlowException) {
+                    attempt--;
+                    ui.step("  " + (next != null ? Tr.f("{0} 很慢（{1}），再试一次，还慢就换来源…", host(url), e.getMessage())
+                        : Tr.f("{0} 很慢（{1}），没有别的来源可换，接着下…", host(url), e.getMessage())));
+                    continue;
+                }
                 if (attempt >= 8) throw e;
                 ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
                 try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
@@ -210,7 +217,9 @@ final class Installer {
             try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 << 16);
                  java.io.RandomAccessFile raf = new java.io.RandomAccessFile(part, "rw")) {
                 byte[] buf = new byte[1 << 16];
+                Slow slow = new Slow();
                 for (int r; (r = in.read(buf)) > 0; ) {
+                    slow.add(r);
                     long room = sg[1] - sg[0] + 1 - sg[2];
                     int n = (int) Math.min(r, room);
                     raf.seek(sg[0] + sg[2]);
@@ -237,14 +246,37 @@ final class Installer {
                  OutputStream out = new FileOutputStream(part, append)) {
                 byte[] buf = new byte[1 << 16];
                 long tick = 0;
+                Slow slow = new Slow();
                 for (int r; (r = in.read(buf)) > 0; ) {
                     out.write(buf, 0, r);
                     have += r;
-                    if (have - tick > (2 << 20)) { tick = have; ui.bytes(have, size); }
+                    slow.add(r);
+                    // 每秒报一次进度：以前每 2 MB 报一次，慢的时候界面一直停在 0%，看着像死了
+                    long now = System.currentTimeMillis();
+                    if (now - tick >= 1000) { tick = now; ui.bytes(have, size); }
                 }
             }
             ui.bytes(have, size);
         } finally { c.disconnect(); }
+    }
+
+    /**
+     * 低速判定：每 30 秒一窗，这一窗不到 600 KB（平均 20 KB/s）就抛错，交给上面的重试 / 换来源。
+     * 读超时只管「一个字节都不来」；连接不断、却一点点往下滴的（群友报的 GitHub 挂着梯子也是这样）会一直耗着不换源。
+     * 与 install-claude.mjs 的规则一致
+     */
+    static final class SlowException extends IOException { SlowException(String m) { super(m); } }
+
+    static final class Slow {
+        static final long WINDOW = 30_000, MIN = 600L << 10;
+        long t0 = System.currentTimeMillis(), n;
+        void add(int r) throws IOException {
+            n += r;
+            long now = System.currentTimeMillis();
+            if (now - t0 < WINDOW) return;
+            if (n < MIN) throw new SlowException(Tr.f("太慢（30 秒只下了 {0} KB）", n >> 10));
+            t0 = now; n = 0;
+        }
     }
 
     static HttpURLConnection open(String url) throws IOException {

@@ -57,7 +57,7 @@
     se.classList.toggle("hidden", !showSetup);
     if (showSetup) {
       se.className = "prov-state " + (su.phase === "error" ? "err" : su.phase === "done" ? "ok" : "warn");
-      se.textContent = su.message + (su.phase === "downloading" && su.total ? `（${fmtSize(su.done)} / ${fmtSize(su.total)}）` : "");
+      se.textContent = su.message + (su.phase === "downloading" && su.total ? `（${fmtSize(su.done) || "0 MB"} / ${fmtSize(su.total)}）` : "");
     }
     $("priv-pair").classList.toggle("hidden", su.phase !== "pairing");
     const wl = st.wireless !== false;
@@ -201,7 +201,7 @@
       const busy = it.state === "downloading" || it.state === "installing" || it.state === "verifying";
       moving ||= busy;
       const ver = esc(it.current || "?") + (it.latest && it.latest !== it.current && it.state !== "uptodate" ? " → " + esc(it.latest) : "");
-      const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done)} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
+      const prog = it.state === "downloading" && it.total ? `（${fmtSize(it.done) || "0 MB"} / ${fmtSize(it.total)} · ${Math.floor(it.done * 100 / it.total)}%）`
         : (it.state === "installing" || it.state === "verifying") && it.total ? `（${Math.floor(it.done * 100 / it.total)}%）` : "";
       const cls = it.state === "error" || it.state === "damaged" || it.state === "missing" ? "err" : it.state === "uptodate" ? "ok" : it.state === "unknown" ? "" : "warn";
       const btn = it.state === "missing" ? t("安装…") : it.state === "available" ? (it.id === "claude" ? t("更新") : t("下载并安装"))
