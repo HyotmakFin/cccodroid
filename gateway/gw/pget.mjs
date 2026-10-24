@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 // ── 分段并行下载 ─────────────────────────────────────────────────────
 // 单个连接常被限速（实测 dl.cccodroid.net 单线 2.7 MB/s，4 路并行 14 MB/s）：服务器认 Range、文件又够大时，
@@ -18,8 +18,8 @@ export async function pget({ curl, url, file, total, n = 4, curlArgs = [], onPro
   if (st && (st.total !== total || !Array.isArray(st.segs) || have !== total)) { st = null; fs.rmSync(segFile, { force: true }); fs.rmSync(file, { force: true }); }
   const have2 = st ? total : (() => { try { return fs.statSync(file).size; } catch { return 0; } })();
   if (!st && total > 0 && have2 === total) return "";                 // 上回已经下全、没来得及改名
-  if (!st && !(total >= 2 * MIN_SEG && rangeOk(curl, url, curlArgs))) return single({ curl, url, file, total, curlArgs, onProgress, cancelled });
-  if (st && !rangeOk(curl, url, curlArgs)) {                          // 换到的来源不认 Range：分段的半成品没法接，从头单线下
+  if (!st && !(total >= 2 * MIN_SEG && await rangeOk(curl, url, curlArgs))) return single({ curl, url, file, total, curlArgs, onProgress, cancelled });
+  if (st && !(await rangeOk(curl, url, curlArgs))) {                          // 换到的来源不认 Range：分段的半成品没法接，从头单线下
     fs.rmSync(segFile, { force: true }); fs.rmSync(file, { force: true });
     return single({ curl, url, file, total, curlArgs, onProgress, cancelled });
   }
@@ -75,10 +75,16 @@ export async function pget({ curl, url, file, total, n = 4, curlArgs = [], onPro
   } finally { fs.closeSync(fd); }
 }
 
-// 认不认 Range：要 1 个字节，回 206 才算
+// 认不认 Range：要 1 个字节，回 206 才算。
+// 必须异步：以前用 spawnSync，网络差时这一下最多卡住整个网关 20 秒（界面没反应、流式输出停住）——写测试时才发现
 function rangeOk(curl, url, curlArgs) {
-  const r = spawnSync(curl, ["-sSL", "--connect-timeout", "10", "--max-time", "20", ...curlArgs, "-r", "0-0", "-o", "/dev/null", "-w", "%{http_code}", url], { encoding: "utf8" });
-  return r.status === 0 && String(r.stdout).trim() === "206";
+  return new Promise((resolve) => {
+    let out = "";
+    const c = spawn(curl, ["-sSL", "--connect-timeout", "10", "--max-time", "20", ...curlArgs, "-r", "0-0", "-o", "/dev/null", "-w", "%{http_code}", url], { stdio: ["ignore", "pipe", "ignore"] });
+    c.stdout.on("data", (d) => { out += d; });
+    c.on("error", () => resolve(false));
+    c.on("close", (code) => resolve(code === 0 && out.trim() === "206"));
+  });
 }
 
 function single({ curl, url, file, total, curlArgs, onProgress, cancelled }) {

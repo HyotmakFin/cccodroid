@@ -1,3 +1,4 @@
+import { LIVE } from "./config.mjs";
 import { RUNS, runList } from "./runs.mjs";
 import { NEXT, sendJson, uiTag } from "./http.mjs";
 import { flushPend, snapshot } from "./queue.mjs";
@@ -29,7 +30,7 @@ function busWrite(res, line) {
     res.write(line);
   } catch { BUS.clients.delete(res); }
 }
-setInterval(() => { for (const c of BUS.clients) busWrite(c, ": hb\n\n"); }, 15000).unref();
+if (LIVE) setInterval(() => { for (const c of BUS.clients) busWrite(c, ": hb\n\n"); }, 15000).unref();
 
 // ── 路由：/api/events /api/state ──
 export async function routeBus(req, res, u, p) {

@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { CFG, log, tz } from "./config.mjs";
+import { CFG, LIVE, log, tz } from "./config.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { END_HOOKS, enqueue } from "./queue.mjs";
 import { RUNS } from "./runs.mjs";
@@ -256,7 +256,7 @@ function tick() {
   DB.lastTick = now;
   save();
 }
-setTimeout(() => { tick(); setInterval(tick, 30000); }, 5000);
+if (LIVE) setTimeout(() => { tick(); setInterval(tick, 30000); }, 5000);
 
 // ── 校验 / 整理前端交来的任务 ──
 const KINDS = ["daily", "weekly", "monthly", "every", "once", "cron"];

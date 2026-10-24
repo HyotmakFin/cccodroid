@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { CFG, LAST_LANG, PREFIX, log, tr, tz } from "./config.mjs";
+import { CFG, LIVE, LAST_LANG, PREFIX, log, tr, tz } from "./config.mjs";
 import { claudeEnv, killTree } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";
@@ -56,8 +56,8 @@ function compFetch(src, quick) {
   });
 }
 // 备用源：cccodroid.net 镜像了两份索引（连同 .sig，逐字节同 GitHub）。主地址拉不到才用；照样验签，镜像不需要被信任
-const COMP_INDEX_MIRROR = { preset: "https://cccodroid.net/components/official/components.json",
-  community: "https://cccodroid.net/components/community/components.json" };
+const COMP_INDEX_MIRROR = { preset: process.env.CCAPP_COMPONENTS_INDEX_MIRROR || "https://cccodroid.net/components/official/components.json",
+  community: process.env.CCAPP_COMPONENTS_COMMUNITY_INDEX_MIRROR || "https://cccodroid.net/components/community/components.json" };   // 环境变量只给测试用
 /** 取一份索引并验签。unsigned 只在私有目录里有 allow-unsigned 开关文件时才放行（/sdcard 别的应用也能写） */
 // 上回主地址拉不到、靠镜像拉到的：这回先试镜像（记在磁盘缓存里，重开 App 也记得）
 // 镜像地址 → 改用镜像的时刻（两份索引各记各的）；一天后重新先试主地址——镜像是定时同步的，可能比 GitHub 晚一拍
@@ -421,7 +421,7 @@ function compHealSkills() {
 }
 
 // 启动后预取一次索引：首次打开「扩展」页时不用干等两份索引下载验签
-if (PREFIX) setTimeout(() => { compHealSkills(); compIndex(false).catch(() => {}); }, 8000).unref?.();
+if (PREFIX && LIVE) setTimeout(() => { compHealSkills(); compIndex(false).catch(() => {}); }, 8000).unref?.();
 
 // 暂存区是所有组件共用的：只清这一个组件自己的东西（<id>-<sha12>.tar.gz[.part] 和解包目录 <id>）。
 // 以前卸载时整个 .staging 一起删，别的组件正在下载的 .part 就被连带删掉 —— curl 写完退出、校验时报 ENOENT

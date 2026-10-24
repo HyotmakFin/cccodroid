@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { CFG, PREFIX, log } from "./config.mjs";
+import { CFG, LIVE, PREFIX, log } from "./config.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { privCall } from "./usage.mjs";
 
@@ -86,7 +86,7 @@ function active(lang) {
 }
 
 // 后台每 3 小时取一次。界面只在打开应用 / 切回前台时来要（用的时候不打扰），那时过期了就当场取，最多等 8 秒
-setInterval(() => refreshNotices().catch(() => {}), EVERY).unref?.();
+if (LIVE) setInterval(() => refreshNotices().catch(() => {}), EVERY).unref?.();
 
 // GET /api/notices[?lang=en&all=1]：要显示的通知（all=1 连已关掉的一起，给设置页「通知」看）
 // POST /api/notices/dismiss {id}：知道了
