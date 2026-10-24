@@ -226,6 +226,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[ThinkReally114](https://github.com/ThinkReally114)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[wangxp12](https://github.com/wangxp12)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[unoyg](https://github.com/unoyg)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
+- **[fisHarly0](https://github.com/fisHarly0)**：0.3.x 期间在交流群里提的改进建议。
 
 报告问题、测试机型、审查代码同样是贡献，都会记在这里。
 

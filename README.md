@@ -222,6 +222,7 @@ Layout:
 - **[ThinkReally114](https://github.com/ThinkReally114)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[wangxp12](https://github.com/wangxp12)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[unoyg](https://github.com/unoyg)**: feedback and bug reports in the community group throughout 0.3.x.
+- **[fisHarly0](https://github.com/fisHarly0)**: suggestions for improvements in the community group during 0.3.x.
 
 Reports, device testing and code review are contributions too, and they're recorded here.
 
