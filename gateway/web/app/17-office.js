@@ -240,7 +240,7 @@
       $("vw-body").innerHTML = `<div class="vw-empty">${t("PDF 打不开：{msg}", { msg: esc(e.message || String(e)) })}</div>`;
       return;
     }
-    if (!vwStill(p0) || VW.pdf) { doc.destroy(); return; }
+    if (!vwStill(p0) || VW.pdf) { doc.loadingTask.destroy(); return; }
     VW.pdf = doc;
     const p1 = await doc.getPage(1);
     const vp = p1.getViewport({ scale: 1 });
@@ -303,7 +303,7 @@
       const c = document.createElement("canvas");
       c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
       h.replaceChildren(c);
-      h._task = page.render({ canvasContext: c.getContext("2d"), viewport: vp });
+      h._task = page.render({ canvas: c, canvasContext: c.getContext("2d"), viewport: vp });
       await h._task.promise;
       if (VW.pdf !== doc) return;
       h.dataset.state = "done";
@@ -331,7 +331,7 @@
 
   function closeViewerPdf() {
     VW.pdfObs?.disconnect(); VW.pdfObs = null;
-    if (VW.pdf) { try { VW.pdf.destroy(); } catch {} VW.pdf = null; }
+    if (VW.pdf) { try { VW.pdf.loadingTask.destroy(); } catch {} VW.pdf = null; }
   }
 
   function closeViewer() {
