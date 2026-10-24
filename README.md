@@ -96,6 +96,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - **Plain-language first-install errors**: the app checks free space before downloading and tells you how much it needs. Failures such as being offline, rate limiting or a checksum mismatch are explained in plain words. *Retry* resumes from what was already downloaded.
   - **Repair ledger**: every toolchain install, verification, repair and startup recovery is recorded (what was found, what was done, the result) and can be read in Settings.
   - **Known issues**: problems not yet fully explained or ruled out, and what we know about each, are listed in [docs/known-issues.md](docs/known-issues.md).
+  - **Permissions**: what each permission is for, when you're asked and what happens if you say no, in [docs/permissions.md](docs/permissions.md). Found a security problem? Report it privately as described in [SECURITY.md](SECURITY.md).
 - **USB debugging of another device**: connect it with an OTG cable and run `usb-adb`, then `adb devices / install / shell` as usual.
 - **Self-test**: `cccodroid-selftest` exercises 73 tools and usages (including ffmpeg and a hardware-encoding probe); the tool notes are injected into Claude's system prompt so it knows what it has.
 
@@ -196,6 +197,7 @@ Layout:
 | `docs/large-screen.md` | Large-screen layout (tablets, foldables) and where its code lives |
 | `docs/known-issues.md` | Known issues and unresolved risks, plus test actions that create fake bugs |
 | `docs/download-sources.md` | Every download chain: sources, trust anchors, server mirrors, how to check and maintain them |
+| `docs/permissions.md` | What each permission is for, when you're asked, what happens if you refuse, and the risks of the three heavy ones |
 | `docs/operit2-on-device-build.md` | Case study: building Operit2 (Flutter + Rust) from source into an APK on a phone, with every gap and fix |
 | `docs/diagrams/` | Architecture diagrams (Archify JSON specs → interactive HTML → light / dark PNG) |
 | `third_party/` | Shizuku-API 13.1.5 (MIT, unmodified from Maven Central) |

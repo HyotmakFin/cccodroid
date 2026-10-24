@@ -97,6 +97,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - **首次安装出错讲人话**：下载前先算空间，不够直接说要多少；断网、限流、校验不过等失败原因写明白，「重试」接着已下载的部分续传。
   - **修复账本**：开发工具包的每次安装、校验、修复与启动时的恢复都记一笔（发现了什么、做了什么、结果如何），设置页可查。
   - **已知问题**：还没查清、也没完全排除的问题，以及目前知道的情况，列在 [docs/known-issues.zh-CN.md](docs/known-issues.zh-CN.md)。
+  - **权限说明**：每个权限拿来干什么、什么时候问、不给会怎样，见 [docs/permissions.zh-CN.md](docs/permissions.zh-CN.md)；发现安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 - **USB 调试另一台设备**：OTG 线连上后运行 `usb-adb`，就能照常 `adb devices / install / shell`。
 - **自检**：`cccodroid-selftest` 逐项实测 73 个工具与用法（含 ffmpeg 与硬件编码探测）；工具说明会注入 Claude 的系统提示，让它知道手里有什么。
 
@@ -200,6 +201,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 | `docs/large-screen.md` | 大屏布局（平板、折叠屏）与代码位置（英文） |
 | `docs/known-issues.zh-CN.md` | 已知问题与未排除的隐患，以及会制造假问题的测试动作 |
 | `docs/download-sources.zh-CN.md` | 各条下载链路：来源顺序、信任锚、服务器镜像、检查与维护方法 |
+| `docs/permissions.zh-CN.md` | 每个权限的用途、什么时候问、不给会怎样，以及三项重权限的风险 |
 | `docs/operit2-on-device-build.zh-CN.md` | 案例：在手机上从源码构建 Operit2（Flutter + Rust）APK，含完整踩坑与补齐记录 |
 | `docs/diagrams/` | 架构图（Archify JSON 规格 → 可交互 HTML → 浅色 / 深色 PNG） |
 | `third_party/` | Shizuku-API 13.1.5（MIT，Maven Central 原样） |
