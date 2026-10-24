@@ -206,7 +206,8 @@
   let bgOpen = localStorage.getItem("cc.bgOpen") === "1";
   const tasksSig = (l) => l.map((x) => x.id + ":" + x.status).join(",");
   const taskLabel = (x) => esc(x.status === "in_progress" && x.active ? x.active : x.subject);
-  function tasksHtml() {
+  // more：清单收起时被一并收起的目标 / 后台任务条数，标在清单那一行末尾
+  function tasksHtml(more) {
     const l = view.tasks;
     if (!l || !l.length) return "";
     const done = l.filter((x) => x.status === "completed").length, all = done === l.length;
@@ -218,6 +219,7 @@
       <span class="rs-tcount">${all ? t("清单完成") : t("清单")} ${done}/${l.length}</span>
       <span class="rs-tbar"><i style="width:${pct}%"></i></span>
       <span class="rs-txt">${!tasksOpen && cur ? taskLabel(cur) : ""}</span>
+      ${more ? `<span class="rs-meta">${t("另有 {n} 项", { n: more })}</span>` : ""}
       ${all ? `<button class="rs-tx" aria-label="${t("关闭")}">${uiI("x")}</button>` : `<span class="rs-chev${tasksOpen ? " up" : ""}">${uiI("chevDown")}</span>`}</div>`;
     const rows = !tasksOpen ? "" : `<div class="rs-tlist">${l.map((x) => `<div class="rs-trow ${esc(x.status)}">
       <span class="rs-tico">${uiI(x.status === "completed" ? "check" : x.status === "in_progress" ? "half" : "ring")}</span>
@@ -228,7 +230,8 @@
   function renderRunStrip() {
     const g = view.goal && !(view.goal.done && view.goal.at <= view.goalHide) ? view.goal : null;
     const bg = (srv.run && srv.run.bgList) || [];
-    let html = tasksHtml();
+    // 清单的折叠管整条：收起时目标、后台任务（包括不能单独折叠的单个任务）一起收起，展开再全露出来
+    let html = "";
     if (g && g.active) {
       const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
       html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">${uiI("target")}</span>
@@ -257,6 +260,9 @@
           ${bgOpen ? `<div class="rs-blist">${bg.map(row).join("")}</div>` : ""}</div>`;
       }
     }
+    const tasksShown = !!tasksHtml(0), fold = tasksShown && !tasksOpen;
+    const more = fold ? (g ? 1 : 0) + bg.length : 0;
+    html = tasksHtml(more) + (fold ? "" : html);
     runStrip.innerHTML = html;
     runStrip.classList.toggle("hidden", !html);
     // 目标进行中：每秒刷新「已用」；别的情况停掉

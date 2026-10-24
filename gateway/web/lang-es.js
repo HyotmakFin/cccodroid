@@ -1168,6 +1168,7 @@ window.I18N_DICT["es"] = {
   "目标无法达成": "No se puede cumplir el objetivo",
   "停止": "Detener",
   "后台在跑 {n} 个": "{n} en segundo plano",
+  "另有 {n} 项": "{n} más",
   "还有 {n} 个": "{n} más",
   "第 {i}/{n} 个": "{i} de {n}",
   "会话闲置快一小时，提示缓存快过期了，先自动压缩上下文，下一条消息就不用把整段历史重算一遍。不需要可以在设置里关掉。": "La conversación lleva casi una hora inactiva y su caché de prompt está por caducar, así que el contexto se compactó automáticamente; tu próximo mensaje no tendrá que reprocesar todo el historial. Puedes desactivarlo en Ajustes.",

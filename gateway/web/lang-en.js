@@ -1197,6 +1197,7 @@ window.I18N_DICT.en = {
   "目标无法达成": "Goal can't be met",
   "停止": "Stop",
   "后台在跑 {n} 个": "{n} running in the background",
+  "另有 {n} 项": "{n} more",
   "还有 {n} 个": "{n} more",
   "第 {i}/{n} 个": "{i} of {n}",
   "会话闲置快一小时，提示缓存快过期了，先自动压缩上下文，下一条消息就不用把整段历史重算一遍。不需要可以在设置里关掉。": "This conversation has been idle for almost an hour and its prompt cache is about to expire, so the context was compacted automatically; your next message won't reprocess the whole history. You can turn this off in Settings.",
