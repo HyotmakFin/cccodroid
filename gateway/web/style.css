@@ -308,7 +308,8 @@ td{color:var(--fg2)}
 #run-strip button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:3px 10px;font-size:12px;flex:0 0 auto}
 #run-strip .rs-x{border:none;background:none;color:var(--fg3);padding:2px 6px}
 #run-strip .rs-tasks{border:1px solid var(--line);border-radius:10px;background:var(--bg2);padding:6px 10px;display:flex;flex-direction:column;gap:4px}
-#run-strip .rs-thead{cursor:pointer;user-select:none}
+#run-strip .rs-thead,#run-strip .rs-bhead{cursor:pointer;user-select:none}
+#run-strip .rs-blist{max-height:30vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-top:2px}
 #run-strip .rs-tcount{flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--fg2)}
 #run-strip .rs-tbar{flex:0 0 54px;height:4px;border-radius:2px;background:var(--bg3);overflow:hidden}
 #run-strip .rs-tbar i{display:block;height:100%;background:var(--accent);transition:width .3s}

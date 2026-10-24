@@ -203,6 +203,7 @@
   const BG_KIND = (k) => /agent/i.test(k) ? t("子代理") : /workflow/i.test(k) ? t("工作流") : /monitor/i.test(k) ? t("监视") : /bash|shell/i.test(k) ? t("命令") : k || "?";
   // 任务清单：折叠时一行（进度 + 正在做的那项），点开看全部；全部完成可 ✕ 收起
   let tasksOpen = localStorage.getItem("cc.tasksOpen") === "1";
+  let bgOpen = localStorage.getItem("cc.bgOpen") === "1";
   const tasksSig = (l) => l.map((x) => x.id + ":" + x.status).join(",");
   const taskLabel = (x) => esc(x.status === "in_progress" && x.active ? x.active : x.subject);
   function tasksHtml() {
@@ -243,9 +244,18 @@
         ${!g.met && g.reason ? `<div class="rs-sub">${esc(g.reason)}</div>` : ""}</div>`;
     }
     if (bg.length) {
-      const rows = bg.slice(0, 4).map((x) => `<div class="rs-row rs-bg"><span class="rs-kind">${esc(BG_KIND(x.type))}</span>
-        <span class="rs-txt">${esc(x.desc || x.id)}</span><button class="rs-stop" data-task="${esc(x.id)}">${t("停止")}</button></div>`).join("");
-      html += `<div class="rs-bgs"><div class="rs-head">${uiI("hourglass")}${t("后台在跑 {n} 个", { n: bg.length })}${bg.length > 4 ? " · " + t("还有 {n} 个", { n: bg.length - 4 }) : ""}</div>${rows}</div>`;
+      // 后台任务：只有一个时直接一行带「停止」；多个时默认折成一行（数量 + 最新那个），点开看全部，列表过长自己滚
+      const row = (x) => `<div class="rs-row rs-bg"><span class="rs-kind">${esc(BG_KIND(x.type))}</span>
+        <span class="rs-txt">${esc(x.desc || x.id)}</span><button class="rs-stop" data-task="${esc(x.id)}">${t("停止")}</button></div>`;
+      if (bg.length === 1) html += `<div class="rs-bgs">${row(bg[0])}</div>`;
+      else {
+        const last = bg[bg.length - 1];
+        html += `<div class="rs-bgs"><div class="rs-row rs-bhead" role="button" tabindex="0" aria-expanded="${bgOpen}">
+          <span class="rs-ico">${uiI("hourglass")}</span><span class="rs-tcount">${t("后台在跑 {n} 个", { n: bg.length })}</span>
+          <span class="rs-txt">${bgOpen ? "" : esc(last.desc || last.id)}</span>
+          <span class="rs-chev${bgOpen ? " up" : ""}">${uiI("chevDown")}</span></div>
+          ${bgOpen ? `<div class="rs-blist">${bg.map(row).join("")}</div>` : ""}</div>`;
+      }
     }
     runStrip.innerHTML = html;
     runStrip.classList.toggle("hidden", !html);
@@ -267,6 +277,7 @@
   runStrip.addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (b && b.classList.contains("rs-tx")) { view.tasksHide = tasksSig(view.tasks || []); saveStripHidden(); renderRunStrip(); return; }
+    if (!b && e.target.closest(".rs-bhead")) { bgOpen = !bgOpen; localStorage.setItem("cc.bgOpen", bgOpen ? "1" : "0"); renderRunStrip(); return; }
     if (!b && e.target.closest(".rs-thead")) { tasksOpen = !tasksOpen; localStorage.setItem("cc.tasksOpen", tasksOpen ? "1" : "0"); renderRunStrip(); return; }
     if (!b) return;
     if (b.classList.contains("rs-x")) { view.goalHide = view.goal?.at || Date.now(); saveStripHidden(); renderRunStrip(); return; }
