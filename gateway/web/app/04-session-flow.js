@@ -181,8 +181,9 @@
   // ── 新会话首屏（照网页版的布局）：问候语居中，输入框紧跟在下面，示例和使用提示在输入框下方；
   //    输入框下面那行左边是项目、右边是型号与权限。发出第一条（或会话里出现任何别的东西）就退回平常的布局。
   //    html.wel 只看 #hist / #live 的直接子节点，流式输出不会触发
-  // 标识：三道套在一起的 c 加圆心一个点 = c-c-c-o，跟原生启动动画同形（Mark.java）。进场时三道弧从里往外写一遍
-  const WL_MARK = '<svg class="wl-mark" viewBox="0 0 48 48" aria-hidden="true"><path pathLength="1" d="M27.5 20.5A5 5 0 1 0 27.5 27.5"/><path pathLength="1" d="M33.2 14.8A13 13 0 1 0 33.2 33.2"/><path pathLength="1" d="M38.8 9.2A21 21 0 1 0 38.8 38.8"/><circle cx="24" cy="24" r="2.4"/></svg>';
+  // 标识：三道套在一起的 c 加圆心一个点 = c-c-c-o，跟原生启动动画同形（Mark.java）。外圈只画 218°、落笔停在正下方，
+  // 比里面两道短一截（定稿时示意页就是这个样子，用户要的正是这点不对称）。进场从外往里写一遍，最后点亮圆心
+  const WL_MARK = '<svg class="wl-mark" viewBox="0 0 48 48" aria-hidden="true"><path pathLength="1" d="M38.8 9.2A21 21 0 1 0 21.54 44.86"/><path pathLength="1" d="M33.2 14.8A13 13 0 1 0 33.2 33.2"/><path pathLength="1" d="M27.5 20.5A5 5 0 1 0 27.5 27.5"/><circle cx="24" cy="24" r="2.4"/></svg>';
   // 问候语看此刻的处境说话：几点、星期几、电量；同一时段有几句，每次随手挑一句
   let wlBat = null;
   try { navigator.getBattery && navigator.getBattery().then((b) => { wlBat = b; }).catch(() => {}); } catch {}
