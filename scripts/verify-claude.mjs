@@ -80,13 +80,21 @@ if (GIVEN) {
   VER = /\d+\.\d+\.\d+/.exec(spawnSync(LD, ["--library-path", path.join(PREFIX, "glibc/lib"), BIN, "--version"], { encoding: "utf8", env: { ...process.env, LD_PRELOAD: "" } }).stdout || "")?.[0] || "";
   if (!VER) die(`${BIN} 报不出版本号`);
   say(`\n── 直接验 ${BIN}（${VER}）`);
-} else if ((WANT === info.current || info.channel === info.current) && info.current && fs.existsSync(path.join(installed, info.current, "claude"))) {
+}
+// 当前装的：网关说的为准，取不到读 current 链接；渠道版本网关取不到就直接问官方 / 镜像
+if (!info.current) try { info.current = path.basename(fs.readlinkSync(path.join(installed, "current"))); } catch {}
+if (!GIVEN && !info.channel && /^(stable|latest)$/.test(WANT))
+  for (const b of ["https://downloads.claude.ai/claude-code-releases", "https://cccodroid.net/claude-code", "https://dl.cccodroid.net/claude-code"]) {
+    try { const v = (await (await fetch(`${b}/${WANT}`, { signal: AbortSignal.timeout(8000) })).text()).trim(); if (/^\d+\.\d+\.\d+$/.test(v)) { info.channel = v; break; } } catch {}
+  }
+const target = /^(stable|latest)$/.test(WANT) ? info.channel : WANT;
+if (!GIVEN && target && target === info.current && fs.existsSync(path.join(installed, info.current, "claude"))) {
   VER = info.current; BIN = path.join(installed, VER, "claude"); npmOnly = fs.existsSync(path.join(installed, VER, ".npm-only"));
   say(`\n── ${VER} 就是当前装的，直接用`);
-} else {
+} else if (!GIVEN) {
   const scratchHome = path.join(tmpBase, "home");
   fs.mkdirSync(scratchHome, { recursive: true });
-  say(`\n── 下载 ${WANT}（装在临时目录，不动当前的 ${info.current || "版本"}）`);
+  say(`\n── 下载 ${WANT}${target ? `（${target}）` : ""}，装在临时目录，不动当前的 ${info.current || "版本"}${target && target !== info.current ? "" : info.current ? `（${info.current} 的程序文件不在，只好下载）` : ""}`);
   const inst = spawnSync(path.join(PREFIX, "bin/node"), [path.join(APP, "scripts/install-claude.mjs"), WANT], { env: { ...process.env, HOME: scratchHome }, stdio: ["ignore", "inherit", "inherit"] });
   const dest = path.join(scratchHome, ".local/share/cccodroid/claude");
   try { VER = path.basename(fs.readlinkSync(path.join(dest, "current"))); } catch {}

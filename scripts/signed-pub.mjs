@@ -1,5 +1,5 @@
 // 签名发布的公共部分（notice.mjs、claude-verified.mjs 共用）：
-// PUB_DRY=1 只签名自验、把内容打出来（演练用）。正常：用组件索引那把 ed25519 钥匙签名 → 用 App 里的公钥自验 → 写文件与 .sig → 提交推送 main → 触发官网生成器 → 等 cccodroid.net 上的副本与本地逐字节一致
+// PUB_DRY=1 只签名自验、把内容打出来（演练用）；PUB_LOCAL=1 签名写文件并本地提交、不推送。正常：用组件索引那把 ed25519 钥匙签名 → 用 App 里的公钥自验 → 写文件与 .sig → 提交推送 main → 触发官网生成器 → 等 cccodroid.net 上的副本与本地逐字节一致
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -30,6 +30,8 @@ export async function signAndPublish({ file, data, msg, site }) {
 
   git("add", file, file + ".sig");
   git("commit", "-q", "-m", `${msg}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`);
+  // PUB_LOCAL=1：只提交不推送（要随下一次发版一起推，比如新版 App 才读的文件）
+  if (process.env.PUB_LOCAL) { console.log(`✓ 已在本地提交 ${git("rev-parse", "--short", "HEAD")}（PUB_LOCAL：没推送，随下次推送 main 一起上）`); return; }
   git("push", "-q", "origin", "HEAD:main");
   console.log(`✓ 已推送 ${git("rev-parse", "--short", "HEAD")}`);
 
