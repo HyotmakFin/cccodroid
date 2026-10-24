@@ -1982,7 +1982,10 @@ button.tile:hover{border-color:var(--accent-dim)}
 /* 设置行（照稿）：说明默认一行，点开看全文；.stack 行控件另起一行 */
 #set-ov .sl p.clamp:not(.open){max-height:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-mask-image:none;mask-image:none}
 #set-ov .srow.stack{flex-wrap:wrap}
-#set-ov .srow.stack > .sc{flex:1 1 100%;display:flex;justify-content:flex-start}
+/* 窄屏整页里带下拉的行改成竖排（见 set-one 那条）：竖排时不能再 wrap，多行列容器每列宽度按内容最宽的算，一行不换的说明会把整页撑出横向滚动 */
+#tab-settings.set-one .srow.stack{flex-wrap:nowrap}
+#set-ov .srow.stack > .sc{flex:1 1 100%}
+#set-ov .srow.stack > .sc{display:flex;justify-content:flex-start}
 #set-ov .seg-mirror{flex-wrap:wrap}
 #set-ov .sc #set-parallel{width:64px;margin-inline-start:8px}
 #set-ov .srow > .sl{flex:1 1 auto;min-width:0}

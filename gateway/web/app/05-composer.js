@@ -166,7 +166,7 @@
   function openCmdPalette(filter) {
     const caps = state.caps;
     const cmds = (caps?.slashCommands || []).filter((c) => !filter || c.name.includes(filter));
-    showPopup("cmd", cmds.map((c) => ({ label: "/" + c.name, desc: c.desc || "", cat: c.cat, raw: c.name })),
+    showPopup("cmd", cmds.map((c) => ({ label: "/" + c.name, desc: c.desc ? t(c.desc) : "", cat: c.cat && t(c.cat), raw: c.name })),
       t("斜杠命令") + (filter ? t(" · 匹配 “{q}”", { q: filter }) : ""));
   }
 
