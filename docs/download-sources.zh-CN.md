@@ -23,6 +23,11 @@ cccodroid 要从网上取的东西有八类，大多有不止一个来源。这�
 | 7 | 自定义组件补 glibc 库 | Termux 官方 glibc 仓库（只此一个） | HTTPS + `Packages` 里的 sha256 | `gateway/gw/custom.mjs` `customFetchLibs` |
 | 8 | 端侧模型 | 魔搭（仅 Qwen 官方）→ HuggingFace → hf-mirror.com | 目录里钉的 sha256（取自 HF LFS） | `gateway/gw/local.mjs` `LOCAL_CATALOG` |
 
+**0.4.1 起的两项通用做法**（工具包、APK 更新、组件包、Claude Code 都适用）：
+
+- **分段并行**：文件不小于 16 MB、服务器认 Range 时，把没下的部分切成最多 4 段同时下，按偏移写进同一个 `.part`（先占满到总大小），每段进度记在 `.part.seg`。被打断或换来源后按它续传；`.seg` 和 `.part` 对不上就两个都作废重来。来源不认 Range 时退回单连接。实测 dl.cccodroid.net 单线约 2.7 MB/s，4 路约 14 MB/s。代码：`Installer.java` 的 `fetchSegmented`、`gateway/gw/pget.mjs`。
+- **gh-proxy.com 兜底**：GitHub 地址在其余来源都不顺时，最后再试一次 `https://gh-proxy.com/github.com/…`。这是第三方服务，不需要信任它：内容照样按上表的信任锚核对。（讨论区 #15 的建议）
+
 另外，有的组件首次运行时还会自己下东西，比如 Blender 从 Debian 官方仓库取本体、从 GitHub 取补丁版 Mesa。这部分由组件自己的首次运行脚本负责，按脚本里钉的 sha256 核对，**不在本文的多源机制内**。
 
 ---
@@ -56,7 +61,7 @@ nginx 配置：`/etc/nginx/sites-available/cccodroid.conf` 和 `cccodroid-dl.con
 
 ### 1. 开发工具包
 
-- 首次安装时，安装页让用户选来源：GitHub、cccodroid.net 镜像，或本地文件。GitHub 和镜像互为备用，**只切换一次**，用同一个 `.part` 文件接着续传。
+- 首次安装时，安装页让用户选来源：GitHub、cccodroid.net 镜像，或本地文件。GitHub 和镜像互为备用，最后再试 gh-proxy；按顺序依次换、不回头，用同一个 `.part` 文件接着续传。
 - 校验值以 APK 里的 `assets/devkit-pin.json` 为准。这个文件由 `scripts/pin-devkit.mjs` 生成，`build.sh` 会核对它和 `devkit-sources.txt` 是不是同一版。
 - **改工具包版本时**：先发布 devkit Release，再更新 `devkit-sources.txt`，然后跑 `pin-devkit.mjs`，最后打 APK。服务器会自动把新绑定的那一版同步过去。
 

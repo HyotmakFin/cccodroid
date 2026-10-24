@@ -196,9 +196,12 @@ else {
   if (!SUM) srcs = srcs.filter((s) => s.kind === "npm");       // 没有官方清单，直链下来的没法核，只走 npm
   srcs.sort((a, b) => (b.id === last) - (a.id === last));
   const raw = path.join(OUT, "claude.part"), tgz = path.join(OUT, "claude.tgz.part");
-  const tag = (f, v) => { const t = f + ".for"; let o = ""; try { o = fs.readFileSync(t, "utf8"); } catch {} if (o !== v) { fs.rmSync(f, { force: true }); fs.writeFileSync(t, v); } };
+  const tag = (f, v) => { const t = f + ".for"; let o = ""; try { o = fs.readFileSync(t, "utf8"); } catch {} if (o !== v) { fs.rmSync(f, { force: true }); fs.rmSync(f + ".seg", { force: true }); fs.writeFileSync(t, v); } };
+  // 分段并行下载（gw/pget.mjs，随网关一起装在 app/gw/）；找不到就照旧单线 curl -C -
+  const PG = await import(new URL("../gw/pget.mjs", import.meta.url).href).catch(() => null);
 
-  const fetchTo = (url, file, total, label) => new Promise((resolve) => {
+  const fetchTo = (url, file, total, label, exact) => PG ? PG.pget({ curl: CURL, url, file, total: exact ? total : 0,
+    onProgress: (d) => console.log(`@progress ${d} ${total}`) }) : new Promise((resolve) => {
     const c = spawn(CURL, ["-fsSL", "--connect-timeout", "15", "--speed-limit", "20480", "--speed-time", "30", "-C", "-", "-o", file, url], { stdio: ["ignore", "ignore", "pipe"] });
     let err = ""; c.stderr.on("data", (d) => { err += d; });
     const tick = setInterval(() => console.log(`@progress ${size(file)} ${total}`), 2000);
@@ -215,11 +218,12 @@ else {
     else {
       if (!npmMeta()) continue;
       url = `${s.reg}/${PKG}/-/${NPM.file}`; file = tgz; tag(tgz, NPM.integrity);
-      total = Number((spawnSync(CURL, ["-fsSIL", "--max-time", "15", url]).stdout || "").toString().match(/content-length:\s*(\d+)/gi)?.pop()?.split(":")[1]) || Math.round((SIZE || 250e6) * 0.45);
+      const len = Number((spawnSync(CURL, ["-fsSIL", "--max-time", "15", url]).stdout || "").toString().match(/content-length:\s*(\d+)/gi)?.pop()?.split(":")[1]) || 0;
+      total = len || Math.round((SIZE || 250e6) * 0.45); s.exact = !!len;
     }
     say(`从${s.name}下载 ${Math.round(total / 1048576)} MB${size(file) ? `（续传，已有 ${Math.round(size(file) / 1048576)} MB）` : ""}…`);
     let err = "";
-    for (let i = 0; i < 2; i++) { err = await fetchTo(url, file, total, s.name); if (!err) break; say(`  ${s.name}断了（${err}），${i ? "换下一个来源" : "续传重试"}…`); }
+    for (let i = 0; i < 2; i++) { err = await fetchTo(url, file, total, s.name, s.kind === "raw" ? SIZE > 0 : s.exact); if (!err) break; say(`  ${s.name}断了（${err}），${i ? "换下一个来源" : "续传重试"}…`); }
     if (err) continue;
     // 校验与落地
     if (s.kind === "raw") {
@@ -236,7 +240,7 @@ else {
       if (SUM) { const g = sha(f); if (g !== SUM) { say(`  解出的程序与官方清单不符（实得 ${g.slice(0, 12)}…），丢掉换来源`); fs.rmSync(x, { recursive: true, force: true }); fs.rmSync(tgz, { force: true }); continue; } }
       fs.renameSync(f, BIN); fs.rmSync(x, { recursive: true, force: true }); fs.rmSync(tgz, { force: true });
     }
-    for (const f of [raw, tgz]) { fs.rmSync(f, { force: true }); fs.rmSync(f + ".for", { force: true }); }
+    for (const f of [raw, tgz]) { fs.rmSync(f, { force: true }); fs.rmSync(f + ".for", { force: true }); fs.rmSync(f + ".seg", { force: true }); }
     fs.rmSync(path.join(OUT, ".mismatch"), { force: true });      // 补核没过、重下成功的，标记一起去掉
     if (SUM) { fs.rmSync(path.join(OUT, ".npm-only"), { force: true }); say("✓ sha256 与官方清单一致"); }
     else { fs.writeFileSync(path.join(OUT, ".npm-only"), VER + "\n"); say("✓ npm 签名与 sha512 一致（官方清单以后连得上时会自动补核）"); }

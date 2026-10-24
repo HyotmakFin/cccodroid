@@ -8,6 +8,7 @@ import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";
 import { SKILLS_DIR, skillMeta } from "./extensions.mjs";
 import { modulesMissingFor } from "./modules.mjs";
+import { ghProxy, pget } from "./pget.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -387,7 +388,7 @@ function compClearStage(id) {
   const stage = path.join(COMP_DIR, ".staging");
   let list = []; try { list = fs.readdirSync(stage); } catch { return; }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return;   // 组件 id 只有小写字母、数字、连字符
-  const mine = new RegExp("^" + id + "-[0-9a-f]{12}\\.tar\\.gz(\\.part)?$");
+  const mine = new RegExp("^" + id + "-[0-9a-f]{12}\\.tar\\.gz(\\.part(\\.seg)?)?$");
   for (const n of list) if (n === id || mine.test(n)) fs.rmSync(path.join(stage, n), { recursive: true, force: true });
 }
 
@@ -410,29 +411,29 @@ async function compRunInstall(id, b, job) {
   // 1) 下载（断点续传：.part 的名字带着 sha，换了版本不会接错）
   if (!fs.existsSync(gz)) {
     const part = gz + ".part";
-    const tick = setInterval(() => { try { job.done = fs.statSync(part).size; } catch {} }, 500);
-    try {
-      // 两个来源轮流试：GitHub 与 dl.cccodroid.net 镜像（逐字节同一份，内容一律按签名索引里的 sha256 把关，镜像不需要被信任）。
-      // 同一个 .part 接着续传；哪边成功了下回先试哪边
-      const urls = compMirrorFirst ? [compMirrorUrl(b), b.url] : [b.url, compMirrorUrl(b)];
+    {
+      // 几个来源轮流试：GitHub 与 dl.cccodroid.net 镜像（逐字节同一份，内容一律按签名索引里的 sha256 把关，镜像不需要被信任）。
+      // 同一个 .part 接着续传；哪边成功了下回先试哪边。gh-proxy 只排最后兜底。分段并行下载见 pget.mjs
+      const urls = (compMirrorFirst ? [compMirrorUrl(b), b.url] : [b.url, compMirrorUrl(b)]).concat(ghProxy(b.url));
       const srcs = urls.filter(Boolean);
       let lastErr;
       for (let i = 0; i < 4 && !job.cancelled; i++) {
         const url = srcs[i % srcs.length];
-        job.via = url === b.url ? "GitHub" : "dl.cccodroid.net";
-        try {
-          await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "2", "--connect-timeout", "15", "--speed-limit", "10000", "--speed-time", "45", "-o", part, url]);
-          lastErr = null; compMirrorFirst = url !== b.url; break;
-        } catch (e) { lastErr = e; if (job.cancelled) break; log(`[comp] ${id} 从 ${job.via} 下载中断：${e.message}`); }
+        job.via = url === b.url ? "GitHub" : url.startsWith("https://gh-proxy.com/") ? "gh-proxy.com" : "dl.cccodroid.net";
+        const err = await pget({ curl: path.join(PREFIX, "bin", "curl"), url, file: part, total: b.bytes,
+          onProgress: (d) => { job.done = d; }, cancelled: () => !!job.cancelled });
+        if (!err) { lastErr = null; if (url === b.url || url === compMirrorUrl(b)) compMirrorFirst = url !== b.url; break; }
+        lastErr = new Error(err); if (job.cancelled) break; log(`[comp] ${id} 从 ${job.via} 下载中断：${err}`);
       }
       if (job.cancelled) throw new Error("cancelled");
       // 上回已经下全、没来得及改名就被打断：续传会得到 416，直接去校验
       let have = 0; try { have = fs.statSync(part).size; } catch {}
-      if (lastErr && have !== b.bytes) throw lastErr;
-    } finally { clearInterval(tick); }
+      // 分段下载的 .part 一开始就占满总大小，还有 .seg 就说明没下完
+      if (lastErr && (have !== b.bytes || fs.existsSync(part + ".seg"))) throw lastErr;
+    }
     job.phase = "verifying"; job.done = 0; job.total = b.bytes;
     const got = await sha256File(part, job);
-    if (got !== b.sha256) { fs.rmSync(part, { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
+    if (got !== b.sha256) { fs.rmSync(part, { force: true }); fs.rmSync(part + ".seg", { force: true }); throw new Error(tz("下载的文件校验不符（已删除，重试会重新下载）")); }
     fs.renameSync(part, gz);
   }
   if (job.cancelled) throw new Error("cancelled");

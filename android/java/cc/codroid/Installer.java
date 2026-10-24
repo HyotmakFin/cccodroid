@@ -84,19 +84,23 @@ final class Installer {
     /** alt：备用地址（同一个文件的镜像）。主地址连着失败两次就换过去，接着同一个 .part 续传；内容由 sha256 把关，镜像不需要被信任 */
     File download(String url, String alt, File done, long size, String sha) throws IOException {
         if (done.isFile() && (size <= 0 || done.length() == size) && (sha == null || sha.equals(sha256(done)))) return done;
-        File part = new File(done.getPath() + ".part"), tag = new File(done.getPath() + ".sha256");
+        File part = new File(done.getPath() + ".part"), tag = new File(done.getPath() + ".sha256"), seg = new File(part.getPath() + ".seg");
         done.getParentFile().mkdirs();
         String id = sha != null ? sha : url;
         if (!tag.isFile() || !id.equals(new String(java.nio.file.Files.readAllBytes(tag.toPath()), StandardCharsets.UTF_8).trim())) {
-            part.delete();
+            part.delete(); seg.delete();
             write(tag, id + "\n");
         }
-        for (int attempt = 1; size <= 0 || part.length() < size; attempt++) {
-            try { fetchRange(url, part, size); if (size <= 0) break; }
+        // 最后兜底：GitHub 地址经 gh-proxy.com 加速（第三方，内容照样按 sha256 把关）
+        String proxy = ghProxy(url) != null ? ghProxy(url) : ghProxy(alt);
+        for (int attempt = 1, onUrl = 1; size <= 0 || part.length() < size || seg.isFile(); attempt++, onUrl++) {
+            try { if (size >= 2 * MIN_SEG && (seg.isFile() || rangeOk(url))) fetchSegmented(url, part, seg, size); else { fetchRange(url, part, size); if (size <= 0) break; } }
             catch (IOException e) {
-                if (alt != null && !url.equals(alt) && attempt >= 2) {      // 只换一次，别两头来回跳
-                    ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(alt)));
-                    url = alt; alt = null;
+                String next = alt != null && !url.equals(alt) ? alt : proxy != null && !url.equals(proxy) ? proxy : null;
+                if (next != null && onUrl >= 2) {      // 依次换，不回头
+                    ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(next)));
+                    if (next.equals(alt)) alt = null; else proxy = null;
+                    url = next; onUrl = 0;
                     continue;
                 }
                 if (attempt >= 8) throw e;
@@ -106,7 +110,7 @@ final class Installer {
         }
         if (sha != null) {
             String got = sha256(part);
-            if (!sha.equals(got)) { part.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
+            if (!sha.equals(got)) { part.delete(); seg.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
         }
         done.delete();
         if (!part.renameTo(done)) throw new IOException(Tr.t("换名失败: ") + part);
@@ -119,6 +123,103 @@ final class Installer {
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
             try (InputStream in = c.getInputStream()) { return readAllBytes(in); }
+        } finally { c.disconnect(); }
+    }
+
+    // ── 分段并行下载 ──
+    // 单个连接常被限速（实测 dl.cccodroid.net 单线 2.7 MB/s，4 路并行 14 MB/s）：文件够大、服务器认 Range 时，
+    // 把没下的部分切成几段、各开一条连接同时下，按偏移写进同一个 .part（先占满到总大小）。
+    // 每段进度记在 .part.seg（每行「起 止 已下」，每秒落盘，只会比实际写入的少），被打断、换来源后按它续传；
+    // 几个来源是逐字节同一份文件，最后照样核 sha256。和 gw/pget.mjs 是同一套做法
+    static final int SEGS = 4;
+    static final long MIN_SEG = 8L << 20;
+
+    static String ghProxy(String url) {
+        return url != null && url.startsWith("https://github.com/") ? "https://gh-proxy.com/" + url.substring("https://".length()) : null;
+    }
+
+    /** 认不认 Range：要 1 个字节，回 206 才算 */
+    static boolean rangeOk(String url) {
+        try {
+            HttpURLConnection c = open(url);
+            c.setRequestProperty("Range", "bytes=0-0");
+            try { return c.getResponseCode() == 206; } finally { c.disconnect(); }
+        } catch (IOException e) { return false; }
+    }
+
+    private void fetchSegmented(String url, File part, File segF, long size) throws IOException {
+        long[][] segs = null;
+        if (segF.isFile() && part.length() == size) {
+            try {
+                String[] ls = new String(java.nio.file.Files.readAllBytes(segF.toPath()), StandardCharsets.UTF_8).trim().split("\n");
+                segs = new long[ls.length][];
+                for (int i = 0; i < ls.length; i++) { String[] t = ls[i].trim().split(" "); segs[i] = new long[]{ Long.parseLong(t[0]), Long.parseLong(t[1]), Long.parseLong(t[2]) }; }
+                if (segs.length == 0 || segs[segs.length - 1][1] != size - 1) segs = null;
+            } catch (RuntimeException e) { segs = null; }
+        }
+        if (segs == null) {
+            // .seg 坏了或和 .part 对不上：作废；以前单线下了一截的 .part（没有 .seg）从它末尾往后切
+            long from = segF.isFile() ? 0 : Math.min(part.length(), size);
+            if (segF.isFile()) { segF.delete(); part.delete(); }
+            long left = size - from;
+            int k = (int) Math.max(1, Math.min(SEGS, left / MIN_SEG));
+            segs = new long[k][];
+            for (int i = 0; i < k; i++) segs[i] = new long[]{ from + left * i / k, from + left * (i + 1) / k - 1, 0 };
+            saveSegs(segF, segs);
+        }
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(part, "rw")) { raf.setLength(size); }
+        final long[][] S = segs;
+        final IOException[] err = new IOException[1];
+        Thread[] ts = new Thread[S.length];
+        for (int i = 0; i < S.length; i++) {
+            final long[] sg = S[i];
+            ts[i] = new Thread(() -> {
+                for (int a = 0; sg[2] < sg[1] - sg[0] + 1; a++) {
+                    try { fetchPiece(url, part, sg); }
+                    catch (IOException e) {
+                        if (a >= 2) { synchronized (err) { if (err[0] == null) err[0] = e; } return; }
+                        try { Thread.sleep(2000L * (a + 1)); } catch (InterruptedException ie) { return; }
+                    }
+                }
+            }, "seg-" + i);
+            ts[i].start();
+        }
+        for (boolean alive = true; alive; ) {
+            alive = false;
+            for (Thread t : ts) { try { t.join(1000); } catch (InterruptedException e) { throw new IOException(e); } alive |= t.isAlive(); }
+            saveSegs(segF, S);
+            long left = 0; for (long[] sg : S) left += sg[1] - sg[0] + 1 - sg[2];
+            ui.bytes(size - left, size);
+        }
+        if (err[0] != null) throw err[0];
+        segF.delete();
+    }
+
+    private static void saveSegs(File f, long[][] segs) {
+        StringBuilder b = new StringBuilder();
+        synchronized (segs) { for (long[] s : segs) b.append(s[0]).append(' ').append(s[1]).append(' ').append(s[2]).append('\n'); }
+        try { write(f, b.toString()); } catch (IOException ignored) {}
+    }
+
+    /** 下一段：从 sg 已下的位置接着要到段尾，按偏移写进 part */
+    private static void fetchPiece(String url, File part, long[] sg) throws IOException {
+        HttpURLConnection c = open(url);
+        c.setRequestProperty("Range", "bytes=" + (sg[0] + sg[2]) + "-" + sg[1]);
+        try {
+            if (c.getResponseCode() != 206) throw new IOException("HTTP " + c.getResponseCode());
+            try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 << 16);
+                 java.io.RandomAccessFile raf = new java.io.RandomAccessFile(part, "rw")) {
+                byte[] buf = new byte[1 << 16];
+                for (int r; (r = in.read(buf)) > 0; ) {
+                    long room = sg[1] - sg[0] + 1 - sg[2];
+                    int n = (int) Math.min(r, room);
+                    raf.seek(sg[0] + sg[2]);
+                    raf.write(buf, 0, n);
+                    sg[2] += n;
+                    if (sg[2] >= sg[1] - sg[0] + 1) break;
+                }
+            }
+            if (sg[2] < sg[1] - sg[0] + 1) throw new IOException(Tr.t("连接提前结束"));
         } finally { c.disconnect(); }
     }
 
