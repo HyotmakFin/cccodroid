@@ -114,6 +114,16 @@ final class Updater {
     void dropStagedIfInstalled() {
         if (!"ready".equals(devkit.state) || devkit.sha == null || !devkit.sha.equals(installedDevkitSha())) return;
         if (devkit.file != null) devkit.file.delete();
+        // 按块下好的压缩包也删（几百 MB）；已经装进去的那几块，installModules 解完就删过了
+        if (devkit.modules != null) try {
+            JSONArray all = new JSONObject(new String(devkit.modules, StandardCharsets.UTF_8)).optJSONArray("modules");
+            for (int i = 0; all != null && i < all.length(); i++) {
+                JSONObject gz = all.optJSONObject(i) == null ? null : all.optJSONObject(i).optJSONObject("gz");
+                if (gz == null) continue;
+                new File(env.files, gz.optString("file")).delete();
+                new File(env.files, gz.optString("file") + ".part").delete();
+            }
+        } catch (Exception ignored) {}
         prefs().edit().remove("devkitStaged").apply();
         refreshCurrent();
         devkit.set("uptodate", "");
@@ -333,11 +343,14 @@ final class Updater {
         if (rels != null) {
             try { checkApp(rels); if (mirror && !"error".equals(app.state)) app.message = app.message.isEmpty() ? Tr.t("来自 cccodroid.net 镜像") : app.message + Tr.t(" · 来自 cccodroid.net 镜像"); }
             catch (Exception e) { app.set("error", e.getMessage()); }
-            if (!mirror) try { checkDevkit(rels); } catch (Exception e) { devkit.set("error", e.getMessage()); }
+            // 首装还没完成（工具包没装好）就别查工具包：那时读不到已装的模块，planModules 会按「整包用户」规划成全部模块，
+            // 自动更新在 Wi‑Fi 下把它们全下好，首装刚按勾选装完，启动流程又把这份「已下载的更新」装上 —— 勾了两个、装了八个（群友 10-24）
+            if (!env.devkitReady()) devkit.set("uptodate", Tr.t("首次安装进行中"));
+            else if (!mirror) try { checkDevkit(rels); } catch (Exception e) { devkit.set("error", e.getMessage()); }
         }
         try { checkClaude(); } catch (Exception e) { claude.set("error", Tr.t("连不上 downloads.claude.ai：") + e.getMessage()); }
         prefs().edit().putLong("lastCheck", System.currentTimeMillis()).apply();
-        if (auto() && !manual) autoApply();
+        if (auto() && !manual && env.devkitReady()) autoApply();      // 首装期间不自动装任何东西，Claude Code 也由首装流程来装
         releaseApp();         // 工具包停在"已下载"没去装（比如有任务在跑）时，别让 APK 一直等着
     }
 
