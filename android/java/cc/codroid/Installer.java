@@ -79,10 +79,13 @@ final class Installer {
      * 通用下载：断点续传 + 重试 + sha256（sha 为 null 则不校验）。.part 旁边的 .sha256 记着它属于哪个版本，
      * 换了版本就作废重下，别把两个版本拼在一起。
      */
-    File download(String url, File done, long size, String sha) throws IOException { return download(url, null, done, size, sha); }
+    File download(String url, File done, long size, String sha) throws IOException { return download(url, (String) null, done, size, sha); }
 
     /** alt：备用地址（同一个文件的镜像）。主地址连着失败两次就换过去，接着同一个 .part 续传；内容由 sha256 把关，镜像不需要被信任 */
-    File download(String url, String alt, File done, long size, String sha) throws IOException {
+    File download(String url, String alt, File done, long size, String sha) throws IOException { return download(url, new String[]{ alt }, done, size, sha); }
+
+    /** alts：按顺序的备用地址（空的跳过）；全换完了最后还有 gh-proxy 兜底 */
+    File download(String url, String[] alts, File done, long size, String sha) throws IOException {
         if (done.isFile() && (size <= 0 || done.length() == size) && (sha == null || sha.equals(sha256(done)))) return done;
         File part = new File(done.getPath() + ".part"), tag = new File(done.getPath() + ".sha256"), seg = new File(part.getPath() + ".seg");
         done.getParentFile().mkdirs();
@@ -91,16 +94,18 @@ final class Installer {
             part.delete(); seg.delete();
             write(tag, id + "\n");
         }
-        // 最后兜底：GitHub 地址经 gh-proxy.com 加速（第三方，内容照样按 sha256 把关）
-        String proxy = ghProxy(url) != null ? ghProxy(url) : ghProxy(alt);
+        // 换源队列：备用地址依次排上，最后兜底 GitHub 地址经 gh-proxy.com 加速（第三方，内容照样按 sha256 把关）
+        java.util.ArrayDeque<String> left = new java.util.ArrayDeque<>();
+        String proxy = ghProxy(url);
+        for (String a : alts) if (a != null && !a.equals(url) && !left.contains(a)) { left.add(a); if (proxy == null) proxy = ghProxy(a); }
+        if (proxy != null && !proxy.equals(url)) left.add(proxy);
         for (int attempt = 1, onUrl = 1; size <= 0 || part.length() < size || seg.isFile(); attempt++, onUrl++) {
             try { if (size >= 2 * MIN_SEG && (seg.isFile() || rangeOk(url))) fetchSegmented(url, part, seg, size); else { fetchRange(url, part, size); if (size <= 0) break; } }
             catch (IOException e) {
-                String next = alt != null && !url.equals(alt) ? alt : proxy != null && !url.equals(proxy) ? proxy : null;
+                String next = left.peek();
                 if (next != null && onUrl >= 2) {      // 依次换，不回头
                     ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(next)));
-                    if (next.equals(alt)) alt = null; else proxy = null;
-                    url = next; onUrl = 0;
+                    url = left.poll(); onUrl = 0;
                     continue;
                 }
                 // 慢但没断、又没别的来源可换：不算失败次数，接着续传（已下的不丢）——总比报错强

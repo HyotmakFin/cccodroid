@@ -42,6 +42,8 @@ final class Updater {
     /** 备用源：cccodroid.net 镜像了最近几个版本的 APK 和一份同形状的发布列表（dl/releases.json）。
      *  只在 GitHub 连不上 / 下载不顺时用；下来的 APK 照样核 sha256 和签名。工具包太大，没有镜像 */
     static final String MIRROR = "https://cccodroid.net";
+    /** 同一份 APK 与发布列表的直连线路（不经 Cloudflare；国内有的网络只通其中一条） */
+    static final String DL = "https://dl.cccodroid.net";
     /** 工具包与本 APK 的接口版本：lock.json 里的 compat（缺省 1）对不上就不装，防止新工具包配旧外壳 */
     static final int DEVKIT_COMPAT = 1;
     static final String CH = "updates";
@@ -66,7 +68,7 @@ final class Updater {
         volatile String current = "", latest = "", state = "unknown", message = "";
         volatile long done, total;
         // 下载需要的东西
-        volatile String url, alt, sha, base, tarSha;
+        volatile String url, alt, alt2, sha, base, tarSha;
         volatile long size, need;
         volatile File file;
         // 模块化工具包（0.3.9 起）：modules.json 原文、它的 sha256、要装的模块。file 指向落盘的 modules.json（全部块下完才写，等于「已下好」的记号）
@@ -335,8 +337,11 @@ final class Updater {
         catch (Exception e) {
             lastError = Tr.t("连不上 GitHub：") + e.getMessage();
             // GitHub 不通：应用本身改看镜像的发布列表；工具包没有镜像，如实说查不了（别报成"已是最新"）
-            try { rels = new JSONArray(new String(Installer.httpGetSmall(MIRROR + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; }
-            catch (Exception e2) { app.set("error", lastError); }
+            for (String m : new String[]{ MIRROR, DL }) {
+                try { rels = new JSONArray(new String(Installer.httpGetSmall(m + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; break; }
+                catch (Exception e2) { /* 换下一条 */ }
+            }
+            if (rels == null) app.set("error", lastError);
             if (pinnedInstalled()) devkit.set("uptodate", Tr.t("已是本应用配套的版本（GitHub 连不上，暂时查不了更新的）"));
             else devkit.set("error", lastError);
         }
@@ -371,6 +376,7 @@ final class Updater {
                 if (!a.optString("name").equals(name)) continue;
                 app.url = a.getString("browser_download_url");
                 app.alt = app.url.startsWith(MIRROR + "/") ? null : MIRROR + "/dl/" + tag + "/" + name;
+                app.alt2 = DL + "/dl/" + tag + "/" + name;
                 app.size = a.optLong("size");
                 String d = a.optString("digest", "");
                 app.sha = d.startsWith("sha256:") ? d.substring(7) : null;
@@ -651,7 +657,7 @@ final class Updater {
                 if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, Tr.t("空间不够：需要约 %.1f GB，只剩 %.1f GB"), need / 1e9, free / 1e9));
             }
             if (it == devkit && it.modules != null) downloadModules(it);
-            else installer(it).download(it.url, it.alt, it.file, it.size, it.sha);
+            else installer(it).download(it.url, new String[]{ it.alt, it.alt2 }, it.file, it.size, it.sha);
             if (it == app) checkApkSigner(it.file);
             if (it == devkit) {
                 JSONObject st = new JSONObject().put("file", it.file.getPath())
