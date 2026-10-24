@@ -166,11 +166,29 @@ cccodroid.apk（Java 外壳：安装器 + 前台服务 + WebView）
 cccodroid 力求遵守 [Anthropic 对运行 Claude Code 的产品的条款](https://code.claude.com/docs/en/legal-and-compliance)。下面如实写明应用实际怎么做，你可以自己判断：
 
 - **程序怎么运行。** Claude Code 的程序文件与官方 linux-arm64 版逐字节一致：按官方 sha256 清单校验，不打任何补丁。安卓没有 `/lib/ld-linux-aarch64.so.1`，所以由 glibc 加载器启动（工具包里那份，36 版用的是 APK 里的同一份），并预加载一个 61 行的小库（[`seccomp-enosys.c`](android/native/seccomp-enosys.c)），把安卓 seccomp 过滤器禁止的系统调用改成返回 ENOSYS。这个库不读、不改 Claude Code 的代码和内存，只让进程不被系统杀掉。
-- **用 Claude 订阅登录。** 登录就是 Claude Code 自己的 `claude auth login`：你在浏览器里的 Anthropic 页面上授权，令牌由 Claude Code 写进它自己的 `~/.claude/.credentials.json`（应用从不读这个文件）；登录状态下，Claude Code 直连 api.anthropic.com，不经过我们的任何进程。实际上这和"SSH 到一台自己的 Linux 机器上运行 Claude Code 并登录"是一回事：这台 Linux 机器就是手机，应用是屏幕和键盘。每一轮都由你发起：要么是你发的消息，要么是你自己设的定时任务。定时任务跑在你自己的手机、你自己的账户上，用的仍是同一个未修改的 Claude Code；跑的时候没人看着，所以凡是需要确认的操作一律拒绝，应用不会替你点「允许」。Anthropic 的条款对这种情况有明文：不妨碍「终端用户用自己的 Claude 订阅登录未经修改的 Claude Code 程序，包括由平台托管 Claude Code 的情形」（原文：does not prevent an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code）。
+- **用 Claude 订阅登录。** 登录就是 Claude Code 自己的 `claude auth login`：你在浏览器里的 Anthropic 页面上授权，令牌由 Claude Code 写进它自己的 `~/.claude/.credentials.json`（应用从不读这个文件）；登录状态下，Claude Code 直连 api.anthropic.com，不经过我们的任何进程。实际上这和"SSH 到一台自己的 Linux 机器上运行 Claude Code 并登录"是一回事：这台 Linux 机器就是手机，应用是屏幕和键盘。每一轮都由你发起：要么是你发的消息，要么是你自己设的定时任务。定时任务跑在你自己的手机、你自己的账户上，用的仍是同一个未修改的 Claude Code；跑的时候没人看着，所以凡是需要确认的操作一律拒绝，应用不会替你点「允许」。0.4.2 起，用订阅账户跑的定时任务默认不执行，要你自己打开，并先确认「无人值守使用以 Anthropic 条款为准」。Anthropic 的条款对这种情况有明文：不妨碍「终端用户用自己的 Claude 订阅登录未经修改的 Claude Code 程序，包括由平台托管 Claude Code 的情形」（原文：does not prevent an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code）。
 - **一次性授权码。** 正常情况下，浏览器在本机直接把授权码交回 Claude Code，不经过应用。自动回传失败时（比如在别的设备上授权），应用打开内置终端并在里面运行 `claude auth login`，你把授权码贴给 Claude Code 自己的提示。终端只是通用的字节通道，和 Termux、SSH 一样；应用没有任何接收授权码的输入框，也不解析、不保存、不记录它。
 - **权限确认。** 和官方命令行一样，Claude 在改文件、跑命令、联网之前会先问你，你在对话里回答。默认模式是「逐项确认」；「全部放行」可以选，但要先确认一次。
 - **名字。** cccodroid 是 "Claude Code CLI On droid" 的缩写，起名方式参照老牌安卓 C/C++ IDE C4droid。项目名、图标、包名都不使用 Claude 或 Anthropic 的名称和标志，也不声称由 Anthropic 制作、认可或与其合作。如果 Anthropic 提出要求，项目会改名。
 - **不转售、不中转。** cccodroid 免费开源，没有服务端，不提供、不代付、不转售任何 Claude 用量：你用自己的账户登录或填自己的 API Key，费用直接记在你自己名下。作者有 Claude Console 账户，已同意 Anthropic 的商业条款（Commercial Terms）——上面的条款要求运行 Claude Code 的产品同意它。
+
+### 本项目反对的做法
+
+下面这些做法，cccodroid 不做、不支持，也不接受加入这类功能的 PR：
+
+- **反代、共享或转售账户。** 把一个订阅账户拆给多人用，或者把订阅额度包装成 API 转卖。
+- **破甲。** 绕过模型的安全限制，去拿本来会被拒绝的有害内容。
+- **批量操控账号。** 用 agent 成批注册、养号、刷评论，冒充真人发言。
+
+这些事看着是钻空子，吃亏的却是普通用户：
+- 买来的共享账号随时会被封；
+- 中间那台代理能看到经过的代码、密钥和对话；
+- 刷屏的账号挤掉了真人的讨论；
+- 平台只能跟着收紧限制、提高价格。
+
+时间一长，所有正常使用的人都跟着受损。
+
+别人怎么选，我们不去干涉。但在这个项目里，界限是清楚的：不提供相关功能，也不帮着排查这类用法出的问题。组件市场同样不收这类组件。
 
 ## 构建
 

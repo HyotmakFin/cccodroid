@@ -162,11 +162,29 @@ cccodroid.apk (Java shell: installer + foreground service + WebView)
 cccodroid aims to follow [Anthropic's terms for products that run Claude Code](https://code.claude.com/docs/en/legal-and-compliance). Below is exactly what the app does, so you can judge for yourself:
 
 - **How the binary runs.** The Claude Code file is byte-for-byte the official linux-arm64 build: checked against the official sha256 manifest and never patched. Android has no `/lib/ld-linux-aarch64.so.1`, so it is started through the glibc loader (the toolchain's copy, or in the 36 build the identical copy inside the APK), with a 61-line preload library ([`seccomp-enosys.c`](android/native/seccomp-enosys.c)) that turns system calls Android's seccomp filter forbids into ENOSYS. The library does not read or change Claude Code's code or memory; it only keeps the process from being killed.
-- **Signing in with a Claude subscription.** Sign-in is Claude Code's own `claude auth login`. You authorize on Anthropic's page in your browser, Claude Code writes the token to its own `~/.claude/.credentials.json` (the app never reads that file), and while signed in Claude Code talks to api.anthropic.com directly, not through any process of ours. In practice this is the same as SSHing into a Linux machine you own, running Claude Code there and signing in: here the Linux machine is the phone, and the app is the screen and keyboard. Every turn starts with you: either a message you send, or a scheduled task you set up yourself. Scheduled tasks run on your own phone, under your own account, with the same unmodified Claude Code; since nobody is watching, anything that needs approval is refused — the app never clicks "Allow" for you. Anthropic's terms cover this case explicitly: they do not prevent "an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code".
+- **Signing in with a Claude subscription.** Sign-in is Claude Code's own `claude auth login`. You authorize on Anthropic's page in your browser, Claude Code writes the token to its own `~/.claude/.credentials.json` (the app never reads that file), and while signed in Claude Code talks to api.anthropic.com directly, not through any process of ours. In practice this is the same as SSHing into a Linux machine you own, running Claude Code there and signing in: here the Linux machine is the phone, and the app is the screen and keyboard. Every turn starts with you: either a message you send, or a scheduled task you set up yourself. Scheduled tasks run on your own phone, under your own account, with the same unmodified Claude Code; since nobody is watching, anything that needs approval is refused — the app never clicks "Allow" for you. Since 0.4.2, scheduled tasks that would run on a subscription account are off by default; you turn them on yourself after accepting that unattended use is governed by Anthropic's terms. Anthropic's terms cover this case explicitly: they do not prevent "an end user from signing in to the unmodified Claude Code binary with their own Claude subscription, including where a platform hosts Claude Code".
 - **The one-time authorization code.** Normally the browser hands the code back to Claude Code automatically, on this device, without passing through the app. If that fails (for example you authorized on another device), the app opens its built-in terminal and runs `claude auth login` there; you paste the code into Claude Code's own prompt. The terminal is a generic byte channel, like Termux or SSH; the app has no field that accepts the code and never parses, saves or logs it.
 - **Permission prompts.** Like the official CLI, Claude asks before editing files, running commands or going online, and you answer in the chat. The default mode is "Ask each time"; "Allow everything" is available but asks for confirmation first.
 - **The name.** cccodroid stands for "Claude Code CLI On droid", modelled on the long-standing Android C/C++ IDE C4droid. The project does not use the Claude or Anthropic names or logos in its name, icon or package name, and does not claim to be made, endorsed or partnered with by Anthropic. If Anthropic asks, the project will be renamed.
 - **No resale, no middleman.** cccodroid is free and open source, has no server, and does not provide, pay for or resell any Claude usage: you sign in with your own account or bring your own API key, and usage is billed to you directly. The author has a Claude Console account and has accepted Anthropic's Commercial Terms, which the terms above require for products that run Claude Code.
+
+### What this project stands against
+
+cccodroid doesn't do, doesn't support, and won't accept pull requests that add any of the following:
+
+- **Reverse proxies and shared or resold accounts**: splitting one subscription among many people, or repackaging subscription usage as an API for sale.
+- **Jailbreaking**: getting around a model's safety limits to extract harmful content it would otherwise refuse.
+- **Mass-controlled accounts**: using agents to register, farm or run accounts in bulk to flood comment sections while passing as real people.
+
+These look like clever shortcuts, but ordinary users pay for them:
+- shared accounts get banned without warning;
+- the proxy in the middle sees every piece of code, key and conversation that passes through;
+- flooding accounts crowd out real discussion;
+- platforms respond by tightening limits and raising prices.
+
+Over time everyone who uses these services honestly loses out.
+
+We don't police other people's choices. In this project, though, the line is clear: no features for these uses, and no help troubleshooting them. The component market doesn't accept such components either.
 
 ## Build
 
