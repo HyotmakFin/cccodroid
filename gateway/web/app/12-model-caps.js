@@ -182,6 +182,7 @@
       provBox.innerHTML = `<div class="seg mp-seg mp-provseg">${ps.map((p) =>
         `<button type="button" class="${p.id === browse ? "on" : ""}${p.id === curProv() ? " cur" : ""}" data-prov="${esc(p.id)}">${esc(provLabel(p.id))}</button>`).join("")}</div>` +
         (browse !== curProv() ? `<div class="tiny mp-provhint">${esc(t("点一个模型，这个会话就换到「{name}」", { name: provLabel(browse) }))}</div>` : "");
+      provBox.querySelector("button.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });   // 横滚里选中的那家露出来
     };
     paintProv();
     provBox.addEventListener("click", async (e) => {
