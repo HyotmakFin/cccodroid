@@ -51,6 +51,7 @@ import { routeCaps } from "./gw/caps.mjs";
 import { NEXT, sendJson, serveStatic } from "./gw/http.mjs";
 import { UPLOAD_DIR, routeFiles } from "./gw/files.mjs";
 import { routePreview } from "./gw/preview.mjs";
+import { startStreamFix } from "./gw/streamfix.mjs";
 import { TERMS, routeTerminal } from "./gw/terminal.mjs";
 import { routeGit } from "./gw/git.mjs";
 import { routeComponents } from "./gw/components.mjs";
@@ -125,6 +126,7 @@ if (PREFIX) {
 }
 try { fs.mkdirSync(CFG.home, { recursive: true }); } catch {}
 try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
+startStreamFix();
 
 server.listen(CFG.port, "127.0.0.1", () => {
   log(`claude-apk 网关 v3 已启动  http://127.0.0.1:${CFG.port}`);
