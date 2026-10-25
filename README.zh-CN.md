@@ -243,6 +243,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[gogoiPhone](https://github.com/gogoiPhone)**：Redmi K70 Ultra 机型报告，附自写的 Vulkan 计算实测（[#14](https://github.com/greyoak111/cccodroid/issues/14)）。
 - **[Slingerspir](https://github.com/Slingerspir)**：建议下载时加 GitHub 加速线路和多线程下载（[讨论区 #15](https://github.com/greyoak111/cccodroid/discussions/15)），0.4.1 加上了分段并行下载和 gh-proxy 备用线。
 - **[hye45402-pixel](https://github.com/hye45402-pixel)**：建议支持 LaTeX 公式、代码高亮、代码块语言名、删除线、粗斜体和任务清单（[讨论区 #18](https://github.com/greyoak111/cccodroid/discussions/18)），0.4.4 全部加上。
+- **[STUTTEFRFIX](https://github.com/STUTTEFRFIX)**：工作岛集成，把 Claude 的工作状态显示在 ColorOS 16 的流体云 / 灵动岛上（[#20](https://github.com/greyoak111/cccodroid/pull/20)、[#21](https://github.com/greyoak111/cccodroid/pull/21)），配套应用 [WorkIsland-Android](https://github.com/STUTTEFRFIX/WorkIsland-Android)。这是 cccodroid 合并的第一个外部 PR，随 0.4.7 发布。
 - **[ThinkReally114](https://github.com/ThinkReally114)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[wangxp12](https://github.com/wangxp12)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[unoyg](https://github.com/unoyg)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。

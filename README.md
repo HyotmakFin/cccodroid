@@ -239,6 +239,7 @@ Layout:
 - **[gogoiPhone](https://github.com/gogoiPhone)**: a Redmi K70 Ultra device report with their own Vulkan compute test ([#14](https://github.com/greyoak111/cccodroid/issues/14)).
 - **[Slingerspir](https://github.com/Slingerspir)**: suggested a GitHub acceleration route and multi-threaded downloads ([discussion #15](https://github.com/greyoak111/cccodroid/discussions/15)); 0.4.1 added segmented parallel downloads and a gh-proxy fallback.
 - **[hye45402-pixel](https://github.com/hye45402-pixel)**: asked for LaTeX, syntax highlighting, code-block language labels, strikethrough, bold italic and task lists ([discussion #18](https://github.com/greyoak111/cccodroid/discussions/18)); all added in 0.4.4.
+- **[STUTTEFRFIX](https://github.com/STUTTEFRFIX)**: the Work Island integration, which shows Claude's working status on the ColorOS 16 Fluid Cloud island ([#20](https://github.com/greyoak111/cccodroid/pull/20), [#21](https://github.com/greyoak111/cccodroid/pull/21)), with the companion app [WorkIsland-Android](https://github.com/STUTTEFRFIX/WorkIsland-Android). The first outside pull request merged into cccodroid; shipped in 0.4.7.
 - **[ThinkReally114](https://github.com/ThinkReally114)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[wangxp12](https://github.com/wangxp12)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[unoyg](https://github.com/unoyg)**: feedback and bug reports in the community group throughout 0.3.x.
