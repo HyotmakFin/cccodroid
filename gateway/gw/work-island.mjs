@@ -52,7 +52,9 @@ function isAndroid() {
 function detectApp(cb) {
   if (process.env.CCAPP_WORK_ISLAND === "1") return cb(true);
   if (process.env.CCAPP_WORK_ISLAND === "0") return cb(false);
-  execFile("pm", ["list", "packages", PKG], { timeout: 3000 }, (e, out) => {
+  // pm 默认按“当前用户”查；应用 uid 会撞 INTERACT_ACROSS_USERS（asks to run as user 10），
+  // 必须显式 --user 0。包可见性由 AndroidManifest 的 <queries> 解决。
+  execFile("pm", ["list", "packages", "--user", "0", PKG], { timeout: 3000 }, (e, out) => {
     cb(!e && String(out).includes("package:" + PKG));
   });
 }
