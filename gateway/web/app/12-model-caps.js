@@ -374,6 +374,7 @@
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
       $("set-static").checked = state.settings.staticCompat !== false;
       $("set-idlecompact").checked = state.settings.idleCompaction !== false;
+      $("set-workisland").checked = state.settings.workIsland === true;
       loadExecMode();
     } catch {}
   }
@@ -448,6 +449,7 @@
     loadExecMode();
   });
   $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
+  $("set-workisland").addEventListener("change", (e) => saveSettings({ workIsland: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));
     if (!(v >= 1)) { e.target.value = state.settings.maxParallel || 3; return; }
