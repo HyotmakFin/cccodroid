@@ -69,7 +69,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 - **多种接入方式**：
   - Claude 账户登录：应用内完成，浏览器授权后自动回到应用。账户卡片显示 5 小时额度与每周额度的占用和重置时间（取自 Claude Code 每轮自己回报的数据，应用不拿你的凭据去查任何东西）。
   - Claude API Key。
-  - DeepSeek、智谱 GLM、通义千问、Kimi 的官方 Anthropic 兼容接口。
+  - 各家模型厂商的官方 Anthropic 兼容接口：DeepSeek、智谱 GLM、通义千问、Kimi、MiniMax、火山方舟（豆包）、小米 MiMo、阶跃星辰、百度千帆、腾讯混元、美团 LongCat、xAI Grok、Meta Muse。
   - 可以继续添加任意第三方兼容接口。
   - **每个对话各用各的**：设置里的接口、型号、思考强度是默认值；在对话里单独选过的，只改这个对话。好几个对话可以同时跑，比如一个用 Claude 账户、一个用 DeepSeek，互不影响。
 - **完整的开发工具链**（约 250 个包，取自 [Termux](https://termux.dev) 官方仓库）：

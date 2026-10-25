@@ -68,7 +68,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
 - **Several ways to connect**:
   - Sign in with a Claude account inside the app; after authorizing in the browser you are brought back automatically. The account card shows your 5-hour and weekly usage limits with their reset times (taken from what Claude Code itself reports after each turn — the app never queries anything with your credentials).
   - Claude API key.
-  - The official Anthropic-compatible endpoints of DeepSeek, Zhipu GLM, Qwen and Kimi.
+  - The official Anthropic-compatible endpoints of model makers: DeepSeek, Zhipu GLM, Qwen, Kimi, MiniMax, Volcengine Ark (Doubao), Xiaomi MiMo, StepFun, Baidu Qianfan, Tencent Hunyuan, Meituan LongCat, xAI Grok and Meta Muse.
   - Any other compatible third-party endpoint you add.
   - **Per conversation**: the provider, model and effort in Settings are defaults; picking something inside a conversation changes only that one. Several conversations can run at once — one on a Claude account, another on DeepSeek — without getting in each other's way.
 - **A complete development toolchain** (about 250 packages, taken from the official [Termux](https://termux.dev) repositories):
