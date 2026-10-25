@@ -5,7 +5,8 @@
 // 设计要点：
 //  · 更新最多 1.5 秒一次，只保留最后一条；到时补发最后那条。
 //  · 收工看 runs（所有活跃轮次），不看 run；run_end 后仍要等 3 秒宽限。
-//  · error 只显示「出错了」，不转发 message（可能含路径/命令输出）。
+//  · error 只显示「出错了」，不转发 message（可能含路径/命令输出）；子任务也只显示「子任务…」。
+//  · 关掉开关 / 网关退出时，只要岛上还挂着（含「任务完成」那 8 秒）就发 IDLE 收起。
 //  · 文案跟随 LAST_LANG：zh 开头用中文，否则英文。
 
 const ZH = {
@@ -20,7 +21,7 @@ const ZH = {
   perm: (n) => `需要你确认：${n}`,
   resume: "继续…",
   compact: "整理上下文…",
-  sub: (d) => `子任务：${d}…`,
+  sub: "子任务…",
   bg: "后台任务还在跑…",
   error: "出错了",
   aborted: "已中止",
@@ -47,7 +48,7 @@ const EN = {
   perm: (n) => `Waiting for approval: ${n}`,
   resume: "Continuing…",
   compact: "Compacting context…",
-  sub: (d) => `Subtask: ${d}…`,
+  sub: "Subtask…",
   bg: "Background task still running…",
   error: "Error",
   aborted: "aborted",
@@ -91,6 +92,7 @@ export function createWorkIsland(opts = {}) {
   const liveRuns = () => (runs() || []).filter((r) => r && !r.ended);
 
   let active = null;        // { id, startedAt, last }
+  let shown = false;        // 岛上还挂着东西（干活中，或「任务完成」还没收起）
   let doneTimer = null;
   let idleTimer = null;
   let lastSent = 0;
@@ -113,6 +115,7 @@ export function createWorkIsland(opts = {}) {
     const t = clock();
     if (t - lastSent >= throttleMs) {
       lastSent = t;
+      shown = true;
       emit("UPDATE", title, text, since);
       return;
     }
@@ -124,6 +127,7 @@ export function createWorkIsland(opts = {}) {
       const p = pending;
       pending = null;
       lastSent = clock();
+      shown = true;
       emit("UPDATE", p.title, p.text, p.since);
     }, Math.max(0, throttleMs - (t - lastSent)));
   }
@@ -168,11 +172,12 @@ export function createWorkIsland(opts = {}) {
       const sec = Math.round(ms / 1000);
       const human = humanDuration(sec, L() === ZH);
       const text = L().took(human) + (reason ? ` · ${reason}` : "");
+      shown = true;
       emit("DONE", L().done, text, 0);
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         idleTimer = null;
-        if (!active) emit("IDLE", L().idleTitle, L().idleText, 0);
+        if (!active) { shown = false; emit("IDLE", L().idleTitle, L().idleText, 0); }
       }, idleMs);
     }, graceMs);
   }
@@ -210,7 +215,7 @@ export function createWorkIsland(opts = {}) {
         update(L().compact);
         break;
       case "sub_progress":
-        update(L().sub(ev.desc || L().start));
+        update(L().sub);           // 不转发子任务描述：是模型写的原文，可能带路径、用户内容
         break;
       case "run_idle":
         if (ev.bg > 0) update(L().bg);
@@ -227,8 +232,9 @@ export function createWorkIsland(opts = {}) {
   }
 
   function stop(sync = false) {
-    const had = active;
+    const had = active || shown;
     active = null;
+    shown = false;
     clearPending();
     if (doneTimer) { clearTimeout(doneTimer); doneTimer = null; }
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }

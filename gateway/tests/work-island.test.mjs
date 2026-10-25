@@ -122,3 +122,25 @@ test("关掉开关：没有活动时不发", () => {
   core.stop();
   assert.equal(sent.length, 0);
 });
+
+test("关掉开关：「任务完成」还挂着（没到收起时间）也发 IDLE，收起后不再发", async () => {
+  const { core, sent, setRuns } = make({ idleMs: 200 });
+  core.handleEvent({ type: "run_start", startedAt: Date.now() });
+  setRuns([]);
+  core.handleEvent({ type: "run_end" });
+  await sleep(40);
+  assert.equal(sent.at(-1).action, "DONE");
+  core.stop();
+  assert.equal(sent.at(-1).action, "IDLE", "DONE 还在岛上时关掉应收起");
+  sent.length = 0;
+  core.stop();
+  assert.equal(sent.length, 0, "已经收起就不重复发");
+});
+
+test("子任务：不转发描述原文", () => {
+  const { core, sent } = make();
+  core.handleEvent({ type: "run_start", startedAt: Date.now() });
+  core.handleEvent({ type: "sub_progress", desc: "读 /sdcard/私密/日记.md" });
+  assert.equal(sent.at(-1).text, "子任务…");
+  assert.ok(!sent.some((x) => String(x.text).includes("日记")));
+});

@@ -2051,4 +2051,7 @@ window.I18N_DICT["es"] = {
   "{v} 有已知问题：{why}\n\n仍然换到这一版？": "{v} tiene un problema conocido: {why}\n\n¿Cambiar a esta versión de todos modos?",
   "等 {n} 台": "({n} dispositivos)",
   "统计字数…": "Contando palabras…",
+  "工作岛（ColorOS 灵动岛）": "Work Island (ColorOS)",
+  "把 Claude 的工作状态显示在 ColorOS 16 的流体云 / 灵动岛上": "Muestra lo que hace Claude en el Fluid Cloud de ColorOS 16",
+  "需要另外安装「工作岛」应用。开启后，正在干活、等待确认、任务完成会出现在岛上的胶囊里；完成后 8 秒自动收起。目前仅在 ColorOS 16 / Android 16 上测试过。": "Requiere instalar aparte la app Work Island. Al activarlo, «trabajando», «esperando tu confirmación» y «terminado» aparecen en la cápsula de la isla, que se oculta 8 segundos después de terminar. Por ahora solo se ha probado en ColorOS 16 / Android 16.",
 };

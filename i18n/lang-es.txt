@@ -2048,3 +2048,6 @@
 2048	{v} tiene un problema conocido: {why}\n\n¿Cambiar a esta versión de todos modos?
 2049	({n} dispositivos)
 2050	Contando palabras…
+2051	Work Island (ColorOS)
+2052	Muestra lo que hace Claude en el Fluid Cloud de ColorOS 16
+2053	Requiere instalar aparte la app Work Island. Al activarlo, «trabajando», «esperando tu confirmación» y «terminado» aparecen en la cápsula de la isla, que se oculta 8 segundos después de terminar. Por ahora solo se ha probado en ColorOS 16 / Android 16.

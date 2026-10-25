@@ -182,5 +182,6 @@ setTimeout(async () => {
   } catch (e) { log(`模型校验失败: ${e.message}`); }
 }, 2500);
 
-process.on("SIGTERM", () => { try { stopWorkIslandSync(); } catch {} for (const t of TERMS.values()) if (t.alive) killTree(t.child); try { bridgeProc?.kill(); } catch {} process.exit(0); });
-process.on("SIGINT", () => { try { stopWorkIslandSync(); } catch {} try { bridgeProc?.kill(); } catch {} process.exit(0); });
+// 工作岛的收起放最后：它要同步调 am（最多 3 秒），App 等 5 秒就强杀，先把 claude 和终端收了
+process.on("SIGTERM", () => { for (const t of TERMS.values()) if (t.alive) killTree(t.child); try { bridgeProc?.kill(); } catch {} try { stopWorkIslandSync(); } catch {} process.exit(0); });
+process.on("SIGINT", () => { try { bridgeProc?.kill(); } catch {} try { stopWorkIslandSync(); } catch {} process.exit(0); });
