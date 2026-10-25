@@ -140,7 +140,9 @@ if (!VER) {
 
 // ── 2. 官方清单（信任锚 ①）──────────────────────────────────
 function officialManifest(ver, quiet) {
-  for (const [name, base, mustSign] of [["官方", OFFICIAL, false], ...MIRRORS.map(([n, u]) => [n, u, true])]) {
+  // 官方源也要验签（10-25 安全审计 M-2a）：只靠 HTTPS 的话，装了别的根证书的代理能连清单带程序一起换掉。
+  // 2.1 之前的老版本官方没有签名文件，会退到下面的 npm 签名这道锚
+  for (const [name, base, mustSign] of [["官方", OFFICIAL, true], ...MIRRORS.map(([n, u]) => [n, u, true])]) {
     const m = small(`${base}/${ver}/manifest.json`);
     if (!m) { quiet || say(`  ${name}清单取不到`); continue; }
     const sig = small(`${base}/${ver}/manifest.json.sig`);

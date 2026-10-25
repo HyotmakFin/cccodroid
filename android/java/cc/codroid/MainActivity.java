@@ -1065,6 +1065,10 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        // 界面全走本机网关（http），用不着 file://；预览里跑的是不可信网页，显式关掉（targetSdk 28 默认是开的）
+        s.setAllowFileAccess(false);
+        s.setAllowFileAccessFromFileURLs(false);
+        s.setAllowUniversalAccessFromFileURLs(false);
         web.setBackgroundColor(BrowserPane.pal(this, uiDark(), "bg"));
         // 本机网关之外的地址一律交给系统浏览器：登录授权页、"去官网创建 Key" 之类。
         // 在 WebView 里打开登录页会被 Google 等拒绝，而且 OAuth 回调要回到浏览器才能跳 localhost。
@@ -1091,35 +1095,37 @@ public class MainActivity extends Activity {
             }
         });
         web.addJavascriptInterface(new Object() {
-            @android.webkit.JavascriptInterface public void openUrl(String url) {
+            // 有副作用的方法第一个参数是口令 k（见 Env.BRIDGE_KEY）；界面在 theme.js 里包一层自动带上，调用处照旧写
+            @android.webkit.JavascriptInterface public boolean keyed() { return true; }
+            @android.webkit.JavascriptInterface public void openUrl(String k, String url) { if (!Env.bridgeOk(k)) return;
                 if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) ui.post(() -> openExternal(url));
             }
             // ── 嵌入式浏览器窗格（宽屏）：页面决定开不开、摆在哪；关掉（✕）回调 __ccBrowserClosed ──
             @android.webkit.JavascriptInterface public boolean hasPane() { return true; }
-            @android.webkit.JavascriptInterface public void paneOpen(String url) {
+            @android.webkit.JavascriptInterface public void paneOpen(String k, String url) { if (!Env.bridgeOk(k)) return;
                 if (url != null && !url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) return;
                 if (isGatewayUrl(url)) return;
                 ui.post(() -> openPane(url));
             }
             /** 页面坐标（CSS px，相对对话 WebView 左上角）；w <= 0 = 先藏起来（被别的窗格 / 浮层盖住时） */
-            @android.webkit.JavascriptInterface public void paneBounds(float x, float y, float w, float h) {
+            @android.webkit.JavascriptInterface public void paneBounds(String k, float x, float y, float w, float h) { if (!Env.bridgeOk(k)) return;
                 ui.post(() -> placePane(x, y, w, h));
             }
             @android.webkit.JavascriptInterface public boolean paneCanBack() { return paneCanBack; }
-            @android.webkit.JavascriptInterface public void paneGoBack() { ui.post(() -> { if (pane != null) pane.back(); }); }
-            @android.webkit.JavascriptInterface public void paneClose() { ui.post(() -> closePane(false)); }
+            @android.webkit.JavascriptInterface public void paneGoBack(String k) { if (!Env.bridgeOk(k)) return; ui.post(() -> { if (pane != null) pane.back(); }); }
+            @android.webkit.JavascriptInterface public void paneClose(String k) { if (!Env.bridgeOk(k)) return; ui.post(() -> closePane(false)); }
             /** 应用内浏览器（回复里的网页链接、本机开发服务）；url 为空 = 回到上次那页 */
-            @android.webkit.JavascriptInterface public void openBrowser(String url) {
+            @android.webkit.JavascriptInterface public void openBrowser(String k, String url) { if (!Env.bridgeOk(k)) return;
                 if (isGatewayUrl(url)) return;
                 if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
                     ui.post(() -> BrowserActivity.open(MainActivity.this, url));
             }
             /** 回复底下的「转发」：把正文交给系统分享面板 */
-            @android.webkit.JavascriptInterface public void shareText(String text) {
+            @android.webkit.JavascriptInterface public void shareText(String k, String text) { if (!Env.bridgeOk(k)) return;
                 if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
             }
             /** 复制到剪贴板：WebView 里 navigator.clipboard.writeText 常被拒（NotAllowedError，页面没焦点或权限策略），走系统剪贴板稳 */
-            @android.webkit.JavascriptInterface public boolean copyText(String text) {
+            @android.webkit.JavascriptInterface public boolean copyText(String k, String text) { if (!Env.bridgeOk(k)) return false;
                 if (text == null) return false;
                 try {
                     android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -1129,28 +1135,28 @@ public class MainActivity extends Activity {
             }
             /** 冻结脱困：WebView 偶发把这个文档的触摸滚动整个吞掉，同站重载不好，跨站跳一次再回来才好。见 bounce() */
             /** 更新卡片的「从本地文件安装」：弹系统文件选择器，选好后由 applyLocalDevkitUi 接手 */
-            @android.webkit.JavascriptInterface public void pickDevkit() {
+            @android.webkit.JavascriptInterface public void pickDevkit(String k) { if (!Env.bridgeOk(k)) return;
                 ui.post(() -> { pickWait = null; try { startActivityForResult(devkitPickIntent(), REQ_DEVKIT); } catch (Exception ignored) {} });
             }
             /** 设置页「卸载」：devkit / claude。确认框在页面里弹过了 */
-            @android.webkit.JavascriptInterface public void uninstall(String item) {
+            @android.webkit.JavascriptInterface public void uninstall(String k, String item) { if (!Env.bridgeOk(k)) return;
                 if ("devkit".equals(item) || "claude".equals(item)) uninstallUi(item);
             }
-            @android.webkit.JavascriptInterface public void unfreeze() { ui.post(() -> bounce()); }
+            @android.webkit.JavascriptInterface public void unfreeze(String k) { if (!Env.bridgeOk(k)) return; ui.post(() -> bounce()); }
             /** 更新说明（见 WhatsNew）：页面启动时来取，显示出来后调 whatsNewSeen */
             @android.webkit.JavascriptInterface public String whatsNew(String lang) { return WhatsNew.pending(MainActivity.this, lang); }
-            @android.webkit.JavascriptInterface public void whatsNewSeen() { WhatsNew.seen(MainActivity.this); }
+            @android.webkit.JavascriptInterface public void whatsNewSeen(String k) { if (!Env.bridgeOk(k)) return; WhatsNew.seen(MainActivity.this); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
-            @android.webkit.JavascriptInterface public void setBars(boolean dark) { ui.post(() -> applyBars(dark)); }
+            @android.webkit.JavascriptInterface public void setBars(String k, boolean dark) { if (!Env.bridgeOk(k)) return; ui.post(() -> applyBars(dark)); }
             /** 界面里的风格（native / qiusuo / zhuyue）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
-            @android.webkit.JavascriptInterface public void skinPref(String s) {
+            @android.webkit.JavascriptInterface public void skinPref(String k, String s) { if (!Env.bridgeOk(k)) return;
                 if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("skin", s).commit();
             }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
             /** 界面最终用的语言（i18n.js 解析过的 code，不是 auto）：外壳的通知、安装页、更新文案跟着换 */
-            @android.webkit.JavascriptInterface public void langPref(String code) { Tr.set(code); }
-            @android.webkit.JavascriptInterface public void themePref(String p) {
+            @android.webkit.JavascriptInterface public void langPref(String k, String code) { if (!Env.bridgeOk(k)) return; Tr.set(code); }
+            @android.webkit.JavascriptInterface public void themePref(String k, String p) { if (!Env.bridgeOk(k)) return;
                 if ("auto".equals(p) || "light".equals(p) || "dark".equals(p))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("theme", p).commit();
                 ui.post(MainActivity.this::syncSplash);
@@ -1159,7 +1165,7 @@ public class MainActivity extends Activity {
             }
             /** 「保存到」：弹系统文件面板（ACTION_CREATE_DOCUMENT），用户挑好位置后把文件复制过去。
              *  不需要存储权限，也不会落进用户打不开的私有目录。结果回调页面的 __ccSaved(ok, 说明) */
-            @android.webkit.JavascriptInterface public void saveAs(String path, String name, String mime) {
+            @android.webkit.JavascriptInterface public void saveAs(String k, String path, String name, String mime) { if (!Env.bridgeOk(k)) return;
                 ui.post(() -> startSaveAs(path, name, mime));
             }
         }, "CCApp");
@@ -1505,6 +1511,29 @@ public class MainActivity extends Activity {
 
     /** 系统给的 createIntent() 不管网页要不要多选，一律只能选一个：<input multiple> 时补上 EXTRA_ALLOW_MULTIPLE */
     /** 网关自己的地址不许进浏览器 / 窗格：它们和界面共用 Cookie，预览页里的脚本能借这个桥拿到网关权限 */
+    /** 浏览器认作回环 / 0.0.0.0 的 IPv4 写法：127.0.0.1、127.1、2130706433、0x7f000001、0177.0.0.1……（按 inet_aton 的规矩解析） */
+    static boolean loopbackV4(String h) {
+        if (!h.matches("[0-9a-fx.]+")) return false;
+        String[] p = h.split("\\.", -1);
+        if (p.length < 1 || p.length > 4) return false;
+        long[] v = new long[p.length];
+        try {
+            for (int i = 0; i < p.length; i++) {
+                String x = p[i];
+                if (x.isEmpty()) return false;
+                if (x.startsWith("0x")) v[i] = x.length() == 2 ? 0 : Long.parseLong(x.substring(2), 16);
+                else if (x.length() > 1 && x.startsWith("0")) v[i] = Long.parseLong(x.substring(1), 8);
+                else v[i] = Long.parseLong(x);
+            }
+        } catch (NumberFormatException e) { return false; }
+        long ip = 0;
+        for (int i = 0; i < p.length - 1; i++) { if (v[i] > 255) return false; ip |= v[i] << (24 - 8 * i); }
+        long last = v[p.length - 1];
+        if (last >= (1L << (8 * (5 - p.length)))) return false;
+        ip |= last;
+        return (ip >>> 24) == 127 || ip == 0;
+    }
+
     static boolean isGatewayUrl(String url) {
         if (url == null || url.isEmpty()) return false;
         try {
@@ -1512,7 +1541,8 @@ public class MainActivity extends Activity {
             String h = u.getHost();
             if (h == null) return false;
             h = h.toLowerCase(java.util.Locale.ROOT);
-            boolean local = h.equals("127.0.0.1") || h.equals("localhost") || h.equals("[::1]") || h.equals("::1") || h.equals("0.0.0.0");
+            boolean local = h.equals("localhost") || h.endsWith(".localhost") || h.equals("[::1]") || h.equals("::1")
+                || h.equals("[::]") || h.equals("::") || h.startsWith("[::ffff:") || loopbackV4(h);
             return local && u.getPort() == Env.PORT;
         } catch (Exception e) { return true; }
     }

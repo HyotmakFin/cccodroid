@@ -80,7 +80,15 @@ const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProvider
 
 // ── 路由 ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
-  const u = new URL(req.url, `http://127.0.0.1:${CFG.port}`);
+  // 请求目标畸形（如 "//["）时 new URL 会抛；这一步在鉴权之前，不兜住的话本机任何应用发一个请求就能让网关退出
+  let u;
+  try {
+    if (!String(req.url || "").startsWith("/")) throw new Error("bad target");
+    u = new URL(req.url, `http://127.0.0.1:${CFG.port}`);
+  } catch {
+    req.resume();
+    return sendJson(res, 400, { error: "bad request" });
+  }
   const p = u.pathname;
 
   const deny = denyReason(req, u);
@@ -112,6 +120,10 @@ const server = http.createServer(async (req, res) => {
     else res.end();
   }
 });
+
+// 最后一道兜底：哪个异步分支漏了 catch，记一笔日志，别让整个网关退出。
+// 不接 uncaughtException：孤儿网关往断掉的 stdout 写日志时靠 EPIPE 异常退出，接住了它就死不掉
+process.on("unhandledRejection", (e) => log(`未处理的 Promise 拒绝: ${(e && e.stack) || e}`));
 
 // ── 启动 ──────────────────────────────────────────────────────────────
 try { fs.mkdirSync(CFG.workspace, { recursive: true }); } catch {}

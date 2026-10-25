@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { MIME, NEXT, readBody, sendJson } from "./http.mjs";
-import { safeFilePath } from "./files.mjs";
+import { fileRoots, safeFilePath } from "./files.mjs";
 
 // ── HTML 预览 ─────────────────────────────────────────────────────────
 // 查看器里渲染 HTML：另起一个只读的小服务（随机端口，地址用 localhost），和界面（127.0.0.1:端口）不同站点——
@@ -11,7 +11,10 @@ import { safeFilePath } from "./files.mjs";
 // 每次预览发一张随机凭证，只能读那个 HTML 所在目录里的东西；路径照样过 safeFilePath（密钥、私有目录照旧拦）。
 // 网址形如 http://localhost:<端口>/<凭证>/index.html，相对路径自然解析；"/assets/x.js" 这种站点绝对路径按 Referer 里的凭证找回来。
 // "../assets/x.css"（页面在子目录、资源在上级，生成的网站常这样）会被浏览器规整成 /assets/x.css，同样走 Referer；
-// 这两种在页面目录里找不到时往上逐级找，最多 UP_LEVELS 层，每层照样过 safeFilePath 和真实路径检查
+// 这两种在页面目录里找不到时往上找，但能往上找到哪一层在发凭证时就定死（最多 UP_LEVELS 层），
+// 而且绝不爬进「大目录」：存储根、存储根下一级（Download、DCIM…）、工作区根、文件面板的快捷入口。
+// 否则 /sdcard/Download/a.html 里的脚本能借 Referer 爬到 /sdcard，把相册整个读走（10-25 安全审计 H-1）。
+// 页面本身就在存储根时，凭证只认这一个文件。
 const UP_LEVELS = 3;
 const PREVIEW = { server: null, port: 0, starting: null, caps: new Map() };
 function previewStart() {
@@ -24,16 +27,39 @@ function previewStart() {
   });
   return PREVIEW.starting;
 }
+const STORAGE_ROOT = /^\/storage\/(emulated\/\d+|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})$/;
+const real = (d) => { try { return fs.realpathSync(d); } catch { return d; } };
+function broadDirs() {
+  const out = new Set(["/", "/sdcard", "/storage", "/storage/emulated", "/storage/self", "/data", "/mnt"]);
+  for (const d of fileRoots()) out.add(real(d));
+  return out;
+}
+/** 不许当预览根、也不许往上爬进去的目录 */
+function isBroad(d, set) {
+  if (set.has(d) || STORAGE_ROOT.test(d) || STORAGE_ROOT.test(path.dirname(d))) return true;
+  return d.split("/").filter(Boolean).length <= 1;
+}
 async function previewGrant(p) {
   const r = safeFilePath(p);
   if (r.error) return r;
   const port = await previewStart();
   const now = Date.now();
   for (const [k, v] of PREVIEW.caps) if (v.exp < now) PREVIEW.caps.delete(k);
-  const root = path.dirname(r.file);
-  let cap = [...PREVIEW.caps].find(([, v]) => v.root === root)?.[0];   // 同一目录复用，刷新不换网址
+  const root = path.dirname(r.file), broad = broadDirs();
+  // 页面在存储根（或 / 这类）：只放这一个文件；其他大目录（Download、工作区根…）：只在本目录里找，不往上爬
+  const only = STORAGE_ROOT.test(root) || root.split("/").filter(Boolean).length <= 1 ? r.file : "";
+  const bases = [root];
+  if (!isBroad(root, broad)) {
+    for (let b = root, i = 0; i < UP_LEVELS; i++) {
+      const up = path.dirname(b);
+      if (up === b || isBroad(up, broad)) break;
+      bases.push(up); b = up;
+    }
+  }
+  const key = root + "\0" + only;
+  let cap = [...PREVIEW.caps].find(([, v]) => v.key === key)?.[0];   // 同一目录复用，刷新不换网址
   if (!cap) { cap = crypto.randomBytes(12).toString("hex"); if (PREVIEW.caps.size >= 200) PREVIEW.caps.delete(PREVIEW.caps.keys().next().value); }
-  PREVIEW.caps.set(cap, { root, exp: now + 12 * 3600e3 });
+  PREVIEW.caps.set(cap, { root, bases, only, key, exp: now + 12 * 3600e3 });
   return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime };
 }
 function previewServe(req, res) {
@@ -61,14 +87,13 @@ function previewServe(req, res) {
     const r = safeFilePath(full);
     if (r.error) return r;
     if (r.file !== base && !r.file.startsWith(base + path.sep)) return { status: 403, error: "outside preview folder" };
+    if (g.only && r.file !== g.only) return { status: 403, error: "outside preview folder" };
     return r;
   };
+  // 只在发凭证时定好的那几层里找（见 previewGrant），请求里怎么写路径都爬不出去
   let r = lookup(g.root);
-  for (let base = g.root, i = 0; viaRef && r.error && i < UP_LEVELS; i++) {
-    const up = path.dirname(base);
-    if (up === base || up === "/") break;
-    base = up;
-    const t = lookup(base);
+  for (let i = 1; viaRef && r.error && i < g.bases.length; i++) {
+    const t = lookup(g.bases[i]);
     if (!t.error) r = t;
   }
   if (r.error) return fail(r.status || 404, r.error);
