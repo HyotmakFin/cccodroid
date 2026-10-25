@@ -74,6 +74,7 @@ import { routeProjects } from "./gw/projects.mjs";
 import { routeSched } from "./gw/sched.mjs";
 import { routeSessModel } from "./gw/sessmodel.mjs";
 import { COOKIE, TOKEN, denyLog, denyReason, tokenOk } from "./gw/access.mjs";
+import { startWorkIsland } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
 const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeProjects, routeSched, routeSessModel, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeModules, routeOrphans, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun, routeNotices, routeReconcile];
@@ -160,6 +161,7 @@ server.listen(CFG.port, "127.0.0.1", () => {
   try { expireTrash(); } catch (e) { log("回收站清理失败: " + e.message); }
   try { customRefresh(); } catch (e) { log("自定义组件入口重写失败: " + e.message); }
   try { cleanOrphans(); } catch (e) { log("旧工具包残留清理失败: " + e.message); }
+  try { startWorkIsland(); } catch (e) { log("工作岛启动失败: " + e.message); }
 });
 
 // 启动后校验一次模型名：不在清单里就落到默认。
