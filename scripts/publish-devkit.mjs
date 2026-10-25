@@ -87,11 +87,13 @@ const ensureRel = () => { if (!["devkit.lock.json", "modules.json", "modules.jso
 
 // 等 CI 跑完：每分钟问一次状态。不用 gh run watch —— 一个半小时里网络抖一下它就非零退出，会把成功的构建当失败
 async function waitRun(repo, id) {
-  let errs = 0;
+  let errs = 0, told = false;
   for (;;) {
     try {
       const r = JSON.parse(gh("run", "view", String(id), "-R", repo, "--json", "status,conclusion"));
       errs = 0;
+      // devkit 工作流走 devkit-release 环境：签名钥匙要维护者批准才放出来，批之前一直是 waiting
+      if (r.status === "waiting" && !told) { told = true; console.log(`  ⏸ 等审批：到 https://github.com/${repo}/actions/runs/${id} 点 Review deployments → 勾 devkit-release → Approve and deploy`); }
       if (r.status === "completed") return r.conclusion;
     } catch (e) { if (++errs >= 15) fail(`连续 15 分钟查不到 run ${id} 的状态：${e.message.split("\n")[0]}`); }
     await sleep(60000);
