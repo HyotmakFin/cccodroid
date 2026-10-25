@@ -166,6 +166,37 @@ pre code{background:none;border:0;padding:0;font-size:12.5px;line-height:1.6}
   position:absolute;top:6px;inset-inline-end:6px;background:var(--bg3);border:0;
   color:var(--fg2);border-radius:7px;font-size:10.5px;padding:3px 8px;opacity:.85;
 }
+/* 代码块顶上的语言名：和 pre 拼成一块，复制键正好落在这一条里 */
+.code-wrap.has-lang>.code-lang{
+  background:var(--code-bg);border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;
+  padding:5px 12px 4px;font:11px/1.4 var(--mono);color:var(--fg3);text-transform:lowercase;
+}
+.code-wrap.has-lang>pre{border-top-left-radius:0;border-top-right-radius:0;border-top:1px dashed var(--line)}
+.code-wrap.has-lang>.copy-btn{top:3px}
+/* 语法高亮（highlight.js 的 token 类，按我们自己的深浅两套色） */
+.hljs-comment,.hljs-quote,.hljs-meta{color:var(--fg3);font-style:italic}
+.hljs-keyword,.hljs-selector-tag,.hljs-built_in,.hljs-literal,.hljs-doctag{color:#d98d6f}
+.hljs-string,.hljs-regexp,.hljs-addition,.hljs-template-tag,.hljs-char.escape_{color:#9fbf7f}
+.hljs-number,.hljs-symbol,.hljs-bullet,.hljs-variable.constant_{color:#d6b26a}
+.hljs-title,.hljs-title.function_,.hljs-title.class_,.hljs-section{color:#8fb0d4}
+.hljs-attr,.hljs-attribute,.hljs-property,.hljs-params,.hljs-variable,.hljs-template-variable{color:#c3a8e6}
+.hljs-type,.hljs-name,.hljs-selector-class,.hljs-selector-id{color:#7fc4b8}
+.hljs-deletion{color:var(--err)}
+.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:600}
+html[data-theme="light"] .hljs-keyword,html[data-theme="light"] .hljs-selector-tag,html[data-theme="light"] .hljs-built_in,html[data-theme="light"] .hljs-literal,html[data-theme="light"] .hljs-doctag{color:#b4502e}
+html[data-theme="light"] .hljs-string,html[data-theme="light"] .hljs-regexp,html[data-theme="light"] .hljs-addition,html[data-theme="light"] .hljs-template-tag{color:#3d7a2a}
+html[data-theme="light"] .hljs-number,html[data-theme="light"] .hljs-symbol,html[data-theme="light"] .hljs-bullet{color:#9a6a00}
+html[data-theme="light"] .hljs-title,html[data-theme="light"] .hljs-section{color:#2f6aa8}
+html[data-theme="light"] .hljs-attr,html[data-theme="light"] .hljs-attribute,html[data-theme="light"] .hljs-property,html[data-theme="light"] .hljs-params,html[data-theme="light"] .hljs-variable,html[data-theme="light"] .hljs-template-variable{color:#7650c0}
+html[data-theme="light"] .hljs-type,html[data-theme="light"] .hljs-name,html[data-theme="light"] .hljs-selector-class,html[data-theme="light"] .hljs-selector-id{color:#1f7a6c}
+/* 删除线、任务清单、公式 */
+.bubble del{color:var(--fg3)}
+.bubble li.task{list-style:none;margin-inline-start:-19px}
+.bubble li.task>input{margin:0 7px 0 0;vertical-align:-2px;width:14px;height:14px}
+html[dir="rtl"] .bubble li.task>input{margin:0 0 0 7px}
+.math-d{display:block;overflow-x:auto;overflow-y:hidden;margin:10px 0;padding:2px 0;text-align:center;-webkit-overflow-scrolling:touch}
+.math:not(.k){font-family:var(--mono);font-size:.9em;color:var(--fg2)}
+.katex{font-size:1.08em}
 
 /* 表格（/context 等命令会输出） */
 .tbl-wrap{overflow-x:auto;margin:9px 0;-webkit-overflow-scrolling:touch}
@@ -1193,6 +1224,13 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .vw-mded .cm-line.cm-md-pre-top{border-top:1px solid var(--line);border-start-start-radius:10px;border-start-end-radius:10px;padding-top:5px}
 .vw-mded .cm-line.cm-md-pre-bot{border-bottom:1px solid var(--line);border-end-start-radius:10px;border-end-end-radius:10px;padding-bottom:5px}
 .vw-mded .cm-line.cm-md-fence{color:var(--fg3)}
+.vw-mded .cm-line.cm-md-fence-hid{font-size:.72em;line-height:1.5}
+.vw-mded .cm-line.cm-md-pre-bot.cm-md-fence-hid{line-height:.5}
+.vw-mded .cm-md-lang{color:var(--fg3);text-transform:lowercase}
+.vw-mded .cm-md-math{font-family:var(--mono);font-size:.9em;color:var(--fg2)}
+.vw-mded .cm-md-math .katex{font-family:KaTeX_Main,serif;color:var(--fg)}
+.vw-mded .cm-md-math-d{display:inline-block;width:100%;text-align:center;overflow-x:auto;overflow-y:hidden;vertical-align:middle;padding:4px 0}
+.vw-mded .cm-line.cm-md-math-hid{line-height:0;font-size:0;padding-block:0}
 .vw-mded .cm-md-bullet{color:var(--accent);font-weight:700;padding:0 .2em}
 .vw-mded .cm-md-olmark{color:var(--fg2)}
 .vw-mded .cm-md-check{width:1.05em;height:1.05em;vertical-align:-.15em;margin:0 .4em 0 0}

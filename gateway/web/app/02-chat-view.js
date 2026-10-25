@@ -131,19 +131,20 @@
 
   /** from 之后、不在代码块里的最后一个空行位置；没有返回 -1 */
   function safeSplit(s, from) {
-    const re = /^[ \t]*```/gm;
+    // 代码块（```）和独占一行的公式块（$$ 或 \[ … \]）里面都不切
+    const re = /^[ \t]*(```|\$\$[ \t]*$|\\\[[ \t]*$|\\\][ \t]*$)/gm;
     re.lastIndex = from;
-    let inCode = false, regionStart = from, best = -1, m;
+    let open = null, regionStart = from, best = -1, m;
     const consider = (a, b) => {
       const i = s.lastIndexOf("\n\n", b - 1);
       if (i >= a && i > from) best = i;
     };
     while ((m = re.exec(s))) {
-      if (!inCode) consider(regionStart, m.index);
-      inCode = !inCode;
-      if (!inCode) regionStart = m.index + 3;
+      const k = m[1].startsWith("```") ? "code" : "math";
+      if (!open) { if (m[1].trim() === "\\]") continue; consider(regionStart, m.index); open = k; }
+      else if (open === k) { open = null; regionStart = m.index + m[0].length; }
     }
-    if (!inCode) consider(regionStart, s.length);
+    if (!open) consider(regionStart, s.length);
     return best;
   }
 
@@ -165,7 +166,7 @@
           frozen.appendChild(c);
           fz = idx;
         }
-        tail.innerHTML = renderMd(text.slice(fz));   // 光标不跟在每段正文后面：整条回复只留一个，见 AssistantView 的 liveTail
+        tail.innerHTML = renderMd(text.slice(fz)); enhanceMd(tail);   // 光标不跟在每段正文后面：整条回复只留一个，见 AssistantView 的 liveTail
       } else {
         setHtml(tail, renderMd(text.slice(fz)));
       }

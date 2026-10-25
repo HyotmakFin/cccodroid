@@ -41,7 +41,7 @@ See **[Design philosophy](docs/design-philosophy.md)**.
   - Each reply shows a live generation timer that settles to the total time when it finishes.
   - **A quiet top bar**: the top right shows a single ⋯; tap it and Files, Terminal, Command palette and New session slide out, tap again to tuck them away. If the page ever stops scrolling, long-press the title in the top bar to rebuild it.
   - Light / dark appearance, or follow the system (status bar included); the launch screen, first-run setup screen and in-app browser follow it too. Warm palette, with the CC Mono monospace font in the UI and terminal.
-  - Your messages sit on the right and replies span the width, as in the desktop app. Tool calls between two pieces of reply text fold into one "N steps" line; tap to see each step. Groups with a pending approval or a failure open by themselves. Under each reply: **Copy** (the raw Markdown) and **Share** (system share sheet).
+  - Your messages sit on the right and replies span the width, as in the desktop app. Tool calls between two pieces of reply text fold into one "N steps" line; tap to see each step. Groups with a pending approval or a failure open by themselves. Under each reply: **Copy** (the raw Markdown) and **Share** (system share sheet). Replies render Markdown with tables, task lists, LaTeX math and syntax-highlighted code blocks.
   - **Built-in help** (sidebar → Help): a full user guide and advanced tips, with a table of contents, in Chinese and English.
   - **Tablets in landscape and unfolded foldables**: depending on the window width, the layout becomes two columns (chat plus a workspace on the right) or three (plus a docked sidebar). Files, the viewer, the terminal and the in-app browser open on the right without covering the chat, and you can drag the divider between them. Phones in portrait and narrow split screens look the same as before.
   - **Work survives the background**: you get a system notification when a turn finishes or Claude is waiting for your approval. It shows no heads-up banner. The notification only offers *Deny* and *Open*; to allow a command you have to return to the app and read it in full. If the system kills the app, reopening it marks the unfinished turn as *Interrupted* with a *Continue* button, and queued messages are still there.
@@ -237,6 +237,7 @@ Layout:
 - **[Cosmosophius](https://github.com/Cosmosophius)**: a thorough Dimensity 9300 report ([cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)).
 - **[gogoiPhone](https://github.com/gogoiPhone)**: a Redmi K70 Ultra device report with their own Vulkan compute test ([#14](https://github.com/greyoak111/cccodroid/issues/14)).
 - **[Slingerspir](https://github.com/Slingerspir)**: suggested a GitHub acceleration route and multi-threaded downloads ([discussion #15](https://github.com/greyoak111/cccodroid/discussions/15)); 0.4.1 added segmented parallel downloads and a gh-proxy fallback.
+- **[hye45402-pixel](https://github.com/hye45402-pixel)**: asked for LaTeX, syntax highlighting, code-block language labels, strikethrough, bold italic and task lists ([discussion #18](https://github.com/greyoak111/cccodroid/discussions/18)); all added in 0.4.4.
 - **[ThinkReally114](https://github.com/ThinkReally114)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[wangxp12](https://github.com/wangxp12)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[unoyg](https://github.com/unoyg)**: feedback and bug reports in the community group throughout 0.3.x.
@@ -256,6 +257,8 @@ cccodroid itself is released under the [Apache License 2.0](LICENSE) (see also [
 - **Shizuku-API**: MIT, see [third_party/shizuku/LICENSE](third_party/shizuku/LICENSE).
 - **xz-decompress** (used at toolchain build time): MIT.
 - **[xterm.js](https://xtermjs.org)** (terminal): MIT, see [ThirdPartyLicenses/xterm.js](ThirdPartyLicenses/xterm.js/LICENSE).
+- **[highlight.js](https://highlightjs.org)** (code highlighting in chat): BSD-3-Clause, see [ThirdPartyLicenses/highlight.js](ThirdPartyLicenses/highlight.js/LICENSE).
+- **[KaTeX](https://katex.org)** (math in chat): MIT, see [ThirdPartyLicenses/KaTeX](ThirdPartyLicenses/KaTeX/LICENSE).
 - **[pdf.js](https://mozilla.github.io/pdf.js/)** (PDF viewer): Apache-2.0; its bundled OpenJPEG / JBIG2 / QCMS decoders carry their own licenses. See [ThirdPartyLicenses/pdf.js](ThirdPartyLicenses/pdf.js/).
 - **CC Mono** (monospace font for the UI and terminal): a subset of [Monaspace Neon](https://github.com/githubnext/monaspace) by GitHub, SIL OFL 1.1, renamed as the Reserved Font Name clause requires. See [ThirdPartyLicenses/ccmono](ThirdPartyLicenses/ccmono/LICENSE).
 - **`android.jar`** is not shipped (its license forbids redistribution); download it yourself if you want to compile APKs on the phone.

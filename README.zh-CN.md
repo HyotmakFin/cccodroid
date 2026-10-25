@@ -42,7 +42,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - 每条回复带生成计时，生成中实时跳动，结束后定格为总用时。
   - **顶栏留白**：右上角平时只有一个 ⋯，点一下文件、终端、命令面板、新会话依次滑出，再点收回。界面偶尔滑不动时，长按顶栏标题就能重建页面。
   - 外观可选浅色 / 深色 / 跟随系统（状态栏一起换），启动页、首次安装页和应用内浏览器也跟着走；暖色配色，界面与终端用等宽字体 CC Mono。
-  - 你的消息靠右、回复铺满，像桌面版一样；两段回复之间的工具调用收成一行「N 个步骤」，点开看每一步，有待确认 / 失败的组自动展开。每条回复下面可**复制**（Markdown 原文）、**转发**（系统分享面板）。
+  - 你的消息靠右、回复铺满，像桌面版一样；两段回复之间的工具调用收成一行「N 个步骤」，点开看每一步，有待确认 / 失败的组自动展开。每条回复下面可**复制**（Markdown 原文）、**转发**（系统分享面板）。回复里的表格、任务清单、LaTeX 公式和代码高亮都能正常显示。
   - **内置帮助**（侧栏 →「帮助」）：完整的使用说明与进阶指南，带小节目录跳转，中英两版。
   - **平板横屏 / 折叠屏展开**：按窗口宽度自动变成两栏（对话 + 右侧工作区）或三栏（再加常驻侧栏）。文件、查看器、终端、应用内浏览器都开在右侧，不盖住对话；分隔条可拖。手机竖屏和窄分屏与以前一样。
   - **切到后台不丢活**：一轮跑完、或 Claude 等你确认时发系统通知（不弹横幅；通知里只有「拒绝」和「打开查看」，放行必须回到应用看完整命令）。应用被系统杀掉后重开，没跑完的那一轮会标明「被中断」并给「继续」按钮，排队的消息也都还在。
@@ -241,6 +241,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[Cosmosophius](https://github.com/Cosmosophius)**：天玑 9300 完整实测报告（[cccodroid-components#47](https://github.com/greyoak111/cccodroid-components/issues/47)）。
 - **[gogoiPhone](https://github.com/gogoiPhone)**：Redmi K70 Ultra 机型报告，附自写的 Vulkan 计算实测（[#14](https://github.com/greyoak111/cccodroid/issues/14)）。
 - **[Slingerspir](https://github.com/Slingerspir)**：建议下载时加 GitHub 加速线路和多线程下载（[讨论区 #15](https://github.com/greyoak111/cccodroid/discussions/15)），0.4.1 加上了分段并行下载和 gh-proxy 备用线。
+- **[hye45402-pixel](https://github.com/hye45402-pixel)**：建议支持 LaTeX 公式、代码高亮、代码块语言名、删除线、粗斜体和任务清单（[讨论区 #18](https://github.com/greyoak111/cccodroid/discussions/18)），0.4.4 全部加上。
 - **[ThinkReally114](https://github.com/ThinkReally114)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[wangxp12](https://github.com/wangxp12)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[unoyg](https://github.com/unoyg)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
@@ -260,6 +261,8 @@ cccodroid 本身以 [Apache License 2.0](LICENSE) 发布（另见 [NOTICE](NOTIC
 - **Shizuku-API**：MIT，见 [third_party/shizuku/LICENSE](third_party/shizuku/LICENSE)。
 - **xz-decompress**（devkit 构建期使用）：MIT。
 - **[xterm.js](https://xtermjs.org)**（终端）：MIT，见 [ThirdPartyLicenses/xterm.js](ThirdPartyLicenses/xterm.js/LICENSE)。
+- **[highlight.js](https://highlightjs.org)**（聊天里的代码高亮）：BSD-3-Clause，见 [ThirdPartyLicenses/highlight.js](ThirdPartyLicenses/highlight.js/LICENSE)。
+- **[KaTeX](https://katex.org)**（聊天里的公式）：MIT，见 [ThirdPartyLicenses/KaTeX](ThirdPartyLicenses/KaTeX/LICENSE)。
 - **[pdf.js](https://mozilla.github.io/pdf.js/)**（PDF 查看）：Apache-2.0；随附的 OpenJPEG / JBIG2 / QCMS 解码器各有许可，见 [ThirdPartyLicenses/pdf.js](ThirdPartyLicenses/pdf.js/)。
 - **CC Mono**（界面与终端的等宽字体）：[Monaspace Neon](https://github.com/githubnext/monaspace)（GitHub）的子集，SIL OFL 1.1；按保留字名要求改了名，见 [ThirdPartyLicenses/ccmono](ThirdPartyLicenses/ccmono/LICENSE)。
 - **`android.jar`** 不随包分发（许可不允许再分发），需要在手机上编译 APK 时由用户自行下载。

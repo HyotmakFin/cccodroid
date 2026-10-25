@@ -686,7 +686,7 @@
     VW.mode = mode;
     if (mode === "edit" && isMd(VW.path) && !VW.plainMd) { vwRenderActs(); return vwMdEditor(); }
     if (mode === "md") {
-      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text, mdImgSrc)}</div>`;
+      $("vw-body").innerHTML = `<div class="vw-md bubble">${renderMd(VW.text, mdImgSrc)}</div>`; enhanceMd($("vw-body"));
     } else {
       $("vw-body").innerHTML = `<div class="vw-edwrap"><div class="vw-gut"><div class="vw-gut-in"></div></div><textarea id="vw-text" class="mono ${VW.wrap ? "" : "nowrap"}" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>`;
       const ta = $("vw-text");
