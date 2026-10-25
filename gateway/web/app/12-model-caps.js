@@ -429,9 +429,11 @@
 
   $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
   // 执行方式：存在 files/.exec-mode，重启网关生效（36 的包选「直接执行」网关会拒）
+  let execPid = 0;
   async function loadExecMode() {
     try {
       const r = await api("/api/exec-mode");
+      execPid = r.pid || 0;
       $("set-exec").value = r.pref;
       $("set-exec").querySelector('option[value="direct"]').disabled = !!r.must;
       let now = t("现在是：{mode}", { mode: t(r.active === "loader" ? "经加载器" : "直接执行") });
@@ -445,6 +447,12 @@
       if (confirm(t("执行方式已保存。现在重启网关让它生效吗？打开的终端会断开。"))) {
         await api("/api/exec-mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restart: true }) });
         toast(t("网关重启中…"));
+        // 旧网关 300ms 后才退：等到换了 pid 的新网关答话再刷新「现在是」，不然读到的还是旧状态
+        const old = execPid;
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 750));
+          try { const r = await api("/api/exec-mode"); if (r.pid && r.pid !== old) break; } catch {}
+        }
       }
     } catch (err) { toast(err.message || String(err)); }
     loadExecMode();
