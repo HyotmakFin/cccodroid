@@ -89,6 +89,11 @@ PIN_TARGET=$(node -p 'require(process.argv[1]).target' "$A/assets/devkit-pin.jso
 LOCK="$ROOT/devkit/cache/lock-$(node -p 'require(process.argv[1]).tag' "$A/assets/devkit-pin.json").json"
 mkdir -p "$ROOT/devkit/cache" "$A/build/lib/arm64-v8a"
 [ -s "$LOCK" ] || curl -fsSL --retry 3 -o "$LOCK" "${PIN_BASE}devkit.lock.json"
+# 锁文件只靠 TLS 不够（审计 M-2c）：对 devkit-pin.json 里钉的 sha256，对不上就删掉缓存、停下
+node -e 'const fs=require("fs"),c=require("crypto");const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+if(!p.lock||!/^[0-9a-f]{64}$/.test(p.lock.sha256||"")){console.error("✗ devkit-pin.json 里没有 lock 的 sha256：跑 node scripts/pin-devkit.mjs 重新生成");process.exit(1)}
+const h=c.createHash("sha256").update(fs.readFileSync(process.argv[2])).digest("hex");
+if(h!==p.lock.sha256){fs.rmSync(process.argv[2],{force:true});console.error("✗ devkit.lock.json 的 sha256 是 "+h+"，钉的是 "+p.lock.sha256+"（已删缓存）");process.exit(1)}' "$A/assets/devkit-pin.json" "$LOCK" || exit 1
 node "$ROOT/devkit/devkit.mjs" ldso --lock "$LOCK" --target "$PIN_TARGET" --release "$PIN_BASE" --vendored "$A/prebuilt/glibc" --out "$A/build/lib/arm64-v8a/libldlinux.so"
 
 echo "▸ aapt2 + 签名"

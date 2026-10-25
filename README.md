@@ -208,7 +208,7 @@ To build on your own machine, install JDK 17, Node.js, the Android SDK (build-to
 Release signing certificate SHA-256: `B7:03:61:59:5D:D3:D8:D7:04:DD:21:0E:D5:96:FC:57:70:14:CE:22:72:88:4F:B6:98:0B:F6:96:23:33:8F:E0`.
 
 The toolchain is built and published by GitHub Actions: push a tag like `devkit-YYYY.MM.DD` (see [.github/workflows/devkit.yml](.github/workflows/devkit.yml)).
-Which toolchain version the app downloads is set in [devkit-sources.txt](devkit-sources.txt). The size and SHA-256 of that version live in [devkit-pin.json](devkit-pin.json), which ships inside the APK: the first install (from GitHub, the cccodroid.net mirror, or a local file) and the check on local files both trust it rather than the download source. When you switch versions, edit the former, run `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`, and commit both; `build.sh` checks that they match.
+Which toolchain version the app downloads is set in [devkit-sources.txt](devkit-sources.txt). The size and SHA-256 of that version live in [devkit-pin.json](devkit-pin.json), which ships inside the APK: the first install (from GitHub, the cccodroid.net mirror, or a local file) and the check on local files both trust it rather than the download source. It also pins the SHA-256 of the lock file `devkit.lock.json` itself, which `build.sh` checks before extracting the glibc loader instead of relying on HTTPS alone. When you switch versions, edit the former, run `node scripts/pin-devkit.mjs "$(head -1 devkit-sources.txt)" devkit-pin.json`, and commit both; `build.sh` checks that they match.
 
 Layout:
 
