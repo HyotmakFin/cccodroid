@@ -15,6 +15,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    # 签名钥匙 INDEX_SIGNING_KEY 只存在这个 Environment 里（不放仓库级 secret）：每次跑都要维护者在 Actions 页点批准，
+    # 别的工作流引用不到它。环境的部署规则只放行 devkit-* tag（审计 M-2b）
+    environment: devkit-release
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
 
