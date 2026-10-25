@@ -1,6 +1,6 @@
 # cccodroid
 
-[English](README.md) · **简体中文** · [QQ 交流群 1062538743](#交流与参与) · [讨论区](https://github.com/greyoak111/cccodroid/discussions) · [参与开发](CONTRIBUTING.zh-CN.md)
+[English](README.md) · **简体中文** · [QQ 交流群 1062538743](#交流与参与) · [Discord](https://discord.gg/jE6KW8kwpe) · [讨论区](https://github.com/greyoak111/cccodroid/discussions) · [参与开发](CONTRIBUTING.zh-CN.md)
 
 **在安卓手机上运行 Claude Code 的开发启动台。** 不 root、不换系统、不走 chroot / proot / 虚拟机。
 
@@ -129,6 +129,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
 - **QQ 交流群：1062538743**（扫码见下）。用起来的问题、想法、机型适配情况都可以来聊。
 - **报 bug**：在应用里点 设置 → 到 GitHub 反馈，机型和自检结果会自动填好。
 - **讨论区**：[GitHub Discussions](https://github.com/greyoak111/cccodroid/discussions)，想法和提问都欢迎。
+- **Discord**：[cccodroid society](https://discord.gg/jE6KW8kwpe)，中英文都行。
 
 **这个项目目前只有作者一个人在维护，非常需要帮手。** 机型报告、译文校对、组件配方、文档、代码，不会写代码也能帮上忙。怎么参与见 [贡献指南](CONTRIBUTING.zh-CN.md)。
 

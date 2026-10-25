@@ -2084,5 +2084,6 @@ window.I18N_DICT.en = {
   "已验证": "Verified",
   "还没验证": "not verified yet",
   "{v} 有已知问题：{why}\n\n仍然换到这一版？": "{v} has a known issue: {why}\n\nSwitch to this version anyway?",
-  "等 {n} 台": "({n} devices)"
+  "等 {n} 台": "({n} devices)",
+  "统计字数…": "Counting words…"
 };

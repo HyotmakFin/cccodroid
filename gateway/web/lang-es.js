@@ -2050,4 +2050,5 @@ window.I18N_DICT["es"] = {
   "还没验证": "aún sin verificar",
   "{v} 有已知问题：{why}\n\n仍然换到这一版？": "{v} tiene un problema conocido: {why}\n\n¿Cambiar a esta versión de todos modos?",
   "等 {n} 台": "({n} dispositivos)",
+  "统计字数…": "Contando palabras…",
 };

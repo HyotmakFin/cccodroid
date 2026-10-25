@@ -212,8 +212,9 @@
   let pdfjsP = null;
   function loadPdfjs() {
     if (!pdfjsP) {
-      pdfjsP = import("/pdfjs/pdf.min.mjs").then((m) => {
-        m.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
+      // 旧 WebView（如 Chrome 104）缺 Promise.withResolvers 等，先补上；worker 走同样先补的入口
+      pdfjsP = import("/pdfjs/compat.mjs").then(() => import("/pdfjs/pdf.min.mjs")).then((m) => {
+        m.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.compat.mjs";
         return m;
       }).catch((e) => { pdfjsP = null; throw e; });
     }

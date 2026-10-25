@@ -2047,3 +2047,4 @@
 2047	aún sin verificar
 2048	{v} tiene un problema conocido: {why}\n\n¿Cambiar a esta versión de todos modos?
 2049	({n} dispositivos)
+2050	Contando palabras…

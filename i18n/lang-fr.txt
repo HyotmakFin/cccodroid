@@ -2047,3 +2047,4 @@
 2047	pas encore vérifiée
 2048	{v} a un problème connu : {why}\n\nPasser quand même à cette version ?
 2049	({n} appareils)
+2050	Comptage des mots…
