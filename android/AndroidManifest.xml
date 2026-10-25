@@ -39,6 +39,8 @@
     <!-- 软件包可见性（30 起）：查 Shizuku 装没装、设备工具列应用 / 打开别的应用 -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- 可选集成「工作岛」：设置里开启后，网关用 pm list packages 检测它装没装 -->
+        <package android:name="com.dafeiyu.workisland" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="http" /></intent>
