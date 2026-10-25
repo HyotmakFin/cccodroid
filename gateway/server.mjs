@@ -74,7 +74,7 @@ import { routeProjects } from "./gw/projects.mjs";
 import { routeSched } from "./gw/sched.mjs";
 import { routeSessModel } from "./gw/sessmodel.mjs";
 import { COOKIE, TOKEN, denyLog, denyReason, tokenOk } from "./gw/access.mjs";
-import { startWorkIsland } from "./gw/work-island.mjs";
+import { startWorkIsland, stopWorkIslandSync } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
 const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeProjects, routeSched, routeSessModel, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeModules, routeOrphans, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun, routeNotices, routeReconcile];
@@ -182,5 +182,5 @@ setTimeout(async () => {
   } catch (e) { log(`模型校验失败: ${e.message}`); }
 }, 2500);
 
-process.on("SIGTERM", () => { for (const t of TERMS.values()) if (t.alive) killTree(t.child); try { bridgeProc?.kill(); } catch {} process.exit(0); });
-process.on("SIGINT", () => { try { bridgeProc?.kill(); } catch {} process.exit(0); });
+process.on("SIGTERM", () => { try { stopWorkIslandSync(); } catch {} for (const t of TERMS.values()) if (t.alive) killTree(t.child); try { bridgeProc?.kill(); } catch {} process.exit(0); });
+process.on("SIGINT", () => { try { stopWorkIslandSync(); } catch {} try { bridgeProc?.kill(); } catch {} process.exit(0); });

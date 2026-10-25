@@ -1,73 +1,109 @@
 // ── 工作岛（可选集成）──────────────────────────────────────────────────────
-// 检测到「工作岛」应用（com.dafeiyu.workisland）已安装时，拉起 driver：
-// driver 订阅 /api/events，把 Claude 的工作状态送到 ColorOS 16 的流体云 / 灵动岛。
+// 在网关进程里直接订阅事件总线，把 Claude 的工作状态经 am 送给「工作岛」应用。
 //
-// 设计约束：
-//  · 网关只用 Node 内置模块；不新增 npm 依赖、不加构建步骤。
-//  · 应用没装就完全不启动，不占进程、不写日志噪音。
-//  · driver 挂在网关进程树里，比单轮 claude 活得久；网关每 30 秒看一次它还活着没有。
+// 约束：
+//  · 不另起进程：没有 detached child、没有 PID 文件、没有看门狗。
+//    网关停，订阅和定时器一起没，不会留孤儿。
+//  · 默认关闭：SETTINGS.workIsland 为 true 才检测应用、开始送状态。
+//  · 只用 Node 内置模块；应用没装就完全不启动。
+//  · 文案跟随 LAST_LANG；中文/英文两套。
 import fs from "node:fs";
-import path from "node:path";
-import { spawn, execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { CFG, log } from "./config.mjs";
+import { execFile, execFileSync } from "node:child_process";
+import { SETTINGS } from "./settings.mjs";
+import { runList } from "./runs.mjs";
+import { onPublish } from "./bus.mjs";
+import { LAST_LANG, log } from "./config.mjs";
+import { createWorkIsland } from "./work-island-core.mjs";
 
 const PKG = process.env.WORK_ISLAND_PKG || "com.dafeiyu.workisland";
-const DRIVER = fileURLToPath(new URL("./work-island-driver.mjs", import.meta.url));
-const PIDFILE = path.join(CFG.home, ".work-island.pid");
+const SVC = PKG + "/.IslandService";
+
+function amArgs(action, title, text, since) {
+  const a = ["start-foreground-service", "--user", "0", "-n", SVC, "-a", PKG + "." + action];
+  if (title) a.push("--es", "title", title);
+  if (text) a.push("--es", "text", text);
+  if (since) a.push("--el", "since", String(since));
+  return a;
+}
+
+let warned = false;
+function amSend(action, title, text, since) {
+  execFile("am", amArgs(action, title, text, since), { timeout: 8000 }, (e, out, err) => {
+    if (!e || warned) return;
+    warned = true;
+    log(`[work-island] am 失败（应用没装或服务未就绪？后面不再重复）：${e.message} ${String(err || "").slice(0, 120)}`);
+  });
+}
+function amSendSync(action, title, text, since) {
+  try {
+    execFileSync("am", amArgs(action, title, text, since), { timeout: 3000, stdio: "ignore" });
+  } catch {}
+}
 
 let started = false;
+let detecting = false;
+let unsub = null;
+let core = null;
 
-function appInstalled() {
-  if (process.env.CCAPP_WORK_ISLAND === "1") return true;
-  if (process.env.CCAPP_WORK_ISLAND === "0") return false;
-  try {
-    const out = execFileSync("pm", ["list", "packages", PKG], {
-      encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"],
-    });
-    return out.includes("package:" + PKG);
-  } catch {
-    return false;
-  }
+function isAndroid() {
+  return fs.existsSync("/system/bin/am");
 }
 
-function alive(pid) {
-  try {
-    const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8");
-    return cmd.includes("work-island-driver.mjs");
-  } catch {
-    return false;
-  }
-}
-
-function spawnDriver() {
-  let old = 0;
-  try {
-    old = parseInt(fs.readFileSync(PIDFILE, "utf8").trim(), 10);
-  } catch {}
-  if (old && alive(old)) return;               // 已在跑，不重复拉
-  try {
-    const env = { ...process.env, WORK_ISLAND_PKG: PKG };
-    delete env.CCAPP_RUN;                      // 别被网关自己的孤儿清理误杀
-    const child = spawn(process.execPath, [DRIVER], {
-      detached: true,
-      stdio: ["ignore", "inherit", "inherit"],
-      env,
-    });
-    child.unref();
-    log(`[work-island] driver 已启动 pid=${child.pid}`);
-  } catch (e) {
-    log(`[work-island] driver 启动失败：${e.message}`);
-  }
+function detectApp(cb) {
+  if (process.env.CCAPP_WORK_ISLAND === "1") return cb(true);
+  if (process.env.CCAPP_WORK_ISLAND === "0") return cb(false);
+  execFile("pm", ["list", "packages", PKG], { timeout: 3000 }, (e, out) => {
+    cb(!e && String(out).includes("package:" + PKG));
+  });
 }
 
 export function startWorkIsland() {
-  if (started) return;
+  if (started || detecting) return;
+  if (!SETTINGS.workIsland) return;              // 默认关，用户开了才动
+  if (process.env.CCAPP_WORK_ISLAND === "0") return;
+  if (!isAndroid()) return;
   started = true;
-  if (!appInstalled()) {
-    log("[work-island] 未安装工作岛应用，跳过（可选集成）");
-    return;
+  detecting = true;
+  detectApp((ok) => {
+    detecting = false;
+    if (!started) return;                        // 检测期间被关掉了
+    if (!ok) {
+      started = false;
+      log("[work-island] 没检测到工作岛应用，跳过（装好后可在设置里重开一次）");
+      return;
+    }
+    core = createWorkIsland({
+      send: amSend,
+      sendSync: amSendSync,
+      runs: runList,
+      lang: () => LAST_LANG,
+    });
+    unsub = onPublish((ev) => {
+      try { core.handleEvent(ev); } catch {}
+    });
+    const live = runList().filter((r) => r && !r.ended);
+    if (live.length) core.start(live[0]);        // 开设置时已经有轮次在跑
+    log("[work-island] 已订阅网关事件");
+  });
+}
+
+export function stopWorkIsland(sync = false) {
+  started = false;
+  detecting = false;
+  if (unsub) { try { unsub(); } catch {} unsub = null; }
+  if (core) {
+    try { core.stop(sync); } catch {}
+    core = null;
   }
-  spawnDriver();
-  setInterval(spawnDriver, 30000).unref?.();   // 挂了 30 秒内自己回来
+}
+
+/** 网关 SIGTERM：同步发一次 IDLE，让岛收起，再退出。 */
+export function stopWorkIslandSync() {
+  stopWorkIsland(true);
+}
+
+/** 设置页开关变化时调用。 */
+export function applyWorkIslandSetting() {
+  if (SETTINGS.workIsland) startWorkIsland();
+  else stopWorkIsland();
 }
