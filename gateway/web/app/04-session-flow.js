@@ -345,6 +345,7 @@
         if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; renderRunStrip(); }
         return;
       case "state": return applyState(ev);
+      case "archive": return loadSessions();   // 建档 / 归入杂项：标题、档号、分组跟着变
       case "sched": case "sched_note": return onSchedEvent(ev);
       case "sync": return;
       case "run_start": {

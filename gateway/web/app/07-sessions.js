@@ -26,6 +26,13 @@
     const md = p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
     return d.getFullYear() === new Date().getFullYear() ? md : d.getFullYear() + "-" + md;
   }
+  // 起止日期（建过档的会话在小字里用）：同一天只写一个日期加时间，跨年带年份
+  function fmtRange(a, b) {
+    if (!a) a = b;
+    const p = (n) => String(n).padStart(2, "0"), y0 = new Date().getFullYear();
+    const day = (ms) => { const d = new Date(ms); return (d.getFullYear() === y0 ? "" : d.getFullYear() + "-") + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
+    return day(a) === day(b) ? fmtStamp(b) : day(a) + " – " + day(b);
+  }
   // 按最后变动分组：今天 / 7 天内（不含今天）/ 30 天内 / 某年某月。key 不随界面语言变，用来记折叠状态
   function sessGroup(ms) {
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -89,11 +96,10 @@
           <div class="it-title">${s.pinned ? `<svg class="pin-ic" viewBox="0 0 24 24">${SM.pin}</svg>` : ""}${sids.has(s.id) ? pi("clock", "pj-ic") : ""}${markHit(s.title, q)}</div>
           ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
           <div class="it-meta">
-            <span title="${esc(t("更新 {time}", { time: new Date(s.mtime).toLocaleString() }) + (s.created ? " · " + t("创建 {time}", { time: new Date(s.created).toLocaleString() }) : ""))}">${fmtStamp(s.mtime)}</span>
+            ${s.no ? `<span class="no">${esc(s.no)}</span>` : ""}<span title="${esc(t("更新 {time}", { time: new Date(s.mtime).toLocaleString() }) + (s.created ? " · " + t("创建 {time}", { time: new Date(s.created).toLocaleString() }) : ""))}">${s.no ? fmtRange(s.created, s.mtime) : fmtStamp(s.mtime)}</span>
             <span>${fmtSize(s.sizeKb * 1024)}</span>
             ${st}
             ${pjOfCwd(s.cwd) ? pjMark(pjOfCwd(s.cwd)) : ""}
-            ${s.renamed ? `<span class="badge">${t("已命名")}</span>` : ""}
           </div>
         </div>
         ${picking ? "" : `<button class="ss-more" data-a="more" aria-label="${esc(t("更多"))}"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>`}
@@ -111,18 +117,33 @@
     const shown = state.sessions.filter(keep);
     const pins = shown.filter((s) => s.pinned);
     if (pins.length) groups.push({ key: "pin", label: t("置顶"), list: pins });
+    // 杂项（测试、试模型这类用完即弃的）收在最后一组，组名右边可一键全移进回收站
+    const misc = shown.filter((s) => s.misc && !s.pinned);
     for (const s of shown) {
-      if (s.pinned) continue;
+      if (s.pinned || s.misc) continue;
       const g = sessGroup(s.mtime), top = groups[groups.length - 1];
       if (top && top.key === g.key) top.list.push(s); else groups.push({ ...g, list: [s] });
     }
+    if (misc.length) groups.push({ key: "misc", label: t("杂项"), list: misc });
     let html = "";
     for (const g of groups) {
       const folded = sessFolded(g.key);
-      html += `<div class="sess-grp ${g.key === "pin" ? "pin" : ""} ${folded ? "folded" : ""}" data-g="${esc(g.key)}"><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>${esc(g.label)} · ${g.list.length}</div>`;
+      html += `<div class="sess-grp ${g.key === "pin" ? "pin" : ""} ${folded ? "folded" : ""}" data-g="${esc(g.key)}"><svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>${esc(g.label)} · ${g.list.length}${g.key === "misc" && !picking ? `<button class="grp-act" data-misc-clear>${esc(t("全部移到回收站"))}</button>` : ""}</div>`;
       html += (folded ? g.list.filter((s) => s.id === view.sessionId) : g.list).map(item).join("");
     }
     box.innerHTML = html;
+  }
+
+  // 杂项一键进回收站：在跑的跳过；回收站里照常保留几天，可恢复
+  async function clearMisc() {
+    const busy = new Set(srv.runs.map((r) => r.sessionId).filter(Boolean));
+    const list = state.sessions.filter((s) => s.misc && !s.pinned && !busy.has(s.id));
+    if (!list.length || !confirm(t("把杂项里的 {n} 个会话移进回收站？", { n: list.length }))) return;
+    let n = 0;
+    for (const s of list) { try { await api(`/api/session/${encodeURIComponent(s.id)}`, { method: "DELETE" }); n++; } catch {} }
+    if (list.some((s) => s.id === view.sessionId)) newConversation();
+    loadSessions();
+    toast(t("已移进回收站 {n} 个（{d} 天内可恢复）", { n, d: sess.keepDays }));
   }
 
   // 搜索：输完停 300ms 再问网关；过时的回复丢掉
@@ -277,6 +298,7 @@
   });
 
   $("session-list").addEventListener("click", async (e) => {
+    if (e.target.closest("[data-misc-clear]")) return clearMisc();
     const grp = e.target.closest(".sess-grp[data-g]");
     if (grp) {
       const k = grp.dataset.g;

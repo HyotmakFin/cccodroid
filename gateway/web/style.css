@@ -2627,3 +2627,16 @@ html[data-skin="zhuyue"][data-theme="light"] #pages{background:var(--bg2)}
 html[data-skin="zhuyue"] .bubble ol > li::marker{color:var(--zy-blue);font-weight:600}
 html[data-skin="zhuyue"] .sel-menu button.on{color:var(--fg)}
 html[data-skin="zhuyue"] .sel-menu button.on svg{color:var(--zy-blue)}
+
+/* 脉络 · 建档：只多几处灰色小字，不加颜色和图标按钮 */
+#tab-sessions .srow-sess .it-meta .no{color:var(--fg2)}
+.sess-grp .grp-act{margin-inline-start:auto;border:0;background:none;color:var(--fg3);font:inherit;font-size:11.5px;padding:2px 0;cursor:pointer}
+.sess-grp .grp-act:hover{color:var(--err)}
+.pop-menu .pm-no{font:12px var(--mono);font-style:normal;font-variant-numeric:tabular-nums;color:var(--fg3);flex:none;min-width:52px}
+.pop-menu button.cur span{font-weight:500}
+.pop-menu button.dim{opacity:.45;cursor:default}
+.pop-menu button.dim:hover{background:none}
+.pop-menu .pm-head.pm-link{cursor:pointer;border-radius:9px;padding-top:6px;padding-bottom:6px}
+.pop-menu .pm-head.pm-link:hover{background:var(--bg2);color:var(--fg2)}
+.pop-menu.lineage{min-width:280px}
+.pop-menu.lineage button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -2088,5 +2088,20 @@ window.I18N_DICT.en = {
   "统计字数…": "Counting words…",
   "工作岛（ColorOS 灵动岛）": "Work Island (ColorOS)",
   "把 Claude 的工作状态显示在 ColorOS 16 的流体云 / 灵动岛上": "Show what Claude is doing in ColorOS 16's Fluid Cloud",
-  "需要另外安装「工作岛」应用。开启后，正在干活、等待确认、任务完成会出现在岛上的胶囊里；完成后 8 秒自动收起。目前仅在 ColorOS 16 / Android 16 上测试过。": "Requires the separate Work Island app. When on, “working”, “waiting for you” and “done” appear in the island capsule, which hides itself 8 seconds after a task finishes. Only tested on ColorOS 16 / Android 16 so far."
+  "需要另外安装「工作岛」应用。开启后，正在干活、等待确认、任务完成会出现在岛上的胶囊里；完成后 8 秒自动收起。目前仅在 ColorOS 16 / Android 16 上测试过。": "Requires the separate Work Island app. When on, “working”, “waiting for you” and “done” appear in the island capsule, which hides itself 8 seconds after a task finishes. Only tested on ColorOS 16 / Android 16 so far.",
+  "脉络": "Lineage",
+  "归入杂项": "Move to Misc",
+  "移出杂项": "Remove from Misc",
+  "杂项": "Misc",
+  "全部移到回收站": "Move all to Trash",
+  "把杂项里的 {n} 个会话移进回收站？": "Move the {n} sessions in Misc to Trash?",
+  "已移进回收站 {n} 个（{d} 天内可恢复）": "Moved {n} to Trash (recoverable for {d} days)",
+  "这个会话还没有记录": "This session has no record yet",
+  "从「{t}」回退 · {d}": "Rewound from “{t}” · {d}",
+  "从「{t}」分叉 · {d}": "Forked from “{t}” · {d}",
+  "还没有题名": "No title yet",
+  "改题名": "Edit title",
+  "新的题名": "New title",
+  "在脉络中查看": "View in Lineage",
+  "即将推出": "Coming soon"
 };

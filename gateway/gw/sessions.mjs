@@ -5,7 +5,7 @@ import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, im
 import { goalStateOf, tasksOf } from "./goal.mjs";
 import { agentFilesOf, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { runOfSession } from "./runs.mjs";
-import { archivedTitle } from "./archive-store.mjs";
+import { archiveBrief, archivedTitle } from "./archive-store.mjs";
 import { NEXT, readBody, readBodyBuf, sendJson } from "./http.mjs";
 
 // ── 会话重命名表 ──────────────────────────────────────────────────────
@@ -91,9 +91,10 @@ export function listSessions(limit = 150) {
   found.sort((a, b) => b.mtime - a.mtime);
   const shown = found.filter((s, i) => i < limit || PINS[s.id]);
   return shown.map((s) => {
-    const meta = peekSession(s.file);
+    const meta = peekSession(s.file), ab = archiveBrief(s.id);
     return {
       id: s.id,
+      no: ab.no, misc: ab.misc,
       created: meta.created || 0,
       pinned: PINS[s.id] || 0,
       // 标题：用户改过的 > 建档的最新一章题名 > 第一句提问

@@ -13,10 +13,11 @@ You are working inside cccodroid. cccodroid keeps an archive for every session: 
 Run (Bash):
 
 ```
-node <archive command path> --title "Title" [--same] [--status ongoing|done|paused]
+node <archive command path> --title "Title" [--same] [--misc] [--status ongoing|done|paused]
 ```
 
 - `--title`: the chapter title; rules below.
+- `--misc`: the whole session is a throwaway (a test, trying out a model, a greeting with no real work). It goes into "Misc", which the user can clear in one tap. Don't use it for sessions with real work.
 - `--same`: this chapter continues the same piece of work as the previous one (it was only split by compaction). The two chapters become one volume, titled by this entry.
 - `--status`: where the work stands now; optional.
 - The command tells you which chapter it filed (archive number). If it rejects the entry with a reason, fix it and run it again.

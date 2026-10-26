@@ -540,7 +540,14 @@
   function paintTitle() {
     const el = $("app-title");
     if (curPage) { el.textContent = pageTitleOv || t(PAGES[curPage].name); subEl.textContent = pageSub; subEl.className = ""; }
-    else { el.textContent = view.title || t("新对话"); subEl.textContent = chatStatus[0]; subEl.className = chatStatus[1]; }
+    else { el.textContent = view.title || t("新对话"); subEl.textContent = chatStatus[0] + (chatStatus[1] === "ok" ? archSub() : ""); subEl.className = chatStatus[1]; }
+  }
+  // 空闲时状态行后面接上档号和起止日期（建过档的会话才有）
+  function archSub() {
+    try {
+      const s = view.sessionId && (state.sessions || []).find((x) => x.id === view.sessionId);
+      return s && s.no ? " · " + s.no + " · " + fmtRange(s.created, s.mtime) : "";
+    } catch { return ""; }
   }
   function setPageSub(name, text) { if (curPage !== name) return; pageSub = text || ""; subEl.textContent = pageSub; }
 

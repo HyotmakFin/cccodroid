@@ -2051,3 +2051,18 @@
 2051	Work Island (ColorOS)
 2052	Affiche l’activité de Claude dans le Fluid Cloud de ColorOS 16
 2053	Nécessite l’application Work Island, installée à part. Une fois activé, « au travail », « en attente de vous » et « terminé » s’affichent dans la capsule, qui se replie 8 secondes après la fin d’une tâche. Testé uniquement sous ColorOS 16 / Android 16 pour l’instant.
+2054	Lignée
+2055	Classer dans Divers
+2056	Retirer de Divers
+2057	Divers
+2058	Tout mettre à la corbeille
+2059	Mettre les {n} sessions de Divers à la corbeille ?
+2060	{n} mis à la corbeille (récupérables pendant {d} jours)
+2061	Cette session n'a pas encore d'historique
+2062	Retour arrière depuis « {t} » · {d}
+2063	Bifurquée depuis « {t} » · {d}
+2064	Pas encore de titre
+2065	Modifier le titre
+2066	Nouveau titre
+2067	Voir dans Lignée
+2068	Bientôt

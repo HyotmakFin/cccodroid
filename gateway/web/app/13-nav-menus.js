@@ -134,8 +134,9 @@
     if (anchor && OV.at(anchor)) { closeMenu(); return null; }
     const m = document.createElement("div");
     m.className = "pop-menu";
-    m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head">${esc(it.head)}</div>`
-      : `<button data-i="${i}" class="${it.danger ? "danger" : ""}">${it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
+    // head 带 fn 时可点（脉络弹层的「来源」行）；no：左边一列等宽小字（档号）代替图标；cur 加粗；没有 fn 的按钮是灰的
+    m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head${it.fn ? " pm-link" : ""}"${it.fn ? ` data-i="${i}"` : ""}>${esc(it.head)}</div>`
+      : `<button data-i="${i}" class="${it.danger ? "danger" : ""}${it.cur ? " cur" : ""}${it.fn ? "" : " dim"}">${it.no ? `<i class="pm-no">${esc(it.no)}</i>` : it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
     OV.open(m, { anchor });
     const ar = anchor.getBoundingClientRect(), W = innerWidth, H = innerHeight, mw = m.offsetWidth, mh = m.offsetHeight;
     let x, y;
@@ -146,7 +147,7 @@
     }
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
-    m.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (!b) return; OV.close(m); items[+b.dataset.i].fn(); });
+    m.addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (!b || !items[+b.dataset.i].fn) return; OV.close(m); items[+b.dataset.i].fn(); });
     return m;
   }
   // 下拉框不用系统弹出的选择器（深色、和主题不搭），换成同一套菜单：当前项打勾，optgroup 成小标题，
@@ -233,6 +234,8 @@
     people: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>',
     logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     update: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>',
+    lineage: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8.5 4M8 17.5c5 0 8-2 8.5-4"/>',
+    tray: '<path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M5 5h14l1 8v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z"/>',
   };
 
   // 侧栏的最近对话：一行一个，分组 置顶 / 今天 / 昨天 / 更早；更早的只列前一段，全部在「对话」整页
@@ -242,7 +245,8 @@
   function folds() { return sideFold ||= new Set((() => { try { return JSON.parse(localStorage.getItem("cc.sideFold") || "[]"); } catch { return []; } })()); }
   function renderSideRecent() {
     const box = $("side-recent"); if (!box) return;
-    const list = state.sessions || [];
+    // 杂项不进侧栏（正开着的那个除外），在「对话」整页最后一组
+    const list = (state.sessions || []).filter((x) => !x.misc || x.id === view.sessionId);
     const live = new Set(srv.runs.filter((x) => !x.idle).map((x) => x.sessionId).filter(Boolean));
     const ask = new Set(srv.runs.filter((x) => x.perms && x.perms.length).map((x) => x.sessionId).filter(Boolean));
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
@@ -252,7 +256,8 @@
     const more = groups[3][1].length > RECENT_MAX;
     groups[3][1] = groups[3][1].slice(0, RECENT_MAX);
     const cur = view.sessionId && list.find((x) => x.id === view.sessionId);
-    if (cur && cur.title && cur.title !== view.title) { view.title = cur.title; paintTitle(); }
+    if (cur && cur.title && cur.title !== view.title) view.title = cur.title;
+    paintTitle();   // 顶栏状态行后面的档号 / 日期也跟着会话列表变
     const row = (x) => `<button class="sr-item${x.id === view.sessionId ? " on" : ""}" data-sid="${esc(x.id)}" title="${esc(x.title)}">${ask.has(x.id) ? '<i class="sr-dot ask"></i>' : live.has(x.id) ? '<i class="sr-dot"></i>' : ""}<span>${esc(x.title)}</span></button>`;
     box.innerHTML = list.length
       ? groups.filter(([, l]) => l.length).map(([g, l, k]) => {
@@ -288,6 +293,8 @@
       { label: x.pinned ? t("取消置顶") : t("置顶"), icon: SM.pin, fn: () => post(`/api/session/${encodeURIComponent(id)}/pin`, { pin: !x.pinned }).then(reload, (e) => toast(e.message, true)) },
       { label: t("移到项目…"), icon: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', fn: () => moveToProject(id, anchor) },
       { label: t("重命名"), icon: SM.edit, fn: () => { const n = prompt(t("新的会话名称"), x.title || ""); if (n) post(`/api/session/${encodeURIComponent(id)}/rename`, { title: n }).then(reload, (e) => toast(e.message, true)); } },
+      { label: t("脉络"), icon: SM.lineage, fn: () => lineageMenu(id, anchor) },
+      { label: x.misc ? t("移出杂项") : t("归入杂项"), icon: SM.tray, fn: () => post("/api/archive/misc", { session: id, misc: !x.misc }).then(reload, (e) => toast(e.message, true)) },
       { label: t("导出"), icon: SM.export, fn: async () => {
         if (!confirm(t("会话记录可能含有你贴过的密钥、令牌或文件内容。导出的压缩包请只发给你信任的地方。继续？"))) return;
         const r = await post("/api/sessions/export", { ids: [id] }).catch((e) => ({ ok: false, message: e.message }));
@@ -302,6 +309,34 @@
         toast(t("已移进回收站（{d} 天内可恢复）", { d: sess.keepDays }));
       } },
     ]);
+  }
+  // 脉络弹层：这个会话的来源（从哪个会话分叉 / 回退来）+ 各章（卷）。全局亲缘图在阶段 1 的脉络页
+  async function lineageMenu(id, anchor) {
+    let r;
+    try { r = await api("/api/archive?session=" + encodeURIComponent(id)); } catch (e) { return toast(e.status === 404 ? t("这个会话还没有记录") : e.message, true); }
+    const p2 = (n) => String(n).padStart(2, "0"), md = (ms) => { const d = new Date(ms); return p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
+    const range = (a, b) => (md(a) === md(b) ? md(b) : md(a) + " – " + md(b));
+    const open = id === view.sessionId ? null : () => { closeDrawer(); openSession(id); };
+    const items = [];
+    const P = r.parent;
+    if (P) {
+      const tt = (P.title || P.id.slice(0, 8)).slice(0, 24), d = P.ts ? md(P.ts) : "";
+      const head = P.kind === "rewind" ? t("从「{t}」回退 · {d}", { t: tt, d }) : t("从「{t}」分叉 · {d}", { t: tt, d });
+      items.push({ head: d ? head : head.replace(/ · $/, ""), fn: P.missing || P.trashed ? null : () => { closeDrawer(); openSession(P.id); } }, "hr");
+    }
+    const sid4 = id.slice(0, 4);
+    for (const v of [...r.volumes].reverse()) {
+      const a = v.chapters[0], b = v.chapters[v.chapters.length - 1], live = r.chapters[b - 1].open;
+      items.push({ no: sid4 + "·" + (a === b ? a : a + "–" + b), label: v.title || t("还没有题名"), small: live ? t("进行中") : range(v.from, v.to), cur: live, fn: open || (() => {}) });
+    }
+    items.push("hr", { label: t("改题名"), icon: SM.edit, fn: () => {
+      const last = r.volumes[r.volumes.length - 1], n = last.chapters[last.chapters.length - 1];
+      const title = prompt(t("新的题名"), last.title || "");
+      if (!title) return;
+      post("/api/archive", { session: id, title, chapter: n }).then(() => loadSessions(), (e) => toast((e.body && e.body.errors || [e.message]).join("；"), true));
+    } }, { label: t("在脉络中查看"), icon: SM.lineage, small: t("即将推出") });
+    const m = popMenu(anchor, items);
+    if (m) m.classList.add("lineage");
   }
   // 账户菜单：常用的在上，不可逆的放最下
   function acctMenu() {

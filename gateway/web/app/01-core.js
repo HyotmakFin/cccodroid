@@ -207,7 +207,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   }
   const shareIco = () => `<svg class="ico-share" viewBox="0 0 24 24">${ICONS.share}</svg>`;
 
-  function setStatus(text, cls) { chatStatus = [text, cls || ""]; if (!curPage) { subEl.textContent = text; subEl.className = cls || ""; } }
+  function setStatus(text, cls) { chatStatus = [text, cls || ""]; if (!curPage) { subEl.textContent = text + (cls === "ok" ? archSub() : ""); subEl.className = cls || ""; } }
 
   // ── 跨刷新要记住的东西 ────────────────────────────────────────────
   //  界面代码一变网关就会让前端自动 reload（uiTag 机制）。要是会话号只存在内存里，

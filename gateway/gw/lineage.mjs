@@ -9,6 +9,7 @@ import path from "node:path";
 import { CFG, PATHS, log } from "./config.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { NAMES, PINS } from "./sessions.mjs";
+import { archivedTitle } from "./archive-store.mjs";
 import { emptyRecord, inferParents, scanSession } from "./lineage-core.mjs";
 import { lineageDb } from "./lineage-store.mjs";
 
@@ -18,7 +19,7 @@ const SID = /^[0-9a-f-]{36}$/i;
 
 let RECS = null;          // id → 记录（lineage-core 的 scanSession 结果）
 const META = new Map();   // id → { file, project, trashed, mtime }
-let building = null, dirty = false;
+let building = null, dirty = false, gen = 0, memo = null;   // gen：索引每变一次加一；memo：按 gen 缓存的主父推断
 
 function loadCache() {
   if (RECS) return;
@@ -67,10 +68,10 @@ async function refresh() {
     META.set(f.id, { file: f.file, project: f.project, trashed: f.trashed, mtime: st.mtimeMs });
     const prev = RECS.get(f.id);
     if (prev && prev.size === st.size && prev.off === st.size) continue;
-    try { RECS.set(f.id, await scanSession(f.file, prev)); dirty = true; }
+    try { RECS.set(f.id, await scanSession(f.file, prev)); dirty = true; gen++; }
     catch (e) { log(`脉络：读 ${f.id.slice(0, 8)} 失败：${e.message}`); }
   }
-  for (const id of [...RECS.keys()]) if (!alive.has(id)) { RECS.delete(id); META.delete(id); dirty = true; }
+  for (const id of [...RECS.keys()]) if (!alive.has(id)) { RECS.delete(id); META.delete(id); dirty = true; gen++; }
   saveCache();
 }
 
@@ -86,11 +87,30 @@ export async function lineageRecord(sid) {
   return RECS.get(sid) || null;
 }
 
+function parentsNow() {
+  const db = lineageDb(), key = gen + ":" + JSON.stringify(db.edges).length + ":" + Object.keys(NAMES).length;
+  if (memo?.key !== key) memo = { key, map: inferParents(RECS, { names: NAMES, explicit: db.edges }) };
+  return memo.map;
+}
+
+/** 一个会话的来源（主父）：{ id, title, kind, at, ts, trashed, missing }；没有来源返回 null */
+export async function lineageParent(sid) {
+  await lineageRefresh();
+  const e = parentsNow().get(sid);
+  if (!e) return null;
+  const me = RECS.get(sid), p = RECS.get(e.parent), i = me && e.at ? me.uu.indexOf(e.at) : -1;
+  return {
+    id: e.parent, kind: e.kind || null, at: e.at || null, ts: i >= 0 ? me.ts[i] : 0,
+    title: NAMES[e.parent] || archivedTitle(e.parent) || p?.first || "",
+    trashed: !!META.get(e.parent)?.trashed, missing: !p,
+  };
+}
+
 /** 给前端：节点（会话）+ 边（主父）。只有元数据和标题，没有消息正文 */
 export async function lineageGraph() {
   await lineageRefresh();
   const db = lineageDb();
-  const parents = inferParents(RECS, { names: NAMES, explicit: db.edges });
+  const parents = parentsNow();
   const nodes = [];
   for (const r of RECS.values()) {
     const m = META.get(r.id) || {};

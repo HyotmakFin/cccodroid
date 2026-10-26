@@ -124,3 +124,36 @@ test("命令行 cc-archive：带本轮编号交档，网关认出会话；不合
   srv.close();
   RUNS.delete("run-arch-1");
 });
+
+test("杂项：AI 交档带 misc 归进去；用户移出后 AI 再带也不动；会话列表带档号和杂项标记", async () => {
+  const { fileChapter, setMisc } = await import("../gw/archive.mjs");
+  const { listSessions } = await import("../gw/sessions.mjs");
+  const sid = session(2, 0);
+  assert.equal((await fileChapter(sid, { title: "测试建档提醒", misc: true })).ok, true);
+  let s = listSessions().find((x) => x.id === sid);
+  assert.equal(s.misc, true);
+  assert.equal(s.no, sid.slice(0, 4) + "·1");
+  setMisc(sid, false);
+  await fileChapter(sid, { title: "测试建档提醒第二次", misc: true, chapter: 1 });
+  assert.equal(listSessions().find((x) => x.id === sid).misc, false, "用户移出过，AI 不再归入");
+  // 没建过档的会话也能被用户归入杂项，档号仍是空的
+  const raw = session(1, 0);
+  setMisc(raw, true);
+  s = listSessions().find((x) => x.id === raw);
+  assert.equal(s.misc, true);
+  assert.equal(s.no, null);
+});
+
+test("脉络弹层：分叉出来的会话带来源（标题、方式、分叉时间），原会话没有来源", async () => {
+  const { archiveView } = await import("../gw/archive.mjs");
+  const { forkSession } = await import("../gw/sessionops.mjs");
+  const sid = session(3, 0);
+  const f = forkSession(sid, "问题 1", 1);
+  assert.equal(f.ok, true, JSON.stringify(f));
+  const v = await archiveView(f.id);
+  assert.equal(v.parent.id, sid);
+  assert.equal(v.parent.kind, "fork");
+  assert.equal(v.parent.title, "问题 0");
+  assert.ok(v.parent.ts > 0);
+  assert.equal((await archiveView(sid)).parent, null);
+});

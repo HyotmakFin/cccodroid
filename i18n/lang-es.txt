@@ -2051,3 +2051,18 @@
 2051	Work Island (ColorOS)
 2052	Muestra lo que hace Claude en el Fluid Cloud de ColorOS 16
 2053	Requiere instalar aparte la app Work Island. Al activarlo, «trabajando», «esperando tu confirmación» y «terminado» aparecen en la cápsula de la isla, que se oculta 8 segundos después de terminar. Por ahora solo se ha probado en ColorOS 16 / Android 16.
+2054	Linaje
+2055	Mover a Varios
+2056	Quitar de Varios
+2057	Varios
+2058	Mover todo a la papelera
+2059	¿Mover las {n} sesiones de Varios a la papelera?
+2060	{n} movidas a la papelera (recuperables durante {d} días)
+2061	Esta sesión aún no tiene registro
+2062	Retrocedida desde «{t}» · {d}
+2063	Bifurcada desde «{t}» · {d}
+2064	Aún sin título
+2065	Editar título
+2066	Nuevo título
+2067	Ver en Linaje
+2068	Próximamente
