@@ -508,6 +508,7 @@
     OV.closeAll();
     const prev = curPage;
     curPage = name;
+    document.documentElement.classList.toggle("pg-lineage", name === "lineage");   // 脉络页整页不滚（地图自己接手势）
     $("pages").classList.remove("hidden");
     pageSub = "";
     paintTitle();
@@ -526,11 +527,13 @@
     if (name !== "projects" && name !== "sched") pageTitleOv = "";
     if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }
     if (name === "sched") { renderSched(); loadSched(); loadProjects(); }
+    if (name === "lineage") { if (LIN.g) linPaint(prev !== name); loadLineage(); }
   }
   function closePage() {
     if (!curPage) return;
     curPage = null;
     pageTitleOv = "";
+    document.documentElement.classList.remove("pg-lineage");
     $("pages").classList.add("hidden");
     renderSideNav();
     paintTitle();

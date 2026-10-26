@@ -18,6 +18,7 @@
     sessions: { name: tk("对话"), icon: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>' },
     settings: { name: tk("设置"), icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>' },
     projects: { name: tk("项目"), icon: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' },
+    lineage: { name: tk("脉络"), icon: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M6 3v12.5M18 8.5a9 9 0 0 1-9.5 8"/>' },
     sched: { name: tk("定时任务"), icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>' },
     ext: { name: tk("扩展"), icon: '<path d="M10 3h4v4a2 2 0 1 0 4 0h3v4h-4a2 2 0 1 0 0 4h4v6H3V3z"/>' },
     caps: { name: tk("能力"), icon: '<path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12z"/>' },
@@ -25,12 +26,14 @@
     help: { name: tk("帮助"), icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>' },
     changelog: { name: tk("更新日志"), icon: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>' },
   };
-  const NAV_ITEMS = ["sessions", "projects", "sched", "ext", "caps", "usage", "help", "changelog"];          // 侧栏「去哪」里能放的；设置走底部账户行
+  const NAV_ITEMS = ["sessions", "projects", "lineage", "sched", "ext", "caps", "usage", "help", "changelog"];          // 侧栏「去哪」里能放的；设置走底部账户行
   var curPage = null;   // var：openSession 在启动早期就会调 closePage，别撞上 let 的暂时性死区
   // 轮询（下载进度、配对状态…）只在那一页开着时继续：整页关了、换页了就停
   function pageOn(name) { return name === "settings" ? setOpen : curPage === name && !$("pages").classList.contains("hidden"); }
   (function () { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p) && !localStorage.getItem("cc.navPinsV2")) { localStorage.setItem("cc.navPins", JSON.stringify([...new Set([...p.filter((k) => k !== "ext"), "projects", "sched"])])); } localStorage.setItem("cc.navPinsV2", "1"); } catch {} })();
-  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "projects", "sched"]; };
+  // 0.4.10 加了「脉络」：已有的固定项里补上它（只补一次，用户之后取消了不再加回来）
+  (function () { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p) && !localStorage.getItem("cc.navPinsV3") && !p.includes("lineage")) localStorage.setItem("cc.navPins", JSON.stringify([...p, "lineage"])); localStorage.setItem("cc.navPinsV3", "1"); } catch {} })();
+  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "projects", "lineage", "sched"]; };
   var navEdit = false;
   function renderSideNav() {
     const nav = $("side-nav"); if (!nav) return;
@@ -334,7 +337,7 @@
       const title = prompt(t("新的题名"), last.title || "");
       if (!title) return;
       post("/api/archive", { session: id, title, chapter: n }).then(() => loadSessions(), (e) => toast((e.body && e.body.errors || [e.message]).join("；"), true));
-    } }, { label: t("在脉络中查看"), icon: SM.lineage, small: t("即将推出") });
+    } }, { label: t("在脉络中查看"), icon: SM.lineage, fn: () => { closeDrawer(); openLineage(id); } });
     popMenu(anchor, items, null, "lineage");
   }
   // 账户菜单：常用的在上，不可逆的放最下

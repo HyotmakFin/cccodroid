@@ -2640,3 +2640,77 @@ html[data-skin="zhuyue"] .sel-menu button.on svg{color:var(--zy-blue)}
 .pop-menu .pm-head.pm-link:hover{background:var(--bg2);color:var(--fg2)}
 .pop-menu.lineage{min-width:280px}
 .pop-menu.lineage button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── 脉络页（照稿 lineage-draft/lineage.html；地图本体 web/lineage/map.js，教程页共用）──────────────
+   手势规则见规划书 §11.5：整页不滚，地图是唯一自由滚的；项目条只横滚，卡片章节只竖滚 */
+html.pg-lineage #page-body{overflow:hidden;padding:0}
+#page-body > #tab-lineage{max-width:none;height:100%;display:flex;flex-direction:column}
+.lin-tools{display:flex;align-items:center;gap:10px;padding:8px 16px;flex:none}
+/* 项目切换条：项目一多就溢出，自己横滚（规则 9）；只吃横向手势、滚到头不外传，右缘渐隐提示还有 */
+.lin-tools .seg-scroll{flex:0 1 auto;min-width:0;overflow-x:auto;touch-action:pan-x;overscroll-behavior-x:contain;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 20px),transparent)}
+.lin-tools .seg-scroll::-webkit-scrollbar{display:none}
+.lin-tools .seg{white-space:nowrap;margin-inline-end:16px}
+.lin-misc{flex:none;margin-inline-start:auto;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--fg3);white-space:nowrap}
+.lin-state{flex:1;display:grid;place-items:center;color:var(--fg3);font-size:13px;padding:24px;text-align:center}
+.lin-state.hidden{display:none}
+#lin-map{flex:1;min-height:0}
+.lmap{position:relative;--lm-track:#4a4a4a;--lm-grid:#1c1c1c;--lm-blue:var(--zy-blue,var(--accent))}
+html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
+.lmap .lm-canvas{position:absolute;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.lmap.tree .lm-canvas{display:none}
+.lmap svg{display:block}
+.lm-main,.lm-axis,.lm-band{position:absolute;left:0;top:0;will-change:transform}
+.lm-axis{right:0;height:30px;background:var(--bg);z-index:2;pointer-events:none}
+.lm-axis::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;background:linear-gradient(var(--bg),transparent)}
+.lm-band{width:120px;z-index:1;pointer-events:none}
+.lm-band div{position:absolute;left:0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 22px 2px 16px;font:600 11px var(--font-ui);color:var(--fg3);letter-spacing:.4px;background:linear-gradient(90deg,var(--bg) 70%,transparent)}
+.lm-now{position:absolute;left:16px;bottom:16px;z-index:3;display:none;font:inherit;font-size:12.5px;padding:6px 12px;border-radius:16px;border:1px solid var(--line);background:var(--bg);color:var(--fg2);box-shadow:0 4px 14px var(--shadow)}
+.lm-now.show{display:block}
+.lmap .lm-grid{stroke:var(--lm-grid);stroke-width:1}
+.lmap .lm-brk{stroke:var(--line);stroke-dasharray:2 4}
+.lmap .lm-sep{stroke:var(--line)}
+.lmap .lm-nowline{stroke:var(--lm-blue);stroke-width:1;opacity:.55}
+.lmap .lm-run{fill:var(--lm-blue)}
+.lmap .t-title{font:500 12.5px var(--font-ui);fill:var(--fg2);paint-order:stroke;stroke:var(--bg);stroke-width:5px;stroke-linejoin:round}
+.lmap .t-title.ghost{fill:var(--fg3);font-weight:400}
+.lmap .t-title.t-ch{font-size:12px;font-weight:400}
+.lmap .t-title.t-ch.cur{fill:var(--fg);font-weight:600}
+.lmap .t-title.t-ch.ghost{fill:var(--fg3)}
+.lmap .t-axis{font:11px var(--mono);fill:var(--fg3);stroke:none}
+.lmap .t-now{font:10.5px var(--mono);fill:var(--lm-blue)}
+.lmap .dim{opacity:.22;transition:opacity .2s}
+/* 选中后的卡片：.pop-menu 的材质；章节多了在卡片里竖滚，滚到头不带动地图 */
+.lm-card{position:absolute;right:16px;bottom:16px;z-index:4}
+.lm-cardbox{width:330px;max-width:calc(100vw - 48px);background:var(--bg);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 32px var(--shadow);padding:14px 14px 12px}
+.lm-cardbox h3{margin:0;font-size:15px;font-weight:500;line-height:1.4}
+.lm-cardbox h3.ghost{color:var(--fg2);font-weight:400}
+.lm-cardbox .meta{margin-top:4px;font:12px/1.4 var(--font-ui);color:var(--fg3);display:flex;gap:10px;flex-wrap:wrap}
+.lm-cardbox .meta .no{color:var(--fg2)}
+.lm-cardbox .src{margin-top:8px;font-size:12px;color:var(--fg3)}
+.lm-cardbox .src b{color:var(--fg2);font-weight:400}
+.lm-cardbox ol{list-style:none;margin:10px 0 0;padding:8px 0 0;border-top:1px solid var(--line);max-height:168px;overflow-y:auto;overscroll-behavior:contain}
+.lm-cardbox li{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:13.5px;cursor:pointer}
+.lm-cardbox li i{font-style:normal;font-size:12px;color:var(--fg3);min-width:48px;font-variant-numeric:tabular-nums}
+.lm-cardbox li span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lm-cardbox li small{font-size:12px;color:var(--fg3);white-space:nowrap}
+.lm-cardbox li.cur span{font-weight:500}
+.lm-cardbox li.ghost span{color:var(--fg3)}
+.lm-cardbox .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.lm-cardbox .acts button{font:inherit;font-size:13px;border-radius:9px;padding:7px 12px;border:1px solid var(--line);background:none;color:var(--fg2)}
+.lm-cardbox .acts button.pri{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.lm-cardbox .acts button.off{opacity:.45}
+/* 手机：缩进树，行样式同会话页；只竖滚 */
+.lm-tree{display:none}
+.lmap.tree .lm-tree{display:block;position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:0 0 calc(var(--safe-b, 0px) + 16px)}
+.lm-grp{font-size:11px;color:var(--fg3);margin:8px 16px 0;padding:6px 0}
+.lm-trow{position:relative;display:flex;align-items:center;min-height:58px;padding:9px 12px 9px 0;cursor:pointer}
+.lm-trow .gut{flex:none;position:relative;align-self:stretch}
+.lm-trow .gut svg{position:absolute;left:0;top:0;overflow:visible}
+.lm-trow .main{flex:1;min-width:0}
+.lm-trow .tt{font-size:14.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lm-trow .mm{margin-top:3px;font:12px/1.4 var(--font-ui);color:var(--fg3);display:flex;gap:10px;flex-wrap:wrap}
+.lm-trow .mm .no{color:var(--fg2)}
+.lm-trow.ghost .tt{color:var(--fg3);font-weight:400}
+.lm-trow.sel{background:var(--bg3)}
+.lm-empty{padding:40px 16px;text-align:center;color:var(--fg3);font-size:13px}

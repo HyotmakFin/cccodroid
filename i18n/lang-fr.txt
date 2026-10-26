@@ -2066,3 +2066,23 @@
 2066	Nouveau titre
 2067	Voir dans Lignée
 2068	Bientôt
+2069	Revenir à maintenant
+2070	Maintenant
+2071	Retour arrière depuis « {t} »
+2072	Bifurqué depuis « {t} »
+2073	Issu d’une session supprimée
+2074	Fusionné depuis {list}
+2075	Repris de {list}
+2076	{n} sessions dérivées
+2077	{n} chapitres
+2078	Aucune session pour l’instant
+2079	Chapitres et titres
+2080	Fusionner…
+2081	Impossible de charger la lignée : {e}
+2082	Indexation des sessions… {d}/{n}
+2083	Autres dossiers
+2084	La vue Lignée ne s’est pas chargée. Rouvrez l’application.
+2085	Aucune session pour l’instant. Après quelques conversations, leurs liens apparaîtront ici.
+2086	{n} sessions · {m} liens
+2087	depuis le {d}
+2088	Afficher Divers

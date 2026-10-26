@@ -146,6 +146,13 @@
     <!-- 用量：本应用的使用统计 + 耗电（原来在设置里） -->
     <!-- 项目 / 定时任务（照稿）：内容全由 app.js 画，列表与详情同一页，返回键先回列表 -->
     <section id="tab-projects" class="tab-pane hidden"></section>
+    <!-- 脉络：会话亲缘图（地图本体 /lineage/map.js；页里只有一个会自由滚的东西，见规划书 §11.5） -->
+    <section id="tab-lineage" class="tab-pane hidden">
+      <div class="lin-tools"><div class="seg-scroll"><span class="seg" id="lin-bands"></span></div>
+        <label class="lin-misc"><span data-i18n>显示杂项</span><input type="checkbox" class="sw" id="lin-misc"></label></div>
+      <div class="lin-state hidden" id="lin-state"></div>
+      <div id="lin-map"></div>
+    </section>
     <section id="tab-sched" class="tab-pane hidden"></section>
     <section id="tab-usage" class="tab-pane hidden">
       <!-- 用量（照设计稿）：一排数字（额度、今天、本月、缓存命中）→ 每天用量柱状图（可切表格）→ 按型号占比 → 最费的对话 / 耗电 → 月报与数据管理。
@@ -892,6 +899,7 @@
 <script src="/langs.js"></script>
 <script src="/i18n.js"></script>
 <script src="/layout.js"></script>
+<script src="/lineage/map.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

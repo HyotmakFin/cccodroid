@@ -2066,3 +2066,23 @@
 2066	Nuevo título
 2067	Ver en Linaje
 2068	Próximamente
+2069	Volver a ahora
+2070	Ahora
+2071	Retrocedido desde «{t}»
+2072	Bifurcado desde «{t}»
+2073	Proviene de una sesión eliminada
+2074	Fusionado desde {list}
+2075	Retomado de {list}
+2076	{n} sesiones derivadas
+2077	{n} capítulos
+2078	Aún no hay sesiones
+2079	Capítulos y títulos
+2080	Fusionar…
+2081	No se pudo cargar el linaje: {e}
+2082	Indexando sesiones… {d}/{n}
+2083	Otras carpetas
+2084	La vista de linaje no se cargó. Vuelve a abrir la app.
+2085	Aún no hay sesiones. Tras unas cuantas conversaciones, aquí verás cómo se relacionan.
+2086	{n} sesiones · {m} vínculos
+2087	desde {d}
+2088	Mostrar varios

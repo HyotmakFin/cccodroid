@@ -532,6 +532,7 @@
     syncPlaceholder();
     syncInterject();
     renderQueue();
+    lineageRuns();
     // 别的窗口（或网关那边）已经答掉的，这里也收起来
     const livePerms = new Set((srv.run?.perms || []).map((p) => p.id));
     for (const [id, it] of PERMS) if (!it.done && srv.run && it.runId === srv.run.id && !livePerms.has(id) && it.p.at < Date.now() - 1500) permDone(id, "gone");

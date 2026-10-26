@@ -4,6 +4,7 @@
       const r = await api("/api/sessions");
       state.sessions = r.sessions || [];
       if (sess.q.trim()) resessSearch(); else renderSessions();
+      lineageDirty();
     } catch {}
   }
 
