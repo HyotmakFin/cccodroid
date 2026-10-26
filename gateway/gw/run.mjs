@@ -19,6 +19,9 @@ import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 
+// 必须由人回答的工具：全部放行也照问（问题、计划审批）
+const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
+
 /** 这一轮在哪个目录跑：显式指定 → 接着的会话当初的 cwd（--resume 只在同一 cwd 下找得到）→ 项目目录 → 工作区 */
 const isDirSync = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
 function cwdOf(item, sessionId) {
@@ -142,6 +145,9 @@ export async function startRun(item) {
     "--verbose",
     "--include-partial-messages",
     "--permission-mode", permMode,
+    // 只是让「全部放行」可选、不默认打开：不带它，跑到一半切到全部放行会被 claude 拒绝（bypass_not_launched），
+    // 界面却显示已切换 —— 群友反馈「一直全部放行还要授权」的原因之一（2.1.308 实测）
+    "--allow-dangerously-skip-permissions",
     // 要确认的工具调用走 stdout 的 control_request(can_use_tool) 来问我们，前端出卡片，用户点了再回 stdin。
     // 不加这个，-p 模式下 claude 不问，直接按拒绝处理（实测：工具结果 "…needs approval"）
     "--permission-prompt-tool", "stdio",
@@ -221,7 +227,8 @@ export async function startRun(item) {
   run.perms = new Map();
   const writeCtl = (o) => { try { child.stdin.write(JSON.stringify(o) + "\n"); return true; } catch { return false; } };
   let ctlN = 0;
-  run.setMode = (mode) => run.inputOpen && writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "set_permission_mode", mode } });
+  run.permMode = permMode;
+  run.setMode = (mode) => { run.permMode = mode; return run.inputOpen && writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "set_permission_mode", mode } }); };
   // 停掉一个后台任务（stop_task 控制请求；claude 停完会再报一次 background_tasks_changed）
   run.stopTask = (taskId) => run.inputOpen && run.bgList.some((t) => t.id === taskId) &&
     writeCtl({ type: "control_request", request_id: "ccapp-" + (++ctlN), request: { subtype: "stop_task", task_id: taskId } });
@@ -266,6 +273,12 @@ export async function startRun(item) {
         (run.denied = run.denied || []).push(p.tool);
         writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: { behavior: "deny",
           message: "This is an unattended scheduled run: nobody can approve this action, so it is denied. Do not retry it; finish with what you can do and say what was blocked." } } });
+        return;
+      }
+      // 全部放行时 claude 不该再来问；来了（子代理没继承到模式之类）就直接放行，必须由人回答的（AskUserQuestion 等）照问
+      if (run.permMode === "bypassPermissions" && !p.interactive && !HUMAN_TOOLS.has(p.tool)) {
+        log(`✓ 全部放行，自动允许 ${p.tool}${p.agentId ? "（子代理）" : ""} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
+        writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: { behavior: "allow", updatedInput: p.input } } });
         return;
       }
       run.perms.set(id, p);
@@ -335,7 +348,8 @@ export async function startRun(item) {
     if (ev.type === "control_request") return onControl(ev);
     // 清单工具一出结果就推，不等 4 秒轮询
     if (ev.type === "user" && ev.tool_use_result && (ev.tool_use_result.task || ev.tool_use_result.statusChange || ev.tool_use_result.updatedFields)) setImmediate(() => tasksCheck(run.sessionId));
-    if (ev.type === "control_response") return;          // 我们发的 set_permission_mode 的回执
+    // 我们发的 set_permission_mode 的回执：被拒要记下来（以前直接丢掉，切了没生效也看不出来）
+    if (ev.type === "control_response") { if (ev.response && ev.response.subtype === "error") log(`⚠️ claude 拒绝了控制请求：${String(ev.response.error || ev.response.error_code || "").slice(0, 160)}`); return; }
     if (ev.type === "assistant" && Array.isArray(ev.message && ev.message.content)) {
       let n = 0;
       for (const c of ev.message.content) if (c && c.type === "tool_use" && c.id && !run.usageTools.has(c.id)) { run.usageTools.add(c.id); n++; }
