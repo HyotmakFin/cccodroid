@@ -1,8 +1,10 @@
   // ── 设置：弹窗。宽屏居中（左分类、右内容）；窄屏铺满，先列分类，点进去看一类，返回键回分类 ──
   var setOpen = false;
+  var setCatShown = "-";   // 上次画的是哪一类：null = 窄屏的分类列表，"-" = 刚打开还没画过
   function openSettings(cat) {
     OV.closeAll();
     setOpen = true;
+    MO.cancel($("set-ov"));
     $("set-ov").classList.remove("hidden");
     setCatOpen = cat || (pagesNarrow() ? null : setCatOpen || "general");
     loadQuota().catch(() => {});
@@ -14,7 +16,9 @@
   function closeSettings() {
     if (!setOpen) return;
     setOpen = false;
-    $("set-ov").classList.add("hidden");
+    const ov = $("set-ov");
+    MO.leave(ov, ov.classList.contains("narrow") ? "mo-out-push" : "mo-out-fade", 170, () => ov.classList.add("hidden"));
+    setCatShown = "-";
     renderSideNav();
   }
   $("set-x").addEventListener("click", closeSettings);
@@ -79,6 +83,14 @@
     $("tab-settings").classList.toggle("set-list", narrow && !setCatOpen);
     $("tab-settings").classList.toggle("set-one", narrow && !!setCatOpen);
     cats.forEach((b) => b.classList.toggle("on", b.dataset.cat === setCatOpen));
+    // 每次进「更新」这一类都重新查一遍（不只读上回的结果）；离开再进来才算一次
+    if (setCatOpen === "update" && setCatShown !== "update") updOnOpen();
+    if (setCatShown !== "-" && setCatShown !== setCatOpen) {
+      const cur = setCatOpen && document.querySelector(`.set-cat[data-cat="${setCatOpen}"]`);
+      if (narrow) { if (cur) MO.play(cur, "mo-in-push", 1400); else if (!setCatOpen) MO.play($("set-cats"), "mo-in-back", 1400); }
+      else if (cur) MO.play(cur, "mo-in-rise", 1400);
+    }
+    setCatShown = setCatOpen;
     document.querySelectorAll(".set-cat").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
     const cb = cats.find((b) => b.dataset.cat === setCatOpen);
     $("set-title").textContent = narrow && cb ? cb.textContent.trim() : t("设置");

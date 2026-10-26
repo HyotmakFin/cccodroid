@@ -2176,3 +2176,5 @@
 2176	« Compléter les titres » dans la barre titre d'un coup les anciens chapitres sans titre. Désormais, l'IA titre elle-même les nouvelles sessions, un chapitre par compactage.
 2177	Première visite ? Touchez « Comment lire » en haut à droite : deux minutes pour apprendre
 2178	Comment lire
+2179	Animations de l’interface
+2180	Entrée et sortie de la barre latérale, des menus et des pages, et signaux de fin. En mode système, désactivées si « Réduire les animations » est activé

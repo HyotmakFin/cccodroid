@@ -78,7 +78,7 @@
     const p = sheetEl.querySelector(".sheet-panel"), col = colRect(), wide = col.width >= 560;
     sheetEl.classList.toggle("pop", wide);
     p.style.cssText = ""; sheetEl.style.left = sheetEl.style.right = "";
-    sheetEl.classList.remove("hidden");
+    MO.cancel(sheetEl); sheetEl.classList.remove("hidden");
     sheetW = innerWidth;
     if (!wide) { sheetEl.style.left = col.left + "px"; sheetEl.style.right = (innerWidth - col.right) + "px"; return; }
     const ar = $("btn-plus").getBoundingClientRect(), w = Math.min(360, col.width - 32);
@@ -101,11 +101,11 @@
   for (const ev of ["pointerup", "pointercancel", "pointerleave"]) sheetEl.addEventListener(ev, () => clearTimeout(shotHold));
   sheetEl.addEventListener("contextmenu", (e) => { if (e.target.closest('.sheet-tile[data-act="shot"]')) e.preventDefault(); });
   sheetEl.addEventListener("click", (e) => {
-    if (e.target === sheetEl) { sheetEl.classList.add("hidden"); return; }
+    if (e.target === sheetEl) { MO.hide(sheetEl, "mo-out-sheet"); return; }
     const it = e.target.closest(".sheet-item, .sheet-tile");
     if (!it) return;
     if (shotHeld) { shotHeld = false; return; }
-    sheetEl.classList.add("hidden");
+    if (it.dataset.act === "shot") sheetEl.classList.add("hidden"); else MO.hide(sheetEl, "mo-out-sheet");   // 截屏别把菜单截进去
     const a = it.dataset.act;
     if (a === "new") return $("btn-new").click();
     if (a === "caps") return openPage("caps");
@@ -332,9 +332,16 @@
       const s = g; g = null;
       if (!s || !s.on) return;
       const open = s.dx > s.w / 5 || s.v > 0.3;
-      panel.style.transition = "transform .18s ease";
       drawerEl.style.transition = "background-color .18s ease";
-      panel.style.transform = open ? "translateX(0)" : `translateX(${(rtl() ? 1 : -1) * s.w}px)`;
+      if (open && MO.on()) {
+        // 松手展开：从手指放开的位置用弹簧落定（和点菜单键打开一个手感）；收回去仍是干脆的缓动
+        const x0 = (rtl() ? 1 : -1) * (s.w - s.dx);
+        panel.style.transition = "none"; panel.style.transform = "translateX(0)";
+        MO.spring(panel, "snap", (p) => ({ transform: `translateX(${x0 * (1 - p)}px)` }));
+      } else {
+        panel.style.transition = "transform .18s ease";
+        panel.style.transform = open ? "translateX(0)" : `translateX(${(rtl() ? 1 : -1) * s.w}px)`;
+      }
       scrim(open ? 0.999 : 0);
       setTimeout(() => { if (open) reset(); else closeDrawer(true); }, 190);
     };
@@ -397,10 +404,10 @@
   // 返回键 / 侧滑返回：壳先问这里，从最上层往下关一层浮层，关了就返回 true；什么都没开才由壳把界面退到后台。
   // 顺序按 z-index 从高到低（灯箱 90 > 终端文本 73 > 终端 72 > 查看器 71 > 文件 70 > 补全弹窗 60 > 底部菜单 55 > 侧栏 50）
   window.__ccBack = guardHook("__ccBack", () => {
-    const open = (id) => !$(id).classList.contains("hidden");
+    const open = (id) => !$(id).classList.contains("hidden") && !$(id)._moLeave;   // 正在退场的不算开着，返回键往下一层走
     if (OV.back()) return true;     // 菜单、速览卡、弹层：关最上面那个
     const steps = [
-      ["lightbox", () => $("lightbox").classList.add("hidden")],
+      ["lightbox", () => MO.hide($("lightbox"), "mo-out-fade")],
       ["term-textview", () => $("term-textview").classList.add("hidden")],
       ["browser", closeBrowser],
       ["term", closeTerm],
@@ -408,7 +415,7 @@
       ["viewer", closeViewer],          // 有未保存修改会先问；选了不丢弃也算处理过，别把界面退到后台
       ["files", closeFiles],
       ["popup", hidePopup],
-      ["sheet", () => $("sheet").classList.add("hidden")],
+      ["sheet", () => MO.hide($("sheet"), "mo-out-sheet")],
       ["set-ov", setBack],
       ["drawer", closeDrawer],
       // 项目 / 定时任务的详情：先回列表，再关整页

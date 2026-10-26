@@ -18,12 +18,12 @@
   async function openGit(dir, opts = {}) {
     Object.assign(GIT, { dir, root: "", tab: opts.tab || "changes", status: null, file: opts.file || "", view: opts.file ? (opts.tab === "history" ? { kind: "log" } : { kind: "diff" }) : null });
     GIT.sel = new Set();
-    gitEl.classList.remove("hidden");
+    MO.cancel(gitEl); gitEl.classList.remove("hidden");
     $("git-name").textContent = String(dir).split("/").pop();
     $("git-info").textContent = "";
     await gitLoad();
   }
-  function closeGit() { gitEl.classList.add("hidden"); $("git-body").innerHTML = ""; $("git-sync").classList.add("hidden"); }
+  function closeGit() { MO.hide(gitEl, MO.paneOut(), 170, () => { $("git-body").innerHTML = ""; $("git-sync").classList.add("hidden"); }); }
   $("git-close").addEventListener("click", closeGit);
   $("git-reload").addEventListener("click", () => gitLoad());
   gitEl.querySelector(".git-tabs").addEventListener("click", (e) => {
@@ -367,7 +367,7 @@
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
-    viewerEl.classList.remove("hidden");
+    MO.cancel(viewerEl); viewerEl.classList.remove("hidden");
     if (VW.kind === "text" && isHtml(path) && localStorage.getItem("cc.vw.htmlmode") !== "edit") return vwHtml();
     if (VW.kind === "text") return vwLoadText(isMd(path) ? (localStorage.getItem("cc.vw.mdmode") === "edit" ? "edit" : "md") : "edit");
     if (VW.kind === "image") return vwImage();

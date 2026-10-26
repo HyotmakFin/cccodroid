@@ -2176,3 +2176,5 @@
 2176	«Completar títulos» en la barra titula de una vez los capítulos antiguos sin título. A partir de ahora la IA titula sola las sesiones nuevas, un capítulo por compactación.
 2177	¿Primera vez? Toca «Cómo leerlo» arriba a la derecha: dos minutos para aprender
 2178	Cómo leerlo
+2179	Animaciones de la interfaz
+2180	Entrada y salida de la barra lateral, menús y páginas, y avisos de finalización. Si sigue al sistema, se desactivan cuando «Reducir movimiento» está activo

@@ -10,7 +10,18 @@
     ...(cur && !usableProvs().some((p) => p.id === cur) ? [[cur, provLabel(cur)]] : [])];
 
   // ── 项目页 ──
+  // 列表 ↔ 详情的动效：上次画的是哪个详情，变了才放（数据刷新重画不放）；整页刚滑进来时不叠加
+  const pgNav = {};
+  function navMo(name, cur) {
+    const k = cur || "", was = pgNav[name];
+    pgNav[name] = k;
+    if (was === undefined || was === k || curPage !== name) return;
+    const pg = $("pages"); if (pg.classList.contains("mo-in-push") || pg.classList.contains("mo-in-rise")) return;
+    const narrow = innerWidth < 680, into = !!k;
+    MO.play($("tab-" + name), narrow ? (into ? "mo-in-push" : "mo-in-back") : (into ? "mo-in-pane" : "mo-in-pane-back"), 1400);
+  }
   async function renderProjects() {
+    navMo("projects", PJ.cur);
     const box = $("tab-projects");
     if (PJ.cur) return renderProject(box);
     setOv("");
@@ -234,6 +245,7 @@
 
   // ── 定时任务页 ──
   async function renderSched() {
+    navMo("sched", SC.cur);
     const box = $("tab-sched");
     if (SC.cur) return renderTask(box);
     setOv("");
@@ -510,7 +522,12 @@
     curPage = name;
     document.documentElement.classList.toggle("pg-lineage", name === "lineage");   // 脉络页整页不滚（地图自己接手势）
     if (name !== "lineage") closeTour();   // 离开脉络页：导览一起收掉
-    $("pages").classList.remove("hidden");
+    // 从对话进整页：窄屏从右边推进来（盖住对话），宽屏只在对话那一块浮上来；整页之间切换：新的那一页浮上来
+    const pg = $("pages"), fromChat = pg.classList.contains("hidden") || !!pg._moLeave;
+    MO.cancel(pg);
+    pg.classList.remove("hidden");
+    if (fromChat) MO.play(pg, innerWidth < 680 ? "mo-in-push" : "mo-in-rise", 1400);
+    else if (prev !== name) MO.play($("tab-" + name), "mo-in-rise", 1400);
     pageSub = "";
     paintTitle();
     document.querySelectorAll("#page-body > .tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));
@@ -536,7 +553,10 @@
     pageTitleOv = "";
     document.documentElement.classList.remove("pg-lineage");
     closeTour();
-    $("pages").classList.add("hidden");
+    // 回到对话：窄屏整页滑出去、底下的对话从左边一点点回来；宽屏淡掉
+    const pg = $("pages");
+    MO.leave(pg, innerWidth < 680 ? "mo-out-push" : "mo-out-fade", 170, () => pg.classList.add("hidden"));
+    if (innerWidth < 680) MO.play(chatEl, "mo-in-back", 1400);
     renderSideNav();
     paintTitle();
   }

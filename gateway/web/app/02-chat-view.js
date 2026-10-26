@@ -305,6 +305,7 @@
         api.state = ok ? "ok" : "err";
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : t("失败");
+        if (live) { MO.play(st, "mo-tick", 1400); if (ok) MO.play(card, "mo-ok", 1400); }
         // 后台子代理：工具结果只是「已启动」，真正跑完靠 sub_done
         if (isAgent && ok && /^Async agent launched/.test(result.text) && !(sub && sub.done)) { st.className = "tool-state run"; st.textContent = t("后台运行"); }
         if (built) { built = false; build(); }

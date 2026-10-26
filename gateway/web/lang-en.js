@@ -2213,5 +2213,7 @@ window.I18N_DICT.en = {
   "试模型、打招呼这类杂项和一问一答默认收起，打开「显示杂项」才看得到。": "Misc sessions (trying a model, saying hi) and one-shot Q&As are hidden until you turn on \"Show misc\".",
   "工具栏的「补档」能给没题名的旧章一次补齐。以后新会话由 AI 自己建档，压缩一次记一章。": "\"Backfill titles\" in the toolbar titles all untitled old chapters at once. From now on the AI titles new sessions itself, one chapter per compaction.",
   "第一次来？点右上「怎么看」，两分钟学会看脉络": "First time here? Tap \"How to read\" at the top right — two minutes to learn the lineage map",
-  "怎么看": "How to read"
+  "怎么看": "How to read",
+  "界面动效": "Interface motion",
+  "侧栏、菜单、整页的进出和完成提示；跟随系统时，系统开了「减少动态效果」就不放": "Sidebar, menus and pages slide in and out, plus completion cues. When following the system, they're off if Reduce motion is on"
 };

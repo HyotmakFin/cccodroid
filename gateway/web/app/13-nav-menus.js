@@ -4,15 +4,32 @@
   function openDrawer(tab) {
     if (tab && tab !== "sessions") return openPage(tab);
     OV.closeAll();
+    MO.cancel(drawerEl);
+    const wasHidden = drawerEl.classList.contains("hidden");
     drawerEl.classList.remove("hidden");
     refreshStatus();
     loadSessions();
     if (!tab) loadCaps();
     renderSideNav();
     loadProjects(); loadSched();
+    // 条目一个接一个跟上（点菜单键、横滑拉出都放）；点菜单键的再加遮罩淡入、面板弹出 ——
+    // 横滑拉出的面板跟着手指走（手势把面板动画关了），松手由手势那边用弹簧落定。常驻左栏不放
+    const panel = drawerEl.querySelector(".drawer-panel");
+    if (wasHidden && MO.on() && panel && !(window.CCLayout && CCLayout.docked())) {
+      MO.stagger(drawerEl.querySelectorAll(".side-new, .side-nav > .nav-item, .side-recent > :is(h4, .sr-item)"), 14);
+      MO.play(drawerEl, "mo-items", 1600);
+      if (panel.style.animation !== "none") MO.play(drawerEl, "mo-enter", 1400);
+    }
   }
   // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点收起 / 菜单键（force）才收
-  function closeDrawer(force) { if (!force && window.CCLayout && CCLayout.docked()) return; drawerEl.classList.add("hidden"); }
+  // 收起：面板滑回去、遮罩淡掉，再真正藏起来；横滑收起的面板已经在屏外了，直接藏
+  function closeDrawer(force) {
+    if (!force && window.CCLayout && CCLayout.docked()) return;
+    if (drawerEl.classList.contains("hidden")) return;
+    const panel = drawerEl.querySelector(".drawer-panel");
+    if (panel && panel.style.transform) { MO.cancel(drawerEl); drawerEl.classList.add("hidden"); return; }
+    MO.leave(drawerEl, "mo-leave", 170, () => drawerEl.classList.add("hidden"));
+  }
 
   const PAGES = {
     sessions: { name: tk("对话"), icon: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>' },
@@ -150,8 +167,17 @@
     }
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
+    moOrigin(m, ar);
     m.addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (!b || !items[+b.dataset.i].fn) return; OV.close(m); items[+b.dataset.i].fn(); });
     return m;
+  }
+  /** 菜单的缩放原点放在锚点那一侧（在锚点下面就从上沿长出、在上面就从下沿），条目错开出场 */
+  function moOrigin(m, ar) {
+    if (!MO.on()) return;
+    const r = m.getBoundingClientRect();
+    const ox = Math.max(12, Math.min(r.width - 12, ar.left + ar.width / 2 - r.left));
+    m.style.transformOrigin = `${ox}px ${r.top >= ar.top + ar.height / 2 ? "0" : "100%"}`;
+    MO.stagger(m.querySelectorAll(":scope > button, :scope > .pm-head"), 10);
   }
   // 下拉框不用系统弹出的选择器（深色、和主题不搭），换成同一套菜单：当前项打勾，optgroup 成小标题，
   // 长列表可滚、自动滚到当前项，宽度至少和下拉框一样。选了照常触发 input / change，原有逻辑不用改。
@@ -181,6 +207,7 @@
     if (y + mh > H - 8) y = ar.top - mh - 4 >= 8 ? ar.top - mh - 4 : Math.max(8, H - mh - 8);
     const x = getComputedStyle(sel).direction === "rtl" ? ar.right - mw : ar.left;
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = y + "px";
+    moOrigin(m, ar);
     const on = m.querySelector("button.on"); if (on) m.scrollTop = on.offsetTop - (m.clientHeight - on.offsetHeight) / 2;
     m.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-i]"); if (!b || b.disabled) return;
@@ -272,6 +299,7 @@
         + `<div class="sr-hint">${esc(t("长按会话：置顶、重命名、导出、删除"))}</div>`
       : `<div class="sr-empty">${esc(t("还没有历史会话。"))}</div>`;
   }
+  $("side-scroll").addEventListener("scroll", (e) => e.target.classList.toggle("scrolled", e.target.scrollTop > 2), { passive: true });
   $("side-recent").addEventListener("click", (e) => {
     if (e.target.closest("[data-all]")) return openPage("sessions");
     const g = e.target.closest("[data-fold]");
