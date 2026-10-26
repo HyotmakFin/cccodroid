@@ -56,21 +56,22 @@ export async function archiveView(sid) {
 }
 
 /**
- * 每次起 claude 时追加的系统提示：常驻规则 + 这一轮该不该先建档。端侧小模型不挂（读不起、也不需要）。
- * sid 为空（新会话第一轮）时只给规则。
+ * 每次起 claude 时：rule 是常驻规则（进追加的系统提示），note 是「这一轮先建档」的提醒（进本轮用户消息）。
+ * 提醒放系统提示末尾，flash 连续几轮都不理（10-26 真机）；作为用户消息里的 <system-reminder> 递进去才照做。
+ * 端侧小模型不挂（读不起、也不需要）。sid 为空（新会话第一轮）时只有规则。
  */
 export async function archiveHint(sid) {
   const lang = LAST_LANG;
   const rule = `Session archiving (cccodroid): this app keeps an archive of every session; each context compaction ends one chapter, and the session list shows the latest chapter's title. Whenever the context has just been compacted (you see a compaction summary, or a note saying so), first file the chapter that just ended, then continue your task: read ${specFile(lang)} once for the rules, then run \`node ${ARCHIVE_CLI} --title "<title>"\` (add --same if it continues the previous chapter's work). Write titles in ${langName(lang)}. If the command rejects the title, fix it as told and run it again. Don't mention archiving to the user unless asked.`;
-  if (!sid) return rule;
+  if (!sid) return { rule, note: "" };
   const rec = await lineageRecord(sid).catch(() => null);
-  if (!rec) return rule;
+  if (!rec) return { rule, note: "" };
   const entry = archiveDb().sessions[sid];
   const C = rec.compacts.length, has = (k) => !!entry?.chapters?.[k]?.title;
   let todo = "";
   if (C >= 1 && !has(C)) todo = `Archive note: chapter ${C} of this session has ended (at the last compaction) and is not filed yet. File it first, before anything else.`;
   else if (!entry?.title && !NAMES[sid] && rec.turns >= 1) todo = `Archive note: this session has no title yet. File the current chapter (chapter ${C + 1}) first, before anything else — even if the user's message is just small talk.`;
-  return todo ? rule + "\n" + todo : rule;
+  return { rule, note: todo };
 }
 
 export async function routeArchive(req, res, u, p) {

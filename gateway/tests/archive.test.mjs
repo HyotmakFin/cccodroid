@@ -78,15 +78,15 @@ test("网关：压缩过、刚结束的章没题名 → 系统提示要求先建
   const { listSessions } = await import("../gw/sessions.mjs");
   const sid = session(6, 2);
   let h = await archiveHint(sid);
-  assert.match(h, /chapter 2 of this session has ended/);
-  assert.match(h, /cc-archive\.mjs/);
+  assert.match(h.note, /chapter 2 of this session has ended/);
+  assert.match(h.rule, /cc-archive\.mjs/);
   const bad = await fileChapter(sid, { title: "你好，claude" });
   assert.equal(bad.ok, false);
   const ok = await fileChapter(sid, { title: "接手网关修复并验证" });
   assert.equal(ok.ok, true);
   assert.equal(ok.n, 2);
   h = await archiveHint(sid);
-  assert.doesNotMatch(h, /Archive note/, "交过了就不再催");
+  assert.equal(h.note, "", "交过了就不再催");
   assert.equal(listSessions().find((s) => s.id === sid).title, "接手网关修复并验证");
   // 用户改的锁定：AI 再交同一章被拒
   await fileChapter(sid, { title: "我自己起的名字", chapter: 2, by: "user" });
@@ -98,9 +98,9 @@ test("网关：压缩过、刚结束的章没题名 → 系统提示要求先建
 
 test("网关：没压缩过的会话从第 2 轮起提醒起题名；新会话第一轮只给规则", async () => {
   const { archiveHint } = await import("../gw/archive.mjs");
-  assert.doesNotMatch(await archiveHint(session(0, 0)), /Archive note/);
-  assert.match(await archiveHint(session(1, 0)), /no title yet/);
-  assert.doesNotMatch(await archiveHint(null), /Archive note/);
+  assert.equal((await archiveHint(session(0, 0))).note, "");
+  assert.match((await archiveHint(session(1, 0))).note, /no title yet/);
+  assert.equal((await archiveHint(null)).note, "");
 });
 
 test("命令行 cc-archive：带本轮编号交档，网关认出会话；不合格退出码 1 并说明", async () => {
