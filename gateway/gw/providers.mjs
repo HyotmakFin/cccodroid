@@ -394,7 +394,9 @@ async function testProvider(id) {
     let msg = text.slice(0, 200);
     try { const j = JSON.parse(text); msg = j.error?.message || j.message || j.msg || msg; } catch {}
     const why = r.status === 401 || r.status === 403 ? "密钥无效或与线路不匹配" : `HTTP ${r.status}`;
-    return { ok: false, status: r.status, message: `${why}：${msg}` };
+    // 聚合平台（如 opencode Zen）同一个型号可能只走 OpenAI 协议：报 "does not support this protocol"。议题 #23
+    const hint = /support(s|ed)? (this|the) protocol|unsupported protocol/i.test(msg) ? tz("（这个型号在这个地址上不支持 Anthropic 协议：换一个支持的型号，或换成平台给 Claude Code 用的那个地址）") : "";
+    return { ok: false, status: r.status, message: `${why}：${msg}${hint}` };
   } catch (e) {
     return { ok: false, message: tz("连不上：{err}", { err: e.message }) };
   }
