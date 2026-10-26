@@ -50,6 +50,7 @@ cccodroid 让执行回到你自己的设备上：云端只负责模型推理，�
   - **会话管理**：侧栏「对话」页能搜内容、按条件筛，常用的对话可以置顶；删除先进回收站（30 天内可恢复）；可逐条勾选或全选，打包导出成 zip，用系统的「保存到」存到任意位置或直接分享；在另一台设备上导入就能接着聊。
   - **终端**（顶栏）：真正的终端，可开多个标签，跑的是 Claude 用的同一个 bash 与工具链 —— hx（Helix）、less、top、git 等都能用。底下一排补上手机键盘没有的键（Esc、Tab、粘住的 Ctrl / Alt、方向键、Home / End、PgUp / PgDn、粘贴、字号）；「文本视图」可长按选择复制输出。关掉面板终端照样在跑，回来时回放输出。
   - **文件查看 / 编辑器**（从文件浏览器打开）：文本、代码直接改、直接存 —— 打开之后磁盘上的文件被改过（比如 Claude 改了），保存前会先问你，不会悄悄覆盖。Markdown 渲染显示，可切到编辑；图片适应屏幕，点一下看原始大小；PDF 用 [pdf.js](https://mozilla.github.io/pdf.js/) 渲染（含中日韩文字与带密码的文件），翻到哪页才画哪页。Word、Excel 直接看，PPT 和旧版 doc 装了 LibreOffice 组件后转成 PDF 看。`.html` 文件直接显示成网页，同目录（以及上级目录）里引用的 CSS、JS、图片都能加载，文件一改自动刷新，Claude 写的网页小游戏点开就能玩。右上角是**分享**：交给系统分享面板，发到别的应用。
+  - **开发者工具**（0.4.14 起）：预览 HTML 和应用内浏览器都能打开内置的 [Eruda](https://github.com/liriliri/eruda)（元素、控制台、网络、存储），不联网。开着时还能「选取元素」：点一下页面上的某一块，它的选择器和一小段 HTML 就放进输入框，接着告诉 Claude 要怎么改。
   - **拿 Markdown 写东西**：编辑时公式、代码块就地排好，光标移过去才露出源码；字数随改随算，没保存的草稿自动存着。几百万字的长稿也能打开、能改（上限 16 MB），预览只排屏幕附近那一段，滑动不卡。
   - **git 面板**（从文件浏览器或编辑器打开）：看改动、历史和逐行对比，勾上文件写一句说明就能提交；也能撤销改动、切换或新建分支、拉取和推送。
   - **输入栏下面直接换**模型、思考强度和权限模式；新对话首屏也能先挑好项目和型号再开口。
@@ -240,6 +241,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 
 - **[DeepSeek Harness 安卓版](https://github.com/woaiys3/deepseek-harness-android-app)**（woaiys3）：免 root 在手机上跑 AI 代理、借 Shizuku 提权、前台保活 —— 这些路是它先蹚出来的。cccodroid 的早期探索和开发都在它搭起的环境里完成，Claude Code 能在安卓上走到今天，地基是它和它的作者打下的。
 - **[Archify](https://github.com/tt-a1i/archify)**（tt-a1i，MIT）：上面的架构图用它生成，经过它的布局校验；许可证见 [ThirdPartyLicenses/Archify](ThirdPartyLicenses/Archify/LICENSE)。
+- **[Eruda](https://github.com/liriliri/eruda)**（liriliri，MIT）：预览和浏览器里的开发者工具；许可证见 [ThirdPartyLicenses/eruda](ThirdPartyLicenses/eruda/LICENSE)。
 - **[Termux](https://termux.dev)**：开发工具包由它的官方软件包组装。
 - **[Shizuku](https://shizuku.rikka.app)**（RikkaApps）：不 root 也能拿到系统权限。
 - **[OpenCC](https://github.com/BYVoid/OpenCC)** / [opencc-js](https://github.com/nk2028/opencc-js)：繁体中文界面文案用它从简体转换，再人工校对。
