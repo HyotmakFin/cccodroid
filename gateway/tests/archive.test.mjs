@@ -96,10 +96,10 @@ test("网关：压缩过、刚结束的章没题名 → 系统提示要求先建
   assert.equal(db.sessions[sid].chapters[2].hist[0].title, "接手网关修复并验证", "改动留痕");
 });
 
-test("网关：没压缩过的会话聊到第 3 轮才提醒起题名；新会话第一轮只给规则", async () => {
+test("网关：没压缩过的会话从第 2 轮起提醒起题名；新会话第一轮只给规则", async () => {
   const { archiveHint } = await import("../gw/archive.mjs");
-  assert.doesNotMatch(await archiveHint(session(1, 0)), /Archive note/);
-  assert.match(await archiveHint(session(2, 0)), /no title yet/);
+  assert.doesNotMatch(await archiveHint(session(0, 0)), /Archive note/);
+  assert.match(await archiveHint(session(1, 0)), /no title yet/);
   assert.doesNotMatch(await archiveHint(null), /Archive note/);
 });
 

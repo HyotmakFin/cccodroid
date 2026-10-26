@@ -3,7 +3,7 @@
 //
 // 权威与时机分开（2026-10-26 真机实测）：钩子输出里的指令模型不执行（当成可能的注入），所以
 //   规则放在网关追加的系统提示里（应用方的话，模型认）；
-//   时机：每次起 claude 时网关自己算（刚结束的章没题名 / 没压缩过的会话聊到第 3 轮），写进系统提示；
+//   时机：每次起 claude 时网关自己算（刚结束的章没题名 / 没压缩过的会话聊到第 2 轮），写进系统提示；
 //   跑到一半自动压缩的，由 SessionStart:compact 钩子补一句「刚压缩过」—— 只陈述事实，不下指令。
 // 交档：AI 在 Bash 里跑 archive/cc-archive.mjs → POST /api/archive（带网关令牌、本轮编号）→ 这里按规范校验，
 //   不合格把原因退回去，AI 改了再交。
@@ -69,7 +69,7 @@ export async function archiveHint(sid) {
   const C = rec.compacts.length, has = (k) => !!entry?.chapters?.[k]?.title;
   let todo = "";
   if (C >= 1 && !has(C)) todo = `Archive note: chapter ${C} of this session has ended (at the last compaction) and is not filed yet. File it first, before anything else.`;
-  else if (!entry?.title && !NAMES[sid] && rec.turns >= 2) todo = `Archive note: this session has no title yet. Before your final reply in this turn, file the current chapter (chapter ${C + 1}).`;
+  else if (!entry?.title && !NAMES[sid] && rec.turns >= 1) todo = `Archive note: this session has no title yet. File the current chapter (chapter ${C + 1}) first, before anything else — even if the user's message is just small talk.`;
   return todo ? rule + "\n" + todo : rule;
 }
 
