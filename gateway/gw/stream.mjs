@@ -14,6 +14,12 @@ import { publish } from "./bus.mjs";
 // 查看器能直接预览 HTML：告诉 Claude 静态网页写好给路径就行，别动不动起 http.server（还得用户自己找端口）
 export const PREVIEW_HINT = "In this app, file paths you mention in a reply are tappable and open in a file viewer, where .html files render as a live preview (relative CSS, JS and images load, and it reloads when the file changes). For a static web page or browser game, write the file and give the user its full path instead of starting a local web server; start a server only when the page needs a backend.";
 export const TASKS_HINT = "When a request has 3 or more distinct steps, track them with the TaskCreate and TaskUpdate tools: create the tasks first, mark each in_progress when you start it and completed when it is done. The user sees this list as a live progress panel.";
+/** 报一次「正在写工具参数」的字数（节流用） */
+function toolEmit(flags, sse) {
+  flags.toolTimer = null; flags.toolAt = Date.now();
+  sse({ type: "phase", phase: "tool", name: flags.toolName || "", chars: flags.toolChars });
+}
+
 export function toolsHint() {
   if (PREFIX) {
     // 随包的 TOOLS.md 是逐项实测过的工具清单与用法（cccodroid-selftest 验证），优先用它；后面接本机实况
@@ -148,10 +154,13 @@ export function translate(ev, { sse, onInit, onResult, onReplay, flags, provider
           } else if (k === "text") sse({ type: "phase", phase: "text" });
         } else if (e?.type === "content_block_delta" && e.delta?.type === "input_json_delta") {
           flags.toolChars = (flags.toolChars || 0) + String(e.delta.partial_json || "").length;
-          const emit = () => { flags.toolTimer = null; flags.toolAt = Date.now(); sse({ type: "phase", phase: "tool", name: flags.toolName || "", chars: flags.toolChars }); };
-          if (Date.now() - (flags.toolAt || 0) >= 400) emit();
-          else if (!flags.toolTimer) flags.toolTimer = setTimeout(emit, 400 - (Date.now() - (flags.toolAt || 0)));   // 节流期间的最后一个数也要报出去
-        } else if (e?.type === "content_block_stop" && flags.toolTimer) { clearTimeout(flags.toolTimer); flags.toolTimer = null; }
+          if (Date.now() - (flags.toolAt || 0) >= 400) toolEmit(flags, sse);
+          else if (!flags.toolTimer) flags.toolTimer = setTimeout(() => toolEmit(flags, sse), 400 - (Date.now() - (flags.toolAt || 0)));   // 节流期间的最后一个数也要报出去
+        } else if (e?.type === "content_block_stop" && flags.toolTimer) {
+          // 参数写完时还有没报的数：补报，别丢。官方接口的参数是大块来的（一小块开头 + 一大块正文），
+          // 以前这里直接清掉计时器，界面就停在开头那几个字上（比如「7 字」），DeepSeek 逐字流才看着正常
+          clearTimeout(flags.toolTimer); toolEmit(flags, sse);
+        }
       }
       if (e?.type === "content_block_delta" && e.delta?.type === "text_delta" && e.delta.text) {
         if (flags) { flags.gotDelta = true; if (!ev.parent_tool_use_id) flags.pendText = (flags.pendText || 0) + e.delta.text.length; }
