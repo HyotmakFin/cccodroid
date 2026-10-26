@@ -2790,9 +2790,7 @@ html[data-motion="on"]:not(.dock-l)[dir="rtl"] .drawer-panel{animation-name:mo-d
 html[data-motion="on"] #drawer.mo-enter{animation:mo-fade-in calc(.2s * var(--mo-x,1)) ease-out}
 html[data-motion="on"] #drawer.mo-items .mo-st{animation:mo-item var(--mo-soft) linear both;animation-delay:calc((70ms + var(--i,0) * 45ms) * var(--mo-x,1))}
 html[data-motion="on"][dir="rtl"] #drawer.mo-items .mo-st{animation-name:mo-item-r}
-html[data-motion] #drawer.mo-leave{animation:mo-fade-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both;pointer-events:none}
-html[data-motion] #drawer.mo-leave .drawer-panel{animation:mo-slide-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both}
-html[data-motion][dir="rtl"] #drawer.mo-leave .drawer-panel{animation-name:mo-slide-out-r}
+#drawer.mo-shut{pointer-events:none}   /* 收起由脚本按当前位置播（closeDrawer），这里只挡点击 */
 /* 弹出菜单：从锚点那一侧长出来（原点由脚本按锚点设），条目错开落下 */
 html[data-motion="on"] .pop-menu{animation:mo-pop var(--mo-pop) linear}
 html[data-motion="on"] .pop-menu > .mo-st{animation:mo-drop var(--mo-soft) linear both;animation-delay:calc(var(--i,0) * 40ms * var(--mo-x,1))}
@@ -2850,7 +2848,3 @@ html[data-motion="on"] .ch-sep.mo-hit :is(.ch-n,.ch-t){animation:mo-bump var(--m
 html[data-motion="on"] .lmap.mo-pick .lm-main .dim{animation:mo-dim calc(.32s * var(--mo-x,1)) ease-out}
 html[data-motion="on"] .lmap.mo-pick .lm-cardbox{animation:mo-card var(--mo-snap) linear both}
 html[data-motion="on"] .lmap.mo-pick .t-ch{animation:mo-rise var(--mo-soft) linear both;animation-delay:calc(.08s * var(--mo-x,1))}
-/* 发送：输入框里的字往上淡走的替身、飞向气泡的替身（脚本放在 body 下，fixed 定位） */
-.mo-lift{position:fixed;z-index:60;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
-.mo-ghost-wrap{position:fixed;z-index:60;margin:0!important;max-width:none!important;pointer-events:none;animation:none!important;display:block}
-.mo-ghost-wrap > .bubble{width:100%;height:100%;max-width:none!important;margin:0!important;box-sizing:border-box;overflow:hidden}

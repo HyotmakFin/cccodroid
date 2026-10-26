@@ -18,6 +18,8 @@
     if (was === undefined || was === k || curPage !== name) return;
     const pg = $("pages"); if (pg.classList.contains("mo-in-push") || pg.classList.contains("mo-in-rise")) return;
     const narrow = innerWidth < 680, into = !!k;
+    // 回程：内容马上要被重画，先给旧的留个替身 —— 进详情时列表往左退暗（垫在下面），返回时详情往右滑走（盖在上面）
+    MO.ghost($("tab-" + name), narrow ? (into ? "back" : "push") : "fade", !(narrow && into));
     MO.play($("tab-" + name), narrow ? (into ? "mo-in-push" : "mo-in-back") : (into ? "mo-in-pane" : "mo-in-pane-back"), 1400);
   }
   async function renderProjects() {
@@ -527,7 +529,7 @@
     MO.cancel(pg);
     pg.classList.remove("hidden");
     if (fromChat) MO.play(pg, innerWidth < 680 ? "mo-in-push" : "mo-in-rise", 1400);
-    else if (prev !== name) MO.play($("tab-" + name), "mo-in-rise", 1400);
+    else if (prev !== name) { if (prev && $("tab-" + prev)) MO.ghost($("tab-" + prev), "fade"); MO.play($("tab-" + name), "mo-in-rise", 1400); }   // 旧的一页淡掉，新的浮上来
     pageSub = "";
     paintTitle();
     document.querySelectorAll("#page-body > .tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));

@@ -75,6 +75,15 @@
     .observe($("tab-settings"), { subtree: true, attributes: true, attributeFilter: ["class"] });
   function paintSetCats() {
     paintSetUsage();
+    // 回程：换类之前给旧的那一屏留个替身 —— 窄屏往里进时分类列表往左退暗、返回时内容页往右滑走；宽屏旧内容淡掉
+    if (setCatShown !== "-" && setCatShown !== setCatOpen) {
+      const old = setCatShown ? document.querySelector(`.set-cat[data-cat="${setCatShown}"]:not(.mo-ghost)`) : $("set-cats");
+      if (old && old.getClientRects().length) {
+        if (!pagesNarrow()) MO.ghost(old, "fade");
+        else if (setCatOpen) MO.ghost(old, "back", false);
+        else MO.ghost(old, "push");
+      }
+    }
     const narrow = pagesNarrow(), cats = [...document.querySelectorAll("#set-cats [data-cat]")];
     // 一类里一项都没显示（比如开发端没有通知 / 更新）就连分类一起藏起来
     const empty = (k) => ![...document.querySelectorAll(`.set-cat[data-cat="${k}"] > :is(.srow, .sblock)`)].some((f) => !f.classList.contains("hidden"));
@@ -91,7 +100,7 @@
       else if (cur) MO.play(cur, "mo-in-rise", 1400);
     }
     setCatShown = setCatOpen;
-    document.querySelectorAll(".set-cat").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
+    document.querySelectorAll(".set-cat:not(.mo-ghost)").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
     const cb = cats.find((b) => b.dataset.cat === setCatOpen);
     $("set-title").textContent = narrow && cb ? cb.textContent.trim() : t("设置");
     $("set-ov").classList.toggle("narrow", narrow);

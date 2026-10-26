@@ -5,7 +5,10 @@
     if (tab && tab !== "sessions") return openPage(tab);
     OV.closeAll();
     MO.cancel(drawerEl);
+    // 收到一半又打开：从停下的位置用弹簧弹回来，别跳
+    const back = drawerEl._moShut ? drawerEl._moShut() : null;
     const wasHidden = drawerEl.classList.contains("hidden");
+    if (back != null) MO.spring(drawerEl.querySelector(".drawer-panel"), "snap", (p) => ({ transform: `translateX(${back * (1 - p)}px)` }));
     drawerEl.classList.remove("hidden");
     refreshStatus();
     loadSessions();
@@ -22,13 +25,41 @@
     }
   }
   // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点收起 / 菜单键（force）才收
-  // 收起：面板滑回去、遮罩淡掉，再真正藏起来；横滑收起的面板已经在屏外了，直接藏
-  function closeDrawer(force) {
+  // 收起：面板从它此刻所在的位置（点遮罩时在原位，横滑推到一半时在手指那里，弹簧还没落定时在半路）滑回屏外，
+  // 遮罩只褪底色 —— 不对整个 #drawer 做透明度，也先关掉毛玻璃：两者叠在一起旧 WebView 上会留一层残影。
+  // fling = 手指甩出去的，已经在动，就用减速曲线接着走；点出来的收起用先加速后减速，和滑入对称
+  function closeDrawer(force, fling) {
     if (!force && window.CCLayout && CCLayout.docked()) return;
-    if (drawerEl.classList.contains("hidden")) return;
+    if (drawerEl.classList.contains("hidden") || drawerEl._moShut) return;
     const panel = drawerEl.querySelector(".drawer-panel");
-    if (panel && panel.style.transform) { MO.cancel(drawerEl); drawerEl.classList.add("hidden"); return; }
-    MO.leave(drawerEl, "mo-leave", 170, () => drawerEl.classList.add("hidden"));
+    MO.cancel(drawerEl);
+    if (!MO.on() || !panel || !panel.animate) { drawerEl.classList.add("hidden"); return; }
+    const w = panel.getBoundingClientRect().width || 300, side = MO.rtl() ? 1 : -1;
+    const tf = getComputedStyle(panel).transform, x0 = tf && tf !== "none" ? new DOMMatrix(tf).m41 : 0;
+    const bg = getComputedStyle(drawerEl).backgroundColor;
+    MO.stopJs(panel); MO.stopJs(drawerEl);
+    drawerEl.classList.remove("mo-enter", "mo-items");
+    panel.style.animation = "none"; panel.style.transition = "none"; panel.style.transform = `translateX(${x0}px)`;
+    Object.assign(drawerEl.style, { transition: "none", backdropFilter: "none", background: bg });
+    drawerEl.classList.add("mo-shut");
+    const left = Math.min(1, Math.abs(side * w - x0) / w);
+    const dur = Math.max(90, Math.round((fling ? 200 : 260) / 1.1 * Math.sqrt(left)));
+    const ease = fling ? "cubic-bezier(.2,.7,.3,1)" : "cubic-bezier(.4,0,.2,1)";
+    const a = panel.animate([{ transform: `translateX(${x0}px)` }, { transform: `translateX(${side * w}px)` }], { duration: dur, easing: ease, fill: "forwards" });
+    const b = drawerEl.animate([{ backgroundColor: bg }, { backgroundColor: "transparent" }], { duration: dur, easing: "linear", fill: "forwards" });
+    const clean = () => {
+      drawerEl._moShut = null; drawerEl._moLeave = null; drawerEl.classList.remove("mo-shut");
+      a.cancel(); b.cancel();
+      panel.style.animation = panel.style.transition = panel.style.transform = "";
+      drawerEl.style.transition = drawerEl.style.backdropFilter = drawerEl.style.background = "";
+    };
+    // 中途又打开：停下来，交出此刻的位置（openDrawer 从这里弹回去）
+    drawerEl._moShut = () => {
+      const t = getComputedStyle(panel).transform, x = t && t !== "none" ? new DOMMatrix(t).m41 : 0;
+      clean(); return x;
+    };
+    drawerEl._moLeave = { cls: "mo-shut", t: 0 };   // 返回键当它已经关了
+    a.finished.then(() => { if (drawerEl._moShut) { drawerEl.classList.add("hidden"); clean(); } }, () => {});
   }
 
   const PAGES = {

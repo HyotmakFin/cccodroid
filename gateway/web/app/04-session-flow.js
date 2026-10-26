@@ -453,7 +453,7 @@
         view.runIds.add(ev.runId);
         view.lastRunId = ev.runId;
         if (runViews.has(ev.runId)) return;
-        if (ev.auto !== "idle") { const ub = renderUser(ev.text, liveEl); if (ev.cid) MO.flySend(ev.cid, ub, chatEl); }
+        if (ev.auto !== "idle") renderUser(ev.text, liveEl);
         const av = AssistantView(liveEl, true);
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
         if (ev.auto === "idle") av.note(t("会话闲置快一小时，提示缓存快过期了，先自动压缩上下文，下一条消息就不用把整段历史重算一遍。不需要可以在设置里关掉。"), true);

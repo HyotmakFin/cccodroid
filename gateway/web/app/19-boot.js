@@ -332,6 +332,7 @@
       const s = g; g = null;
       if (!s || !s.on) return;
       const open = s.dx > s.w / 5 || s.v > 0.3;
+      if (!open && MO.on()) { closeDrawer(true, true); return; }   // 没拉够：从手指那里缩回去，走统一的收起
       drawerEl.style.transition = "background-color .18s ease";
       if (open && MO.on()) {
         // 松手展开：从手指放开的位置用弹簧落定（和点菜单键打开一个手感）；收回去仍是干脆的缓动
@@ -391,6 +392,7 @@
       const s = c; c = null;
       if (!s || !s.on) return;
       const shut = s.dx > s.w / 5 || s.v > 0.3;
+      if (shut && MO.on()) { closeDrawer(true, true); return; }   // 从手指放开的位置接着滑出去，和点遮罩收起同一套
       panel.style.transition = "transform .18s ease";
       drawerEl.style.transition = "background-color .18s ease";
       panel.style.transform = shut ? `translateX(${(rtl() ? 1 : -1) * s.w}px)` : "translateX(0)";

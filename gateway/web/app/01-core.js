@@ -202,14 +202,62 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       if (!on() || !el) return;
       el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
       clearTimeout(el["_mo_" + cls]);
-      el["_mo_" + cls] = setTimeout(() => el.classList.remove(cls), ttl || 1200);
+      // 摘类名时元素自己原本的动画（比如 .msg 的淡入）会被浏览器当成新动画重播一遍 —— 看着就是「又渲染了一次」。
+      // 摘掉后把刚起头的那几个直接拨到结尾
+      el["_mo_" + cls] = setTimeout(() => {
+        el.classList.remove(cls);
+        if (el.getAnimations && window.CSSAnimation)
+          for (const a of el.getAnimations()) if (a instanceof CSSAnimation && a.effect && a.effect.target === el && (a.currentTime || 0) < 50) a.finish();
+      }, ttl || 1200);
     }
     /** 退场：给 el 挂 cls（样式里是干脆的缓入），ms 后执行 done；期间又打开了就 cancel 掉 */
     function leave(el, cls, dur, done) {
-      cancel(el);
+      cancel(el); stopJs(el);
       if (!on()) return done();
       el.classList.add(cls);
       el._moLeave = { cls, t: setTimeout(() => { el._moLeave = null; el.classList.remove(cls); done(); }, k(dur)) };
+    }
+    /** 停掉元素上还在播的脚本动画（弹簧尾巴约 0.6 秒，期间它压着 transform —— 不停掉的话，
+     *  紧接着的退场 / 手指拖动都看不出效果，松手才「啪」地跳过去）。CSS 动画不动，由类名管 */
+    function stopJs(el) {
+      if (!el || !el.getAnimations) return;
+      for (const a of el.getAnimations()) if (!(window.CSSAnimation && a instanceof CSSAnimation) && !(window.CSSTransition && a instanceof CSSTransition)) a.cancel();
+    }
+    /** 回程：内容马上要被换掉 / 藏掉时，留一张它的替身播退场（push 往右滑走、back 往左退一点变暗、fade 淡掉、drop 往下沉）。
+     *  替身插在原元素旁边（above = 盖在新内容上面，否则垫在下面），吃得到同样的样式；播完删掉 */
+    function ghost(el, kind, above = true) {
+      if (!on() || !el || !el.isConnected || !el.animate) return;
+      const r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
+      const g = el.cloneNode(true);
+      g.querySelectorAll("canvas, video, iframe").forEach((x) => x.remove());
+      g.classList.remove("hidden", "mo-in-push", "mo-in-back", "mo-in-rise", "mo-in-pane", "mo-in-pane-back");
+      // id 照留（按 id 写的样式才吃得到）：替身插在真身后面，getElementById / querySelector 拿到的总是真身
+      g.classList.add("mo-ghost");   // 按类名批量切 hidden 的地方要跳过它（:not(.mo-ghost)）
+      g.setAttribute("aria-hidden", "true"); g.inert = true;
+      Object.assign(g.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px",
+        margin: "0", pointerEvents: "none", zIndex: above ? "5" : "0", animation: "none", overflow: "hidden", boxSizing: "border-box" });
+      const st = el.scrollTop; el.after(g); if (st) g.scrollTop = st;
+      // 祖先带 transform 时 fixed 是相对它定位的：量一下偏了多少，拨回来
+      const q = g.getBoundingClientRect();
+      if (Math.abs(q.left - r.left) > .5 || Math.abs(q.top - r.top) > .5) { g.style.left = 2 * r.left - q.left + "px"; g.style.top = 2 * r.top - q.top + "px"; }
+      // 原来是被滚动容器裁着的（整页里的长列表）：替身也只露容器里那一块，别盖到标题栏上
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        if (!/auto|scroll|hidden/.test(getComputedStyle(p).overflowY)) continue;
+        const c = p.getBoundingClientRect();
+        const t = Math.max(0, c.top - r.top), b = Math.max(0, r.bottom - c.bottom);
+        if (t || b) g.style.clipPath = `inset(${t}px 0 ${b}px 0)`;
+        break;
+      }
+      if (!above) el.style.zIndex = el.style.zIndex || "1";
+      const s = rtl() ? -1 : 1;
+      const fr = { push: [{ transform: "none" }, { transform: `translateX(${100 * s}%)` }],
+        back: [{ transform: "none", opacity: 1 }, { transform: `translateX(${-18 * s}%)`, opacity: .4 }],
+        fade: [{ opacity: 1 }, { opacity: 0 }],
+        drop: [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(16px)" }] }[kind];
+      const dur = kind === "back" ? ms("snap") * .5 : k(170);
+      const a = g.animate(fr, { duration: dur, easing: kind === "back" ? "cubic-bezier(.2,.8,.2,1)" : OUT, fill: "forwards" });
+      const fin = () => { g.remove(); if (!above && el.style.zIndex === "1") el.style.zIndex = ""; };
+      a.finished.then(fin, fin);
     }
     function cancel(el) { const l = el && el._moLeave; if (!l) return; clearTimeout(l.t); el.classList.remove(l.cls); el._moLeave = null; }
     /** 浮层收起：先淡出（小浮层再缩一点），再移走；还在 OV 栈里的说明又被打开了，不删 */
@@ -265,64 +313,11 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     /** 一组元素逐项错开：前 max 个挂 .mo-st 并设 --i（样式里 animation-delay 按它算）；之后重新渲染出来的没有这个类，不会再播 */
     function stagger(els, max = 12) { let i = 0; for (const el of els) { if (i >= max) break; el.classList.add("mo-st"); el.style.setProperty("--i", i++); } }
 
-    // ── 发送：从发送键飞到气泡 ──
-    // 气泡要等网关回 run_start 才画出来；先记下发的那条（cid）和起点，画出来时再起飞
-    let armed = null;
-    function armSend(cid, text, btn, input) {
-      if (!on() || !btn) return;
-      armed = { cid, t: Date.now(), from: btn.getBoundingClientRect() };
-      spring(btn, "pop", (p) => ({ transform: `scale(${lin(.86, 1, p)})` }));
-      // 输入框里的字往上淡走：盖一层替身播，真输入框已经清空了
-      if (input && text) {
-        const r = input.getBoundingClientRect(), cs = getComputedStyle(input);
-        const lift = document.createElement("div");
-        lift.className = "mo-lift";
-        lift.textContent = text.split("\n")[0];
-        Object.assign(lift.style, { left: r.left + parseFloat(cs.paddingLeft) + "px", top: r.top + parseFloat(cs.paddingTop) + "px",
-          width: Math.max(0, r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px", font: cs.font, lineHeight: cs.lineHeight, direction: cs.direction });
-        document.body.appendChild(lift);
-        const a = lift.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-12px)" }], { duration: k(170), easing: OUT, fill: "forwards" });
-        a.finished.then(() => lift.remove(), () => lift.remove());
-      }
-    }
-    function flySend(cid, bubble, box) {
-      const a0 = armed; armed = null;
-      if (!on() || !a0 || a0.cid !== cid || Date.now() - a0.t > 8000 || !bubble) return;
-      const msg = bubble.closest(".msg"); if (!msg) return;
-      requestAnimationFrame(() => {              // 等 scrollDown 把它滚进来再量
-        const br = bubble.getBoundingClientRect(), cr = box.getBoundingClientRect(), f = a0.from;
-        if (!br.width || br.bottom < cr.top || br.top > cr.bottom || br.height > cr.height * .8) return;   // 看不到 / 太长：不飞
-        // 替身：套一层同样的 .msg.user 好吃到气泡的样式，整层正好盖在气泡上
-        const g = document.createElement("div");
-        g.className = msg.className + " mo-ghost-wrap";
-        Object.assign(g.style, { left: br.left + "px", top: br.top + "px", width: br.width + "px", height: br.height + "px" });
-        const inner = bubble.cloneNode(true); g.appendChild(inner);
-        document.body.appendChild(g);
-        msg.style.visibility = "hidden";
-        // 终点 = 气泡中心；起点 = 发送键中心、缩成发送键大小；中间先往上抛的二次贝塞尔
-        const ex = br.left + br.width / 2, ey = br.top + br.height / 2, sx0 = f.left + f.width / 2, sy0 = f.top + f.height / 2;
-        const cx = sx0 + (ex - sx0) * .15, cy = Math.min(sy0, ey) - 48;
-        const k0x = Math.min(1, f.width / br.width), k0y = Math.min(1, f.height / br.height);
-        const cs = getComputedStyle(bubble), A = getComputedStyle(document.getElementById("btn-send") || bubble).backgroundColor;
-        const { pts } = curve("snap");
-        const ease = (t, a, b) => Math.max(0, Math.min(1, (t - a) / (b - a)));
-        const frames = pts.map((p) => {
-          const t = Math.min(1, p), u = 1 - t, k = Math.min(1, p * 1.25);
-          const x = u * u * sx0 + 2 * u * t * cx + t * t * ex, y = u * u * sy0 + 2 * u * t * cy + t * t * ey;
-          return { transform: `translate(${x - ex}px,${y - ey}px) scale(${lin(k0x, 1, k)},${lin(k0y, 1, k)})` };
-        });
-        const ga = g.animate(frames, { duration: ms("snap"), easing: "linear", fill: "both" });
-        const ia = inner.animate([{ backgroundColor: A, color: "transparent" }, { backgroundColor: cs.backgroundColor, color: "transparent", offset: .5 }, { backgroundColor: cs.backgroundColor, color: cs.color }],
-          { duration: ms("snap") * .7, easing: "ease-out", fill: "both" });
-        const done = () => { ga.cancel(); ia.cancel(); g.remove(); msg.style.visibility = ""; spring(bubble, "pop", (p) => ({ transform: `scale(${lin(1.03, 1, p)},${lin(.95, 1, p)})` })); };
-        ga.finished.then(done, done);
-      });
-    }
     inject(); apply();
     if (reduce.addEventListener) reduce.addEventListener("change", apply);
     document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("#seg-motion [data-mo]"); if (b) set(b.dataset.mo); });
     document.addEventListener("DOMContentLoaded", apply);
-    return { paneOut, on, ms, rtl, spring, play, leave, cancel, hide, outRemove, enterOv, stagger, armSend, flySend, apply, set };
+    return { paneOut, stopJs, ghost, on, ms, rtl, spring, play, leave, cancel, hide, outRemove, enterOv, stagger, apply, set };
   })();
   // 项目 / 定时任务的状态（模块在 openPage 前；这两个要在启动早期就可用）
   var PJ = { list: [], colors: [], ws: "", cur: null, detail: null, loaded: false, effLevels: [] };

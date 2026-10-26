@@ -50,7 +50,7 @@
     const cid = newCid();
     view.cids.add(cid);
     const sentAtt = fromInput ? state.attachments : [];
-    if (fromInput) { MO.armSend(cid, typed, sendEl, inputEl); inputEl.value = ""; autoGrow(); clearAttachments(); }
+    if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
     syncInterject();
     try {
       const r = await api("/api/chat", {
