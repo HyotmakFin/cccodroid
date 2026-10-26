@@ -254,7 +254,7 @@ Layout:
 - **[wangxp12](https://github.com/wangxp12)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[unoyg](https://github.com/unoyg)**: feedback and bug reports in the community group throughout 0.3.x.
 - **[fisHarly0](https://github.com/fisHarly0)**: suggestions for improvements in the community group during 0.3.x.
-- **[chenshi723](https://github.com/chenshi723)**: front-end suggestions in the community group during 0.4.x — the sidebar's leftover animation when closing, the new-chat greeting rendering twice, choppy streaming, the DeepSeek balance showing 0, fonts following the system — fixed across 0.4.11–0.4.12.
+- **[chenshi723](https://github.com/chenshi723)**: front-end suggestions in the community group during 0.4.x. The whole interface motion system in 0.4.11 started from their remark that the app's motion felt bare; they then pointed out the sidebar's leftover animation when closing, the new-chat greeting rendering twice, choppy streaming, the DeepSeek balance showing 0 and fonts not fully following the system — fixed across 0.4.11–0.4.12.
 
 Reports, device testing and code review are contributions too, and they're recorded here.
 

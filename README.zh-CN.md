@@ -258,7 +258,7 @@ App 下载哪个版本的工具包，由 [devkit-sources.txt](devkit-sources.txt
 - **[wangxp12](https://github.com/wangxp12)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[unoyg](https://github.com/unoyg)**：0.3.x 期间在交流群里的项目反馈与 bug 报告。
 - **[fisHarly0](https://github.com/fisHarly0)**：0.3.x 期间在交流群里提的改进建议。
-- **[chenshi723](https://github.com/chenshi723)**：0.4.x 期间在交流群里对界面前端提的改进意见：侧栏收起的残影、新对话问候语重复渲染、流式输出不够顺、DeepSeek 余额显示为 0、字体跟随系统等，0.4.11–0.4.12 陆续修好。
+- **[chenshi723](https://github.com/chenshi723)**：0.4.x 期间在交流群里对界面前端提的改进意见。整套界面动效就是从 ta 那句「动效寒酸」开始做的（0.4.11），之后又指出侧栏收起的残影、新对话问候语重复渲染、流式输出不够顺、DeepSeek 余额显示为 0、字体跟随系统不全，0.4.11–0.4.12 陆续修好。
 
 报告问题、测试机型、审查代码同样是贡献，都会记在这里。
 
