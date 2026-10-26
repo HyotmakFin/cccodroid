@@ -9,8 +9,10 @@ import path from "node:path";
 import { CFG, PATHS, log } from "./config.mjs";
 import { NEXT, sendJson } from "./http.mjs";
 import { NAMES, PINS } from "./sessions.mjs";
-import { archivedTitle } from "./archive-store.mjs";
-import { emptyRecord, inferParents, scanSession } from "./lineage-core.mjs";
+import { archiveDb, archivedTitle } from "./archive-store.mjs";
+import { chapterView } from "./archive-core.mjs";
+import { runOfSession } from "./runs.mjs";
+import { emptyRecord, inferParents, scanSession, weakPrompt } from "./lineage-core.mjs";
 import { lineageDb } from "./lineage-store.mjs";
 
 const CACHE_FILE = path.join(CFG.home, ".cache", "ccapp-lineage-index.json");
@@ -19,14 +21,15 @@ const SID = /^[0-9a-f-]{36}$/i;
 
 let RECS = null;          // id → 记录（lineage-core 的 scanSession 结果）
 const META = new Map();   // id → { file, project, trashed, mtime }
-let building = null, dirty = false, gen = 0, memo = null;   // gen：索引每变一次加一；memo：按 gen 缓存的主父推断
+let building = null, dirty = false, gen = 0, memo = null;
+const PROG = { done: 0, total: 0 };   // 首次整理大户要十几秒，页面显示进度   // gen：索引每变一次加一；memo：按 gen 缓存的主父推断
 
 function loadCache() {
   if (RECS) return;
   RECS = new Map();
   try {
     const j = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
-    if (j && j.v === 1 && Array.isArray(j.recs)) for (const r of j.recs) if (r && r.id) RECS.set(r.id, { ...emptyRecord(r.id), ...r });
+    if (j && j.v === 2 && Array.isArray(j.recs)) for (const r of j.recs) if (r && r.id) RECS.set(r.id, { ...emptyRecord(r.id), ...r });
   } catch {}
 }
 function saveCache() {
@@ -34,7 +37,7 @@ function saveCache() {
   dirty = false;
   try {
     fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-    fs.writeFileSync(CACHE_FILE + ".tmp", JSON.stringify({ v: 1, recs: [...RECS.values()] }), { mode: 0o600 });
+    fs.writeFileSync(CACHE_FILE + ".tmp", JSON.stringify({ v: 2, recs: [...RECS.values()] }), { mode: 0o600 });
     fs.renameSync(CACHE_FILE + ".tmp", CACHE_FILE);
   } catch (e) { log("写脉络缓存失败: " + e.message); }
 }
@@ -62,8 +65,9 @@ function listFiles() {
 async function refresh() {
   loadCache();
   const files = listFiles(), alive = new Set();
+  PROG.total = files.length; PROG.done = 0;
   for (const f of files) {
-    alive.add(f.id);
+    alive.add(f.id); PROG.done++;
     let st; try { st = fs.statSync(f.file); } catch { continue; }
     META.set(f.id, { file: f.file, project: f.project, trashed: f.trashed, mtime: st.mtimeMs });
     const prev = RECS.get(f.id);
@@ -106,33 +110,68 @@ export async function lineageParent(sid) {
   };
 }
 
-/** 给前端：节点（会话）+ 边（主父）。只有元数据和标题，没有消息正文 */
+const FORK_TAIL = / · (分叉|回退|分岔|Fork|Rewind|Branch)( \d+)?$/i;
+/** 没建档、没改名的旧会话：拿最新一章的章首提问当标题（比第一句「你好，claude」有用） */
+const lastQ = (r) => [...r.compacts].reverse().map((c) => c.q).find((q) => q && !weakPrompt(q)) || r.lead || r.first;
+const tsAt = (rec, uuid) => { const i = rec && uuid ? rec.uu.indexOf(uuid) : -1; return i >= 0 ? rec.ts[i] : 0; };
+
+/**
+ * 给前端：节点（会话，带每章题名）+ 边。只有元数据和标题，没有消息正文。
+ * 旧会话兼容（规划书 §12）：章没建档时 title 为 null，q 是章首第一句提问，界面灰字顶上；
+ * 改版前「读隔壁会话记录接手」的痕迹作 kind:"read" 的边（early：读者前 3 轮内读的，算接手）。
+ */
 export async function lineageGraph() {
   await lineageRefresh();
-  const db = lineageDb();
+  const db = lineageDb(), adb = archiveDb().sessions;
   const parents = parentsNow();
+  const { projectOfDir } = await import("./projects.mjs");
+  const { schedSessions } = await import("./sched.mjs");
+  const { realWorkspace } = await import("./sessionops.mjs");
+  const sched = schedSessions(), ws = [CFG.workspace, realWorkspace()];
   const nodes = [];
   for (const r of RECS.values()) {
-    const m = META.get(r.id) || {};
+    const m = META.get(r.id) || {}, entry = adb[r.id] || null;
+    const cv = chapterView(r, entry);
+    const name = NAMES[r.id] ? NAMES[r.id].replace(FORK_TAIL, "") : "";
+    const p = projectOfDir(r.cwd);
+    const band = p ? { key: "p:" + p.id, name: p.name, color: p.color || null } : ws.includes(r.cwd) || !r.cwd ? { key: "ws" } : { key: "other" };
     nodes.push({
-      id: r.id, title: NAMES[r.id] || r.first || "", renamed: !!NAMES[r.id], pinned: PINS[r.id] || 0,
-      project: m.project || null, cwd: r.cwd || "", trashed: !!m.trashed,
-      firstTs: r.firstTs, lastTs: r.lastTs, mtime: m.mtime || 0, turns: r.turns, chapters: r.compacts.length, sizeKb: Math.round(r.size / 1024),
+      id: r.id, title: name || cv.sessionTitle || lastQ(r) || "", titleBy: name ? "user" : cv.sessionTitle ? "archive" : null,
+      pinned: PINS[r.id] || 0, band, cwd: r.cwd || "", trashed: !!m.trashed,
+      sched: sched.get(r.id) || null, misc: !!entry?.misc, running: !!runOfSession(r.id),
+      firstTs: r.firstTs || r.birth || m.mtime || 0, lastTs: r.lastTs || m.mtime || 0, turns: r.turns, sizeKb: Math.round(r.size / 1024),
+      chapters: cv.chapters.map((c) => ({ n: c.n, from: c.from, to: c.to, title: c.title, by: c.by, same: c.same, status: c.status, q: (c.n === 1 ? r.lead || r.first : r.compacts[c.n - 2]?.q) || "" })),
     });
   }
-  const edges = [];
+  const edges = [], linked = new Set();
   for (const [child, e] of parents) {
-    edges.push({ child, parent: e.parent, at: e.at, kind: e.kind, source: e.source, missing: !RECS.has(e.parent) });
+    edges.push({ child, parent: e.parent, at: e.at, ts: tsAt(RECS.get(child), e.at), kind: e.kind, source: e.source, missing: !RECS.has(e.parent) });
+    linked.add(child + ">" + e.parent);
   }
   for (const [child, e] of Object.entries(db.edges)) for (const x of e.extra || []) {
-    if (x && x.id) edges.push({ child, parent: x.id, at: x.at || null, kind: "merge", source: "explicit", how: x.how || "", missing: !RECS.has(x.id) });
+    if (!x || !x.id) continue;
+    edges.push({ child, parent: x.id, at: x.at || null, ts: tsAt(RECS.get(x.id), x.at), kind: "merge", source: "explicit", how: x.how || "", missing: !RECS.has(x.id) });
+    linked.add(child + ">" + x.id);
   }
+  for (const r of RECS.values()) for (const x of r.refs || []) {
+    if (!RECS.has(x.id) || linked.has(r.id + ">" + x.id) || linked.has(x.id + ">" + r.id)) continue;
+    // 读的那一刻，来源已经聊到哪儿：取来源在 x.ts 之前最后一条消息
+    edges.push({ child: r.id, parent: x.id, at: x.at, ts: x.ts, kind: "read", source: "inferred", early: x.turn < 3, n: x.n });
+  }
+  // 一问一答（规划书 §12）：≤2 轮、没压缩过、没亲缘、不在跑 —— 连通测试、「你好」就走的那种。只在图上和杂项一起默认收起，不写杂项标记
+  const touched = new Set(edges.flatMap((e) => [e.child, e.parent]));
+  for (const n of nodes) n.brief = n.turns <= 2 && n.chapters.length === 1 && !touched.has(n.id) && !n.running && !n.sched && !n.pinned;
   return { nodes, edges };
 }
 
 export async function routeLineage(req, res, u, p) {
   if (p !== "/api/lineage") return NEXT;
   if (req.method !== "GET") return sendJson(res, 405, { error: "method" });
-  try { return sendJson(res, 200, await lineageGraph()); }
+  // 首次整理没完成就先回进度，页面轮询（大户从头扫要十几秒，不能让请求干等）
+  const job = lineageGraph();
+  const quick = await Promise.race([job, new Promise((r) => setTimeout(() => r(null), 1500))]).catch((e) => ({ error: e.message }));
+  if (quick === null) { job.catch(() => {}); return sendJson(res, 200, { building: true, done: PROG.done, total: PROG.total }); }
+  if (quick.error) return sendJson(res, 500, quick);
+  try { return sendJson(res, 200, quick); }
   catch (e) { return sendJson(res, 500, { error: e.message }); }
 }

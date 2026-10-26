@@ -30,7 +30,7 @@ function userText(e) {
 }
 
 export function emptyRecord(id) {
-  return { id, size: 0, off: 0, head: "", birth: 0, uu: [], ts: [], compacts: [], turns: 0, first: "", firstTs: 0, lastTs: 0, cwd: "" };
+  return { id, size: 0, off: 0, head: "", birth: 0, uu: [], ts: [], compacts: [], refs: [], turns: 0, first: "", firstTs: 0, lastTs: 0, cwd: "", lead: "", qN: 0 };
 }
 
 /**
@@ -45,7 +45,7 @@ export async function scanSession(file, prev) {
   try {
     const head = headHash(fd, st.size);
     let r = prev && prev.id === id && st.size >= prev.off && prev.head === head ? prev : emptyRecord(id);
-    if (r === prev) r = { ...prev, uu: prev.uu.slice(), ts: prev.ts.slice(), compacts: prev.compacts.slice() };
+    if (r === prev) r = { ...prev, uu: prev.uu.slice(), ts: prev.ts.slice(), compacts: prev.compacts.map((c) => ({ ...c })), refs: (prev.refs || []).map((x) => ({ ...x })) };
     r.head = head; r.size = st.size; r.birth = st.birthtimeMs || r.birth || 0;
     let pos = r.off, rest = Buffer.alloc(0);
     const CH = 4 << 20;
@@ -78,12 +78,37 @@ export async function scanSession(file, prev) {
       const ts = Date.parse(e.timestamp || "") || 0;
       r.uu.push(e.uuid); r.ts.push(ts);
       if (ts) { if (!r.firstTs) r.firstTs = ts; r.lastTs = ts; }
-      if (e.isCompactSummary) { r.compacts.push({ uuid: e.uuid, ts, off: at }); return; }
+      if (e.isCompactSummary) { r.compacts.push({ uuid: e.uuid, ts, off: at, q: "" }); r.qN = 0; return; }
+      if (e.type === "assistant" && s.includes(".jsonl")) refsIn(e, ts);
       const t = userText(e);
-      if (t) { r.turns++; if (!r.first) r.first = t.replace(/\s+/g, " ").trim().slice(0, 80); }
+      if (!t) return;
+      const q = t.replace(/\s+/g, " ").trim().slice(0, 80);
+      r.turns++;
+      if (!r.first) r.first = q;
+      // 旧章没有题名时拿章首提问顶上（规划书 §12）：看本章前 3 句，「你好，claude」「继续」这种让给后面有内容的那句
+      if (r.qN < 3) {
+        const c = r.compacts[r.compacts.length - 1], had = c ? c.q : r.lead;
+        if (!had || (weakPrompt(had) && !weakPrompt(q))) { if (c) c.q = q; else r.lead = q; }
+        r.qN++;
+      }
+    }
+    // 工具调用里读过别的会话记录（<id>.jsonl）：改版前「去读隔壁会话接手」的唯一痕迹。每个来源只记第一次
+    function refsIn(e, ts) {
+      for (const b of Array.isArray(e.message?.content) ? e.message.content : []) {
+        if (b?.type !== "tool_use") continue;
+        for (const m of JSON.stringify(b.input || {}).matchAll(REF)) {
+          const x = r.refs.find((y) => y.id === m[1]);
+          if (m[1] === id) continue;
+          if (x) x.n++; else r.refs.push({ id: m[1], at: e.uuid, ts, turn: r.turns, n: 1 });
+        }
+      }
     }
   } finally { fs.closeSync(fd); }
 }
+const REF = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl/g;
+
+/** 当不了题名的提问：问候、「继续」「好的」、太短 */
+export const weakPrompt = (q) => q.length < 4 || /^(你好|您好|嗨|哈喽|在吗|hi|hello|hey)[\s，,。.!！~]*(claude|克劳德)?[\s，,。.!！~]*$/i.test(q) || /^(继续|接着|接着来|go on|continue|ok|好的?|嗯|行|开始吧?)[\s，,。.!！~]*$/i.test(q);
 
 const FORK_SUFFIX = /· (分叉|回退|分岔|Fork|Rewind|Branch)/i;
 

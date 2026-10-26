@@ -155,3 +155,77 @@ test("网关：分叉时写显式记录，/api/lineage 的图里能看到（含�
   assert.equal(g.nodes.find((n) => n.id === P).trashed, true);
   assert.ok(fs.existsSync(path.join(home, ".cache", "ccapp-lineage-index.json")), "缓存落盘");
 });
+
+test("旧会话兼容：每章记下章首第一句提问；工具调用读过别的会话记录记成引用（每个来源只记第一次）", async () => {
+  const S = id(), X = id();
+  const L = chain(S, 2);
+  L.push({ type: "user", uuid: id(), sessionId: S, isCompactSummary: true, timestamp: iso(10), message: { role: "user", content: "摘要" } });
+  L.push(...chain(S, 1, 12));
+  const read = { type: "assistant", uuid: id(), sessionId: S, timestamp: iso(15), message: { role: "assistant", content: [{ type: "tool_use", name: "Read", input: { file_path: `/x/.claude/projects/-w/${X}.jsonl` } }] } };
+  L.push(read, { ...read, uuid: id(), timestamp: iso(16) });
+  L.push({ type: "assistant", uuid: id(), sessionId: S, timestamp: iso(17), message: { role: "assistant", content: [{ type: "tool_use", name: "Bash", input: { command: `tail ${S}.jsonl` } }] } });
+  const r = await scanSession(write(S, L));
+  assert.equal(r.first, "问题 0");
+  assert.equal(r.compacts[0].q, "问题 12");
+  assert.equal(r.refs.length, 1, "读自己的不算");
+  assert.equal(r.refs[0].id, X);
+  assert.equal(r.refs[0].at, read.uuid);
+  assert.equal(r.refs[0].n, 2);
+  assert.equal(r.refs[0].turn, 3);
+  // 增量：压缩后还没提问就断在这里，下次读到的第一句补上
+  const S2 = id(), L2 = chain(S2, 1);
+  L2.push({ type: "user", uuid: id(), sessionId: S2, isCompactSummary: true, timestamp: iso(5), message: { role: "user", content: "摘要" } });
+  const f2 = write(S2, L2), r1 = await scanSession(f2);
+  assert.equal(r1.compacts[0].q, "");
+  fs.appendFileSync(f2, chain(S2, 1, 8).map((l) => JSON.stringify(l)).join("\n") + "\n");
+  assert.equal((await scanSession(f2, r1)).compacts[0].q, "问题 8");
+});
+
+test("网关：图 v2 —— 章节题名（建档的 / 未建档用章首提问）、分叉后缀去掉、读记录的边、项目带", async () => {
+  const home = process.env.CCAPP_HOME;
+  const proj = path.join(home, ".claude", "projects", "-v2");
+  fs.mkdirSync(proj, { recursive: true });
+  const A = id(), B = id();
+  const LA = chain(A, 2);
+  LA[0].cwd = "/probe/elsewhere";   // 不在项目里、也不是工作区 → 「其他目录」带
+  LA.push({ type: "user", uuid: id(), sessionId: A, isCompactSummary: true, timestamp: iso(10), message: { role: "user", content: "摘要" } });
+  LA.push(...chain(A, 1, 12));
+  fs.writeFileSync(path.join(proj, A + ".jsonl"), LA.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  const LB = chain(B, 1, 30);
+  LB.push({ type: "assistant", uuid: id(), sessionId: B, timestamp: iso(32), message: { role: "assistant", content: [{ type: "tool_use", name: "Read", input: { file_path: A + ".jsonl" } }] } });
+  fs.writeFileSync(path.join(proj, B + ".jsonl"), LB.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  const { NAMES } = await import("../gw/sessions.mjs");
+  NAMES[B] = "接手 · 分叉";
+  const { fileChapter } = await import("../gw/archive.mjs");
+  assert.equal((await fileChapter(A, { title: "审 GPU 驱动组件", chapter: 1 })).ok, true);
+  const { lineageGraph } = await import("../gw/lineage.mjs");
+  const g = await lineageGraph();
+  const a = g.nodes.find((n) => n.id === A), b = g.nodes.find((n) => n.id === B);
+  assert.equal(a.chapters.length, 2);
+  assert.equal(a.chapters[0].title, "审 GPU 驱动组件");
+  assert.equal(a.chapters[1].title, null);
+  assert.equal(a.chapters[1].q, "问题 12", "未建档的章拿章首提问顶上");
+  assert.equal(a.title, "审 GPU 驱动组件");
+  assert.equal(a.titleBy, "archive");
+  assert.equal(b.title, "接手", "去掉老版本的「· 分叉」后缀");
+  assert.equal(a.band.key, "other");
+  const e = g.edges.find((x) => x.kind === "read" && x.child === B);
+  assert.equal(e.parent, A);
+  assert.equal(e.early, true);
+  assert.ok(e.ts > 0);
+  assert.equal(a.brief, false, "有亲缘的不算一问一答");
+  assert.equal(b.brief, false);
+  delete NAMES[B];
+});
+
+test("旧会话兼容：章首提问跳过「你好，claude」「继续」，取本章前 3 句里第一句有内容的", async () => {
+  const S = id(), L = [];
+  const u = (t, m) => ({ type: "user", uuid: id(), sessionId: S, timestamp: iso(m), message: { role: "user", content: t } });
+  L.push(u("你好，claude", 0), u("看看这台设备的开发能力", 1), u("再看看 GPU", 2));
+  L.push({ type: "user", uuid: id(), sessionId: S, isCompactSummary: true, timestamp: iso(5), message: { role: "user", content: "摘要" } });
+  L.push(u("继续", 6), u("好的", 7), u("ok", 8), u("修 GPU 驱动", 9));
+  const r = await scanSession(write(S, L));
+  assert.equal(r.lead, "看看这台设备的开发能力");
+  assert.equal(r.first, "你好，claude");
+  assert.equal(r.compacts[0].q, "继续", "前 3 句都没内容就留第一句，不往后找");
+});
