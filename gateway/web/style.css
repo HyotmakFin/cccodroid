@@ -2724,7 +2724,39 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
 .ch-sep.hit-flash{animation:chflash 2.4s ease-out}
 @keyframes chflash{0%,30%{background:var(--bg3)}100%{background:transparent}}
 .lmap .lm-st{cursor:pointer}
-/* 脉络页工具栏的「补档」：小文字钮，跑的时候蓝字 */
-.lin-tools .lin-fill{flex:none;white-space:nowrap;background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--fg2);cursor:pointer}
-.lin-tools .lin-fill.on{color:var(--zy-blue,var(--accent));border-color:currentColor}
-.lin-tools .lin-fill:active{background:var(--bg3)}
+/* 脉络页工具栏右侧的小钮：「怎么看」「补档」；跑的时候蓝字，没看过教程时「怎么看」带个蓝点 */
+.lin-tools .lin-chip{flex:none;white-space:nowrap;background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--fg2);cursor:pointer;position:relative}
+.lin-tools .lin-chip.on{color:var(--zy-blue,var(--accent));border-color:currentColor}
+.lin-tools .lin-chip:active{background:var(--bg3)}
+.lin-tools .lin-how{margin-inline-start:auto}
+.lin-tools .lin-how ~ .lin-misc{margin-inline-start:0}
+.lin-tools .lin-how.new::after{content:"";position:absolute;top:-2px;inset-inline-end:-2px;width:7px;height:7px;border-radius:50%;background:var(--zy-blue,var(--accent))}
+/* 脉络导览：盖在脉络页上，同一份 map.js 画假数据；步骤卡片横屏在左下、竖屏贴底 */
+#tab-lineage{position:relative}
+.lin-tour{position:absolute;inset:0;z-index:6;background:var(--bg);display:flex;flex-direction:column}
+.lin-tour.hidden{display:none}
+#lt-map{flex:1;min-height:0}
+.lt-panel{position:absolute;left:16px;bottom:calc(var(--safe-b, 0px) + 16px);width:min(360px,calc(100% - 32px));background:var(--bg2);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px 12px;z-index:7}
+.lin-tour.tree .lt-panel{left:0;right:0;bottom:0;width:auto;border-radius:12px 12px 0 0;border-width:1px 0 0;padding-bottom:calc(var(--safe-b, 0px) + 12px)}
+.lin-tour.tree #lt-map .lm-tree{padding-bottom:240px}
+.lt-panel .lt-step{font-size:11.5px;color:var(--fg3);display:flex;align-items:center;gap:8px}
+.lt-panel .lt-dots{display:flex;gap:4px}
+.lt-panel .lt-dots i{width:5px;height:5px;border-radius:50%;background:var(--line)}
+.lt-panel .lt-dots i.on{background:var(--zy-blue,var(--accent))}
+.lt-panel .lt-x{margin-inline-start:auto;background:none;border:0;color:var(--fg3);font-size:12px;cursor:pointer;padding:2px 4px}
+.lt-panel h4{margin:8px 0 6px;font-size:15px;font-weight:600;color:var(--fg)}
+.lt-panel p{margin:0 0 6px;font-size:13px;line-height:1.6;color:var(--fg2)}
+.lt-panel .lt-do{display:flex;align-items:center;gap:6px;margin:8px 0 2px;font-size:12.5px;color:var(--fg3)}
+.lt-panel .lt-do::before{content:"";width:12px;height:12px;border-radius:50%;border:1.5px solid currentColor;flex:none;box-sizing:border-box}
+.lt-panel .lt-do.ok{color:var(--zy-blue,var(--accent))}
+.lt-panel .lt-do.ok::before{background:currentColor;box-shadow:inset 0 0 0 2px var(--bg2)}
+.lt-panel .lt-note{font-size:12px;color:var(--fg3);margin-top:4px}
+.lt-panel .lt-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.lt-panel .lt-btns button{border:1px solid var(--line);background:none;color:var(--fg2);border-radius:8px;padding:5px 12px;font-size:12.5px;cursor:pointer}
+.lt-panel .lt-btns button.pri{background:var(--zy-blue,var(--accent));border-color:transparent;color:#fff}
+.lt-panel .lt-btns button:active{opacity:.8}
+/* 窄屏：项目条独占一行，「怎么看 / 补档 / 显示杂项」换到下一行，长语言也不出屏 */
+@media (max-width:599px){
+  .lin-tools{flex-wrap:wrap;row-gap:6px}
+  .lin-tools .seg-scroll{flex:1 1 100%}
+}

@@ -41,6 +41,8 @@
     LIN.g = g;
     linPaint(true);
     linFill();
+    // 第一次来：提一句「怎么看」，不强拉进导览
+    if (!localStorage.getItem("cc.linTourSeen") && !LIN.hinted) { LIN.hinted = true; toast(t("第一次来？点右上「怎么看」，两分钟学会看脉络")); }
   }
 
   // ── 补档（gw/backfill.mjs）：没题名的旧章，用全局默认模型按压缩摘要补起题名；先报预估，用户点头才跑 ──

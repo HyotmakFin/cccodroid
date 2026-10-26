@@ -7,6 +7,7 @@
 //   opts.acts(s)             选中会话时卡片底下的按钮：[{ act, label, pri, off, title }]
 //   opts.onAct(act, id, el)  按钮 / 卡片里各章 / 定时任务各次被点
 //   opts.onSelect(id|null)   选中变了
+//   opts.onGesture(kind)     做了一个手势：pan / zoom / home（教程据此判断这一步做对了）
 //   opts.misc                显示杂项（含一问一答）；opts.band 只看某一带（key）—— 都可以 set 时改
 // model：{ now, bands: [{ key, name }], sessions: [会话] }，会话：
 //   { id, short, band, title, ghost, from, to, running, trashed, misc, parent, at, kind, missingParent,
@@ -281,7 +282,8 @@
       st.raf = requestAnimationFrame(step);
     }
     function settle() { const b = bounds(); animateTo(Math.min(b.maxX, Math.max(b.minX, st.tx)), Math.min(b.maxY, Math.max(b.minY, st.ty))); }
-    function home() { st.k = 1; paint(); animateTo(nowX(), 0); }
+    const gesture = (k) => { if (opts.onGesture) opts.onGesture(k); };
+    function home() { st.k = 1; paint(); animateTo(nowX(), 0); gesture("home"); }
 
     // 选中某个会话：画亮一家子，并把它挪进视野（从外面跳进来时用）
     function reveal(id) {
@@ -343,7 +345,7 @@
     });
     const up = (e) => {
       pts.delete(e.pointerId);
-      if (pinch) { if (pts.size < 2) pinch = null; return; }
+      if (pinch) { if (pts.size < 2) { pinch = null; gesture("zoom"); } return; }
       if (!drag) return;
       const d = drag; drag = null;
       if (e.type === "pointercancel") return settle();
@@ -357,6 +359,7 @@
         select(hit ? hit.getAttribute("data-id") : null);
         return;
       }
+      gesture("pan");
       // 惯性：按松手时的速度滑出去、逐帧减速；过了边就弹回
       if (performance.now() - d.lt > 80) return settle();   // 停住了再松手：不甩
       let vx = d.vx * 16, vy = d.vy * 16;
@@ -379,7 +382,8 @@
         const r = cv.getBoundingClientRect(), mid = e.clientX - r.left, base = (mid - st.tx - LEFT) / st.k;
         st.k = Math.min(3, Math.max(0.45, st.k * Math.exp(-e.deltaY / 300)));
         paint(); st.tx = mid - (LEFT + st.k * base);
-      } else { st.tx -= e.shiftKey ? e.deltaY : e.deltaX; st.ty -= e.shiftKey ? 0 : e.deltaY; }
+        gesture("zoom");
+      } else { st.tx -= e.shiftKey ? e.deltaY : e.deltaX; st.ty -= e.shiftKey ? 0 : e.deltaY; gesture("pan"); }
       const b = bounds(); st.tx = Math.min(b.maxX, Math.max(b.minX, st.tx)); st.ty = Math.min(b.maxY, Math.max(b.minY, st.ty)); place();
     }, { passive: false });
 

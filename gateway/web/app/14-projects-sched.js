@@ -509,6 +509,7 @@
     const prev = curPage;
     curPage = name;
     document.documentElement.classList.toggle("pg-lineage", name === "lineage");   // 脉络页整页不滚（地图自己接手势）
+    if (name !== "lineage") closeTour();   // 离开脉络页：导览一起收掉
     $("pages").classList.remove("hidden");
     pageSub = "";
     paintTitle();
@@ -534,6 +535,7 @@
     curPage = null;
     pageTitleOv = "";
     document.documentElement.classList.remove("pg-lineage");
+    closeTour();
     $("pages").classList.add("hidden");
     renderSideNav();
     paintTitle();

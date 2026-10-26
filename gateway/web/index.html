@@ -149,10 +149,12 @@
     <!-- 脉络：会话亲缘图（地图本体 /lineage/map.js；页里只有一个会自由滚的东西，见规划书 §11.5） -->
     <section id="tab-lineage" class="tab-pane hidden">
       <div class="lin-tools"><div class="seg-scroll"><span class="seg" id="lin-bands"></span></div>
-        <button type="button" class="lin-fill hidden" id="lin-fill"></button>
+        <button type="button" class="lin-chip lin-how" id="lin-how" data-i18n>怎么看</button>
+        <button type="button" class="lin-chip lin-fill hidden" id="lin-fill"></button>
         <label class="lin-misc"><span data-i18n>显示杂项</span><input type="checkbox" class="sw" id="lin-misc"></label></div>
       <div class="lin-state hidden" id="lin-state"></div>
       <div id="lin-map"></div>
+      <div class="lin-tour hidden" id="lin-tour"><div id="lt-map"></div><div class="lt-panel" id="lt-panel" role="dialog"></div></div>
     </section>
     <section id="tab-sched" class="tab-pane hidden"></section>
     <section id="tab-usage" class="tab-pane hidden">
