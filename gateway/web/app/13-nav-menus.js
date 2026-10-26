@@ -26,7 +26,7 @@
   }
   // 三栏宽屏时侧栏常驻在左边：开会话之类顺手的关闭不收它，只有用户点收起 / 菜单键（force）才收
   // 收起：面板从它此刻所在的位置（点遮罩时在原位，横滑推到一半时在手指那里，弹簧还没落定时在半路）滑回屏外，
-  // 遮罩只褪底色 —— 不对整个 #drawer 做透明度，也先关掉毛玻璃：两者叠在一起旧 WebView 上会留一层残影。
+  // 遮罩的底色和毛玻璃一起褪 —— 不对整个 #drawer 做透明度：透明度叠毛玻璃在旧 WebView 上会留一层残影。
   // fling = 手指甩出去的，已经在动，就用减速曲线接着走；点出来的收起用先加速后减速，和滑入对称
   function closeDrawer(force, fling) {
     if (!force && window.CCLayout && CCLayout.docked()) return;
@@ -53,17 +53,18 @@
     }
     const w = panel.getBoundingClientRect().width || 300, side = MO.rtl() ? 1 : -1;
     const tf = getComputedStyle(panel).transform, x0 = tf && tf !== "none" ? new DOMMatrix(tf).m41 : 0;
-    const bg = getComputedStyle(drawerEl).backgroundColor;
+    const dcs = getComputedStyle(drawerEl), bg = dcs.backgroundColor, bf = dcs.backdropFilter && dcs.backdropFilter !== "none" ? dcs.backdropFilter : "blur(0px)";
     MO.stopJs(panel); MO.stopJs(drawerEl);
     drawerEl.classList.remove("mo-enter", "mo-items");
     panel.style.animation = "none"; panel.style.transition = "none"; panel.style.transform = `translateX(${x0}px)`;
-    Object.assign(drawerEl.style, { transition: "none", backdropFilter: "none", background: bg });
+    Object.assign(drawerEl.style, { transition: "none", background: bg });
     drawerEl.classList.add("mo-shut");
     const left = Math.min(1, Math.abs(side * w - x0) / w);
     const dur = Math.max(90, Math.round((fling ? 200 : 260) / 1.1 * Math.sqrt(left)));
     const ease = fling ? "cubic-bezier(.2,.7,.3,1)" : "cubic-bezier(.4,0,.2,1)";
     const a = panel.animate([{ transform: `translateX(${x0}px)` }, { transform: `translateX(${side * w}px)` }], { duration: dur, easing: ease, fill: "forwards" });
-    const b = drawerEl.animate([{ backgroundColor: bg }, { backgroundColor: "transparent" }], { duration: dur, easing: "linear", fill: "forwards" });
+    // 遮罩底色和毛玻璃一起褪（毛玻璃一开始就关掉的话，背景会「突然一清」）；不对整个 #drawer 做透明度 —— 那会连面板一起淡、旧 WebView 上留残影
+    const b = drawerEl.animate([{ backgroundColor: bg, backdropFilter: bf }, { backgroundColor: "transparent", backdropFilter: "blur(0px)" }], { duration: dur, easing: "linear", fill: "forwards" });
     const clean = () => {
       drawerEl._moShut = null; drawerEl._moLeave = null; drawerEl.classList.remove("mo-shut");
       a.cancel(); b.cancel();

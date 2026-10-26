@@ -290,7 +290,8 @@
     };
     let g = null;
     // 遮罩跟着手指由浅到深（只改 #drawer 的底色，别动 opacity —— 那会让侧栏本身也半透明）
-    const scrim = (k) => { drawerEl.style.background = `color-mix(in srgb, var(--scrim) ${Math.round(k * 100)}%, transparent)`; drawerEl.style.backdropFilter = k >= 1 ? "" : "none"; };
+    // 毛玻璃也跟着手指由无到有（原来拖动时关着、松手才一下打开，背景「突然一虚」—— 群友 10-27）
+    const scrim = (k) => { drawerEl.style.background = `color-mix(in srgb, var(--scrim) ${Math.round(k * 100)}%, transparent)`; drawerEl.style.backdropFilter = k >= 1 ? "" : `blur(${(2 * k).toFixed(2)}px)`; };
     const reset = () => { panel.style.transition = ""; panel.style.transform = ""; drawerEl.style.transition = ""; drawerEl.style.background = ""; drawerEl.style.backdropFilter = ""; };
     // 手势开出来的侧栏把滑入动画关了（不然展开后再播一遍）；收起时还原，下次点菜单键照常有动画
     new MutationObserver(() => { if (drawerEl.classList.contains("hidden")) { panel.style.animation = ""; reset(); } })
