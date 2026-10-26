@@ -2178,3 +2178,8 @@
 2178	Comment lire
 2179	Animations de l’interface
 2180	Entrée et sortie de la barre latérale, des menus et des pages, et signaux de fin. En mode système, désactivées si « Réduire les animations » est activé
+2181	Outils de dév.
+2182	Choisir un élément
+2183	Touchez une partie de la page pour l’ajouter au message
+2184	Ajouté au message — dites maintenant quoi modifier
+2185	{sel} dans {path} :

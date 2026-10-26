@@ -408,7 +408,13 @@
     el.innerHTML = `<button class="tg-head" type="button"></button><div class="tg-body"></div>`;
     parent.appendChild(el);
     const head = el.firstChild, body = el.lastChild, members = [], inner = [];
-    head.addEventListener("click", () => el.classList.toggle("open"));
+    // 收起整组时，组里展开着的步骤、子代理过程、思考也一起收回去 —— 不然下次点开还是一大片摊着（群友 10-27）
+    head.addEventListener("click", () => {
+      if (!el.classList.toggle("open")) {
+        body.querySelectorAll(".tool.open, .tool-sub.open").forEach((x) => x.classList.remove("open"));
+        body.querySelectorAll("details[open]").forEach((d) => { d.open = false; });
+      }
+    });
     function refresh() {
       const n = members.length;
       el.classList.toggle("single", n < 2);

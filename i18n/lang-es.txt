@@ -2178,3 +2178,8 @@
 2178	Cómo leerlo
 2179	Animaciones de la interfaz
 2180	Entrada y salida de la barra lateral, menús y páginas, y avisos de finalización. Si sigue al sistema, se desactivan cuando «Reducir movimiento» está activo
+2181	Herram. de desarrollo
+2182	Elegir elemento
+2183	Toca cualquier parte de la página para añadirla al mensaje
+2184	Añadido al mensaje: ahora di qué cambiar
+2185	{sel} en {path}:

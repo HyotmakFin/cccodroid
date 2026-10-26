@@ -2215,5 +2215,10 @@ window.I18N_DICT.en = {
   "第一次来？点右上「怎么看」，两分钟学会看脉络": "First time here? Tap \"How to read\" at the top right — two minutes to learn the lineage map",
   "怎么看": "How to read",
   "界面动效": "Interface motion",
-  "侧栏、菜单、整页的进出和完成提示；跟随系统时，系统开了「减少动态效果」就不放": "Sidebar, menus and pages slide in and out, plus completion cues. When following the system, they're off if Reduce motion is on"
+  "侧栏、菜单、整页的进出和完成提示；跟随系统时，系统开了「减少动态效果」就不放": "Sidebar, menus and pages slide in and out, plus completion cues. When following the system, they're off if Reduce motion is on",
+  "开发者工具": "DevTools",
+  "选取元素": "Pick element",
+  "点一下网页里的某一块，它就会放进输入框": "Tap any part of the page to put it in the message box",
+  "已放进输入框，接着写要怎么改": "Added to the message box — now say what to change",
+  "{path} 里的 {sel}：": "{sel} in {path}:"
 };

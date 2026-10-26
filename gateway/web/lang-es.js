@@ -2181,4 +2181,9 @@ window.I18N_DICT["es"] = {
   "怎么看": "Cómo leerlo",
   "界面动效": "Animaciones de la interfaz",
   "侧栏、菜单、整页的进出和完成提示；跟随系统时，系统开了「减少动态效果」就不放": "Entrada y salida de la barra lateral, menús y páginas, y avisos de finalización. Si sigue al sistema, se desactivan cuando «Reducir movimiento» está activo",
+  "开发者工具": "Herram. de desarrollo",
+  "选取元素": "Elegir elemento",
+  "点一下网页里的某一块，它就会放进输入框": "Toca cualquier parte de la página para añadirla al mensaje",
+  "已放进输入框，接着写要怎么改": "Añadido al mensaje: ahora di qué cambiar",
+  "{path} 里的 {sel}：": "{sel} en {path}:",
 };
