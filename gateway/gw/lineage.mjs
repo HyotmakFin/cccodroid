@@ -80,6 +80,12 @@ export function lineageRefresh() {
   return building;
 }
 
+/** 一个会话的最新索引记录（建档用：要知道它压缩过几次、每章从哪儿开始）；没有这个会话返回 null */
+export async function lineageRecord(sid) {
+  await lineageRefresh();
+  return RECS.get(sid) || null;
+}
+
 /** 给前端：节点（会话）+ 边（主父）。只有元数据和标题，没有消息正文 */
 export async function lineageGraph() {
   await lineageRefresh();

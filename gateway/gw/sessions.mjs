@@ -5,6 +5,7 @@ import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, im
 import { goalStateOf, tasksOf } from "./goal.mjs";
 import { agentFilesOf, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { runOfSession } from "./runs.mjs";
+import { archivedTitle } from "./archive-store.mjs";
 import { NEXT, readBody, readBodyBuf, sendJson } from "./http.mjs";
 
 // ── 会话重命名表 ──────────────────────────────────────────────────────
@@ -95,7 +96,9 @@ export function listSessions(limit = 150) {
       id: s.id,
       created: meta.created || 0,
       pinned: PINS[s.id] || 0,
-      title: NAMES[s.id] || meta.title,
+      // 标题：用户改过的 > 建档的最新一章题名 > 第一句提问
+      title: NAMES[s.id] || archivedTitle(s.id) || meta.title,
+      archived: !NAMES[s.id] && !!archivedTitle(s.id),
       renamed: !!NAMES[s.id],
       cwd: meta.cwd,
       mtime: s.mtime,

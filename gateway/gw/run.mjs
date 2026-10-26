@@ -14,6 +14,7 @@ import { handleLocalCommand } from "./modelcmd.mjs";
 import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
+import { archiveHint } from "./archive.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
@@ -161,7 +162,9 @@ export async function startRun(item) {
   // 端侧只补一句身份（--bare 的提示自称 Claude，小模型会照着说），几十 token，不拖慢首字
   const localHint = !P.local ? "" : lcust && lcust.systemPrompt ? lcust.systemPrompt
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
-  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : PREVIEW_HINT, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  // 建档（脉络）：常驻规则 + 这一轮该不该先建档（见 archive.mjs）
+  const archHint = P.local ? "" : await archiveHint(run.sessionId).catch(() => "");
+  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : PREVIEW_HINT, archHint, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
@@ -186,7 +189,8 @@ export async function startRun(item) {
   const [cmd0, args0] = claudeCmd(argv);
   const child = spawn(cmd0, args0, {
     cwd,
-    env: claudeEnv({ model, provider: P }),
+    // CCAPP_RUN_ID / CCAPP_GW_PORT：建档命令 cc-archive 靠它们告诉网关「这是哪一轮」
+    env: { ...claudeEnv({ model, provider: P }), CCAPP_RUN_ID: String(run.id), CCAPP_GW_PORT: String(CFG.port) },
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,            // 当进程组长，中断时好整组带走（见 killTree）
   });
