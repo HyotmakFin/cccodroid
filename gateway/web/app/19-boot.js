@@ -438,7 +438,9 @@
     }
     return false;
   });
-  if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer });
+  if (window.CCLayout) CCLayout.init({ openDrawer: () => openDrawer(), closeDrawer,
+    // 常驻栏展开：面板从左边弹进来（右边内容已经让出位置）
+    dockIn: () => MO.spring(drawerEl.querySelector(".drawer-panel"), "snap", (p) => ({ transform: `translateX(${(MO.rtl() ? 100 : -100) * (1 - p)}%)` })) });
   window.__cc = { view, srv, state, send, abort, openSession, newConversation, openPage,
     openGit, openViewer, openFiles, openDrawer, showWhatsNew, mdEd: () => VW.ed, provCard: (id) => { state.provView = id; renderProvCard(); } };
 

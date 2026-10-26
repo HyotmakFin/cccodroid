@@ -129,7 +129,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   // 进场弹、退场干脆（150ms 左右缓入，不弹）。设置「界面动效」：跟随系统（默认；系统开了减少动态效果就不放）/ 开 / 关
   //   → html[data-motion=on|off]；样式里的动效都挂在 html[data-motion="on"] 下面
   const MO = (() => {
-    const SPR = { snap: [420, 30], pop: [520, 26], soft: [320, 36] }, SPEED = 1.1, TEMPO = 1.6 / SPEED, K = 1 / SPEED, OUT = "cubic-bezier(.4,0,1,1)";
+    // BOUNCE：回弹力度（冲过头的那一截乘它，节奏和时长不变）；10-27 用户定 0.4（试过 0.85、0.6）
+    const SPR = { snap: [420, 30], pop: [520, 26], soft: [320, 36] }, SPEED = 1.1, BOUNCE = 0.4, TEMPO = 1.6 / SPEED, K = 1 / SPEED, OUT = "cubic-bezier(.4,0,1,1)";
     const k = (ms) => Math.round(ms * K);
     const root = document.documentElement, cache = {};
     const reduce = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
@@ -147,6 +148,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
         if (still > 8) break;
       }
       pts.push(1);
+      for (let i = 0; i < pts.length; i++) if (pts[i] > 1) pts[i] = 1 + (pts[i] - 1) * BOUNCE;
       return (cache[name] = { pts, ms: Math.round((pts.length - 1) * 1000 / 60 * TEMPO) });
     }
     const ms = (name) => curve(name).ms;

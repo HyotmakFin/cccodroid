@@ -56,7 +56,9 @@
       const x = $("tab-" + name).querySelector(`:scope > [data-sec="${b.dataset.sec}"]`); if (!x) return;
       if (x.tagName === "DETAILS") x.open = true;
       const body = $("page-body");
-      body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - $(id).offsetHeight - 10, behavior: "smooth" });
+      const d = x.getBoundingClientRect().top - body.getBoundingClientRect().top - $(id).offsetHeight - 10;
+      if (Math.abs(d) < 24) return;   // 已经在这一节了：再点别挪那几像素（来回一挪就是「抽一下」）
+      body.scrollTo({ top: body.scrollTop + d, behavior: "smooth" });
     });
     // 计数、哪节显示都是异步加载出来的：内容一变就重画（下一帧合并；导航自己重画引起的变化不算）
     let raf = 0;
@@ -97,7 +99,7 @@
     if (setCatShown !== "-" && setCatShown !== setCatOpen) {
       const cur = setCatOpen && document.querySelector(`.set-cat[data-cat="${setCatOpen}"]`);
       if (narrow) { if (cur) MO.play(cur, "mo-in-push", 1400); else if (!setCatOpen) MO.play($("set-cats"), "mo-in-back", 1400); }
-      else if (cur) MO.play(cur, "mo-in-rise", 1400);
+      else if (cur) MO.play(cur, "mo-in-fade", 1400);   // 宽屏换类：新旧交叉淡变，左栏分类在原地，内容不该上下走
     }
     setCatShown = setCatOpen;
     document.querySelectorAll(".set-cat:not(.mo-ghost)").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));

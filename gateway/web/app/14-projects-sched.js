@@ -529,7 +529,7 @@
     MO.cancel(pg);
     pg.classList.remove("hidden");
     if (fromChat) MO.play(pg, innerWidth < 680 ? "mo-in-push" : "mo-in-rise", 1400);
-    else if (prev !== name) { if (prev && $("tab-" + prev)) MO.ghost($("tab-" + prev), "fade"); MO.play($("tab-" + name), "mo-in-rise", 1400); }   // 旧的一页淡掉，新的浮上来
+    else if (prev !== name) { if (prev && $("tab-" + prev)) MO.ghost($("tab-" + prev), "fade"); MO.play($("tab-" + name), "mo-in-fade", 1400); }   // 整页之间换：新旧交叉淡变，不上下走
     pageSub = "";
     paintTitle();
     document.querySelectorAll("#page-body > .tab-pane").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + name));

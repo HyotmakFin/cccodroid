@@ -2831,7 +2831,9 @@ html[data-motion="on"] #lin-tour:not(.hidden){animation:mo-fade-in calc(.2s * va
 html[data-motion="on"] #lin-tour:not(.hidden) > *{animation:mo-rise var(--mo-soft) linear}
 /* 设置弹窗：宽屏遮罩淡入、面板浮上来；窄屏从右推进来 */
 html[data-motion="on"] #set-ov:not(.narrow){animation:mo-fade-in calc(.18s * var(--mo-x,1)) ease-out}
-html[data-motion="on"] #set-ov:not(.narrow) .set-sheet{animation:mo-rise var(--mo-soft) linear}
+html[data-motion="on"] #set-ov:not(.narrow) .set-sheet{animation:mo-sheet-in calc(.2s * var(--mo-x,1)) cubic-bezier(.2,.8,.2,1)}   /* 宽屏设置：原地轻轻放大淡入，不上下走 */
+@keyframes mo-sheet-in{from{opacity:0;transform:scale(.97)}}
+html[data-motion="on"] .mo-in-fade{animation:mo-fade-in calc(.16s * var(--mo-x,1)) ease-out}
 html[data-motion="on"] #set-ov.narrow{animation:mo-page var(--mo-snap) linear}
 html[data-motion="on"][dir="rtl"] #set-ov.narrow{animation-name:mo-page-r}
 /* 工具卡跑完：「完成」弹一下，卡片边缘闪一圈绿 */

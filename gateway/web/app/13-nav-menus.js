@@ -34,6 +34,23 @@
     const panel = drawerEl.querySelector(".drawer-panel");
     MO.cancel(drawerEl);
     if (!MO.on() || !panel || !panel.animate) { drawerEl.classList.add("hidden"); return; }
+    if (document.documentElement.classList.contains("dock-l")) {
+      // 常驻栏收起：真身马上藏（接着会摘 dock-l，右边内容铺满），留一张替身照原样往外滑走，盖着内容让出来的那一条。
+      // 替身挂在 body 下：#drawer 已经藏了；样式不靠 #drawer 祖先，dock-l 下的内边距 / 背景当场抄下来
+      const r = panel.getBoundingClientRect(), cs = getComputedStyle(panel);
+      const g = panel.cloneNode(true);
+      g.classList.add("mo-ghost"); g.inert = true; g.setAttribute("aria-hidden", "true");
+      Object.assign(g.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", inset: "auto",
+        margin: "0", padding: cs.padding, background: cs.backgroundColor, borderInlineEnd: cs.borderInlineEnd, boxSizing: "border-box",
+        overflow: "hidden", zIndex: "45", pointerEvents: "none", animation: "none", transform: "none" });
+      const sc = drawerEl.querySelector("#side-scroll"), st = sc ? sc.scrollTop : 0;
+      document.body.appendChild(g);
+      if (st) { const gs = g.querySelector("#side-scroll"); if (gs) gs.scrollTop = st; }
+      drawerEl.classList.add("hidden");
+      const a = g.animate([{ transform: "none" }, { transform: `translateX(${MO.rtl() ? 100 : -100}%)` }], { duration: Math.round(260 / 1.1), easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" });
+      a.finished.then(() => g.remove(), () => g.remove());
+      return;
+    }
     const w = panel.getBoundingClientRect().width || 300, side = MO.rtl() ? 1 : -1;
     const tf = getComputedStyle(panel).transform, x0 = tf && tf !== "none" ? new DOMMatrix(tf).m41 : 0;
     const bg = getComputedStyle(drawerEl).backgroundColor;
