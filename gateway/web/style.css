@@ -2724,3 +2724,7 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
 .ch-sep.hit-flash{animation:chflash 2.4s ease-out}
 @keyframes chflash{0%,30%{background:var(--bg3)}100%{background:transparent}}
 .lmap .lm-st{cursor:pointer}
+/* 脉络页工具栏的「补档」：小文字钮，跑的时候蓝字 */
+.lin-tools .lin-fill{flex:none;white-space:nowrap;background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--fg2);cursor:pointer}
+.lin-tools .lin-fill.on{color:var(--zy-blue,var(--accent));border-color:currentColor}
+.lin-tools .lin-fill:active{background:var(--bg3)}

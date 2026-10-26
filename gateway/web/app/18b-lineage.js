@@ -40,7 +40,50 @@
     }
     LIN.g = g;
     linPaint(true);
+    linFill();
   }
+
+  // ── 补档（gw/backfill.mjs）：没题名的旧章，用全局默认模型按压缩摘要补起题名；先报预估，用户点头才跑 ──
+  const FILL = { st: null, poll: 0, was: false };
+  async function linFill() {
+    clearTimeout(FILL.poll);
+    let r;
+    try { r = await api("/api/lineage/backfill"); } catch { return; }
+    FILL.st = r;
+    const j = r.job, el = $("lin-fill");
+    if (j.running) {
+      el.textContent = t("补档中 {d}/{n} · 停止", { d: j.done, n: j.total });
+      el.classList.remove("hidden"); el.classList.add("on");
+      FILL.was = true;
+      if (pageOn("lineage")) FILL.poll = setTimeout(linFill, 2000);
+      return;
+    }
+    el.classList.remove("on");
+    if (FILL.was) {
+      // 刚跑完：报结果、重画（新题名进图）
+      FILL.was = false;
+      toast(j.error && !j.ok ? t("补档没跑成：{e}", { e: j.error }) : t("补好 {n} 章题名", { n: j.ok }) + (j.failed ? t("，{n} 章没起成", { n: j.failed }) : ""), !!(j.error && !j.ok));
+      loadLineage();
+    }
+    const n = r.estimate.chapters;
+    el.textContent = t("补档 · {n} 章", { n });
+    el.classList.toggle("hidden", !n);
+  }
+  $("lin-fill").addEventListener("click", async () => {
+    const r = FILL.st; if (!r) return;
+    if (r.job.running) { await post("/api/lineage/backfill", { action: "stop" }).catch(() => {}); return linFill(); }
+    const e = r.estimate, num = (x) => x.toLocaleString(I18N.lang);
+    const msg = t("用全局默认的 {m}（{p}）给 {s} 个会话的 {c} 章补起题名。", { m: r.modelName || r.model || "?", p: r.provider, s: e.sessions, c: e.chapters })
+      + "\n\n" + t("素材是每章结束时的压缩摘要，不重读全文。预计 {k} 次调用，输入约 {i} token、输出约 {o} token（按上限估，实际通常更少）。", { k: e.calls, i: num(e.tokensIn), o: num(e.tokensOut) })
+      + "\n\n" + t("补出来的题名随时能改，之后 AI 建档也会盖过它。开始吗？");
+    if (!confirm(msg)) return;
+    try {
+      const s = await post("/api/lineage/backfill", { action: "start" });
+      if (!s.ok && s.message === "nothing") toast(t("没有要补的章了"));
+      else if (!s.ok && s.message === "bridge") toast(t("本地 DNS 桥启动失败，无法连接 API。"), true);
+    } catch (err) { toast(err.message, true); }
+    linFill();
+  });
   const mdOf = (ms) => { const d = new Date(ms), p = (n) => String(n).padStart(2, "0"); return p(d.getMonth() + 1) + "-" + p(d.getDate()); };
   function linState(msg) {
     const el = $("lin-state");

@@ -2088,3 +2088,12 @@
 2088	Afficher Divers
 2089	Chapitre {n}
 2090	Début du chapitre introuvable ; ouvert au plus récent
+2091	Titrage {d}/{n} · Arrêter
+2092	Le titrage n'a pas pu s'exécuter : {e}
+2093	{n} chapitres titrés
+2094	, {n} en échec
+2095	Compléter les titres · {n}
+2096	Utiliser le modèle global par défaut {m} ({p}) pour titrer {c} chapitres dans {s} sessions.
+2097	À partir du résumé de compactage de fin de chapitre, sans relire tout l'échange. Environ {k} appels, ~{i} jetons en entrée et ~{o} en sortie (estimation haute ; souvent moins).
+2098	Ces titres restent modifiables, et l'archivage par l'IA les remplacera ensuite. Lancer ?
+2099	Plus aucun chapitre à titrer

@@ -2088,3 +2088,12 @@
 2088	Mostrar varios
 2089	Capítulo {n}
 2090	No se encontró el inicio del capítulo; se abrió en lo más reciente
+2091	Titulando {d}/{n} · Detener
+2092	No se pudo completar el titulado: {e}
+2093	{n} capítulos titulados
+2094	, {n} fallaron
+2095	Completar títulos · {n}
+2096	Usar el modelo global predeterminado {m} ({p}) para titular {c} capítulos de {s} sesiones.
+2097	Usa el resumen de compactación al final de cada capítulo, sin releer todo. Unas {k} llamadas, ~{i} tokens de entrada y ~{o} de salida (estimación alta; normalmente menos).
+2098	Puedes cambiar estos títulos cuando quieras, y el archivado de la IA los sustituirá después. ¿Empezar?
+2099	No quedan capítulos por titular

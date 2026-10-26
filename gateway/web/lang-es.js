@@ -2091,4 +2091,13 @@ window.I18N_DICT["es"] = {
   "显示杂项": "Mostrar varios",
   "第 {n} 章": "Capítulo {n}",
   "没找到这一章的位置，已打开到最新": "No se encontró el inicio del capítulo; se abrió en lo más reciente",
+  "补档中 {d}/{n} · 停止": "Titulando {d}/{n} · Detener",
+  "补档没跑成：{e}": "No se pudo completar el titulado: {e}",
+  "补好 {n} 章题名": "{n} capítulos titulados",
+  "，{n} 章没起成": ", {n} fallaron",
+  "补档 · {n} 章": "Completar títulos · {n}",
+  "用全局默认的 {m}（{p}）给 {s} 个会话的 {c} 章补起题名。": "Usar el modelo global predeterminado {m} ({p}) para titular {c} capítulos de {s} sesiones.",
+  "素材是每章结束时的压缩摘要，不重读全文。预计 {k} 次调用，输入约 {i} token、输出约 {o} token（按上限估，实际通常更少）。": "Usa el resumen de compactación al final de cada capítulo, sin releer todo. Unas {k} llamadas, ~{i} tokens de entrada y ~{o} de salida (estimación alta; normalmente menos).",
+  "补出来的题名随时能改，之后 AI 建档也会盖过它。开始吗？": "Puedes cambiar estos títulos cuando quieras, y el archivado de la IA los sustituirá después. ¿Empezar?",
+  "没有要补的章了": "No quedan capítulos por titular",
 };

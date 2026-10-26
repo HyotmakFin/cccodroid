@@ -2125,5 +2125,14 @@ window.I18N_DICT.en = {
   "{d} 起": "since {d}",
   "显示杂项": "Show misc",
   "第 {n} 章": "Chapter {n}",
-  "没找到这一章的位置，已打开到最新": "Couldn't find where this chapter starts; opened at the latest instead"
+  "没找到这一章的位置，已打开到最新": "Couldn't find where this chapter starts; opened at the latest instead",
+  "补档中 {d}/{n} · 停止": "Titling {d}/{n} · Stop",
+  "补档没跑成：{e}": "Backfill didn't run: {e}",
+  "补好 {n} 章题名": "Titled {n} chapters",
+  "，{n} 章没起成": ", {n} failed",
+  "补档 · {n} 章": "Backfill titles · {n}",
+  "用全局默认的 {m}（{p}）给 {s} 个会话的 {c} 章补起题名。": "Use the global default {m} ({p}) to title {c} chapters across {s} sessions.",
+  "素材是每章结束时的压缩摘要，不重读全文。预计 {k} 次调用，输入约 {i} token、输出约 {o} token（按上限估，实际通常更少）。": "It works from the compaction summary at the end of each chapter, not the full transcript. About {k} calls, roughly {i} input and {o} output tokens (an upper estimate; usually less).",
+  "补出来的题名随时能改，之后 AI 建档也会盖过它。开始吗？": "You can change these titles anytime, and the AI's own archiving will override them later. Start?",
+  "没有要补的章了": "No chapters left to title"
 };
