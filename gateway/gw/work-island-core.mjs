@@ -5,7 +5,8 @@
 // 设计要点：
 //  · 更新最多 1.5 秒一次，只保留最后一条；到时补发最后那条。
 //  · 收工看 runs（所有活跃轮次），不看 run；run_end 后仍要等 3 秒宽限。
-//  · error 只显示「出错了」，不转发 message（可能含路径/命令输出）；子任务也只显示「子任务…」。
+//  · error 只显示「出错了 / 这一轮出错了」，不转发 message（可能含路径/命令输出）；子任务也只显示「子任务…」。
+//  · 认不出的工具（含 MCP 长名字）不原样上岛，统一显示「调用工具 / Using a tool」。
 //  · 关掉开关 / 网关退出时，只要岛上还挂着（含「任务完成」那 8 秒）就发 IDLE 收起。
 //  · 文案跟随 LAST_LANG：zh 开头用中文，否则英文。
 
@@ -13,6 +14,7 @@ const ZH_TOOLS = {
   Bash: "执行命令", Read: "读文件", Write: "写文件", Edit: "改文件",
   Glob: "找文件", Grep: "搜代码", WebSearch: "查资料", WebFetch: "读网页",
   Task: "子任务", Agent: "子任务", TodoWrite: "整理清单", NotebookEdit: "改笔记",
+  TaskCreate: "整理清单", TaskUpdate: "整理清单", TaskList: "整理清单", TaskGet: "整理清单",
   Skill: "调用技能", KillShell: "收尾命令",
 };
 
@@ -20,6 +22,7 @@ const EN_TOOL_NAMES = {
   Bash: "a command", Read: "a file", Write: "a file", Edit: "a file",
   Glob: "files", Grep: "code", WebSearch: "the web", WebFetch: "a page",
   Task: "a subtask", Agent: "a subtask", TodoWrite: "the list",
+  TaskCreate: "the list", TaskUpdate: "the list", TaskList: "the list", TaskGet: "the list",
   NotebookEdit: "a notebook", Skill: "a skill", KillShell: "a command",
 };
 
@@ -27,6 +30,7 @@ const EN_TOOL_TITLES = {
   Bash: "Running", Read: "Reading", Write: "Writing", Edit: "Editing",
   Glob: "Finding", Grep: "Searching", WebSearch: "Searching", WebFetch: "Reading",
   Task: "Subtask", Agent: "Subtask", TodoWrite: "Updating list",
+  TaskCreate: "Updating list", TaskUpdate: "Updating list", TaskList: "Updating list", TaskGet: "Updating list",
   NotebookEdit: "Editing", Skill: "Skill", KillShell: "Stopping",
 };
 
@@ -38,13 +42,14 @@ const ZH = {
   wait: "等模型回复…",
   think: "正在想…",
   text: "正在写回复…",
-  tool: (n) => `用 ${n}…`,
-  perm: (n) => `需要你确认：${n}`,
+  tool: (n) => (n ? `用 ${n}…` : "调用工具…"),
+  perm: (n) => (n ? `需要你确认：${n}` : "需要你确认"),
   resume: "继续…",
   compact: "整理上下文…",
   sub: "子任务…",
   bg: "后台任务还在跑…",
   error: "出错了",
+  errorText: "这一轮出错了",
   aborted: "已中止",
   idleTitle: "工作岛",
   idleText: "在后台等下一轮",
@@ -59,8 +64,9 @@ const ZH = {
   titleError: "出错了",
   todoTitle: "整理清单",
   todo: (d, t) => `清单 ${d}/${t}`,
-  toolName: (n) => ZH_TOOLS[n] || n || "工具",
-  toolTitle: (n) => ZH_TOOLS[n] || n || "工具",
+  // 认不出的工具（含 mcp__<服务器>__<工具> 这类长名字）不原样上岛：标题和正文都用通用说法
+  toolName: (n) => ZH_TOOLS[n] || "",
+  toolTitle: (n) => ZH_TOOLS[n] || "调用工具",
 };
 
 const EN = {
@@ -71,13 +77,14 @@ const EN = {
   wait: "Waiting for the model…",
   think: "Thinking…",
   text: "Writing…",
-  tool: (n) => `Using ${n}…`,
-  perm: (n) => `Waiting for approval: ${n}`,
+  tool: (n) => (n ? `Using ${n}…` : "Using a tool…"),
+  perm: (n) => (n ? `Waiting for approval: ${n}` : "Waiting for approval"),
   resume: "Continuing…",
   compact: "Compacting context…",
   sub: "Subtask…",
   bg: "Background task still running…",
   error: "Error",
+  errorText: "This run hit an error",
   aborted: "aborted",
   idleTitle: "Work Island",
   idleText: "Waiting for the next run",
@@ -92,8 +99,8 @@ const EN = {
   titleError: "Error",
   todoTitle: "Updating list",
   todo: (d, t) => `List ${d}/${t}`,
-  toolName: (n) => EN_TOOL_NAMES[n] || n || "a tool",
-  toolTitle: (n) => EN_TOOL_TITLES[n] || n || "Tool",
+  toolName: (n) => EN_TOOL_NAMES[n] || "",
+  toolTitle: (n) => EN_TOOL_TITLES[n] || "Using a tool",
 };
 
 function humanDuration(sec, zh) {
@@ -116,6 +123,7 @@ const TOOL_STATE = {
   Write: "writing", Edit: "writing", NotebookEdit: "writing",
   WebSearch: "searching", WebFetch: "searching",
   Task: "subtask", Agent: "subtask", Skill: "working",
+  TaskCreate: "planning", TaskUpdate: "planning", TaskList: "planning", TaskGet: "planning",
 };
 const toolState = (name) => TOOL_STATE[name] || "working";
 
@@ -260,6 +268,16 @@ export function createWorkIsland(opts = {}) {
         else update(L().tool(L().toolName(ev.name)), L().toolTitle(ev.name), toolState(ev.name));
         break;
       }
+      case "tasks": {
+        // TaskCreate / TaskUpdate 的清单（goal.mjs 的 tasksCheck）：只数数字，不转发 subject / active 原文。
+        // tasks 为 null 表示清单被清空，这时什么也不做，等下一个事件刷新。
+        const list = Array.isArray(ev.tasks) ? ev.tasks : null;
+        if (!list || !list.length) break;
+        const total = list.length;
+        const done = list.filter((t) => t && t.status === "completed").length;
+        update(L().todo(done, total), L().todoTitle, "planning");
+        break;
+      }
       case "perm_request":
         update(L().perm(L().toolName(ev.tool || ev.name)), L().waiting, "waiting");
         break;
@@ -276,7 +294,9 @@ export function createWorkIsland(opts = {}) {
         if (ev.bg > 0) update(L().bg, L().titleBg, "working");
         break;
       case "error":
-        update("", L().titleError, "error");   // 不转发 message：可能带路径/命令输出
+        // 不转发 message：可能带路径/命令输出。正文给一句固定话，
+        // 别发空串（应用缺 text 时会把上一句清掉，看起来像没更新）。
+        update(L().errorText, L().titleError, "error");
         break;
       case "run_end":
         if (!active) break;
