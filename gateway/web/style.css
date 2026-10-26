@@ -2736,8 +2736,8 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
 .lin-tour{position:absolute;inset:0;z-index:6;background:var(--bg);display:flex;flex-direction:column}
 .lin-tour.hidden{display:none}
 #lt-map{flex:1;min-height:0}
-.lt-panel{position:absolute;left:16px;bottom:calc(var(--safe-b, 0px) + 16px);width:min(360px,calc(100% - 32px));background:var(--bg2);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px 12px;z-index:7}
-.lin-tour.tree .lt-panel{left:0;right:0;bottom:0;width:auto;border-radius:12px 12px 0 0;border-width:1px 0 0;padding-bottom:calc(var(--safe-b, 0px) + 12px)}
+.lt-panel{position:absolute;inset-inline-start:16px;bottom:calc(var(--safe-b, 0px) + 16px);width:min(360px,calc(100% - 32px));background:var(--bg2);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px 12px;z-index:7}
+.lin-tour.tree .lt-panel{inset-inline:0;bottom:0;width:auto;border-radius:12px 12px 0 0;border-width:1px 0 0;padding-bottom:calc(var(--safe-b, 0px) + 12px)}
 .lin-tour.tree #lt-map .lm-tree{padding-bottom:240px}
 .lt-panel .lt-step{font-size:11.5px;color:var(--fg3);display:flex;align-items:center;gap:8px}
 .lt-panel .lt-dots{display:flex;gap:4px}
@@ -2760,3 +2760,6 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
   .lin-tools{flex-wrap:wrap;row-gap:6px}
   .lin-tools .seg-scroll{flex:1 1 100%}
 }
+/* 时间轴始终从左往右：地图各层钉 LTR（阿拉伯语界面也一样），卡片里的文字仍跟界面方向 */
+.lmap .lm-canvas{direction:ltr}
+html[dir="rtl"] .lmap .lm-card,html[dir="rtl"] .lmap .lm-now{direction:rtl}
