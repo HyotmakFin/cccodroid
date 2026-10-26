@@ -129,11 +129,11 @@
 
   // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
   function closeMenu() { OV.closeAll("menu"); }
-  function popMenu(anchor, items, place) {
+  function popMenu(anchor, items, place, cls) {
     // 同一个按钮再点一次 = 收起（侧栏账户、项目标签、⋯ 这些都走这里）
     if (anchor && OV.at(anchor)) { closeMenu(); return null; }
     const m = document.createElement("div");
-    m.className = "pop-menu";
+    m.className = "pop-menu" + (cls ? " " + cls : "");   // 额外的类要在量宽度之前挂上，不然定位按窄的算、加宽后出屏
     // head 带 fn 时可点（脉络弹层的「来源」行）；no：左边一列等宽小字（档号）代替图标；cur 加粗；没有 fn 的按钮是灰的
     m.innerHTML = items.map((it, i) => it === "hr" ? "<hr>" : it.head ? `<div class="pm-head${it.fn ? " pm-link" : ""}"${it.fn ? ` data-i="${i}"` : ""}>${esc(it.head)}</div>`
       : `<button data-i="${i}" class="${it.danger ? "danger" : ""}${it.cur ? " cur" : ""}${it.fn ? "" : " dim"}">${it.no ? `<i class="pm-no">${esc(it.no)}</i>` : it.icon ? `<svg viewBox="0 0 24 24">${it.icon}</svg>` : '<span class="pm-pad"></span>'}<span>${esc(it.label)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</button>`).join("");
@@ -234,7 +234,7 @@
     people: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>',
     logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
     update: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>',
-    lineage: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M8 6.5c5 0 8 2 8.5 4M8 17.5c5 0 8-2 8.5-4"/>',
+    lineage: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M6 3v12.5M18 8.5a9 9 0 0 1-9.5 8"/>',
     tray: '<path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M5 5h14l1 8v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z"/>',
   };
 
@@ -335,8 +335,7 @@
       if (!title) return;
       post("/api/archive", { session: id, title, chapter: n }).then(() => loadSessions(), (e) => toast((e.body && e.body.errors || [e.message]).join("；"), true));
     } }, { label: t("在脉络中查看"), icon: SM.lineage, small: t("即将推出") });
-    const m = popMenu(anchor, items);
-    if (m) m.classList.add("lineage");
+    popMenu(anchor, items, null, "lineage");
   }
   // 账户菜单：常用的在上，不可逆的放最下
   function acctMenu() {
