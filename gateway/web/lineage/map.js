@@ -138,7 +138,7 @@
     function paint() {
       const AX = st.AX = buildAxis(st.k), L = st.L = layout(), BY = st.BY, sel = st.sel, fam = sel ? family(sel) : null;
       const W = st.W = AX.width, H = st.H = L.height;
-      const g = [], ax = [], lines = [], labels = [], hits = [];
+      const g = [], ax = [], lines = [], labels = [], hits = [], sts = [];
       for (const [ms, x] of AX.ticks) {
         g.push(`<line x1="${x}" y1="30" x2="${x}" y2="${H}" class="lm-grid"/>`);
         ax.push(`<text class="t-axis" x="${x + 6}" y="20">${md(ms)} <tspan opacity=".6">${esc(wd(ms))}</tspan></text>`);
@@ -199,7 +199,8 @@
         const dead = s.trashed;
         let body = `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${dead ? "var(--fg3)" : stroke}" stroke-width="${sw}" stroke-linecap="round" ${dead ? 'stroke-dasharray="4 4" opacity=".55"' : ""}/>`;
         if (!P0 && !ex.length) body += `<circle cx="${x0}" cy="${y}" r="3.2" fill="${dead ? "var(--fg3)" : stroke}"/>`;
-        s.ch.forEach((c) => { body += `<circle cx="${AX.X(c.at)}" cy="${y}" r="4.6" fill="var(--bg)" stroke="${stroke}" stroke-width="${isSel ? 2.2 : 1.8}"/>`; });
+        // 站点 = 压缩处 = 下一章的开头；外面套一圈透明的大热区，点站直接跳到会话里那个位置
+        s.ch.forEach((c, i) => { body += `<circle cx="${AX.X(c.at)}" cy="${y}" r="4.6" fill="var(--bg)" stroke="${stroke}" stroke-width="${isSel ? 2.2 : 1.8}"/>`; if (!dead) sts.push(`<circle class="lm-st" data-st="${esc(s.id)}" data-n="${i + 2}" cx="${AX.X(c.at)}" cy="${y}" r="12" fill="transparent"/>`); });
         if (isSel) {
           // 选中：线上方逐章「章序 · 题名」，段太短只写序号；未建档的章灰字
           const cuts = [x0, ...s.ch.map((c) => AX.X(c.at)), x1], names = [...s.ch, s.open];
@@ -219,7 +220,7 @@
         // 点按热区：比线粗得多的透明描边 + 标题那一块
         hits.push(`<line data-id="${esc(s.id)}" x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="transparent" stroke-width="22"/><rect data-id="${esc(s.id)}" x="${x0 - 4}" y="${y - 26}" width="${Math.max(x1 - x0, textW(clip(s.title)) + 8)}" height="22" fill="transparent"/>`);
       }
-      layer.main.innerHTML = `<svg width="${W}" height="${H}">${g.join("")}${lines.join("")}${labels.join("")}${hits.join("")}</svg>`;
+      layer.main.innerHTML = `<svg width="${W}" height="${H}">${g.join("")}${lines.join("")}${labels.join("")}${hits.join("")}${sts.join("")}</svg>`;
       layer.axis.innerHTML = `<svg width="${W}" height="30">${ax.join("")}</svg>`;
       layer.band.innerHTML = L.bandY.map((b) => `<div style="top:${b.y + 4}px">${esc(bandName(b.key))}</div>`).join("");
       layer.card.innerHTML = sel ? card(sel) : "";
@@ -350,6 +351,8 @@
         const now = performance.now();
         if (now - lastTap < 300) { lastTap = 0; return home(); }
         lastTap = now;
+        const stn = d.target.closest && d.target.closest("[data-st]");
+        if (stn && opts.onAct) { lastTap = 0; return opts.onAct("chapter", stn.getAttribute("data-n"), stn, stn.getAttribute("data-st")); }
         const hit = d.target.closest && d.target.closest("[data-id]");
         select(hit ? hit.getAttribute("data-id") : null);
         return;

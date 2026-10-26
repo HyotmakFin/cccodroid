@@ -10,6 +10,7 @@
     if (!text) return;
     if (fromInput) draftLast = "";      // 发出去的不算「误删」：有的输入法清空后还会补一个空的 input 事件
     hidePopup();
+    backToLatest();                     // 正看着中间某一章：先回到最新，新消息才看得见
 
     // 纯界面命令：不惊动 claude
     if (typed === "/clear" || typed === "/new") {

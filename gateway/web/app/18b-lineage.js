@@ -15,7 +15,12 @@
   }
   function linAct(act, arg, el, sel) {
     if (act === "open" && arg && arg !== sel) return openSession(arg);   // 定时任务卡片里点某一次
-    if (act === "open" || act === "chapter") return openSession(sel);
+    if (act === "open") return openSession(sel);
+    if (act === "chapter") {
+      // 地图上的站 / 卡片里的章：落在那一章开头（第一章 = 会话开头）
+      const n = Number(arg), c = LIN.g?.nodes.find((x) => x.id === sel)?.chapters[n - 1];
+      return openSession(sel, null, n === 1 ? "start" : c?.anchor || "");
+    }
     if (act === "menu" || act === "tree") return lineageMenu(arg, el);
     if (act === "restore") return post("/api/trash/restore", { ids: [sel] }).then(() => { toast(t("已恢复")); loadSessions(); loadLineage(); }, (e) => toast(e.message, true));
   }

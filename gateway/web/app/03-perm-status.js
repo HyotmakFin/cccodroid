@@ -674,6 +674,18 @@
     };
   }
 
+  /** 压缩处的章节分隔：第 n 章 · 题名（没建档的拿章首提问灰字顶上）· 档号 */
+  function chapterSep(m, parent) {
+    const el = document.createElement("div");
+    el.className = "ch-sep";
+    el.dataset.uuid = m.uuid || "";
+    el.innerHTML = `<span class="ch-n">${esc(t("第 {n} 章", { n: m.chapter }))}</span>`
+      + (m.chTitle ? `<span class="ch-t${m.chGhost ? " ghost" : ""}">${esc(m.chTitle)}</span>` : "")
+      + `<span class="ch-no">${esc(m.chNo || "")}</span>`;
+    el.title = m.text;
+    parent.appendChild(el);
+    return el;
+  }
   /** 历史页：一段 transcript 条目 → 一个 .page 容器 */
   function renderItems(items) {
     const page = document.createElement("div");
@@ -682,7 +694,7 @@
     const avs = [];
     for (const m of items) {
       if (m.role === "user") { renderUser(m.text, page); av = null; continue; }
-      if (m.role === "note") { addNote(m.text, page); av = null; continue; }
+      if (m.role === "note") { (m.chapter ? chapterSep : addNote)(m.chapter ? m : m.text, page); av = null; continue; }
       if (m.role === "tool_result") { toolResult(m.id, m.ok, m.text); continue; }
       if (!av) { av = AssistantView(page, false); avs.push(av); }
       if (m.role === "assistant") av.text(m.text);

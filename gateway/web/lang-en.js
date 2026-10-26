@@ -2123,5 +2123,7 @@ window.I18N_DICT.en = {
   "还没有会话。聊过几次之后，这里会画出它们之间的来龙去脉。": "No sessions yet. After a few chats, this map will show how they relate.",
   "{n} 个会话 · {m} 处亲缘": "{n} sessions · {m} links",
   "{d} 起": "since {d}",
-  "显示杂项": "Show misc"
+  "显示杂项": "Show misc",
+  "第 {n} 章": "Chapter {n}",
+  "没找到这一章的位置，已打开到最新": "Couldn't find where this chapter starts; opened at the latest instead"
 };

@@ -8,7 +8,7 @@
   let bottomH = 0, bottomRaf = 0;
   function syncBottomBtn() {
     bottomRaf = 0;
-    const away = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 320;
+    const away = view.next != null || chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight > 320;
     toBottomEl.classList.toggle("hidden", !away);
     if (!away) toBottomEl.classList.remove("new");
     else if (chatEl.scrollHeight > bottomH + 4 && bottomH) toBottomEl.classList.add("new");
@@ -21,6 +21,7 @@
   bottomRO.observe(histEl); bottomRO.observe(liveEl);
   toBottomEl.addEventListener("click", () => {
     toBottomEl.classList.remove("new");
+    if (backToLatest()) return;
     chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: "smooth" });
   });
 

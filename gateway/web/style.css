@@ -2714,3 +2714,13 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
 .lm-trow.ghost .tt{color:var(--fg3);font-weight:400}
 .lm-trow.sel{background:var(--bg3)}
 .lm-empty{padding:40px 16px;text-align:center;color:var(--fg3);font-size:13px}
+/* 会话里压缩处的章节分隔（脉络里点站 / 章标题落在这里） */
+.ch-sep{max-width:900px;margin:22px auto 18px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg3);line-height:1.4;border-radius:6px}
+.ch-sep::before,.ch-sep::after{content:"";flex:1 1 24px;min-width:16px;height:1px;background:var(--line)}
+.ch-sep .ch-n{color:var(--zy-blue,var(--accent));white-space:nowrap}
+.ch-sep .ch-t{color:var(--fg2);min-width:0;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-sep .ch-t.ghost{color:var(--fg3)}
+.ch-sep .ch-no{font-family:var(--mono);font-size:11px;white-space:nowrap}
+.ch-sep.hit-flash{animation:chflash 2.4s ease-out}
+@keyframes chflash{0%,30%{background:var(--bg3)}100%{background:transparent}}
+.lmap .lm-st{cursor:pointer}

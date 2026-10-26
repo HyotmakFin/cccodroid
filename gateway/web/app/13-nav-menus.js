@@ -328,9 +328,12 @@
       items.push({ head: d ? head : head.replace(/ · $/, ""), fn: P.missing || P.trashed ? null : () => { closeDrawer(); openSession(P.id); } }, "hr");
     }
     const sid4 = id.slice(0, 4);
+    // 点卷：跳到这一卷第一章的开头（和脉络页点站、卡片里点章同一个去处）；要看最新用最上面的「打开」
+    if (open) items.push({ label: t("打开"), icon: SM.chat, fn: open }, "hr");
     for (const v of [...r.volumes].reverse()) {
       const a = v.chapters[0], b = v.chapters[v.chapters.length - 1], live = r.chapters[b - 1].open;
-      items.push({ no: sid4 + "·" + (a === b ? a : a + "–" + b), label: v.title || t("还没有题名"), small: live ? t("进行中") : range(v.from, v.to), cur: live, fn: open || (() => {}) });
+      const anchor = a === 1 ? "start" : r.chapters[a - 1].anchor;
+      items.push({ no: sid4 + "·" + (a === b ? a : a + "–" + b), label: v.title || t("还没有题名"), small: live ? t("进行中") : range(v.from, v.to), cur: live, fn: () => { closeDrawer(); openSession(id, null, anchor); } });
     }
     items.push("hr", { label: t("改题名"), icon: SM.edit, fn: () => {
       const last = r.volumes[r.volumes.length - 1], n = last.chapters[last.chapters.length - 1];

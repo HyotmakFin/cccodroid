@@ -2086,3 +2086,5 @@
 2086	{n} sessions · {m} liens
 2087	depuis le {d}
 2088	Afficher Divers
+2089	Chapitre {n}
+2090	Début du chapitre introuvable ; ouvert au plus récent

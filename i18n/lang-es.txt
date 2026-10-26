@@ -2086,3 +2086,5 @@
 2086	{n} sesiones · {m} vínculos
 2087	desde {d}
 2088	Mostrar varios
+2089	Capítulo {n}
+2090	No se encontró el inicio del capítulo; se abrió en lo más reciente

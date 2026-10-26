@@ -85,6 +85,9 @@ export function lineageRefresh() {
   return building;
 }
 
+/** 不刷新、只读已有缓存的索引记录（会话页每翻一页都要用，首次整理大户要十几秒，不能等） */
+export function lineageCached(sid) { loadCache(); return RECS.get(sid) || null; }
+
 /** 一个会话的最新索引记录（建档用：要知道它压缩过几次、每章从哪儿开始）；没有这个会话返回 null */
 export async function lineageRecord(sid) {
   await lineageRefresh();
@@ -140,7 +143,7 @@ export async function lineageGraph() {
       pinned: PINS[r.id] || 0, band, cwd: r.cwd || "", trashed: !!m.trashed,
       sched: sched.get(r.id) || null, misc: !!entry?.misc, running: !!runOfSession(r.id),
       firstTs: r.firstTs || r.birth || m.mtime || 0, lastTs: r.lastTs || m.mtime || 0, turns: r.turns, sizeKb: Math.round(r.size / 1024),
-      chapters: cv.chapters.map((c) => ({ n: c.n, from: c.from, to: c.to, title: c.title, by: c.by, same: c.same, status: c.status, q: (c.n === 1 ? r.lead || r.first : r.compacts[c.n - 2]?.q) || "" })),
+      chapters: cv.chapters.map((c) => ({ n: c.n, anchor: c.n === 1 ? "start" : c.anchor, from: c.from, to: c.to, title: c.title, by: c.by, same: c.same, status: c.status, q: (c.n === 1 ? r.lead || r.first : r.compacts[c.n - 2]?.q) || "" })),
     });
   }
   const edges = [], linked = new Set();

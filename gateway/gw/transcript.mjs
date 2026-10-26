@@ -35,7 +35,8 @@ export function transcriptItems(ev) {
   const out = [];
   if (!ev || ev.isSidechain || ev.isMeta) return out;
   if (ev.type === "user") {
-    if (ev.isCompactSummary) { out.push({ role: "note", text: tr(LAST_LANG, tz("（此前的对话已被压缩成摘要）")) }); return out; }
+    // 压缩处：带上 uuid，界面画成章节分隔（第几章、题名由路由按脉络索引补上），脉络页跳转也靠它落地
+    if (ev.isCompactSummary) { out.push({ role: "note", text: tr(LAST_LANG, tz("（此前的对话已被压缩成摘要）")), compact: true, uuid: ev.uuid || null }); return out; }
     const c = ev.message?.content;
     if (typeof c === "string") {
       if (c && !c.startsWith("<")) out.push({ role: "user", text: c });
@@ -124,4 +125,98 @@ export async function readSessionPage(file, { before = null, limit = 40, exclude
   } finally {
     await fh.close();
   }
+}
+
+/** 从字节位置 after **往后**读一页（脉络跳到某一章用）。
+ *  after 不在行首时先跳到下一行开头；凑够 limit 条后停在下一轮对话开头（用户消息）之前 —— 和往前翻一样，
+ *  页的边界都落在一轮的开头，工具调用和它的结果不会被切到两页。
+ *  返回 { items, from, next, size }：from 是这一页第一行的偏移（往前翻用 before=from），next 是下一页的起点；next === size 表示到底了。
+ *  excludeFrom：时间戳不早于它的行不给（界面里正实时显示的那几轮）。 */
+export async function readSessionForward(file, { after = 0, limit = 40, excludeFrom = 0 } = {}) {
+  const CH = 256 * 1024, MAX_SCAN = 12 * 1024 * 1024;
+  const fh = await fs.promises.open(file, "r");
+  try {
+    const size = (await fh.stat()).size;
+    let pos = Math.max(0, Math.min(Number(after) || 0, size));
+    // 对齐到行首：前一个字节不是换行就往后找下一行
+    if (pos > 0) {
+      const b = Buffer.alloc(1); await fh.read(b, 0, 1, pos - 1);
+      if (b[0] !== 10) {
+        for (let p = pos; p < size;) {
+          const chunk = Buffer.alloc(Math.min(CH, size - p)); await fh.read(chunk, 0, chunk.length, p);
+          const i = chunk.indexOf(10);
+          if (i >= 0) { pos = p + i + 1; break; }
+          p += chunk.length; if (p >= size) pos = size;
+        }
+      }
+    }
+    const from = pos, items = [];
+    let rest = Buffer.alloc(0), scanned = 0, base = pos;
+    while (pos < size) {
+      const chunk = Buffer.alloc(Math.min(CH, size - pos)); await fh.read(chunk, 0, chunk.length, pos);
+      pos += chunk.length; scanned += chunk.length;
+      const data = rest.length ? Buffer.concat([rest, chunk]) : chunk;
+      let start = 0;
+      for (let nl = data.indexOf(10); nl !== -1; nl = data.indexOf(10, start)) {
+        const lineAt = base + start, line = data.toString("utf8", start, nl).trim();
+        start = nl + 1;
+        if (!line) continue;
+        let ev = null; try { ev = JSON.parse(line); } catch {}
+        if (!ev || (excludeFrom && ev.timestamp && Date.parse(ev.timestamp) >= excludeFrom)) continue;
+        const its = transcriptItems(ev);
+        if (!its.length) continue;
+        // 够数了、又碰到下一轮的开头：这一行留给下一页
+        if (items.length >= limit && its[0].role === "user" && lineAt > from) return { items, from, next: lineAt, size };
+        items.push(...its);
+      }
+      base += start; rest = Buffer.from(data.subarray(start));
+      if (rest.length > 64 << 20) { base += rest.length; rest = Buffer.alloc(0); }   // 单行超长：跳过
+      if (scanned >= MAX_SCAN && items.length) return { items, from, next: base, size };
+    }
+    // 最后一行没换行（还在写）：当作到底了 —— 再往后的内容走事件总线实时来，不然界面会反复来要一页空的
+    return { items, from, next: size, size };
+  } finally {
+    await fh.close();
+  }
+}
+
+/** 找含某个 uuid 的那一行的起点（脉络跳转的兜底：索引里的偏移对不上时，比如文件被删消息改写过）。找不到返回 -1 */
+export async function findLineOffset(file, uuid) {
+  const needle = Buffer.from(`"uuid":"${uuid}"`), CH = 4 << 20;
+  const fh = await fs.promises.open(file, "r");
+  try {
+    const size = (await fh.stat()).size;
+    let pos = 0, carry = Buffer.alloc(0), base = 0;
+    while (pos < size) {
+      const chunk = Buffer.alloc(Math.min(CH, size - pos)); await fh.read(chunk, 0, chunk.length, pos);
+      pos += chunk.length;
+      const data = carry.length ? Buffer.concat([carry, chunk]) : chunk;
+      const i = data.indexOf(needle);
+      // data 总是从某一行的开头起（carry 留的是最后一个换行之后），所以找到时往回找换行就是行首
+      if (i >= 0) return base + data.lastIndexOf(10, i) + 1;
+      let keep = data.lastIndexOf(10) + 1;
+      if (data.length - keep > 64 << 20) keep = data.length - needle.length;   // 单行超长：只留够跨块匹配的一截
+      base += keep; carry = Buffer.from(data.subarray(keep));
+    }
+    return -1;
+  } finally { await fh.close(); }
+}
+/** 偏移 off 是不是某行的行首、且那一行含这个 uuid（核对索引给的偏移还准不准）。
+ *  uuid 在行里排在 message 后面，压缩摘要那行常有十几 KB，所以要读完整行再看 */
+export async function lineHas(file, off, uuid) {
+  const fh = await fs.promises.open(file, "r");
+  try {
+    if (off > 0) { const p = Buffer.alloc(1); await fh.read(p, 0, 1, off - 1); if (p[0] !== 10) return false; }
+    const needle = `"uuid":"${uuid}"`, CH = 256 << 10;
+    let pos = off, line = Buffer.alloc(0);
+    while (line.length < 64 << 20) {
+      const b = Buffer.alloc(CH); const { bytesRead } = await fh.read(b, 0, CH, pos);
+      if (!bytesRead) break;
+      const nl = b.subarray(0, bytesRead).indexOf(10);
+      line = Buffer.concat([line, b.subarray(0, nl >= 0 ? nl : bytesRead)]);
+      if (nl >= 0) break;
+      pos += bytesRead;
+    }
+    return line.includes(needle);
+  } catch { return false; } finally { await fh.close(); }
 }

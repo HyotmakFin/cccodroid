@@ -2089,4 +2089,6 @@ window.I18N_DICT["es"] = {
   "{n} 个会话 · {m} 处亲缘": "{n} sesiones · {m} vínculos",
   "{d} 起": "desde {d}",
   "显示杂项": "Mostrar varios",
+  "第 {n} 章": "Capítulo {n}",
+  "没找到这一章的位置，已打开到最新": "No se encontró el inicio del capítulo; se abrió en lo más reciente",
 };
