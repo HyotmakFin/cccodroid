@@ -2675,7 +2675,7 @@ html[data-theme="light"] .lmap{--lm-track:#c4c4c4;--lm-grid:#f4f4f4}
 .lmap.tree .lm-canvas{display:none}
 .lmap svg{display:block}
 .lm-main,.lm-axis,.lm-band{position:absolute;left:0;top:0;will-change:transform}
-.lm-axis{right:0;height:30px;background:var(--bg);z-index:2;pointer-events:none}
+.lm-axis{height:30px;background:var(--bg);z-index:2;pointer-events:none}
 .lm-axis::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;background:linear-gradient(var(--bg),transparent)}
 .lm-band{width:120px;z-index:1;pointer-events:none}
 .lm-band div{position:absolute;left:0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 22px 2px 16px;font:600 11px var(--font-ui);color:var(--fg3);letter-spacing:.4px;background:linear-gradient(90deg,var(--bg) 70%,transparent)}

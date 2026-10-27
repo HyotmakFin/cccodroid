@@ -139,6 +139,8 @@
     function paint() {
       const AX = st.AX = buildAxis(st.k), L = st.L = layout(), BY = st.BY, sel = st.sel, fam = sel ? family(sel) : null;
       const W = st.W = AX.width, H = st.H = L.height;
+      // 时间轴底色按整张图宽铺：原先 right:0 只有画布宽，往左拖到头时右边露出一截没底色的空白
+      layer.axis.style.width = Math.max(W, cv.clientWidth) + "px";
       const g = [], ax = [], lines = [], labels = [], hits = [], sts = [];
       for (const [ms, x] of AX.ticks) {
         g.push(`<line x1="${x}" y1="30" x2="${x}" y2="${H}" class="lm-grid"/>`);
@@ -436,11 +438,12 @@
       opts.onAct && opts.onAct("tree", id, r, id);
     });
 
-    // ── 尺寸：宽度跨过 600 换形态；视口变了重新夹边界 ──
+    // ── 尺寸：竖屏宽度跨过 600 换形态（横屏放宽到 440）；视口变了重新夹边界 ──
     function relayout() {
       if (!st.model) return;
       const w = root.clientWidth; if (!w) return;
-      const mode = w < PHONE ? "tree" : "map";
+      // 竖屏窄才用缩进树；手机横屏开着常驻侧栏时图只剩 ~580 宽，照样给满血地图（能拖能缩放，窄点不碍事）
+      const mode = w < 440 || (w < PHONE && innerWidth <= innerHeight) ? "tree" : "map";
       root.classList.toggle("tree", mode === "tree");
       if (mode !== st.mode) { st.mode = mode; st.placed = false; }
       if (mode === "tree") return paintTree();
