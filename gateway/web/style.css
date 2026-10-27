@@ -2916,3 +2916,4 @@ html.land .msg.bot .bubble{line-height:1.65}
 .mp-panel > *{flex:none}
 .mp-list,#model-pick.pop .mp-list{flex:none;overflow:visible;min-height:0}
 .pop-menu{max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}
+#perm-menu{overflow-y:auto;overscroll-behavior:contain}
