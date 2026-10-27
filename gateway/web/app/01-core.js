@@ -25,6 +25,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   // 出错要看得见：脚本一挂界面就是死的，把原因写到顶栏副标题上，
   // 而不是让人对着一个不动的东西猜。
   const showErr = (msg) => {
+    // 顶栏只放得下一行，截图常被截断：最近 5 条完整的存起来（cc.errLog），排障时能拿到文件和行号
+    try { const l = JSON.parse(localStorage.getItem("cc.errLog") || "[]"); l.push({ at: Date.now(), msg: String(msg).slice(0, 600) }); localStorage.setItem("cc.errLog", JSON.stringify(l.slice(-5))); } catch {}
     const el = document.getElementById("sub-title");
     if (el) { el.textContent = t("界面脚本出错：{msg}", { msg }); el.className = "err"; }
   };
@@ -32,7 +34,9 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     // 光秃秃的「Script error.」没有文件和行号：是从外壳 evaluateJavascript 注入的代码里冒出去的错，WebView 把细节抹了。
     // 写在顶栏上谁也看不懂，只进控制台；外壳注入的每段代码自己 try 住交给 __ccErr，页面这边的入口也用 guardHook 包着
     if (!e.filename && /^Script error\.?$/.test(e.message || "")) { console.warn("[cc] 外壳注入的脚本出错（细节被 WebView 隐去）"); return; }
-    showErr(e.message || String(e.error));
+    // 带上出错位置（app.js 是拼起来的一整份，行号用 scripts/appjs.mjs 对回分段）
+    const at = e.filename ? `[${e.filename.split("/").pop().split("?")[0]}:${e.lineno}:${e.colno}] ` : "";   // 放前头：顶栏截断时位置还在
+    showErr(at + (e.message || String(e.error)));
   });
   // 外壳（MainActivity）直接调用的入口：在页面自己的代码里接住错误，按原文报，不让它变成「Script error.」
   // 外壳注入的代码接住错误后交到这里（MainActivity.guarded / caught）：name 是哪个入口

@@ -2498,6 +2498,7 @@ html.wel #chat{display:flex;flex-direction:column;justify-content:flex-end;flex:
 html.wel #composer{border-top-color:transparent;background:none;position:static}
 html.wel #wl-below{display:block;flex:1 1 0;min-height:0;overflow:auto;padding:var(--g3) 12px calc(var(--safe-b) + var(--g4))}
 html.wel .msg.welcome{width:100%;margin-bottom:var(--g4)}
+.msg.welcome.wl-kept,.msg.welcome.wl-kept .wl-mark path,.msg.welcome.wl-kept .wl-mark circle{animation:none!important}.msg.welcome.wl-kept .wl-mark path{stroke-dashoffset:0;opacity:1}.msg.welcome.wl-kept .wl-mark circle{opacity:1}
 html.wel .msg.welcome .who,html.wel .msg.welcome + .msg-acts,html.wel .msg.welcome .msg-acts{display:none}
 .wl-hero{display:flex;align-items:center;justify-content:center;gap:var(--g3);text-align:center;flex-wrap:wrap}
 .wl-mark{width:52px;height:52px;flex:none;fill:none;stroke:var(--fg);stroke-width:2.6;stroke-linecap:round}

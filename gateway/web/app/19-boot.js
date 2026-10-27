@@ -312,6 +312,8 @@
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         if (!(dx > 0 && dx >= Math.abs(dy))) { g = null; return; }
         g.on = true;
+        // 三栏宽屏收起时：横滑同样回到常驻侧栏，和菜单键一致（不拉出盖在对话上的抽屉）
+        if (window.CCLayout && CCLayout.expand && CCLayout.tier() >= 3) { g = null; CCLayout.expand(); return; }
         panel.style.animation = "none";
         panel.style.transition = drawerEl.style.transition = "none";
         panel.style.transform = rtl() ? "translateX(100%)" : "translateX(-100%)";   // 先藏在屏外再显示，别闪一下全开

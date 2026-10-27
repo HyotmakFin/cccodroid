@@ -3,6 +3,7 @@
   // 宽屏时侧栏和右侧窗格都留着、整页只占对话那一块；窄屏整页盖住对话，返回键回到对话。
   function openDrawer(tab) {
     if (tab && tab !== "sessions") return openPage(tab);
+    if (window.CCLayout && CCLayout.expand && CCLayout.expand()) return;   // 三栏收起时：回到常驻，布局层会回调这里把内容填上
     OV.closeAll();
     MO.cancel(drawerEl);
     // 收到一半又打开：从停下的位置用弹簧弹回来，别跳

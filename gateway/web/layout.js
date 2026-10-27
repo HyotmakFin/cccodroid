@@ -244,6 +244,14 @@
       return true;
     },
     collapse() { if (tier >= 3) localStorage.setItem(LS_DOCK, "0"); apply(); },
+    // 三栏时收起过的侧栏要叫回来：一律回到常驻，不走窄屏那套盖在对话上的抽屉（遮罩 + 毛玻璃）——
+    // 以前菜单键回常驻、横滑和别的入口却开出抽屉，同一块屏两种侧栏。返回 true 表示已接手
+    expand() {
+      if (tier < 3 || docked()) return false;
+      localStorage.setItem(LS_DOCK, "1");
+      apply();
+      return true;
+    },
     setAvoid(x) { avoid = x == null ? null : +x; apply(); },
     cover(on) { ovCover = !!on; placeBrowser(); },
     apply,

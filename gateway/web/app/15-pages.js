@@ -118,7 +118,7 @@
   // 侧栏常驻项：打开侧栏、展开「更多」、进入勾选
   $("set-navpins").addEventListener("click", () => {
     localStorage.setItem("cc.navMore", "1"); navEdit = true;
-    if (!(window.CCLayout && CCLayout.docked())) drawerEl.classList.remove("hidden");
+    if (!(window.CCLayout && (CCLayout.docked() || CCLayout.expand()))) drawerEl.classList.remove("hidden");
     renderSideNav();
   });
   // 设置里较长的说明默认收成两行，点一下展开 / 收起

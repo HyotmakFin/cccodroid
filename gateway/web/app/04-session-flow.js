@@ -62,6 +62,10 @@
     view.tasks = null;
     view.tasksHide = hid.t || "";
     renderRunStrip();
+    // 新会话的首屏留着：点「新对话」时已经画过一次，重连回来（hello）又会走到这里——清掉重画就是空一帧再整块冒出来，
+    // 关了动效时看着就是一闪。还是新会话、首屏也还在，就把那块原样接回去（showWelcome 认它）
+    const wel = !view.sessionId && histEl.childElementCount === 1 ? histEl.querySelector(":scope > .msg.welcome") : null;
+    welKeep = wel || null;
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
     for (const rv of runViews.values()) rv.timer?.stop();
@@ -82,6 +86,7 @@
   function openSession(id, jumpQ, anchor) {
     closePage();
     resetView(id);
+    if (!id) showWelcome();   // 新会话当场画首屏，不等重连回来——中间空着那一下就是闪
     view.jumpQ = id && jumpQ ? jumpQ : "";   // 从搜索结果点进来：历史加载完后跳到命中的那条
     view.jumpPages = 0;
     view.anchor = id && anchor ? anchor : "";
@@ -300,7 +305,18 @@
     if ((wd === 0 || wd === 6) && h >= 8 && h < 22) pool.push(t("周末，做点自己想做的"));
     return pool[Math.floor(Math.random() * pool.length)];
   }
+  var welKeep = null;   // var：resetView 在上面，别撞暂时性死区
   function showWelcome() {
+    if (histEl.querySelector(":scope > .msg.welcome")) return;
+    if (welKeep) {
+      // 接回去的节点：重新插进文档时浏览器会把它的 CSS 动画（淡入、线稿描画）从头再播，挂 wl-kept 压住
+      const w = welKeep; welKeep = null;
+      w.classList.add("wl-kept");
+      histEl.appendChild(w);
+      fillSetupGuide(w.querySelector(".setup-guide"));
+      paintWelBelow();
+      return;
+    }
     const b = mkMsg("bot", null, histEl);
     b.parentElement.classList.add("welcome");
     b.innerHTML = `<div class="wl-hero">${WL_MARK}<h1 class="wl-greet">${esc(greeting())}</h1></div><div class="setup-guide hidden"></div>`;
