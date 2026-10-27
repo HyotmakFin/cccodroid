@@ -176,10 +176,12 @@ export function applyCatalog(list, cat, keys) {
   });
 }
 
-async function withCatalog(list, p) {
+// 目录有 6 MB，国内常要好几秒、甚至撞上超时：不让模型清单干等。没有就后台去拉，先出不带窗口的清单；
+// 拉到后让清单缓存过期，下次打开设置就补上。过期的旧目录照用，后台换新
+function withCatalog(list, p) {
   if (!list.some((m) => !m.context_window)) return list;
-  const cat = await loadCatalog();
-  return applyCatalog(list, cat, catalogKeys(p));
+  if (!CAT || Date.now() - CAT_AT >= CATALOG_TTL) loadCatalog().then((c) => { if (c) expireModelCache(); });
+  return CAT ? applyCatalog(list, CAT, catalogKeys(p)) : list;
 }
 
 // 清空 / 让它过期：别的模块改不了这几个变量（ES 模块的导入是只读的），走这两个函数
@@ -214,7 +216,7 @@ async function fetchModelsOf(p, force) {
       }
       const r = await fetch(p.modelsUrl, { headers, signal: AbortSignal.timeout(15000) });
       if (r.ok) {
-        const list = await withCatalog(mergeKnown(normalizeModels(await r.json()), p.fallbackModels), p);
+        const list = withCatalog(mergeKnown(normalizeModels(await r.json()), p.fallbackModels), p);
         if (list.length) {
           log(`[${p.id}] 模型清单：${list.map((m) => m.id).join(", ")}`);
           return keep(list);
