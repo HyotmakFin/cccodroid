@@ -2044,6 +2044,11 @@ body{line-height:1.6}
 html.dock-l .drawer-panel,.drawer-panel{padding:var(--safe-tt) 8px 0}
 .side-head{padding:0 2px 6px;gap:6px}
 .side-brand{padding-inline-start:6px}
+/* 常驻侧栏的标题行和主顶栏共用一条中线（#31）：标题行内容高 = 顶栏边框盒（--tbh，随字号 / 两行标题实测）减去上内边距、下内边距 2、底边 1。
+   两边上内边距都是 --safe-tt，内容各自居中，中线就重合。手机横屏顶栏没有下内边距、侧栏上内边距是 2px（不是 --safe-tt），
+   中线 = safe-tt + (tbh - safe-tt - 1)/2 = 2 + 高/2，解出 高 = tbh + safe-tt - 5 */
+html.dock-l .side-head{box-sizing:content-box;height:calc(var(--tbh,44px) - var(--safe-tt) - 3px)}
+html.dock-l.land .side-head{height:calc(var(--tbh,40px) + var(--safe-tt) - 5px)}
 .side-new{margin:4px 0 6px;padding:9px 12px;border-radius:12px;font-size:15px;font-weight:600}
 .side-nav{gap:0;padding:2px 0 0}
 .nav-item{padding:8px 12px;border-radius:10px;font-size:15px;gap:12px}
