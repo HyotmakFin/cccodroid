@@ -2915,3 +2915,4 @@ html.land .msg.bot .bubble{line-height:1.65}
 .mp-panel,#model-pick.pop .mp-panel{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .mp-panel > *{flex:none}
 .mp-list,#model-pick.pop .mp-list{flex:none;overflow:visible;min-height:0}
+.pop-menu{max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}

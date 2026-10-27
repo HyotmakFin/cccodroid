@@ -216,6 +216,9 @@
       y = ar.top - m.offsetHeight - 6;
     }
     else { x = Math.min(ar.left + 24, W - mw - 8); y = ar.bottom + 2; if (y + mh > H - 8) y = Math.max(8, ar.top - mh - 2); }
+    // 矮屏（手机横屏）放不下：限高、菜单自己滚，别顶出屏幕
+    const room = place === "up" ? ar.top - 14 : (y >= ar.bottom ? H - y - 8 : ar.top - 10);
+    if (m.offsetHeight > room && room > 80) { m.style.maxHeight = room + "px"; if (place === "up" || y < ar.top) y = ar.top - room - (place === "up" ? 6 : 2); }
     m.style.left = Math.max(8, Math.min(x, W - mw - 8)) + "px"; m.style.top = Math.max(8, y) + "px";
     moOrigin(m, ar);
     m.addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (!b || !items[+b.dataset.i].fn) return; OV.close(m); items[+b.dataset.i].fn(); });

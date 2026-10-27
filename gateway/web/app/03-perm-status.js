@@ -363,6 +363,7 @@
     const r = permEl.getBoundingClientRect(), col = colRect(), mw = Math.min(m.offsetWidth, col.width - 16);
     m.style.maxWidth = (col.width - 16) + "px";
     m.style.bottom = (fixedH() - r.top + 6) + "px";
+    m.style.maxHeight = Math.max(120, r.top - 14) + "px";   // 矮屏：上面放不下就限高自己滚
     // 标签在右半边就右对齐；不出对话这一栏（右边可能是浏览器窗格）
     const x0 = r.left + r.width / 2 > col.left + col.width / 2 ? r.right - mw : r.left;
     m.style.left = Math.max(col.left + 8, Math.min(x0, col.right - mw - 8)) + "px";
