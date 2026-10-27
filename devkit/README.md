@@ -63,6 +63,7 @@ node devkit.mjs modules --plan <plan> --build --target <包名> --out DIR   # �
 - CI 按「划分 → 整包 → 各块」走，同一个 Release 里整包（旧 App 用）和模块（新 App 用）出自同一份快照。
 - adb 单独成组并进基础模块：Shizuku 的无线调试自启动要用它。
 - 目前的可选模块：命令行增强（`cli`）、C/C++ 构建（`build`）、安卓打包（`android`）、GPU 图形（`graphics`）、音视频（`media`）、文档与数据（`extra`）、Go 语言（`go`，含 gopls / goimports / gofumpt / gotestsum / govulncheck / golangci-lint / dlv）、Node.js 生态（`node`，pnpm / yarn / bun / deno）。`clang` 与 `libllvm` 这类多块共用的大家伙由划分自动提成共享层（`lib-clang`、`lib-libllvm`）。
+- 模块可以标 `"full": false`：整包里不放它，从整包升级上来的用户也不会自动装上（要用再到扩展页加）。后加的大模块（`go`、`node`）都这么标，免得只认整包的旧版 App 和整包用户升级时平白多下几百 MB。
 
 ## 组件（`component`）
 

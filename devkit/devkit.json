@@ -311,6 +311,7 @@
       "groups": [
         "go"
       ],
+      "full": false,
       "name": {
         "zh": "Go 语言",
         "en": "Go"
@@ -336,6 +337,7 @@
       "groups": [
         "node"
       ],
+      "full": false,
       "name": {
         "zh": "Node.js 生态",
         "en": "Node.js ecosystem"
