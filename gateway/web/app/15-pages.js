@@ -77,12 +77,12 @@
     .observe($("tab-settings"), { subtree: true, attributes: true, attributeFilter: ["class"] });
   function paintSetCats() {
     paintSetUsage();
-    // 回程：换类之前给旧的那一屏留个替身 —— 窄屏往里进时分类列表往左退暗、返回时内容页往右滑走；宽屏旧内容淡掉
-    if (setCatShown !== "-" && setCatShown !== setCatOpen) {
+    // 回程：换类之前给旧的那一屏留个替身 —— 窄屏往里进时分类列表往左退暗、返回时内容页往右滑走。
+    // 宽屏（左边选、右边换）不放动画，直接换（10-27 用户定：交叉淡变不好看，做减法）
+    if (setCatShown !== "-" && setCatShown !== setCatOpen && pagesNarrow()) {
       const old = setCatShown ? document.querySelector(`.set-cat[data-cat="${setCatShown}"]:not(.mo-ghost)`) : $("set-cats");
       if (old && old.getClientRects().length) {
-        if (!pagesNarrow()) MO.ghost(old, "fade");
-        else if (setCatOpen) MO.ghost(old, "back", false);
+        if (setCatOpen) MO.ghost(old, "back", false);
         else MO.ghost(old, "push");
       }
     }
@@ -99,7 +99,6 @@
     if (setCatShown !== "-" && setCatShown !== setCatOpen) {
       const cur = setCatOpen && document.querySelector(`.set-cat[data-cat="${setCatOpen}"]`);
       if (narrow) { if (cur) MO.play(cur, "mo-in-push", 1400); else if (!setCatOpen) MO.play($("set-cats"), "mo-in-back", 1400); }
-      else if (cur) MO.play(cur, "mo-in-fade", 1400);   // 宽屏换类：新旧交叉淡变，左栏分类在原地，内容不该上下走
     }
     setCatShown = setCatOpen;
     document.querySelectorAll(".set-cat:not(.mo-ghost)").forEach((c) => c.classList.toggle("hidden", c.dataset.cat !== setCatOpen));
