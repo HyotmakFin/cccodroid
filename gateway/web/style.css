@@ -2423,10 +2423,11 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 /* 月报卡片下面的「保存图片 / 分享」别贴着卡片 */
 #us-actions{margin-top:var(--g4)}
 #us-actions > .row-actions{margin-bottom:var(--g3)}
-/* 交界处的圆角（细微）：常驻侧栏的底色在会话区上下两角各包进一个 g3 的内凹圆角，侧栏竖线顺势弯过去，
+/* 交界处的圆角（细微）：角片要压在面板上面（z-index），否则面板那条直竖线穿过角片一直通到顶，和弧线叉成 Y 形（群友 10-27 挑的刺）。
+   常驻侧栏的底色在会话区上下两角各包进一个 g3 的内凹圆角，侧栏竖线顺势弯过去，
    会话区（以及开在它上面的设置等页面）就像嵌在侧栏旁的一张圆角卡片。挂在 #drawer 上，侧栏收起时自然消失 */
 html.dock-l #drawer::before,html.dock-l #drawer::after{
-  content:"";position:absolute;inset-inline-start:calc(100% - 1px);width:var(--g3);height:var(--g3);pointer-events:none;
+  content:"";position:absolute;inset-inline-start:calc(100% - 1px);width:var(--g3);height:var(--g3);pointer-events:none;z-index:1;
   --cc-fil:transparent calc(var(--g3) - 1.5px),var(--line) calc(var(--g3) - 1px),var(--line) calc(var(--g3) - .5px),var(--bg2) var(--g3);
 }
 html.dock-l #drawer::before{top:0;background:radial-gradient(circle at 100% 100%,var(--cc-fil))}
