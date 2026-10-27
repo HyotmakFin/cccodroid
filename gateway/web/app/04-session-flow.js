@@ -336,13 +336,17 @@
   });
   function welSync() {
     const w = histEl.childElementCount === 1 && !!histEl.querySelector(":scope > .msg.welcome") && !liveEl.childElementCount;
+    // 发出第一条后问候语就退场：留着会变成一条顶着「Claude」名字的假回复（重新打开会话时本来也没有它）
+    if (!w && histEl.childElementCount > 1) { const old = histEl.querySelector(":scope > .msg.welcome"); if (old) { old.remove(); return welSync(); } }
     if (document.documentElement.classList.contains("wel") === w) return;
     document.documentElement.classList.toggle("wel", w);
     syncPlaceholder(); paintProjChip(); welNarrow();
+    // 首屏输入框两行高，autoGrow 量出来的高度写在行内；离开首屏要重量一次，不然发完第一条输入框还是两行高、发送键被挤偏
+    autoGrow();
   }
   // 对话栏窄（开着右侧窗格、分屏）：首屏排得紧一点
   function welNarrow() { document.documentElement.classList.toggle("wel-narrow", colRect().width < 600); }
-  addEventListener("resize", welNarrow);
+  addEventListener("resize", () => { welNarrow(); autoGrow(); });   // 转屏后宽度变了，行内高度也要重量
   new MutationObserver(welSync).observe(histEl, { childList: true });
   new MutationObserver(welSync).observe(liveEl, { childList: true });
   // 输入框里的一行提示：首屏问「有什么可以帮你」，会话里提示斜杠命令

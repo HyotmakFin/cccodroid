@@ -206,7 +206,8 @@
       let html = "";
       if (!kw) {
         if (info.nativeModels) html += row("", info.defaultModel ? t("（默认：{model}）", { model: info.defaultModel }) : t("（默认，由 claude 决定）"));
-        const rec = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")).filter((id) => ML.some((md) => md.id === id));
+        // 当前在用的那个总排在「最近用过」头一个：不然清单一长，打开弹层根本看不到现在用的是哪个
+        const rec = [...new Set([cur(), ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")])].filter((id) => id && ML.some((md) => md.id === id));
         if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(ML.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: ML.length })}</div>`;
       }
       html += all.slice(0, 300).map((md) => row(md.id, meta(md))).join("");

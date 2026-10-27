@@ -2497,7 +2497,9 @@ html:not([data-readfont="sans"]) .msg.bot .bubble :is(h1,h2,h3,h4,strong){font-w
    上：问候语沉到会话区底部；中：输入框；下：示例与使用提示。上下两块按 φ : 1 分剩余高度，
    输入框落在屏幕中线略偏下，和网页版一个位置 */
 #wl-below{display:none}
-html.wel #chat{display:flex;flex-direction:column;justify-content:flex-end;flex:1.618 1 0;min-height:0}
+html.wel #chat{display:flex;flex-direction:column;justify-content:flex-start;flex:1.618 1 0;min-height:0}
+/* 沉底靠 #hist 的 margin-top:auto（第一个子元素 #older 平时是 display:none，挂它身上不生效），不用 justify-content:flex-end —— 后者内容一高就把顶上那截顶出滚动区，滚不回去（手机横屏首屏标题被吃掉） */
+html.wel #hist{margin-top:auto}
 html.wel #composer{border-top-color:transparent;background:none;position:static}
 html.wel #wl-below{display:block;flex:1 1 0;min-height:0;overflow:auto;padding:var(--g3) 12px calc(var(--safe-b) + var(--g4))}
 html.wel .msg.welcome{width:100%;margin-bottom:var(--g4)}
@@ -2529,9 +2531,10 @@ html.wel #hint-row #model-chip::before{display:none !important}
 .wl-chip:hover,.wl-chip:active{background:var(--bg2);color:var(--fg);border-color:var(--accent-dim)}
 .wl-chip svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .wl-tips{color:var(--fg3)}
-/* 手机横屏太矮：不居中，照常贴底 */
-html.short.wel #chat{flex:1 1 auto}
-html.short.wel #wl-below{display:none}
+/* 矮窗口（分屏半屏之类）：不居中，照常贴底；手机横屏（land）照平板，问候 + 输入框落在中线略偏下 */
+html.short:not(.land).wel #chat{flex:1 1 auto}
+html.short:not(.land).wel #wl-below{display:none}
+html.land.wel #wl-below{padding-top:var(--g2)}
 html .msg.welcome.bot .bubble h1.wl-greet{font-size:clamp(19px,4.2cqi,31px);margin:0;font-weight:400;line-height:1.3}
 /* 首屏输入框：第一行整行写字，第二行左边 ＋、右边发送（同网页版） */
 html.wel #composer-inner{flex-wrap:wrap;align-items:center;row-gap:2px}
@@ -2863,3 +2866,52 @@ html[data-motion="on"] .lmap.mo-pick .t-ch{animation:mo-rise var(--mo-soft) line
   #pages .xr-r .num{min-width:0}
 }
 
+
+/* ── 手机横屏密度（html.land，layout.js 判定：高 < 500、横着、宽 ≥ 720）──────────
+   370 来高的屏，平板那套留白太奢侈：字号小一号，行距、内边距、按钮、行高各收一档；不藏功能 */
+html.land body{font-size:14px}
+html.land #chat{line-height:1.6;padding:8px 12px 4px}
+html.land .icon-btn{width:34px;height:34px;flex-basis:34px}
+html.land .icon-btn svg{width:19px;height:19px}
+html.land #topbar{padding-bottom:0;min-height:0}
+html.land #topbar #title-block{line-height:1.2}
+html.land #composer{padding:4px 10px calc(var(--safe-b) + 3px)}
+html.land #composer-inner{padding:3px 4px 3px 6px}
+html.land #hint-row{margin-top:1px;font-size:12px}
+/* 侧栏 */
+html.land .drawer-panel{padding-top:2px}
+html.land .nav-item{padding:5px 10px;font-size:14px;gap:10px}
+html.land .nav-item svg{width:17px;height:17px}
+/* 首屏：问候小一号、标识缩小、输入框一行起 */
+html.land.wel .msg.welcome{margin-bottom:var(--g2)}
+html.land .wl-mark{width:34px;height:34px}
+html.land .wl-greet,html.land .msg.welcome.bot .bubble h1.wl-greet{font-size:21px}
+html.land.wel .msg.welcome .setup-guide{margin-top:var(--g2)}
+html.land.wel #input{min-height:calc(1.45em + 12px)}
+html.land.wel #composer-inner{border-radius:16px;padding:4px 6px 4px 10px}
+html.land.wel #hint-row{margin-top:2px}
+/* 设置：表头、分类、每一行都收紧 */
+html.land .set-shead{padding:3px 6px}
+html.land .set-shead h3{font-size:15px}
+html.land .set-wrap{grid-template-columns:168px minmax(0,1fr);gap:18px}
+html.land .set-cats button{padding:5px 10px;font-size:14px}
+html.land .set-h{margin:0 0 6px;font-size:16px}
+html.land .set-cat{padding:0 14px}
+html.land .set-cat .set-h{margin:8px 0 0}
+html.land .srow{padding:8px 0;gap:12px}
+html.land .sblock{padding:4px 0 8px}
+html.land .sblock > .srow.sub{padding:6px 0}
+html.land .sblock.prov-card{padding:2px 0 8px}
+html.land #tab-settings .set-cats{width:168px;padding:4px 6px}
+html.land #tab-settings .set-cats button{padding:5px 10px}
+html.land #tab-settings .set-main{padding:0 14px 16px}
+html.land #tab-settings .set-cat .set-h{margin:8px 0 2px;font-size:16px}
+html.land #tab-settings .srow{padding:7px 0;gap:12px}
+html.land .side-new{padding:6px 12px;margin:2px 0 4px;font-size:14px}
+html.land .side-acct{padding:5px 14px calc(var(--safe-b) + 5px);margin-top:4px}
+html.land .acct-av{width:28px;height:28px}
+html.land .msg.bot .bubble{line-height:1.65}
+/* 型号弹层整体是一个滚动容器（像侧栏）：强度、接口、清单一起滚，不再让清单在剩下的缝里自己滚 —— 矮屏上那条缝常常一行都不剩 */
+.mp-panel,#model-pick.pop .mp-panel{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.mp-panel > *{flex:none}
+.mp-list,#model-pick.pop .mp-list{flex:none;overflow:visible;min-height:0}
