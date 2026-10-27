@@ -1098,11 +1098,9 @@ html:not(.ws-multi) #browser{padding-top:var(--safe-tp)}
   #fs-body{flex-direction:column}
   #fs-body .fs-preview{flex:0 0 auto;max-height:46vh}
 }
-/* 手机横屏：矮，不加栏，只压缩顶栏和输入区 */
+/* 手机横屏（矮）：只压缩顶栏和输入区的内边距，不藏东西；栏数照平板来（layout.js 的 land） */
 html.short #topbar{padding-top:var(--safe-tt);padding-bottom:2px}
 html.short #composer{padding-top:5px;padding-bottom:calc(var(--safe-b) + 5px)}
-html.short #hint-row:not(:has(#draft-chip:not(.hidden))){display:none}
-html.short #hint-row > :not(#draft-chip){display:none}
 /* 侧栏变窄（常驻左栏 / 小手机）时：标签和按钮别把字挤成竖排，放不下就换行 */
 .tab,.row-actions .btn{white-space:nowrap}
 .row-actions{flex-wrap:wrap}
@@ -2138,6 +2136,10 @@ html.dock-l .side-acct,.side-acct{margin:8px -8px 0;padding:16px 16px calc(var(-
 #tab-settings.set-list .set-cats .chev{width:18px;height:18px;color:var(--fg)}
 /* 横屏设置卡片：宽 800、高按黄金比例（宽 ÷ 1.618），矮屏时上下各让出状态栏 + 16 */
 #set-ov:not(.narrow) .set-sheet{width:min(800px,calc(100vw - 64px));height:auto;aspect-ratio:1.618;max-height:calc(100vh - 2 * (var(--safe-t) + 16px))}
+/* 手机横屏：宽屏设置铺满整屏（不是压成一条的卡片），左分类右内容照旧 */
+html.short #set-ov:not(.narrow){background:var(--bg);align-items:stretch;justify-content:stretch}
+html.short #set-ov:not(.narrow) .set-sheet{width:100%;height:100%;aspect-ratio:auto;max-height:none;border-radius:0;box-shadow:none;padding-top:var(--safe-tt)}
+html.short .pj-ov:not(.narrow) .pj-sheet{max-height:calc(100vh - 2 * (var(--safe-t) + 6px))}
 /* 自绘下拉菜单（替代系统选择器）：跟主题走，当前项打勾、强调色 */
 .sel-menu{overflow-y:auto;overscroll-behavior:contain;max-width:min(420px,calc(100vw - 16px));scrollbar-width:thin}
 .sel-menu button{padding:9px 10px}
