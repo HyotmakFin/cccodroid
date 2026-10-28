@@ -522,6 +522,7 @@
     OV.closeAll();
     const prev = curPage;
     curPage = name;
+    document.documentElement.classList.add("pg-on");   // 整页盖着时藏起会话的上下文用量条（#39：小数缩放下整页上沿和顶栏差一丝，条会漏出来）
     document.documentElement.classList.toggle("pg-lineage", name === "lineage");   // 脉络页整页不滚（地图自己接手势）
     if (name !== "lineage") closeTour();   // 离开脉络页：导览一起收掉
     // 从对话进整页：窄屏从右边推进来（盖住对话），宽屏只在对话那一块浮上来；整页之间切换：新的那一页浮上来
@@ -554,7 +555,7 @@
     if (!curPage) return;
     curPage = null;
     pageTitleOv = "";
-    document.documentElement.classList.remove("pg-lineage");
+    document.documentElement.classList.remove("pg-lineage", "pg-on");
     closeTour();
     // 回到对话：窄屏整页滑出去、底下的对话从左边一点点回来；宽屏淡掉
     const pg = $("pages");

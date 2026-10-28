@@ -2593,6 +2593,7 @@ html.side-drag .drawer-panel{transition:none}   /* 别写 animation:none：松�
 
 /* ── 额度与余额速览：顶栏细条后半段 + 点开的小卡片；用量页「额度与消费」 ── */
 #ctxbar{cursor:pointer}
+html.pg-on #ctxbar{visibility:hidden}   /* 整页盖着时不露会话的用量条（#39） */
 #ctxq:empty{display:none}
 #ctxctx:not(:empty) + #ctxq::before{content:"·";margin:0 6px;color:var(--fg3)}
 #ctxq.warm{color:color-mix(in srgb,var(--ctx-warn) 70%,var(--fg))}
