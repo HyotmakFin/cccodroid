@@ -2183,3 +2183,6 @@
 2183	Touchez une partie de la page pour l’ajouter au message
 2184	Ajouté au message — dites maintenant quoi modifier
 2185	{sel} dans {path} :
+2186	Se connecter
+2187	Taille de l'historique local
+2188	Taille du fichier d'historique de cette conversation sur l'appareil, messages et appels d'outils compris. Ce n'est ni la longueur de contexte actuelle du modèle, ni la consommation de tokens ou le coût. L'historique d'origine est conservé après la compaction du contexte, il ne fait donc que grossir.

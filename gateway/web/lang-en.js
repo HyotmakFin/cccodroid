@@ -2220,5 +2220,8 @@ window.I18N_DICT.en = {
   "选取元素": "Pick element",
   "点一下网页里的某一块，它就会放进输入框": "Tap any part of the page to put it in the message box",
   "已放进输入框，接着写要怎么改": "Added to the message box — now say what to change",
-  "{path} 里的 {sel}：": "{sel} in {path}:"
+  "{path} 里的 {sel}：": "{sel} in {path}:",
+  "登录账户": "Sign in",
+  "本地记录大小": "Local record size",
+  "这条会话存在设备上的记录文件有多大，含聊天内容和工具调用。不是模型当前的上下文长度，也不是 token 用量或费用；压缩上下文后原始记录仍会保留，所以它会一直变大。": "How large this conversation's record file on the device is, including messages and tool calls. It is not the model's current context length, nor token usage or cost. The original record is kept after context compaction, so it keeps growing."
 };

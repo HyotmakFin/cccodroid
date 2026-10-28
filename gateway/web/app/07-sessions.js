@@ -98,7 +98,7 @@
           ${s.snippet ? `<div class="it-snip">${markHit(s.snippet, q)}${s.count > 1 ? ` <span class="badge">${t("{n} 处", { n: s.count >= 99 ? "99+" : s.count })}</span>` : ""}</div>` : ""}
           <div class="it-meta">
             ${s.no ? `<span class="no">${esc(s.no)}</span>` : ""}<span title="${esc(t("更新 {time}", { time: new Date(s.mtime).toLocaleString() }) + (s.created ? " · " + t("创建 {time}", { time: new Date(s.created).toLocaleString() }) : ""))}">${s.no ? fmtRange(s.created, s.mtime) : fmtStamp(s.mtime)}</span>
-            <span>${fmtSize(s.sizeKb * 1024)}</span>
+            <button class="ss-size" data-a="size">${fmtSize(s.sizeKb * 1024)}</button>
             ${st}
             ${pjOfCwd(s.cwd) ? pjMark(pjOfCwd(s.cwd)) : ""}
           </div>
@@ -317,12 +317,14 @@
     const b = e.target.closest("button");
     if (!b && sess.mode !== "trash") {
       const h = sess.q.trim() && (sess.hits || []).find((s) => s.id === id);
-      closeDrawer(); openSession(id, h && h.count ? sess.q.trim() : ""); return;
+      goSession(id, h && h.count ? sess.q.trim() : ""); return;
     }
     if (!b) return;
     e.stopPropagation();
     const a = b.dataset.a;
     if (a === "more") return sessMenu(id, b);
+    // 大小是本地 .jsonl 的体积，常被当成上下文用量（#35）：点一下说清楚
+    if (a === "size") return popMenu(b, [{ head: t("本地记录大小") }, { head: t("这条会话存在设备上的记录文件有多大，含聊天内容和工具调用。不是模型当前的上下文长度，也不是 token 用量或费用；压缩上下文后原始记录仍会保留，所以它会一直变大。") }], null, "ss-size-tip");
     if (a === "restore") {
       const r = await post("/api/trash/restore", { ids: [id] }).catch((err) => ({ failed: [{ error: err.message }] }));
       if (r.failed && r.failed.length) toast(t("恢复失败：{msg}", { msg: r.failed[0].error === "exists" ? t("同名会话已存在") : r.failed[0].error }), true);
@@ -336,7 +338,7 @@
     }
     if (a === "open") {
       const h = sess.q.trim() && (sess.hits || []).find((s) => s.id === id);
-      closeDrawer(); openSession(id, h && h.count ? sess.q.trim() : ""); return;
+      goSession(id, h && h.count ? sess.q.trim() : ""); return;
     }
     if (a === "pin") {
       const cur = state.sessions.find((s) => s.id === id) || (sess.hits || []).find((s) => s.id === id);

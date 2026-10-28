@@ -192,7 +192,7 @@
     const kick = () => { if (!timer) timer = setTimeout(tick, STREAM_TICK); };
     return {
       kind: "text",
-      append(t) { text += t; kick(); },
+      append(t) { text += t; if (busReplay) shown = text.length; kick(); },
       set(t) { text = t; if (live) { shown = Math.min(shown, text.length); kick(); } else paint(true); },
       finish() { if (!live) return; if (shown >= text.length) paint(true); else { ending = true; kick(); } },
       /** 从末尾删掉 n 个字（流断了、那半截不算数）；冻结的段落可能也在里面，整块重画 */
@@ -323,7 +323,7 @@
         api.state = ok ? "ok" : "err";
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : t("失败");
-        if (live) { MO.play(st, "mo-tick", 1400); if (ok) MO.play(card, "mo-ok", 1400); }
+        if (live && !busReplay) { MO.play(st, "mo-tick", 1400); if (ok) MO.play(card, "mo-ok", 1400); }
         // 后台子代理：工具结果只是「已启动」，真正跑完靠 sub_done
         if (isAgent && ok && /^Async agent launched/.test(result.text) && !(sub && sub.done)) { st.className = "tool-state run"; st.textContent = t("后台运行"); }
         if (built) { built = false; build(); }

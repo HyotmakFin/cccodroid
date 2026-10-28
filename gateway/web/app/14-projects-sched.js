@@ -93,7 +93,7 @@
     if (a === "back") { PJ.cur = null; PJ.detail = null; return renderProjects(); }
     if (a === "new") return newProjectDlg();
     const card = e.target.closest("[data-pj]"); if (card) return openProject(card.dataset.pj);
-    const sid = e.target.closest("[data-sid]"); if (sid) return openSession(sid.dataset.sid);
+    const sid = e.target.closest("[data-sid]"); if (sid) return goSession(sid.dataset.sid);
     const tk = e.target.closest("[data-task]"); if (tk) { SC.cur = tk.dataset.task; SC.detail = null; return openPage("sched"); }
     const p = PJ.detail && PJ.detail.project; if (!p) return;
     if (a === "chat") return newChatIn(p.id);
@@ -337,7 +337,7 @@
     }
     const ms = e.target.closest("[data-missed]");
     if (ms) { try { await jsend("/api/sched/missed", { taskId: ms.dataset.id, at: +ms.dataset.at, act: ms.dataset.missed }); toast(ms.dataset.missed === "run" ? t("已开始补跑") : t("这次就算了")); } catch (err) { toast(err.message, true); } return loadSched(); }
-    const sid = e.target.closest("[data-sid]"); if (sid) return openSession(sid.dataset.sid);
+    const sid = e.target.closest("[data-sid]"); if (sid) return goSession(sid.dataset.sid);
     const tk = e.target.closest("[data-task]"); if (tk && !SC.cur) { SC.cur = tk.dataset.task; SC.detail = null; renderSched(); $("page-body").scrollTop = 0; return; }
     const d = SC.detail; if (!d) return;
     if (a === "edit") return taskDlg(d.task);

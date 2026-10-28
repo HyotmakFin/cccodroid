@@ -2922,3 +2922,10 @@ html.land .msg.bot .bubble{line-height:1.65}
 .mp-list,#model-pick.pop .mp-list{flex:none;overflow:visible;min-height:0}
 .pop-menu{max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}
 #perm-menu{overflow-y:auto;overscroll-behavior:contain}
+
+/* 会话列表的记录大小：点开有说明（#35），外观同旁边的小字 */
+.it-meta .ss-size{all:unset;cursor:pointer;color:inherit;font:inherit}
+.it-meta .ss-size:active{opacity:.6}
+.pop-menu.ss-size-tip{max-width:min(320px,90vw)}
+.pop-menu.ss-size-tip .pm-head{white-space:normal;overflow:visible;line-height:1.5;font-size:12.5px}
+.pop-menu.ss-size-tip .pm-head:first-child{color:var(--fg);font-weight:600;font-size:13.5px}

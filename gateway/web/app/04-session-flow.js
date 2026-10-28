@@ -95,6 +95,13 @@
     connectBus(false);
   }
 
+  // 用户点会话标题（侧栏 / 对话列表 / 项目）：点的就是眼前这个、又不是跳搜索命中，就只收起整页和侧栏，现场原样（#37）；
+  // 正看着中间某一段（窗口式）时照旧重开，回到最新
+  function goSession(id, jumpQ) {
+    if (id && id === view.sessionId && !jumpQ && view.next == null && !view.loading) { closePage(); closeDrawer(); return; }
+    closeDrawer(); openSession(id, jumpQ);
+  }
+
   function newConversation(note) {
     openSession(null);
     updateCtx(0, state.ctxTotal);
@@ -220,7 +227,8 @@
       setStatus(t("就绪"), "ok");
       if (anchor) return landOnChapter(page, gen);
       if (fwd) { stick = false; chatEl.scrollTop = 0; }   // 重连时接着原来那一段
-      else { scrollDown(true); MO.play(histEl, "mo-in-rise", 1400); }
+      else { scrollDown(true); if (!seenSessions.has(id)) MO.play(histEl, "mo-in-rise", 1400); }
+      seenSessions.add(id);
     } else {
       const h0 = chatEl.scrollHeight, t0 = chatEl.scrollTop;
       histEl.insertBefore(page, histEl.firstChild);
@@ -467,7 +475,7 @@
       case "state": return applyState(ev);
       case "archive": return loadSessions();   // 建档 / 归入杂项：标题、档号、分组跟着变
       case "sched": case "sched_note": return onSchedEvent(ev);
-      case "sync": return;
+      case "sync": busReplay = false; return;
       case "run_start": {
         if (!belongs(ev)) return;
         view.runIds.add(ev.runId);
@@ -579,6 +587,7 @@
     if (ev.uiTag) uiTag = ev.uiTag;
     applyState(ev);
     if (ev.resume) { setStatus(t("已连接"), "ok"); return; }
+    busReplay = true;
 
     // 续不上（首次连接 / 网关重启过 / 断太久）：本视图从头来 —— 历史重新取，
     // 正在跑的那一轮紧接着会被网关整轮重放过来

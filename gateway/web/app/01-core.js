@@ -441,21 +441,36 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   }
   // 自动跟到底：用户一往上滑就停，回到底部附近再恢复。
   // 以前只看"离底部 <160px"，生成中每来一条事件就把正在惯性滑动的画面拽回去，表现为"滑不动、只能一点点拖"
-  let stick = true, progTop = -1;
+  // 生成中往上翻会抖（#34）：跟底判断原本攒到 rAF 里做，而吐字每帧都 scrollDown，手指刚往上拖的那一帧还按「贴底」拽回去。
+  // 现在：手指按着就不跟；scroll 事件里当场比 scrollTop（不读排版），比我们上次滚到的位置靠上 = 用户往上翻了，立刻停跟
+  // 只认手指（按着或刚松手的惯性里）：内容变矮时浏览器会把 scrollTop 夹小，那不是用户往上翻
+  let stick = true, progTop = -1, touching = false, touchEndAt = 0;
+  // 网关整轮重放（切会话 / 重连续不上）期间为真，到 sync 为止：那些是已经说过的话，正文直接整段显示，不再匀速吐一遍（#36）
+  let busReplay = false;
+  // 这次打开应用后进过的会话：再切回来不重播入场动画
+  const seenSessions = new Set();
+  chatEl.addEventListener("touchstart", () => { touching = true; }, { passive: true });
+  const touchOff = () => { touching = false; touchEndAt = Date.now(); };
+  chatEl.addEventListener("touchend", touchOff, { passive: true });
+  chatEl.addEventListener("touchcancel", touchOff, { passive: true });
+  chatEl.addEventListener("wheel", (e) => { if (e.deltaY < 0) stick = false; }, { passive: true });
   // 对话区只挂一个 scroll 监听，事件里不读排版，攒到下一帧统一处理：跟底判断、翻到顶加载更早的、↓ 圆钮
   const chatScrollHooks = [];
   let chatScrollRaf = 0;
   chatEl.addEventListener("scroll", () => {
+    const byHand = touching || Date.now() - touchEndAt < 2000;
+    if (byHand && progTop >= 0 && chatEl.scrollTop < progTop - 1) stick = false;
     if (chatScrollRaf) return;
     chatScrollRaf = requestAnimationFrame(() => {
       chatScrollRaf = 0;
-      if (chatEl.scrollTop !== progTop) stick = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 40;  // 不是我们自己滚的
+      // 不是我们自己滚的；手指操作期间要真到底（4px）才恢复跟随，否则往上拖的前 40px 会被判回「贴底」又拽下去
+      if (chatEl.scrollTop !== progTop) stick = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < (byHand ? 4 : 40);
       for (const f of chatScrollHooks) f();
     });
   }, { passive: true });
   function scrollDown(force) {
     if (force) stick = true;
-    else if (!stick) return;
+    else if (!stick || touching) return;
     chatEl.scrollTop = chatEl.scrollHeight;
     progTop = chatEl.scrollTop;
   }

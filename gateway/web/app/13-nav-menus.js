@@ -123,7 +123,13 @@
   }
   $("side-nav").addEventListener("click", (e) => {
     const p = e.target.closest("[data-page]");
-    if (p) { if (p.dataset.page === "projects") PJ.cur = null; if (p.dataset.page === "sched") SC.cur = null; return openPage(p.dataset.page); }
+    if (p) {
+      const pg = p.dataset.page;
+      // 已经在这一页的首页：再点不重画、不重载，只收侧栏（#37）；在项目 / 定时任务的详情里点 = 回首页，照常
+      if (pg === curPage && !(pg === "projects" && PJ.cur) && !(pg === "sched" && SC.cur)) return closeDrawer();
+      if (pg === "projects") PJ.cur = null; if (pg === "sched") SC.cur = null;
+      return openPage(pg);
+    }
     const n = e.target.closest("[data-nav]")?.dataset.nav;
     if (n === "more") { localStorage.setItem("cc.navMore", localStorage.getItem("cc.navMore") === "1" ? "0" : "1"); navEdit = false; }
     if (n === "edit") navEdit = true;
@@ -191,11 +197,14 @@
       acctEmailAt = Date.now();
       api("/api/login/status").then((st) => {
         const wk = st && st.limits && st.limits.sevenDay ? Math.round(st.limits.sevenDay.used) : null;
-        if (st && ((st.email && st.email !== acctEmail) || wk !== acctWeek)) { acctEmail = st.email || acctEmail; acctWeek = wk; paintAcct(s); }
+        if (!st) return;
+        acctLogged = !!st.loggedIn;
+        const em = st.loggedIn ? st.email || acctEmail : "";
+        if (em !== acctEmail || wk !== acctWeek) { acctEmail = em; acctWeek = wk; paintAcct(s); }
       }).catch(() => {});
     }
   }
-  var acctEmail = "", acctEmailAt = 0, acctWeek = null;
+  var acctEmail = "", acctEmailAt = 0, acctWeek = null, acctLogged = null;
 
   // ── 弹出菜单（长按会话、账户行）：items 是 { label, icon, small, danger, fn } / "hr" / { head } ──
   function closeMenu() { OV.closeAll("menu"); }
@@ -363,7 +372,7 @@
       return renderSideRecent();
     }
     const it = e.target.closest("[data-sid]"); if (!it) return;
-    closeDrawer(); openSession(it.dataset.sid);
+    goSession(it.dataset.sid);
   });
   $("side-recent").addEventListener("contextmenu", (e) => {
     const it = e.target.closest("[data-sid]"); if (!it) return;
@@ -442,12 +451,16 @@
       { label: t("到 GitHub 反馈"), icon: SM.chat, fn: () => $("btn-issue").click() },
       { label: t("交流群 · 讨论区"), icon: SM.people, fn: () => { openPage("help"); setTimeout(() => $("help-body").querySelector(".cm-box")?.scrollIntoView({ block: "center", behavior: "smooth" }), 400); } },
     ];
-    if (st.keyMode === "login") items.push("hr", { label: t("退出登录"), icon: SM.logout, danger: true, fn: async () => {
+    // 官方账户：按实际登录状态给「退出登录」或「登录」（接口是官方账户 ≠ 已登录）；状态没问到时先不放
+    if (st.keyMode === "login" && acctLogged) items.push("hr", { label: t("退出登录"), icon: SM.logout, danger: true, fn: async () => {
       if (!confirm(t("退出这台设备上的 Claude 账户登录？"))) return;
       const r = await post("/api/login/logout").catch((e) => ({ ok: false, output: e.message }));
       toast(r.ok ? t("已退出登录") : t("退出失败：{msg}", { msg: r.output || r.message || "" }), !r.ok);
+      acctEmailAt = 0;
       refreshStatus();
     } });
+    else if (st.keyMode === "login" && acctLogged === false) items.push("hr", { label: t("登录账户"), icon: SM.swap, fn: () => openPage("settings", "provider") });
+    if (st.keyMode === "login") { acctEmailAt = 0; paintAcct(st); }
     popMenu($("side-acct"), items, "up");
   }
 

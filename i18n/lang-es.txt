@@ -2183,3 +2183,6 @@
 2183	Toca cualquier parte de la página para añadirla al mensaje
 2184	Añadido al mensaje: ahora di qué cambiar
 2185	{sel} en {path}:
+2186	Iniciar sesión
+2187	Tamaño del registro local
+2188	Tamaño del archivo de registro de esta conversación en el dispositivo, incluidos mensajes y llamadas a herramientas. No es la longitud de contexto actual del modelo, ni el uso de tokens ni el coste. El registro original se conserva tras compactar el contexto, así que sigue creciendo.

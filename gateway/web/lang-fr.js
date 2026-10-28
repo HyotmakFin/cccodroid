@@ -2186,4 +2186,7 @@ window.I18N_DICT["fr"] = {
   "点一下网页里的某一块，它就会放进输入框": "Touchez une partie de la page pour l’ajouter au message",
   "已放进输入框，接着写要怎么改": "Ajouté au message — dites maintenant quoi modifier",
   "{path} 里的 {sel}：": "{sel} dans {path} :",
+  "登录账户": "Se connecter",
+  "本地记录大小": "Taille de l'historique local",
+  "这条会话存在设备上的记录文件有多大，含聊天内容和工具调用。不是模型当前的上下文长度，也不是 token 用量或费用；压缩上下文后原始记录仍会保留，所以它会一直变大。": "Taille du fichier d'historique de cette conversation sur l'appareil, messages et appels d'outils compris. Ce n'est ni la longueur de contexte actuelle du modèle, ni la consommation de tokens ou le coût. L'historique d'origine est conservé après la compaction du contexte, il ne fait donc que grossir.",
 };
