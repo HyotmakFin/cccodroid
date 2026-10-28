@@ -70,6 +70,8 @@ public class MainActivity extends Activity {
     /** 交给网页时盖在 WebView 上的标识层，页面加载完再收起（不然中间有一下空白） */
     private View handoff;
     private WebView web;
+    /** 折叠屏的折痕（没有折痕的设备上一直是空的），换算成页面坐标交给网页，见 pushFold */
+    private Fold fold;
     /** 宽屏时嵌在右侧工作区的浏览器（null = 没开）。位置、显隐全听页面的（layout.js → CCApp.paneBounds） */
     private BrowserPane pane;
     private volatile boolean paneCanBack;
@@ -98,6 +100,8 @@ public class MainActivity extends Activity {
         env = new Env(this);
         buildSetupUi(env.devkitReady() && !secondaryUser(this));
         edgeToEdge();
+        fold = new Fold(this, f -> pushFold());
+        fold.start();
         pending = getIntent();
         java.util.List<String> want = new java.util.ArrayList<>();
         // targetSdk ≥ 30 时这两个存储权限已经不管用（分区存储），改由 askAllFiles 要「所有文件访问」，不挡启动
@@ -107,6 +111,11 @@ public class MainActivity extends Activity {
         }
         if (want.isEmpty()) boot();
         else requestPermissions(want.toArray(new String[0]), 1);
+    }
+
+    @Override protected void onDestroy() {
+        if (fold != null) fold.stop();
+        super.onDestroy();
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) {
@@ -898,6 +907,33 @@ public class MainActivity extends Activity {
         if (web == null) return;
         float css = insetTop / getResources().getDisplayMetrics().density;
         web.evaluateJavascript("document.documentElement.style.setProperty('--safe-t','" + css + "px')", null);
+        pushFold();
+    }
+    /** 折痕交给页面：html[data-fold=none|flat|half]、data-fold-dir=v（竖折痕，左右分）|h（横折痕，上下分），
+     *  --fold-x/--fold-w 或 --fold-y/--fold-h（第一条折痕，CSS 像素，相对 WebView 左上角），data-folds=条数；
+     *  三折叠展开有两条，全部在 window.__ccFold.list 里。再发一个 ccfold 事件。
+     *  窗口变了（合上 / 展开 / 分屏）厂商会重新回调；系统栏变了走 pushInsets 顺带再算一遍 */
+    private void pushFold() {
+        if (web == null || fold == null) return;
+        StringBuilder list = new StringBuilder();
+        int[] at = new int[2];
+        web.getLocationInWindow(at);
+        float d = getResources().getDisplayMetrics().density;
+        boolean half = false;
+        for (Fold.Feat f : fold.feats) {
+            android.graphics.Rect b = f.r;
+            if (list.length() > 0) list.append(',');
+            list.append("{dir:'").append(b.height() > b.width() ? "v" : "h").append("'")   // 折痕矩形的宽或高常为 0：竖着的就是左右分
+                .append(",x:").append((b.left - at[0]) / d).append(",y:").append((b.top - at[1]) / d)
+                .append(",w:").append(b.width() / d).append(",h:").append(b.height() / d)
+                .append(",type:").append(f.type).append(",state:").append(f.state).append('}');
+            half |= f.state == 2;
+        }
+        String js = "{fold:'" + (fold.feats.isEmpty() ? "none" : half ? "half" : "flat") + "',vendor:" + fold.vendor + ",list:[" + list + "]}";
+        web.evaluateJavascript(guarded("pushFold", "var f=" + js + ",r=document.documentElement,a=f.list[0];"
+            + "if(a){f.dir=a.dir;f.x=a.x;f.y=a.y;f.w=a.w;f.h=a.h}window.__ccFold=f;r.dataset.fold=f.fold;r.dataset.folds=f.list.length;"
+            + "if(a){r.dataset.foldDir=a.dir;for(var k of ['x','y','w','h'])r.style.setProperty('--fold-'+k,a[k]+'px')}else delete r.dataset.foldDir;"
+            + "window.dispatchEvent(new CustomEvent('ccfold',{detail:f}))"), null);
     }
 
     // ── 界面 ───────────────────────────────────────────────────────────

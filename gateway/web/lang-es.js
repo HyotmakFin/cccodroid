@@ -2200,4 +2200,6 @@ window.I18N_DICT["es"] = {
   "提问": "Pregunta",
   "回复": "Respuesta",
   "（无标题）": "(Sin título)",
+  "折叠屏适配（实验）": "Diseño para plegables (experimental)",
+  "展开时按折痕分栏，侧栏、对话、右侧窗格各占一扇；半开时弹窗不压折痕，立在桌上时输入框放到下半屏": "Al desplegar, la pantalla se divide por el pliegue: barra lateral, chat y panel lateral ocupan cada uno una hoja. Medio abierto, los diálogos no quedan sobre el pliegue; apoyado en la mesa, el cuadro de texto pasa a la mitad inferior.",
 };

@@ -2197,3 +2197,5 @@
 2197	Pregunta
 2198	Respuesta
 2199	(Sin título)
+2200	Diseño para plegables (experimental)
+2201	Al desplegar, la pantalla se divide por el pliegue: barra lateral, chat y panel lateral ocupan cada uno una hoja. Medio abierto, los diálogos no quedan sobre el pliegue; apoyado en la mesa, el cuadro de texto pasa a la mitad inferior.

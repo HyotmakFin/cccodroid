@@ -2200,4 +2200,6 @@ window.I18N_DICT["fr"] = {
   "提问": "Question",
   "回复": "Réponse",
   "（无标题）": "(Sans titre)",
+  "折叠屏适配（实验）": "Mise en page pliable (expérimental)",
+  "展开时按折痕分栏，侧栏、对话、右侧窗格各占一扇；半开时弹窗不压折痕，立在桌上时输入框放到下半屏": "Déplié, l’écran est partagé le long du pli : barre latérale, conversation et volet latéral ont chacun leur panneau. À demi ouvert, les boîtes de dialogue évitent le pli ; posé sur une table, le champ de saisie passe dans la moitié basse.",
 };

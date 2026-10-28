@@ -2197,3 +2197,5 @@
 2197	Question
 2198	Réponse
 2199	(Sans titre)
+2200	Mise en page pliable (expérimental)
+2201	Déplié, l’écran est partagé le long du pli : barre latérale, conversation et volet latéral ont chacun leur panneau. À demi ouvert, les boîtes de dialogue évitent le pli ; posé sur une table, le champ de saisie passe dans la moitié basse.

@@ -2948,3 +2948,13 @@ html.land .msg.bot .bubble{line-height:1.65}
 #tab-bookmarks .bm-del{background:transparent;border:0;color:var(--fg3);width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex:none;padding:0}
 #tab-bookmarks .bm-del svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 #tab-bookmarks .bm-del:active{background:var(--bg3);color:var(--fg)}
+
+/* ═══ 折叠屏（实验，0.4.18，layout.js 按折痕给类和变量）═══ */
+/* 铰链有宽度：算进了常驻侧栏，内容往里收，别放到缝里 */
+html.fold-split.dock-l .drawer-panel{padding-inline-end:calc(8px + var(--fgap,0px))}
+/* 书本式半开：弹窗、底部弹层只铺在对话那一页，不骑在折痕上（设置卡片本身就是一整页，不挪） */
+html.fold-half-v :is(.rw-ov,#whatsnew,#notice-pop,.pj-ov,#lightbox,#sheet,#model-pick,#ccv-pick){left:var(--fpl);right:var(--fpr)}
+html.fold-half-v :is(.rw-ov,#whatsnew,#notice-pop,.pj-ov,#lightbox,#sheet,#model-pick,#ccv-pick) > *{max-width:100%;box-sizing:border-box}
+html.fold-half-v #lightbox-img{max-width:calc(100% - 24px)}
+/* 立在桌上（横折痕半开）：输入框从折痕下沿开始，占满下半屏；上半屏全给对话。首屏欢迎页有自己的排法，不动 */
+html.fold-table:not(.wel) #composer{min-height:var(--fbelow);box-sizing:border-box}

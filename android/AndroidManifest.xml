@@ -68,6 +68,8 @@
         android:requestLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <!-- 折叠屏的折痕：厂商随系统带的窗口扩展库，没有也照常装、照常跑（Fold.java 反射调用） -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
 
         <!-- 应用内浏览器（系统 WebView，见 BrowserActivity.java）：分屏 / 转屏不重建，免得页面重载 -->
         <activity

@@ -2234,5 +2234,7 @@ window.I18N_DICT.en = {
   "还没有书签。在提问或回复底下点书签键，就在那一处留了个记号。": "No bookmarks yet. Tap the bookmark button under a prompt or reply to mark that spot.",
   "提问": "Prompt",
   "回复": "Reply",
-  "（无标题）": "(Untitled)"
+  "（无标题）": "(Untitled)",
+  "折叠屏适配（实验）": "Foldable layout (experimental)",
+  "展开时按折痕分栏，侧栏、对话、右侧窗格各占一扇；半开时弹窗不压折痕，立在桌上时输入框放到下半屏": "When unfolded, split the layout along the fold: sidebar, chat and side pane each get a panel. Half-open, dialogs stay off the fold; standing on a table, the input box moves to the lower half."
 };
