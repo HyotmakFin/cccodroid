@@ -44,7 +44,7 @@ claude 始终以 `--bare` 运行（极简系统提示，不读 CLAUDE.md、不�
 ## 网关默认的 llama-server 参数
 
 ```
--m <模型> --host 127.0.0.1 --port 8811 -c <按内存> -np 1 -t <大核数> --jinja --cache-reuse 256 --no-webui
+-m <模型> --host 127.0.0.1 --port 8811 -c <按内存> -np 1 -t <大核数> --jinja --cache-reuse 256 --no-webui --api-key-file ~/.cache/llama-api-key
 GPU 驱动装了：-ngl 99（全部层放 GPU）；没装：-dev none。想强制 CPU 就在 llamaArgs 里写 ["-dev", "none"]
 ```
 
@@ -52,11 +52,11 @@ GPU 驱动装了：-ngl 99（全部层放 GPU）；没装：-dev none。想强�
 
 ## 怎么测（不用开界面）
 
-模型目录：`/sdcard/cccodroid/models/`（扩展页 llama-cpp 组件下能一键下载 26 个常见模型，也能贴 .gguf 直链）。先在设置页发一条消息让网关拉起服务（或自己另起一个端口），然后：
+模型目录：`/sdcard/cccodroid/models/`（扩展页 llama-cpp 组件下能一键下载 26 个常见模型，也能贴 .gguf 直链）。先在设置页发一条消息让网关拉起服务（或自己另起一个端口），然后：（网关起的服务要密钥，在 `~/.cache/llama-api-key`；自己另起的没加 `--api-key` 就随便填）
 
 ```sh
 cd 某个测试目录
-env ANTHROPIC_BASE_URL=http://127.0.0.1:8811 ANTHROPIC_API_KEY=local \
+env ANTHROPIC_BASE_URL=http://127.0.0.1:8811 ANTHROPIC_API_KEY="$(cat ~/.cache/llama-api-key)" \
   claude --model <模型 id> -p "统计一下这里有几个文件" \
   --bare --tools Bash --permission-mode bypassPermissions \
   --append-system-prompt "$(cat prompt.txt)" \

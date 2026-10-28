@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { CFG, LIVE, HERE, PREFIX, log, tz } from "./config.mjs";
 import { SETTINGS, saveSettings } from "./settings.mjs";
-import { LLAMA_PORT } from "./providers.mjs";
+import { LLAMA_KEY_FILE, LLAMA_PORT } from "./providers.mjs";
 import { expireModelCache } from "./models.mjs";
 import { ensureShell, killTree } from "./claude.mjs";
 import { RUNS } from "./runs.mjs";
@@ -128,7 +128,7 @@ function llamaPlan(m) {
   // -np 1：只开一个槽，KV 缓存不被四等分（默认 4 槽，每槽只剩四分之一上下文）；
   // --cache-reuse：同一段提示前缀第二轮起直接复用，不再从头读。自定义参数放最后，同名参数以它为准
   const args = ["-m", m.file, "--host", "127.0.0.1", "--port", String(LLAMA_PORT), "-c", String(ctx), "-np", "1",
-    "-t", String(llamaThreads()), "--jinja", "--cache-reuse", "256", "--no-webui",
+    "-t", String(llamaThreads()), "--jinja", "--cache-reuse", "256", "--no-webui", "--api-key-file", LLAMA_KEY_FILE,
     ...(gpu ? ["-ngl", "99"] : ["-dev", "none"]), ...(cust ? cust.llamaArgs : [])];
   return { gpu, ctx, args, sig: JSON.stringify(args) };
 }

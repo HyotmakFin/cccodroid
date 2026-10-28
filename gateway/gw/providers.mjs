@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
@@ -261,11 +262,21 @@ const PRESETS = {
   },
 };
 // 端侧小模型（cccodroid）：llama.cpp 的 llama-server 自带 Anthropic Messages 端点（/v1/messages），claude 直连本机。
-// 不要密钥（给个占位值，llama-server 不校验）；模型清单就是模型目录里的 .gguf，服务由网关按需拉起，见「端侧小模型」一节
+// 模型清单就是模型目录里的 .gguf，服务由网关按需拉起，见「端侧小模型」一节
 export const LLAMA_PORT = Number(process.env.CCAPP_LLAMA_PORT) || 8811;
+// 端侧服务要密钥（审查 中9）：127.0.0.1 的端口全机共享，不设的话同机别的应用能白用算力、把 KV 缓存占满。
+// llama-server 用 --api-key-file 读它（Bearer、X-Api-Key 两种头都认）。存在 home/.cache 里（0600），
+// 跨网关重启不变 —— 还活着的 llama-server 和新起的网关对得上
+export const LLAMA_KEY_FILE = path.join(CFG.home, ".cache", "llama-api-key");
+export const LLAMA_KEY = !PREFIX ? "local" : (() => {
+  try { const k = fs.readFileSync(LLAMA_KEY_FILE, "utf8").trim(); if (/^[0-9a-f]{48}$/.test(k)) return k; } catch {}
+  const k = crypto.randomBytes(24).toString("hex");
+  try { fs.mkdirSync(path.dirname(LLAMA_KEY_FILE), { recursive: true }); fs.writeFileSync(LLAMA_KEY_FILE, k + "\n", { mode: 0o600 }); } catch {}
+  return k;
+})();
 if (PREFIX) PRESETS.local = {
   label: "端侧小模型（本机）", labelEn: "On-device model", group: "local", local: true,
-  baseUrl: `http://127.0.0.1:${LLAMA_PORT}`, authStyle: "x-api-key", apiKey: "local", defaultModel: null,
+  baseUrl: `http://127.0.0.1:${LLAMA_PORT}`, authStyle: "x-api-key", apiKey: LLAMA_KEY, defaultModel: null,
   // 手机上读一万多 token 的提示要几分钟：别让 claude 等两分钟就当超时。
   // 重试只给两次：本机服务挂了就是挂了，默认十次退避要白等三分钟
   extraEnv: { API_TIMEOUT_MS: "3000000", CLAUDE_CODE_MAX_RETRIES: "2" },
@@ -283,6 +294,7 @@ function composeProvider(id, raw) {
   if (pre) {
     v = { ...pre };
     for (const k of USER_FIELDS) if (raw && raw[k] != null && raw[k] !== "") v[k] = raw[k];
+    if (pre.local) v.apiKey = LLAMA_KEY;    // 旧配置里存的占位 "local" 不算数
     // 旧配置里自己攒的模型清单（带真实窗口）比目录里的全，留着
     if (raw && Array.isArray(raw.fallbackModels) && raw.fallbackModels.length) v.fallbackModels = raw.fallbackModels;
   } else {
