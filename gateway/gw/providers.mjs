@@ -316,7 +316,9 @@ function loadProviders() {
   return { active, providers };
 }
 function saveProvidersRaw() {
-  fs.writeFileSync(PROVIDERS_FILE, JSON.stringify(PROVIDERS_RAW, null, 2), { mode: 0o600 });
+  // 先写临时文件再换名（同 settings）：密钥都在这里，写一半被杀就全丢了
+  fs.writeFileSync(PROVIDERS_FILE + ".tmp", JSON.stringify(PROVIDERS_RAW, null, 2), { mode: 0o600 });
+  fs.renameSync(PROVIDERS_FILE + ".tmp", PROVIDERS_FILE);
   PROVIDERS_CFG = loadProviders();
 }
 export let PROVIDERS_CFG = loadProviders();

@@ -89,7 +89,9 @@ function outputStyles() {
 export function saveSettings() {
   try {
     fs.mkdirSync(path.dirname(PATHS.settings), { recursive: true });
-    fs.writeFileSync(PATHS.settings, JSON.stringify(SETTINGS, null, 2), { mode: 0o600 });
+    // 先写临时文件再换名：写到一半被杀，下次读到半个 JSON 会回落默认，下一次保存就把密钥覆盖没了（审查 中1）
+    fs.writeFileSync(PATHS.settings + ".tmp", JSON.stringify(SETTINGS, null, 2), { mode: 0o600 });
+    fs.renameSync(PATHS.settings + ".tmp", PATHS.settings);
   } catch (e) { log(`保存设置失败: ${e.message}`); }
 }
 loadSettings();
