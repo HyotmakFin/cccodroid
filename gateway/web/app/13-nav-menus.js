@@ -101,7 +101,9 @@
   (function () { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p) && !localStorage.getItem("cc.navPinsV2")) { localStorage.setItem("cc.navPins", JSON.stringify([...new Set([...p.filter((k) => k !== "ext"), "projects", "sched"])])); } localStorage.setItem("cc.navPinsV2", "1"); } catch {} })();
   // 0.4.10 加了「脉络」：已有的固定项里补上它（只补一次，用户之后取消了不再加回来）
   (function () { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p) && !localStorage.getItem("cc.navPinsV3") && !p.includes("lineage")) localStorage.setItem("cc.navPins", JSON.stringify([...p, "lineage"])); localStorage.setItem("cc.navPinsV3", "1"); } catch {} })();
-  const navPins = () => { try { const p = JSON.parse(localStorage.getItem("cc.navPins")); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); } catch {} return ["sessions", "projects", "lineage", "sched"]; };
+  // 0.4.20 起存进 ccapp-ui.json（uiGet / uiSet，见 01-core.js）；以前存在本地的 cc.navPins 照读
+  const navPins = () => { const p = uiGet("navPins", "cc.navPins"); if (Array.isArray(p)) return NAV_ITEMS.filter((k) => p.includes(k)); return ["sessions", "projects", "lineage", "sched"]; };
+  document.addEventListener("cc:ui", (e) => { if (e.detail.key === "navPins") renderSideNav(); });
   var navEdit = false;
   function renderSideNav() {
     const nav = $("side-nav"); if (!nav) return;
@@ -141,8 +143,7 @@
     const k = e.target.dataset.pin; if (!k) return;
     const pins = navPins().filter((x) => x !== k);
     if (e.target.checked) pins.push(k);
-    localStorage.setItem("cc.navPins", JSON.stringify(pins));
-    renderSideNav();
+    uiSet("navPins", pins);
   });
   $("side-new").addEventListener("click", () => { closePage(); closeDrawer(); newConversation(); });
   $("side-acct").addEventListener("click", () => acctMenu());

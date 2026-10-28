@@ -26,11 +26,35 @@
   });
 
   $("btn-files").addEventListener("click", () => openFiles());
+  // 顶栏按钮怎么摆（0.4.20）：五个工具键各自「常驻」（挪进 #tb-pins，不折叠）/「收起」（照旧收在 ⋯ 里）/「隐藏」，外加先后顺序。
+  //   存在 ccapp-ui.json 的 topbar：{ order, pin, off }；没设过就是全收起、原来的顺序。⋯ 里一个都不剩时 ⋯ 也藏掉
+  const TB_BTNS = { files: "btn-files", term: "btn-term", web: "btn-web", palette: "btn-palette", new: "btn-new" };
+  const TB_ORDER = Object.keys(TB_BTNS);
+  function tbConf() {
+    const c = uiGet("topbar") || {}, ok = (a) => (Array.isArray(a) ? a.filter((k) => TB_BTNS[k]) : []);
+    const order = ok(c.order); for (const k of TB_ORDER) if (!order.includes(k)) order.push(k);
+    return { order, pin: ok(c.pin), off: ok(c.off) };
+  }
+  function tbNumber() { [...document.querySelectorAll("#tb-tools .icon-btn:not(.hidden):not(.tb-off)")].reverse().forEach((b, i) => b.style.setProperty("--i", i)); }
+  function paintTopbar() {
+    const c = tbConf(), pins = $("tb-pins"), fold = document.querySelector("#tb-tools .tb-in");
+    for (const k of c.order) {
+      const b = $(TB_BTNS[k]); if (!b) continue;
+      b.classList.toggle("tb-off", c.off.includes(k));
+      const box = c.pin.includes(k) && !c.off.includes(k) ? pins : fold;
+      if (b.parentNode !== box || box.lastElementChild !== b) box.appendChild(b);
+    }
+    const left = [...fold.querySelectorAll(".icon-btn")].some((b) => !b.classList.contains("tb-off") && !b.classList.contains("hidden"));
+    $("btn-more").classList.toggle("tb-off", !left);
+    tbNumber();
+  }
+  paintTopbar();
+  document.addEventListener("cc:ui", (e) => { if (e.detail.key === "topbar") paintTopbar(); });
   // 顶栏工具键横向折叠：「⋯」点开、「›」收回，记住上次的状态。展开时按可见顺序倒着编号（--i），离「⋯」最近的先出来
   (() => {
     const more = $("btn-more"), KEY = "cc.tbOpen", root = document.documentElement;
     const set = (open) => {
-      [...document.querySelectorAll("#tb-tools .icon-btn:not(.hidden)")].reverse().forEach((b, i) => b.style.setProperty("--i", i));
+      tbNumber();
       root.classList.toggle("tb-open", open);
       more.setAttribute("aria-expanded", String(open));
       more.setAttribute("aria-label", t(open ? "收起工具" : "展开工具"));
@@ -463,7 +487,7 @@
     connectBus(false);                   // hello 到了就会去取历史 / 接上正在跑的那一轮
 
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
-    loadFonts();                         // 导入字体的清单和本地缓存对一下（换过机、清过缓存时把 @font-face 补回来）
+    uiSync(); loadFonts();               // 界面定制（ccapp-ui.json）、导入字体的清单，各和本地缓存对一下（换过机、清过缓存时补回来）
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
     setInterval(refreshStatus, 45000);
     // 设置里有几类（设备与权限、更新、通知、用量……）要等接口回话才显示：开机空下来先拉一遍，

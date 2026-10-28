@@ -2291,5 +2291,13 @@ window.I18N_DICT.en = {
   "和自带的命令重名了，换个名字": "That's the name of a built-in command. Pick another",
   "指令内容不能是空的": "The prompt can't be empty",
   "指令内容太长了（上限 64 KB）": "The prompt is too long (64 KB max)",
-  "已经有同名的指令了": "A prompt with that name already exists"
+  "已经有同名的指令了": "A prompt with that name already exists",
+  "顶栏按钮": "Top bar buttons",
+  "每个按钮选「常驻」（一直露在顶栏）、「收起」（收在 ⋯ 里）或「隐藏」；按住左边的把手上下拖，换先后顺序": "For each button choose Pinned (always on the top bar), Folded (inside ⋯) or Hidden. Hold the handle on the left and drag to reorder",
+  "拖动换顺序": "Drag to reorder",
+  "常驻": "Pinned",
+  "隐藏": "Hidden",
+  "恢复默认": "Restore default",
+  "收进 ⋯": "In ⋯",
+  "每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序": "For each button choose Pinned (always on the top bar), In ⋯ (shown when you tap ⋯) or Hidden. Hold the handle on the left and drag to reorder"
 };

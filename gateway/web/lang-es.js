@@ -2257,4 +2257,12 @@ window.I18N_DICT["es"] = {
   "指令内容不能是空的": "La indicación no puede estar vacía",
   "指令内容太长了（上限 64 KB）": "La indicación es demasiado larga (máx. 64 KB)",
   "已经有同名的指令了": "Ya existe una indicación con ese nombre",
+  "顶栏按钮": "Botones de la barra superior",
+  "每个按钮选「常驻」（一直露在顶栏）、「收起」（收在 ⋯ 里）或「隐藏」；按住左边的把手上下拖，换先后顺序": "Para cada botón elige Fijo (siempre en la barra), Plegado (dentro de ⋯) u Oculto. Mantén pulsada el asa de la izquierda y arrastra para cambiar el orden",
+  "拖动换顺序": "Arrastra para reordenar",
+  "常驻": "Fijo",
+  "隐藏": "Oculto",
+  "恢复默认": "Restablecer",
+  "收进 ⋯": "En ⋯",
+  "每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序": "Para cada botón elige Fijo (siempre en la barra), En ⋯ (aparece al tocar ⋯) u Oculto. Mantén pulsada el asa de la izquierda y arrastra para cambiar el orden",
 };

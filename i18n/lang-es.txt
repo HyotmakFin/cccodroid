@@ -2254,3 +2254,11 @@
 2254	La indicación no puede estar vacía
 2255	La indicación es demasiado larga (máx. 64 KB)
 2256	Ya existe una indicación con ese nombre
+2257	Botones de la barra superior
+2258	Para cada botón elige Fijo (siempre en la barra), Plegado (dentro de ⋯) u Oculto. Mantén pulsada el asa de la izquierda y arrastra para cambiar el orden
+2259	Arrastra para reordenar
+2260	Fijo
+2261	Oculto
+2262	Restablecer
+2263	En ⋯
+2264	Para cada botón elige Fijo (siempre en la barra), En ⋯ (aparece al tocar ⋯) u Oculto. Mantén pulsada el asa de la izquierda y arrastra para cambiar el orden

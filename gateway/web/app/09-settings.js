@@ -720,3 +720,75 @@
     if (MO.on() && row.animate) await row.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${MO.rtl() ? 24 : -24}px)` }], { duration: 155, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.catch(() => {});
     await loadFonts();
   });
+
+  // ── 顶栏按钮（0.4.20）：设置 → 通用。每个按钮 常驻 / 收起 / 隐藏，按住把手拖动排序；摆法见 19-boot.js 的 paintTopbar ──
+  const TB_NAME = { files: tk("文件浏览器"), term: tk("终端"), web: tk("浏览器"), palette: tk("命令面板"), new: tk("新会话") };
+  const GRIP = '<svg viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg>';
+  function renderTbList() {
+    const box = $("tb-list"); if (!box) return;
+    const c = tbConf();
+    // 浏览器键只在有内置浏览器的壳里出现；没有的不列，免得设了没反应
+    const keys = c.order.filter((k) => !$(TB_BTNS[k]).classList.contains("hidden"));
+    box.innerHTML = keys.map((k) => {
+      const m = c.off.includes(k) ? "off" : c.pin.includes(k) ? "pin" : "fold";
+      const ico = $(TB_BTNS[k]).querySelector("svg").outerHTML;
+      return `<div class="tb-item" data-k="${k}"><span class="tb-grip" title="${esc(t("拖动换顺序"))}">${GRIP}</span><span class="tb-ico">${ico}</span><span class="tb-nm">${esc(t(TB_NAME[k]))}</span>`
+        + `<span class="seg tb-seg">${[["pin", t("常驻")], ["fold", t("收进 ⋯")], ["off", t("隐藏")]].map(([v, l]) => `<button type="button" data-tbm="${v}"${v === m ? ' class="on"' : ""}>${esc(l)}</button>`).join("")}</span></div>`;
+    }).join("");
+  }
+  function tbSave(c) {
+    const same = JSON.stringify(c.order) === JSON.stringify(TB_ORDER) && !c.pin.length && !c.off.length;
+    uiSet("topbar", same ? null : c);   // 和默认一样就删掉这一项，以后默认变了也跟着走
+  }
+  document.addEventListener("cc:ui", (e) => { if (e.detail.key === "topbar") renderTbList(); });
+  $("tb-reset")?.addEventListener("click", () => tbSave({ order: TB_ORDER.slice(), pin: [], off: [] }));
+  $("tb-list")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tbm]"); if (!b) return;
+    const k = b.closest("[data-k]").dataset.k, c = tbConf();
+    c.pin = c.pin.filter((x) => x !== k); c.off = c.off.filter((x) => x !== k);
+    if (b.dataset.tbm === "pin") c.pin.push(k); else if (b.dataset.tbm === "off") c.off.push(k);
+    tbSave(c);
+  });
+  // 拖动排序：被拖的那行跟手走，其余行让位（都是 transform），松手按落点重排，被拖的那行弹回它的新位置
+  (() => {
+    const box = $("tb-list"); if (!box) return;
+    let d = null;
+    box.addEventListener("pointerdown", (e) => {
+      const g = e.target.closest(".tb-grip"); if (!g || e.button > 0) return;
+      e.preventDefault();
+      const row = g.closest(".tb-item"), rows = [...box.children], i = rows.indexOf(row);
+      const step = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : row.offsetHeight;
+      d = { row, rows, i, to: i, y0: e.clientY, step, id: e.pointerId };
+      try { g.setPointerCapture(e.pointerId); } catch {}
+      row.classList.add("dragging"); box.classList.add("sorting");
+    });
+    box.addEventListener("pointermove", (e) => {
+      if (!d || e.pointerId !== d.id) return;
+      const dy = e.clientY - d.y0, n = d.rows.length;
+      const lo = -d.i * d.step - d.step * .4, hi = (n - 1 - d.i) * d.step + d.step * .4;
+      const y = Math.max(lo, Math.min(hi, dy));
+      d.row.style.transform = `translateY(${y}px)`;
+      d.to = Math.max(0, Math.min(n - 1, d.i + Math.round(y / d.step)));
+      d.rows.forEach((r, j) => {
+        if (r === d.row) return;
+        const s = d.i < j && j <= d.to ? -d.step : d.to <= j && j < d.i ? d.step : 0;
+        r.style.transform = s ? `translateY(${s}px)` : "";
+      });
+    });
+    const end = (e) => {
+      if (!d || e.pointerId !== d.id) return;
+      const { row, rows, i, to } = d; d = null;
+      const y0 = row.getBoundingClientRect().top;
+      box.classList.remove("sorting"); row.classList.remove("dragging");
+      rows.forEach((r) => (r.style.transform = ""));
+      if (to === i) { const dy = y0 - row.getBoundingClientRect().top; if (Math.abs(dy) > .5) MO.spring(row, "snap", (p) => ({ transform: `translateY(${dy * (1 - p)}px)` })); return; }
+      const c = tbConf(), shown = rows.map((r) => r.dataset.k), k = shown.splice(i, 1)[0];
+      shown.splice(to, 0, k);
+      c.order = shown.concat(c.order.filter((x) => !shown.includes(x)));
+      tbSave(c);   // 触发 cc:ui → 重画清单；新清单里被拖的那行从松手处弹到位
+      const nr = box.querySelector(`[data-k="${k}"]`);
+      if (nr) { const dy = y0 - nr.getBoundingClientRect().top; if (Math.abs(dy) > .5) MO.spring(nr, "snap", (p) => ({ transform: `translateY(${dy * (1 - p)}px)` })); }
+    };
+    box.addEventListener("pointerup", end);
+    box.addEventListener("pointercancel", end);
+  })();

@@ -22,6 +22,8 @@
   </div>
   <!-- 工具键横向折叠：常态只露「⋯」，点开从它左边依次滑出，再点收回（状态记在 localStorage cc.tbOpen）。
        冻结脱困不再占按钮：长按标题（见 19-boot.js） -->
+  <!-- 设成「常驻」的工具键挪到这里，不跟着折叠（设置 → 通用 → 顶栏按钮；19-boot.js 的 paintTopbar） -->
+  <div id="tb-pins"></div>
   <div id="tb-tools"><div class="tb-in">
     <button id="btn-files" class="icon-btn" aria-label="文件浏览器" title="文件浏览器" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
@@ -451,6 +453,12 @@
                 <option value="gc-dark" data-i18n>构成 · 深色</option>
               </select>
             </div>
+          </div>
+          <!-- 顶栏按钮（0.4.20）：常驻 / 收起 / 隐藏 + 拖动排序，存 ccapp-ui.json 的 topbar（app/09-settings.js 的 TB 一节） -->
+          <div class="srow tb-row">
+            <div class="sl"><b data-i18n>顶栏按钮</b><p data-i18n>每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序</p>
+              <div id="tb-list" class="tb-list"></div></div>
+            <div class="sc"><button type="button" id="tb-reset" class="btn sm ghost" data-i18n>恢复默认</button></div>
           </div>
           <!-- 字体与正文字号（theme.js 读写，结果在 html 的 data-uifont / data-readfont / data-monofont / data-fs 上）；
                「自选…」从导入的字体里挑（app/09-settings.js 的字体一节），选中后按钮上显示字体名 -->

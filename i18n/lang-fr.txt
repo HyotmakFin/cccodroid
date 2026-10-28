@@ -2254,3 +2254,11 @@
 2254	L'invite ne peut pas être vide
 2255	L'invite est trop longue (64 Ko max)
 2256	Une invite porte déjà ce nom
+2257	Boutons de la barre du haut
+2258	Pour chaque bouton : Épinglé (toujours dans la barre), Replié (dans ⋯) ou Masqué. Maintenez la poignée à gauche et faites glisser pour changer l'ordre
+2259	Glisser pour réordonner
+2260	Épinglé
+2261	Masqué
+2262	Rétablir
+2263	Dans ⋯
+2264	Pour chaque bouton : Épinglé (toujours dans la barre), Dans ⋯ (visible en touchant ⋯) ou Masqué. Maintenez la poignée à gauche et faites glisser pour changer l'ordre

@@ -504,6 +504,33 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     }
     return r.json();
   }
+  // ── 界面定制的统一存储（0.4.20）：网关 home/ccapp-ui.json 为准（gw/uistore.mjs），本地 cc.ui 是镜像 ──
+  //   uiGet(键, 旧的 localStorage 键)：新位置没有就读旧位置（cc.navPins 这类以前存在本地的），写只写新位置。
+  //   启动时 uiSync() 拉一次网关的：和镜像不一样就以网关为准，再通知各处重画（cc:ui 事件）
+  const UIS = { d: (() => { try { const j = JSON.parse(localStorage.getItem("cc.ui")); return j && typeof j === "object" ? j : {}; } catch { return {}; } })() };
+  function uiGet(k, legacy) {
+    if (UIS.d[k] !== undefined) return UIS.d[k];
+    if (legacy) { try { const v = JSON.parse(localStorage.getItem(legacy)); if (v != null) return v; } catch {} }
+    return undefined;
+  }
+  function uiSet(k, v) {
+    if (v == null) delete UIS.d[k]; else UIS.d[k] = v;
+    try { localStorage.setItem("cc.ui", JSON.stringify(UIS.d)); } catch {}
+    api("/api/ui", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ [k]: v == null ? null : v }) }).catch(() => {});
+    document.dispatchEvent(new CustomEvent("cc:ui", { detail: { key: k } }));
+  }
+  async function uiSync() {
+    const d = await api("/api/ui").catch(() => null); if (!d) return;
+    // 网关还没有、本地有（升级上来的第一次）：把本地的推上去，别被空的盖掉
+    const up = {}; for (const k of Object.keys(UIS.d)) if (d[k] === undefined) up[k] = UIS.d[k];
+    if (Object.keys(up).length) api("/api/ui", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(up) }).catch(() => {});
+    const next = Object.assign({}, d, up);
+    const changed = Object.keys(Object.assign({}, next, UIS.d)).filter((k) => JSON.stringify(next[k]) !== JSON.stringify(UIS.d[k]));
+    if (!changed.length) return;
+    UIS.d = next;
+    try { localStorage.setItem("cc.ui", JSON.stringify(UIS.d)); } catch {}
+    for (const k of changed) document.dispatchEvent(new CustomEvent("cc:ui", { detail: { key: k } }));
+  }
   const fileUrl = (p, dl) =>
     "/api/file?path=" + encodeURIComponent(p) + (dl ? "&download=1" : "");
 

@@ -2257,4 +2257,12 @@ window.I18N_DICT["fr"] = {
   "指令内容不能是空的": "L'invite ne peut pas être vide",
   "指令内容太长了（上限 64 KB）": "L'invite est trop longue (64 Ko max)",
   "已经有同名的指令了": "Une invite porte déjà ce nom",
+  "顶栏按钮": "Boutons de la barre du haut",
+  "每个按钮选「常驻」（一直露在顶栏）、「收起」（收在 ⋯ 里）或「隐藏」；按住左边的把手上下拖，换先后顺序": "Pour chaque bouton : Épinglé (toujours dans la barre), Replié (dans ⋯) ou Masqué. Maintenez la poignée à gauche et faites glisser pour changer l'ordre",
+  "拖动换顺序": "Glisser pour réordonner",
+  "常驻": "Épinglé",
+  "隐藏": "Masqué",
+  "恢复默认": "Rétablir",
+  "收进 ⋯": "Dans ⋯",
+  "每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序": "Pour chaque bouton : Épinglé (toujours dans la barre), Dans ⋯ (visible en touchant ⋯) ou Masqué. Maintenez la poignée à gauche et faites glisser pour changer l'ordre",
 };
