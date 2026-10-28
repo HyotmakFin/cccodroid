@@ -83,6 +83,8 @@ html.tb-still #tb-tools,html.tb-still #tb-tools *,html.tb-still #btn-more path{t
 #title-block{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:opacity .2s ease}
 #title-block.lp{opacity:.4;transition:opacity .6s ease}
 #sub-title{font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 副标题空着也占一行：切整页时它先清空、概况异步回来再填，不占位的话顶栏先缩矮再弹回，常驻侧栏（高度跟 --tbh）也跟着上下抽一下（#43）；帮助、更新日志没有副标题，高度也和别的页一致 */
+#sub-title:empty::before{content:"\200b"}
 #sub-title.ok{color:var(--ok)} #sub-title.err{color:var(--err)} #sub-title.warn{color:var(--warn)}
 .icon-btn{
   width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;
@@ -2663,7 +2665,7 @@ html[data-skin="zhuyue"] .sel-menu button.on svg{color:var(--zy-blue)}
 
 /* ───────────── 构成风格（设置 → 外观 → 构成 · 浅色 / 深色）─────────────
    出自用户早年 mazz-editor 的「构成主义」主题（原件与视觉基线在 claude-workspace/themes/construct-from-mazz/）：
-   牛皮纸底 #f0e6d2、墨黑 #1a1a1a、宣传画红 #c8211b；零圆角、粗墨线、5px 实心错位投影，按钮按下往投影方向落 2px，
+   牛皮纸底 #f0e6d2（0.5.0 起浅色减一档黄，主底 #f3eee3，#42）、墨黑 #1a1a1a、宣传画红 #c8211b；零圆角、粗墨线、5px 实心错位投影，按钮按下往投影方向落 2px，
    选中的分段是斜切红块。深色版是我们补的：炭黑底、纸色当墨（边线与投影都用纸色）、红提亮到 #f0473b 保对比。
    顶栏不涂黑（安卓状态栏透明，黑顶栏会跟浅色状态栏图标打架），改成纸底 + 粗墨线 + 右端一块斜切红。
    回复正文不加花样，只动外框；动效照旧走 MO，这里只多「按下落位」一处 transform。 */
@@ -2682,17 +2684,17 @@ html[data-skin="goucheng"]{
   --gc-ink:#f0e6d2; --gc-hard:rgba(240,230,210,.3); --gc-red:#f0473b; --gc-stripe:rgba(240,230,210,.07); --gc-wedge:rgba(240,71,59,.1);
 }
 html[data-skin="goucheng"][data-theme="light"]{
-  --bg:#f0e6d2; --bg2:#f8f0dd; --bg3:#e8dbc0; --bg4:#dccfae; --line:#c9bb9c;
+  --bg:#f3eee3; --bg2:#faf7ef; --bg3:#e9e2d2; --bg4:#ddd4c0; --line:#cdc2aa;
   --fg:#1a1a1a; --fg2:#4f483d; --fg3:#6b6255;
-  --accent:#c8211b; --accent-dim:#e6a49a; --on-accent:#f8f0dd;
+  --accent:#c8211b; --accent-dim:#e6a49a; --on-accent:#faf7ef;
   --ok:#3d6b35; --err:#9c1c16; --warn:#7f5d06; --tool:#1f4e8c; --purple:#6b3f8c;
-  --bar-bg:#f0e6d2; --bar-bg2:#f0e6d2; --veil:rgba(240,230,210,.9);
-  --strong:#000000; --code-bg:#e8dbc0; --think-bg:#ece1c9; --more-bg:#e8dbc0; --more-line:#c9bb9c;
-  --user-bg:#f8f0dd; --user-line:#1a1a1a; --sys-bg:#e3e4d6; --sys-line:#b9bda4;
-  --tool-bg:#f8f0dd; --tool-line:#1a1a1a; --tool-sep:#e8dbc0; --cmd-bg:#ece4d0;
+  --bar-bg:#f3eee3; --bar-bg2:#f3eee3; --veil:rgba(243,238,227,.9);
+  --strong:#000000; --code-bg:#e9e2d2; --think-bg:#eee8db; --more-bg:#e9e2d2; --more-line:#cdc2aa;
+  --user-bg:#faf7ef; --user-line:#1a1a1a; --sys-bg:#e3e4d6; --sys-line:#b9bda4;
+  --tool-bg:#faf7ef; --tool-line:#1a1a1a; --tool-sep:#e9e2d2; --cmd-bg:#eeeadf;
   --err-bg:#f3d8c2; --err-line:#d9947f; --err-fg:#9c1c16; --active-bg:#f3d8c2;
   --shadow:rgba(26,26,26,.18); --scrim:rgba(26,26,26,.35);
-  --panel:#f8f0dd; --input-bg:#f8f0dd; --radius:0px;
+  --panel:#faf7ef; --input-bg:#faf7ef; --radius:0px;
   --gc-ink:#1a1a1a; --gc-hard:#1a1a1a; --gc-red:#c8211b; --gc-stripe:rgba(26,26,26,.07); --gc-wedge:rgba(200,33,27,.13);
 }
 /* 顶栏：粗墨线收底，右端一块斜切红（纯装饰，不挡点击） */
@@ -2716,6 +2718,8 @@ html[data-skin="goucheng"] .pop-menu button{border-radius:0}
 html[data-skin="goucheng"] .sheet-panel{border-radius:0;border-top:2px solid var(--gc-ink)}
 html[data-skin="goucheng"] #pages .panel:not(.flat){border:1.5px solid var(--gc-ink);box-shadow:4px 4px 0 var(--gc-hard)}
 html[data-skin="goucheng"] .drawer-panel{border-inline-end:2px solid var(--gc-ink)}
+/* 常驻侧栏上下那两个内凹角是渐变画的（见上文「交界处的圆角」），全方角规则压不到；构成下直接不画，交界就是一条直墨线（#42） */
+html[data-skin="goucheng"].dock-l #drawer::before,html[data-skin="goucheng"].dock-l #drawer::after{content:none}
 html[data-skin="goucheng"] :is(input[type=text],input[type=search],input[type=url],input[type=number],textarea,select,.chip){border-radius:0}
 html[data-skin="goucheng"] :is(#pages,#set-ov) select{border-radius:0;border-color:var(--gc-ink)}
 /* 按钮：实心错位投影，按下往投影方向落 2px（只动 transform） */
@@ -2928,6 +2932,9 @@ html[data-motion] .mo-out-fade{animation:mo-fade-out calc(.17s * var(--mo-x,1)) 
 html[data-motion] .mo-out-sheet{animation:mo-fade-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important;pointer-events:none}
 html[data-motion] .mo-out-sheet .sheet-panel{animation:mo-sheet-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important}
 html[data-motion] #sheet.pop.mo-out-sheet .sheet-panel{animation:mo-fade-out calc(.14s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important}
+/* 宽屏关设置：面板自己先快速淡掉、略缩一点，遮罩照常 0.17 秒淡完。以前面板和遮罩一起慢慢变透明，中间几帧设置的字和底下列表的字叠在一起（#41） */
+@keyframes mo-set-out{to{opacity:0;transform:scale(.97)}}
+html[data-motion] #set-ov.mo-out-fade:not(.narrow) .set-sheet{animation:mo-set-out calc(.1s * var(--mo-x,1)) cubic-bezier(0,0,.2,1) both!important}
 @keyframes mo-sheet-out{to{transform:translateY(100%)}}
 /* 右侧窗格（文件 / 查看器 / git / 终端）：宽屏停靠在右边时从右侧浮进来，窄屏铺满时像整页一样推进来 */
 html[data-motion="on"]:not(.has-right) :is(#files,#viewer,#git,#term):not(.hidden){animation:mo-page var(--mo-snap) linear}
