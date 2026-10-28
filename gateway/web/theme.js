@@ -116,8 +116,10 @@
     let css = "";
     if (hex) {
       const { acc, dim, on, soft } = accentFor(hex, skin, name);
+      // 构成首屏右侧那块斜切色块（--gc-wedge）原来写死成半透明红，自定颜色时漏了没跟着换；照原版的透明度从强调色派生
+      const wedge = `rgba(${hex2rgb(acc).map((v) => Math.round(v * 255)).join(",")},${lum(BAR[skin][name]) > 0.4 ? .13 : .1})`;
       // 选择器带两个属性：压过各外观自己那段（同样两个属性），这段 style 插在 style.css 后面，同分时后者赢
-      css = `html[data-theme][data-skin]{--accent:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--zy-blue:${acc}}`;
+      css = `html[data-theme][data-skin]{--accent:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--gc-wedge:${wedge};--zy-blue:${acc}}`;
     }
     if (!el) { if (!css) return; el = document.createElement("style"); el.id = "user-accent"; document.head.appendChild(el); }
     if (el.textContent !== css) el.textContent = css;
