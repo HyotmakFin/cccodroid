@@ -138,6 +138,7 @@
     xt.open(el);
     const a = { id, el, xt, fit, es: null, ro: null, q: "", sending: Promise.resolve(), timer: 0, cols: 0, rows: 0 };
     TERM.inst.set(id, a);
+    termScrubber(a);
 
     xt.onData((d) => termSend(a, termMods(d)));
     // 终端里的网址点一下就用系统浏览器打开（登录授权页那种长地址会折成好几行，按折行拼回来再找）
@@ -219,12 +220,62 @@
   function termFit(a) {
     if (!a || a.el.classList.contains("hidden") || !a.el.clientWidth) return;
     try { a.fit.fit(); } catch { return; }
+    a.sbPaint?.(true);
     if (a.xt.cols === a.cols && a.xt.rows === a.rows) return;
     a.cols = a.xt.cols; a.rows = a.xt.rows;
     clearTimeout(a.rt);
     a.rt = setTimeout(() => api(`/api/term/${a.id}/resize`, {
       method: "POST", body: JSON.stringify({ cols: a.cols, rows: a.rows }),
     }).catch(() => {}), 120);
+  }
+
+  // 右侧滑块自己画：xterm 6 自带的是 VS Code 那套滚动条，滑块 14×20px，触摸拖动时 xterm 自己的触摸滚动也在响应（方向还相反），
+  // 两边打架、拖着不跟手。这里藏掉它（样式表），换一条触摸友好的：右边 22px 都能抓，滑块至少 44px 高；
+  // 拖动时滑块严格跟手指走、按比例 scrollToLine；点轨道空白处滑块中心跳过去。滑块是 .xterm 的兄弟节点，xterm 收不到这些触摸
+  function termScrubber(a) {
+    const bar = document.createElement("div");
+    bar.className = "term-sb none";
+    bar.innerHTML = "<i></i>";
+    const th = bar.firstChild;
+    a.el.appendChild(bar);
+    let H = 0, h = 0, top = 0, drag = null, raf = 0;
+    const span = () => { const b = a.xt.buffer.active; return { max: Math.max(0, b.length - a.xt.rows), y: b.viewportY, len: b.length }; };
+    const place = (t) => { top = t; th.style.transform = `translateY(${t}px)`; };
+    function paint(measure) {
+      if (measure || !H) H = a.el.clientHeight;   // 量终端区（滑块条和它一样高）：滑块条藏着时 display:none，量它永远是 0
+      const { max, y, len } = span();
+      bar.classList.toggle("none", max <= 0 || !H);
+      if (max <= 0 || !H) return;
+      const nh = Math.max(44, Math.round(H * a.xt.rows / len));
+      if (nh !== h) { h = nh; th.style.height = h + "px"; }
+      if (!drag) place(Math.round((H - h) * y / max));
+    }
+    a.sbPaint = (measure) => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; paint(measure); }); };
+    a.xt.onScroll(() => a.sbPaint());
+    a.xt.onWriteParsed(() => a.sbPaint());
+    const move = (e) => {
+      if (!drag) return;
+      const room = H - h, t = Math.min(room, Math.max(0, e.clientY - drag.y0 - drag.off));
+      place(t);
+      a.xt.scrollToLine(Math.round(span().max * (room > 0 ? t / room : 0)));
+    };
+    bar.addEventListener("pointerdown", (e) => {
+      if (bar.classList.contains("none")) return;
+      e.preventDefault(); e.stopPropagation();
+      try { bar.setPointerCapture(e.pointerId); } catch {}
+      paint(true);
+      const y0 = bar.getBoundingClientRect().top, at = e.clientY - y0;
+      // 按在滑块上：抓住的那一点跟着手指；按在轨道上：滑块中心跳到手指处
+      drag = { y0, off: at >= top && at <= top + h ? at - top : h / 2 };
+      bar.classList.add("drag");
+      move(e);
+    });
+    bar.addEventListener("pointermove", move);
+    const end = () => { if (!drag) return; drag = null; bar.classList.remove("drag"); paint(); };
+    bar.addEventListener("pointerup", end);
+    bar.addEventListener("pointercancel", end);
+    bar.addEventListener("lostpointercapture", end);
+    a.sbPaint(true);
   }
 
   const TERM_KEYS = [

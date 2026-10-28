@@ -914,6 +914,12 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
   border:1px solid var(--line);border-radius:9px;overflow:hidden;
 }
 .term-screen{position:absolute;inset:4px 2px 2px 6px}
+/* 终端右侧滑块（18-terminal.js termScrubber）：xterm 自带的竖向滚动条藏掉，换一条触摸友好的 */
+.term-screen .xterm .scrollbar.vertical{display:none!important}
+.term-sb{position:absolute;top:0;bottom:0;right:-2px;width:22px;z-index:5;touch-action:none;-webkit-user-select:none;user-select:none}
+.term-sb.none{display:none}
+.term-sb i{position:absolute;top:0;right:3px;width:4px;border-radius:3px;background:var(--fg3);opacity:.4;transition:width .12s,opacity .12s,right .12s;will-change:transform}
+.term-sb.drag i{width:8px;right:2px;opacity:.85}
 .term-keys{
   display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-top:5px;
   scrollbar-width:none;
