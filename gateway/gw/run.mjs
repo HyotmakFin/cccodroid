@@ -384,8 +384,11 @@ export async function startRun(item) {
       clearTimeout(run.idleClose);
       if (run.idle && !run.bgTasks) run.idleClose = setTimeout(() => { if (run.idle && !run.bgTasks && !run.ended) closeInput(); }, 6000);
     }
-    // 空闲中 claude 又动起来了（后台任务回报、或用户发来的新消息）：重新算「生成中」
-    if (run.idle && (ev.type === "assistant" || ev.type === "stream_event" || (ev.type === "system" && ev.subtype === "init"))) {
+    // 空闲中 claude 又动起来了（后台任务回报、或用户发来的新消息）：重新算「生成中」。
+    // 只认主会话自己的事件：后台子代理的消息也从这条流出来（带 parent_tool_use_id），它们说话不等于主会话开了新一轮——
+    // 以前不分，主会话答完「请稍等」、子代理一开口，界面就又是「生成中」加一个空的「连接中」，一直挂到子代理跑完
+    const mainEv = !ev.parent_tool_use_id && !ev.isSidechain;
+    if (run.idle && mainEv && (ev.type === "assistant" || ev.type === "stream_event" || (ev.type === "system" && ev.subtype === "init"))) {
       run.idle = false;
       emit({ type: "run_busy", startedAt: Date.now() });
       publishState();
