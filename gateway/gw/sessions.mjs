@@ -3,6 +3,7 @@ import path from "node:path";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, importSessions, listTrash, locateUserTurn, purgeTrash, realWorkspace, restoreSession, rewindFiles, rewindFixup, trashSession, undoDelete } from "./sessionops.mjs";
 import { goalStateOf, tasksOf } from "./goal.mjs";
+import { backfillAgents, readAgentIndex } from "./agents.mjs";
 import { agentFilesOf, findLineOffset, lineHas, readSessionForward, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { lineageCached } from "./lineage.mjs";
 import { chapterView } from "./archive-core.mjs";
@@ -330,6 +331,15 @@ export async function routeSessions(req, res, u, p) {
         goal: u.searchParams.has("before") || u.searchParams.has("after") ? undefined : goalStateOf(found.file),
         tasks: u.searchParams.has("before") || u.searchParams.has("after") ? undefined : tasksOf(id),
       });
+    }
+
+    // 子代理联络簿：有落盘的读落盘（网关跑的时候记的），没有就从 claude 的记录里现推（旧会话，不写文件）
+    if (req.method === "GET" && action === "agents") {
+      if (!found) return sendJson(res, 404, { error: "not found" });
+      const meta = peekSession(found.file);
+      let recs = meta.cwd ? readAgentIndex(meta.cwd, id) : [], src = "book";
+      if (!recs.length) { recs = backfillAgents(found.file); src = "transcript"; }
+      return sendJson(res, 200, { records: recs, src });
     }
 
     // 子代理的过程（按需取：点开 Agent 卡的「过程」才读）

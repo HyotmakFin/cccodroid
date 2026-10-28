@@ -15,6 +15,7 @@ import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
+import { SUBAGENT_HINT, agentBook } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
@@ -172,6 +173,8 @@ export async function startRun(item) {
   const arch = P.local ? null : await archiveHint(run.sessionId).catch(() => null);
   const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : PREVIEW_HINT, arch?.rule, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
+  // 子代理（连孙代理）统一的联络规矩：用 agentId 发消息、summary 写事由、长内容落文件只发路径（见 agents.mjs）
+  if (!P.local && !message.trim().startsWith("/")) argv.push("--append-subagent-system-prompt", SUBAGENT_HINT);
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
   argv.push(...settingsArgs(P));
@@ -220,6 +223,15 @@ export async function startRun(item) {
     log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容
     return true;
   };
+  // 子代理联络簿：落盘交代/汇报/长消息，推 ag 事件；一批子代理全部结束时给主会话送一条只带路径的短消息。
+  // 这条不是用户说的：sys 标记让回显、队列、断点续传都跳过它，记录里以 < 开头，历史也不显示
+  run.agents = agentBook(run, { emit, inject: (text) => {
+    if (!run.inputOpen || run.ended || run.aborted) return false;
+    try { writeUser(text); } catch { return false; }
+    run.pendingInject.push({ sys: true, message: text });
+    log("↪ 子代理汇总已交给主会话");
+    return true;
+  } });
   // 每轮 result 之后：没有待送达的插话就关 stdin，claude 随即退出；有就留着，它会接着处理
   // ── 权限确认（stream-json 控制协议）──
   // claude 要用需确认的工具时，往 stdout 发 control_request(can_use_tool) 然后等；我们回 control_response。
@@ -337,11 +349,11 @@ export async function startRun(item) {
   };
   const onReplay = () => {
     // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
-    const said = run.replays === 0 ? message : run.pendingInject[0] && run.pendingInject[0].message;
-    if (usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
+    const said = run.replays === 0 ? message : run.pendingInject[0] && !run.pendingInject[0].sys && run.pendingInject[0].message;
+    if (said && usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
     if (run.replays++ === 0) return;
     const it = run.pendingInject.shift();
-    if (it) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
+    if (it && !it.sys) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
   };
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
@@ -379,6 +391,7 @@ export async function startRun(item) {
       emit({ type: "run_busy", startedAt: Date.now() });
       publishState();
     }
+    run.agents.feed(ev);
     translate(ev, { sse: emit, flags, onInit, onResult, onReplay, provider: P });
   };
 
@@ -404,6 +417,7 @@ export async function startRun(item) {
     buf = "";
     run.inputOpen = false;
     run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
+    run.pendingInject = run.pendingInject.filter((it) => !it.sys);
     if (run.pendingInject.length) {
       log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
       QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));

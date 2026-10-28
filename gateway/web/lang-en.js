@@ -2236,5 +2236,17 @@ window.I18N_DICT.en = {
   "回复": "Reply",
   "（无标题）": "(Untitled)",
   "折叠屏适配（实验）": "Foldable layout (experimental)",
-  "展开时按折痕分栏，侧栏、对话、右侧窗格各占一扇；半开时弹窗不压折痕，立在桌上时输入框放到下半屏": "When unfolded, split the layout along the fold: sidebar, chat and side pane each get a panel. Half-open, dialogs stay off the fold; standing on a table, the input box moves to the lower half."
+  "展开时按折痕分栏，侧栏、对话、右侧窗格各占一扇；半开时弹窗不压折痕，立在桌上时输入框放到下半屏": "When unfolded, split the layout along the fold: sidebar, chat and side pane each get a panel. Half-open, dialogs stay off the fold; standing on a table, the input box moves to the lower half.",
+  "{n} 在跑": "{n} running",
+  "{n} 完成": "{n} done",
+  "{n} 失败": "{n} failed",
+  "{n} 步": "{n} steps",
+  "交代": "Brief",
+  "汇报": "Report",
+  "联络 {n} 条": "{n} messages",
+  "未送达": "not delivered",
+  "汇总": "Summary",
+  "主会话": "main",
+  "这个子代理的过程还没加载到": "This sub-agent's steps haven't loaded yet",
+  "更早的 {n} 步": "{n} earlier steps"
 };

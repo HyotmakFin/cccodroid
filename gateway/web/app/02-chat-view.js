@@ -274,6 +274,30 @@
     return s.length > 90 ? s.slice(0, 90) + "…" : s;
   }
 
+  /** 收着的子代理过程里的一步：只记数据，不建 DOM。子代理正在跑时每一步都会来，十几个子代理各几百步，
+   *  全建成卡片就是几千个节点常驻页面（展开过程时才 realize 成真卡片，见 ToolBlock 的 openSub）。
+   *  孙代理的步骤挂在它下面同样记着；结果、汇报、状态都按调用顺序存，展开时原样重放 */
+  function LazyCard(id, name, input, live) {
+    const calls = [];
+    const c = { lazy: true, id, name, input, live, calls, isAgent: name === "Agent" || name === "Task",
+                state: live ? "run" : "ok", summary: summarizeTool(name, input), onChange: null };
+    for (const k of ["result", "subText", "subProgress", "subDone", "stop", "finish", "subLazy"]) {
+      c[k] = (...a) => { calls.push([k, a]); if (k === "result") c.state = a[0] ? "ok" : "err"; };
+    }
+    c.sub = (sid, sn, si) => { const n = LazyCard(sid, sn, si, live); calls.push(["sub", [sid, sn, si, n]]); if (sid) TOOL_CARDS.set(sid, n); return n; };
+    return c;
+  }
+  const SUB_SHOW = 50;
+  function realize(c, list) {
+    const b = ToolBlock(list, c.id, c.name, c.input, c.live);
+    for (const [k, a] of c.calls) {
+      if (k !== "sub") { b[k](...a); continue; }
+      const nb = b.sub(a[0], a[1], a[2]);            // b 的过程区是收着的：拿到的是新的 LazyCard，把旧的记录接过去
+      if (nb.lazy) nb.calls.push(...a[3].calls), nb.state = a[3].state;
+    }
+    return b;
+  }
+
   function ToolBlock(parent, id, name, input, live) {
     const card = document.createElement("div");
     card.className = "tool";
@@ -295,14 +319,39 @@
       box.className = "tool-sub";
       box.innerHTML = `<button class="ts-head" type="button"><span class="chev">▶</span><span class="ts-label"></span><span class="tool-arg ts-now"></span></button><div class="ts-list"></div>`;
       card.insertBefore(box, bodyEl);
-      sub = { box, list: box.lastChild, label: box.querySelector(".ts-label"), now: box.querySelector(".ts-now"), n: 0, textEl: null, lazy: null };
+      sub = { box, list: box.lastChild, label: box.querySelector(".ts-label"), now: box.querySelector(".ts-now"), n: 0, textEl: null, text: null, lazy: null, queue: [] };
       box.firstChild.addEventListener("click", (e) => {
         e.stopPropagation();
-        box.classList.toggle("open");
-        if (box.classList.contains("open") && sub.lazy) { const f = sub.lazy; sub.lazy = null; f(); }
+        if (box.classList.contains("open")) box.classList.remove("open");
+        else openSub();
       });
       subLabel();
       return sub;
+    };
+    // 展开过程：先把收着时记下的步骤建成卡片、汇报排到最后，历史里的再去取
+    const openSub = () => {
+      const s = subArea();
+      s.box.classList.add("open");
+      // 一次只建最近 SUB_SHOW 步（200 步全建要卡半秒多，压测实测），更早的点一下再建，插在最前面
+      if (s.queue.length) {
+        const q = s.queue; s.queue = [];
+        const cut = q.length > SUB_SHOW + 10 ? q.length - SUB_SHOW : 0;
+        if (cut) {
+          const box = document.createElement("div"), more = document.createElement("button");
+          more.type = "button"; more.className = "ts-older"; more.textContent = t("更早的 {n} 步", { n: cut });
+          box.appendChild(more); s.list.prepend(box);
+          more.addEventListener("click", (e) => { e.stopPropagation(); more.remove(); for (const c of q.slice(0, cut)) realize(c, box); });
+        }
+        for (const c of q.slice(cut)) realize(c, s.list);
+      }
+      if (s.text != null) paintSubText();
+      if (s.lazy) { const f = s.lazy; s.lazy = null; f(); }
+    };
+    const paintSubText = () => {
+      const s = sub;
+      if (!s.textEl) { s.textEl = document.createElement("div"); s.textEl.className = "ts-text md"; }
+      s.list.appendChild(s.textEl);
+      setHtml(s.textEl, renderMd(s.text));
     };
     const subLabel = () => { sub.label.textContent = t("子代理过程") + (sub.n ? " · " + t("{n} 个步骤", { n: sub.n }) : ""); };
     const build = () => {           // 点开才把参数、结果铺进 DOM
@@ -353,19 +402,26 @@
       sub(sid, sname, sinput) {
         const s = subArea();
         s.n++; subLabel();
+        const sum = summarizeTool(sname, sinput);
+        s.now.textContent = sname + (sum ? " " + sum : "");
+        if (!s.box.classList.contains("open")) {          // 收着：只记数据
+          const c = LazyCard(sid, sname, sinput, live);
+          s.queue.push(c);
+          if (sid) TOOL_CARDS.set(sid, c);
+          return c;
+        }
         const b = ToolBlock(s.list, sid, sname, sinput, live);
-        s.now.textContent = sname + (b.summary ? " " + b.summary : "");
         if (s.textEl) s.list.appendChild(s.textEl);       // 汇报总在最后
         return b;
       },
+      openSub,
       // 新版 claude 跑得久的普通命令（Bash 等）也会发 task_progress / task_notification，
       // id 是那张工具卡自己的：只有子代理卡才有「过程」可放，别的卡只更新状态，不挂空的「子代理过程」
       subText(text) {
         if (!isAgent) return;
         const s = subArea();
-        if (!s.textEl) { s.textEl = document.createElement("div"); s.textEl.className = "ts-text md"; }
-        s.list.appendChild(s.textEl);
-        setHtml(s.textEl, renderMd(String(text || "")));
+        s.text = String(text || "");
+        if (s.box.classList.contains("open")) paintSubText();   // 收着就只记下，展开时再排版
       },
       subProgress(desc) { if (desc && isAgent) subArea().now.textContent = desc; },
       subDone(status) {

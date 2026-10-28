@@ -2199,3 +2199,15 @@
 2199	(Sans titre)
 2200	Mise en page pliable (expérimental)
 2201	Déplié, l’écran est partagé le long du pli : barre latérale, conversation et volet latéral ont chacun leur panneau. À demi ouvert, les boîtes de dialogue évitent le pli ; posé sur une table, le champ de saisie passe dans la moitié basse.
+2202	{n} en cours
+2203	{n} terminé(s)
+2204	{n} en échec
+2205	{n} étapes
+2206	Consigne
+2207	Rapport
+2208	{n} messages
+2209	non remis
+2210	Synthèse
+2211	principal
+2212	Les étapes de ce sous-agent ne sont pas encore chargées
+2213	{n} étapes précédentes

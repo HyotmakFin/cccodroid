@@ -2199,3 +2199,15 @@
 2199	(Sin título)
 2200	Diseño para plegables (experimental)
 2201	Al desplegar, la pantalla se divide por el pliegue: barra lateral, chat y panel lateral ocupan cada uno una hoja. Medio abierto, los diálogos no quedan sobre el pliegue; apoyado en la mesa, el cuadro de texto pasa a la mitad inferior.
+2202	{n} en curso
+2203	{n} completado(s)
+2204	{n} fallido(s)
+2205	{n} pasos
+2206	Encargo
+2207	Informe
+2208	{n} mensajes
+2209	no entregado
+2210	Resumen
+2211	principal
+2212	Los pasos de este subagente aún no se han cargado
+2213	{n} pasos anteriores

@@ -81,7 +81,7 @@ export function saveRunMark() {
     fs.writeFileSync(RUN_MARK + ".tmp", JSON.stringify({
       runs: live.map((r) => ({ id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt })),
       // 已经写进 stdin、claude 还没吃进去的插话也算排队的：一起留下
-      queue: [...live.flatMap((r) => (r.pendingInject || []).map((it) => ({ ...it, injected: false }))), ...QUEUE],
+      queue: [...live.flatMap((r) => (r.pendingInject || []).filter((it) => !it.sys).map((it) => ({ ...it, injected: false }))), ...QUEUE],
     }), { mode: 0o600 });
     fs.renameSync(RUN_MARK + ".tmp", RUN_MARK);
   } catch {}

@@ -73,6 +73,7 @@
     runViews.clear();
     TOOL_CARDS.clear();
     PENDING_RESULTS.clear();
+    agReset();
     olderEl.classList.add("hidden");
     syncWindow();
     statEl.textContent = "";
@@ -588,9 +589,11 @@
       case "discard_partial": av.discard(ev.text || 0, ev.think || 0); break;
       case "tool_use": {
         const pc = ev.parent && TOOL_CARDS.get(ev.parent);
+        if (ev.parent) agStep(ev.parent, ev.name, ev.input);
         if (pc && pc.isAgent) { pc.sub(ev.id, ev.name, ev.input); break; }
         av.tool(ev.id, ev.name, ev.input); break;
       }
+      case "ag":             agApply(ev, av); break;
       case "sub_text":       TOOL_CARDS.get(ev.parent)?.subText?.(ev.text); break;
       case "sub_progress":   TOOL_CARDS.get(ev.parent)?.subProgress?.(ev.desc); break;
       case "sub_done":       TOOL_CARDS.get(ev.parent)?.subDone?.(ev.status); break;

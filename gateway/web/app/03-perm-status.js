@@ -629,6 +629,18 @@
         keepTail();
         scrollDown();
       },
+      // 主会话被子代理叫起来的那一轮：开头一行「← 谁：为什么事」，连着来的并成一行
+      mark(text) {
+        undot(); any = true;
+        const tailEl = liveTail && liveTail.parentNode === bubble ? liveTail : null;
+        const prev = tailEl ? tailEl.previousElementSibling : bubble.lastElementChild;
+        if (last === null && prev && prev.classList.contains("ag-mark")) { prev.textContent += " · " + text; return; }
+        last = null;
+        const p = document.createElement("p");
+        p.className = "ag-mark"; p.textContent = text;
+        bubble.insertBefore(p, tailEl);
+        keepTail();
+      },
       note(t, solid) { undot(); last = null; if (solid) any = true; bubble.insertAdjacentHTML("beforeend", `<p class="run-note">${esc(t)}</p>`); keepTail(); },
       // 同一个 key 的提示原地更新（加载模型、读提示的进度），不一条条往下堆
       noteK(k, t) {
@@ -709,12 +721,14 @@
       else if (m.role === "thinking") av.thinking(m.text);
       else if (m.role === "tool_use") {
         av.tool(m.id, m.name, m.input);
+        if (AG.byTool.has(m.id)) agTouch(agCardFor(m.id));   // 联络簿先到、卡片所在的这页后到
         const c = m.sub && view.sessionId && TOOL_CARDS.get(m.id), sid = view.sessionId;
         if (c && c.isAgent) c.subLazy(async () => (await api(`/api/session/${encodeURIComponent(sid)}/agent?tool=${encodeURIComponent(m.id)}`)).items || []);
       }
     }
     for (const a of avs) a.finish();
     paintMarks(page);
+    if (view.sessionId && items.some((m) => m.sub)) agLoad(view.sessionId);
     return page;
   }
 
