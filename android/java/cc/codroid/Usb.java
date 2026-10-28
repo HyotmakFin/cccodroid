@@ -75,10 +75,8 @@ final class Usb {
     private static boolean ask(Context c, UsbManager m, UsbDevice d, long timeoutSec) throws InterruptedException {
         if (m.hasPermission(d)) return true;
         CountDownLatch done = new CountDownLatch(1);
-        final boolean[] ok = { false };
         BroadcastReceiver r = new BroadcastReceiver() {
             @Override public void onReceive(Context x, Intent i) {
-                ok[0] = i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
                 done.countDown();
             }
         };
@@ -93,7 +91,8 @@ final class Usb {
         } finally {
             c.unregisterReceiver(r);
         }
-        return ok[0] || m.hasPermission(d);
+        // 只认系统记的授权，不信广播里带的结果：安卓 13 以下这个接收器是导出的，别的应用能伪造（审查 低11）
+        return m.hasPermission(d);
     }
 
     /** op=usb_open：授权、打开，把 fd 随回复一起递过去（回复是一行 JSON，fd 走辅助数据） */

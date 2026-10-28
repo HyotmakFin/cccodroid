@@ -327,7 +327,14 @@ public class MainActivity extends Activity {
             android.net.Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
             if (u != null) uris.add(u);
         }
-        String text = i.getStringExtra(Intent.EXTRA_TEXT);
+        String text0 = i.getStringExtra(Intent.EXTRA_TEXT);
+        // 收多少有个数：一次最多 32 个文件、文字最多 1 MB；复制时剩余空间低于 512 MB 就停，别把存储写满（审查 低12）
+        final String text = text0 != null && text0.length() > (1 << 20) ? text0.substring(0, 1 << 20) : text0;
+        if (uris.size() > 32) {
+            int more = uris.size() - 32;
+            uris.subList(32, uris.size()).clear();
+            android.widget.Toast.makeText(this, Tr.f("一次最多收 32 个文件，其余 {0} 个没收", more), android.widget.Toast.LENGTH_LONG).show();
+        }
         i.setAction(null);                                  // 同一个意图只收一次（转屏重建时别再收）
         if (uris.isEmpty() && (text == null || text.isEmpty())) return;
         new Thread(() -> {
@@ -342,7 +349,13 @@ public class MainActivity extends Activity {
                 for (int k = 2; out.exists(); k++) out = new java.io.File(dir, stamp + "-" + k + "-" + name);
                 try (InputStream in = getContentResolver().openInputStream(u); OutputStream o = new FileOutputStream(out)) {
                     byte[] buf = new byte[1 << 16];
-                    for (int r; (r = in.read(buf)) > 0; ) o.write(buf, 0, r);
+                    long w = 0, check = 0;
+                    for (int r; (r = in.read(buf)) > 0; ) {
+                        o.write(buf, 0, r);
+                        if ((w += r) < check) continue;
+                        check = w + (64L << 20);       // 每写 64 MB 看一眼剩余空间
+                        if (dir.getUsableSpace() < (512L << 20)) throw new java.io.IOException(Tr.t("存储空间不够了"));
+                    }
                     n++;
                     toPage("ccapp-attach", out.getPath());
                 } catch (Exception e) {
@@ -1235,7 +1248,20 @@ public class MainActivity extends Activity {
         web.setDownloadListener((url, ua, cd, mime, len) -> {
             Uri u = Uri.parse(url);
             String p = u.getQueryParameter("path");
-            if (p != null && url.startsWith("http://127.0.0.1:" + Env.PORT + "/api/file")) startSaveAs(p, new File(p).getName(), mime);
+            if (p == null || !p.startsWith("/") || !url.startsWith("http://127.0.0.1:" + Env.PORT + "/api/file")) return;
+            // 这条兜底任何 frame 都能触发（包括预览里的不可信网页），又不经网关：先拿令牌让网关按 /api/file 的规矩核一遍路径，
+            // 放行了才复制。不然预览页放个下载链接就能把 .ssh、令牌之类弹到「保存到」面板（审查 低7）
+            new Thread(() -> {
+                boolean ok = false;
+                try {
+                    java.net.HttpURLConnection c = Env.gateway("/api/file?path=" + Uri.encode(p));
+                    c.setConnectTimeout(3000); c.setReadTimeout(3000);
+                    ok = c.getResponseCode() == 200;
+                    c.disconnect();
+                } catch (Exception ignored) {}
+                final boolean pass = ok;
+                ui.post(() -> { if (pass) startSaveAs(p, new File(p).getName(), mime); else savedJs(false, "forbidden"); });
+            }, "save-check").start();
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {

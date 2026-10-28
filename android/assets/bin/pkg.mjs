@@ -109,7 +109,7 @@ function hashFile(f) {
   return h.digest("hex");
 }
 function curlBuf(url, timeout = 120) {
-  const r = spawnSync(BIN("curl"), ["-fsSL", "--retry", "2", "--max-time", String(timeout), url], { env: ENV, maxBuffer: 256 << 20 });
+  const r = spawnSync(BIN("curl"), ["-fsSL", "--proto", "=https", "--proto-redir", "=https", "--retry", "2", "--max-time", String(timeout), url], { env: ENV, maxBuffer: 256 << 20 });
   if (r.status !== 0) throw new Error(`${url}：${String(r.stderr || "").trim().split("\n").pop() || "curl rc=" + r.status}`);
   return r.stdout;
 }
@@ -145,13 +145,20 @@ function verOk(have, op, want) {
 }
 const atom = (s) => { const m = /^\s*([^\s(]+)\s*(?:\(\s*([<>=]+)\s*([^)\s]+)\s*\))?/.exec(s); if (!m) return { name: "" }; return { name: m[1].replace(/:any$/, ""), op: m[2], ver: m[3] }; };
 
+// 锁里那个 pid 还是不是 pkg：pid 会被复用，只看活没活会把不相干的进程当成「另一个 pkg」（审查 低14）。
+// 别的用户的进程（kill 报 EPERM）不可能是我们的 pkg；/proc 读不到 cmdline 时保守当它在跑
+function pkgAlive(pid) {
+  try { process.kill(pid, 0); } catch { return false; }
+  try { return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("pkg"); } catch { return true; }
+}
+
 // 同一时间只许一个 pkg 在改东西
 function lock() {
   fs.mkdirSync(STATE, { recursive: true });
   const f = path.join(STATE, ".lock");
   try {
     const pid = Number(fs.readFileSync(f, "utf8"));
-    if (pid && pid !== process.pid) { try { process.kill(pid, 0); die(`另一个 pkg（pid ${pid}）正在运行，等它结束再试`); } catch (e) { if (e.code === "EPERM") die(`另一个 pkg（pid ${pid}）正在运行`); } }
+    if (pid && pid !== process.pid && pkgAlive(pid)) die(`另一个 pkg（pid ${pid}）正在运行，等它结束再试`);
   } catch {}
   fs.writeFileSync(f, String(process.pid));
   process.on("exit", () => { try { if (fs.readFileSync(f, "utf8") === String(process.pid)) fs.unlinkSync(f); } catch {} });
@@ -388,7 +395,7 @@ function download(p) {
   for (const base of from && all.includes(from) ? [from, ...all.filter((b) => b !== from)] : all) {
     for (let i = 0; i < 3; i++) {
       // 进度条走 stderr 照常显示；stdout 只收 HTTP 状态码
-      const r = spawnSync(BIN("curl"), ["-fL", tty ? "-#" : "-sS", "-C", "-", "--speed-limit", "10000", "--speed-time", "30", "-w", "%{http_code}", "-o", part, base + p.f],
+      const r = spawnSync(BIN("curl"), ["-fL", "--proto", "=https", "--proto-redir", "=https", tty ? "-#" : "-sS", "-C", "-", "--speed-limit", "10000", "--speed-time", "30", "-w", "%{http_code}", "-o", part, base + p.f],
         { env: ENV, stdio: ["ignore", "pipe", "inherit"] });
       if (String(r.stdout || "").trim() === "404") { gone++; break; }
       let size = 0; try { size = fs.statSync(part).size; } catch {}

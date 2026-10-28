@@ -15,7 +15,8 @@ const OFFICE_DIR = path.join(CFG.home, ".cache", "office-pdf");
 const OFFICE_KEEP = 40;
 const sofficePath = () => PREFIX ? path.join(PREFIX, "bin", "soffice") : "";
 const officeHave = () => { const s = sofficePath(); return !!s && fs.existsSync(s); };
-const officeKey = (file, st) => crypto.createHash("sha1").update(`${file}|${st.size}|${st.mtimeMs}`).digest("hex").slice(0, 20);
+// 带上 inode 和 ctime：大小、修改时间都能伪造成一样的，ctime 改不了（审查 低21）
+const officeKey = (file, st) => crypto.createHash("sha1").update(`${file}|${st.size}|${st.mtimeMs}|${st.ino}|${st.ctimeMs}`).digest("hex").slice(0, 20);
 
 // 文档里写的多是 Windows 字体（宋体、微软雅黑…），本机没有；不配的话 fontconfig 会挑到 Noto CJK 的日文 / 韩文字形。
 // 宋体一类映射到 Noto Serif CJK SC，黑体一类映射到 Noto Sans CJK SC（安卓系统自带这两套）
