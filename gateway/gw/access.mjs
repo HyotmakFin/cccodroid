@@ -49,6 +49,12 @@ export function denyReason(req, u) {
   const origin = req.headers.origin;
   if (origin !== undefined && !ALLOWED_ORIGINS.has(String(origin).toLowerCase())) return 403;
   if (!u.pathname.startsWith("/api/")) return null;          // 静态页面与资源不含秘密
-  if (tokenOk(String(req.headers["x-cc-token"] || "")) || tokenOk(cookieToken(req))) return null;
+  if (tokenOk(String(req.headers["x-cc-token"] || ""))) return null;
+  // 凭 Cookie 的：浏览器标明是别的源发起的就不认。SameSite 不看端口，内置浏览器里开的本机页面（127.0.0.1:3000 之类）
+  // 发的 <img> / no-cors 请求不带 Origin、却会带上 Cookie（审查 H7）。界面自己的请求是 same-origin；
+  // 地址栏直接打开是 none；claude、curl 这类不发这个头
+  const site = req.headers["sec-fetch-site"];
+  if (site && site !== "same-origin" && site !== "none") return 403;
+  if (tokenOk(cookieToken(req))) return null;
   return 403;
 }
