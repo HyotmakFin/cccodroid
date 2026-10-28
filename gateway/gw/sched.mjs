@@ -46,6 +46,10 @@ function pushNext() {
 }
 const saveRuns = () => { RUNLOG = RUNLOG.slice(-500); try { fs.writeFileSync(RUNS_FILE + ".tmp", JSON.stringify(RUNLOG)); fs.renameSync(RUNS_FILE + ".tmp", RUNS_FILE); } catch {} };
 const byId = (id) => DB.tasks.find((t) => t.id === id) || null;
+// 失败后的重试定时器（按任务 id）：用户关掉、暂停、删除时要撤掉，否则到点照跑（审查 H4）。
+// 不能在 fire 里看 t.on 拦：「只跑一次」「跑满次数」的任务失败那一刻 on 已经是 false，重试本来就该跑
+const RETRY = new Map();
+const cancelRetry = (id) => { clearTimeout(RETRY.get(id)); RETRY.delete(id); };
 
 // ── 下次什么时候跑 ──
 const hm = (s, d = "09:00") => { const m = String(s || d).match(/^(\d{1,2}):(\d{2})$/) || String(d).match(/^(\d{1,2}):(\d{2})$/); return [+m[1], +m[2]]; };
@@ -244,7 +248,10 @@ END_HOOKS.push((run, f) => {
   const found = !t.quiet || text.replace(/[\s。.!！]/g, "") !== String(t.quiet).replace(/[\s。.!！]/g, "");
   const want = t.notify === "none" ? false : t.notify === "fail" ? st !== "ok" : t.notify === "found" ? (st !== "ok" || found) : true;
   if (want) note(t, st === "ok" ? tz("定时任务完成：{n}", { n: t.name }) : tz("定时任务没成：{n}", { n: t.name }), msg, sid, st === "ok");
-  if (st === "err" && ctx.attempt < (+t.retry || 0)) setTimeout(() => fire(t, { reason: "retry", attempt: ctx.attempt + 1 }), 2 * 60000);
+  if (st === "err" && ctx.attempt < (+t.retry || 0)) {
+    clearTimeout(RETRY.get(t.id));
+    RETRY.set(t.id, setTimeout(() => { RETRY.delete(t.id); if (byId(t.id) === t) fire(t, { reason: "retry", attempt: ctx.attempt + 1 }); }, 2 * 60000));
+  }
 });
 
 // ── 计时 ──
@@ -375,10 +382,12 @@ export async function routeSched(req, res, u, p) {
     try { clean(b, {}); } catch (e) { return sendJson(res, 400, { error: e.message }); }
     Object.assign(t, clean(b, t));
     if (b.on === true) { t.pausedUntil = 0; t.skipNext = false; }
+    if (b.on === false) cancelRetry(t.id);
     refreshNext(t); save();
     return sendJson(res, 200, { ok: true, task: summary(t) });
   }
   if (!sub && req.method === "DELETE") {
+    cancelRetry(t.id);
     DB.tasks = DB.tasks.filter((x) => x.id !== t.id); DB.missed = DB.missed.filter((x) => x.taskId !== t.id); save();
     log(`⏰ 删除定时任务「${t.name}」`);
     return sendJson(res, 200, { ok: true });
@@ -392,6 +401,7 @@ export async function routeSched(req, res, u, p) {
     const b = await body();
     t.skipNext = b.mode === "skip";
     t.pausedUntil = b.mode === "1d" ? Date.now() + 864e5 : b.mode === "1w" ? 7 * 864e5 + Date.now() : 0;
+    if (t.pausedUntil) cancelRetry(t.id);
     refreshNext(t); save();
     return sendJson(res, 200, { ok: true, task: summary(t) });
   }
