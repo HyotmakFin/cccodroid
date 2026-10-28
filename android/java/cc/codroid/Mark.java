@@ -34,10 +34,11 @@ final class Mark extends View {
         dot.setColor(dotColor);
     }
 
-    /** 当前外观下圆心点的颜色：逐月外观是黑白，点用它那抹蓝；其余外观用主色 */
+    /** 当前外观下圆心点的颜色：逐月外观是黑白，点用它那抹蓝（自定了强调色就用自定的）；其余外观用主色 */
     static int dotColor(Context c, boolean night) {
         String skin = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("skin", "native");
-        if ("zhuyue".equals(skin)) return Color.parseColor(night ? "#3a8ef6" : "#2b80f7");
+        boolean own = !c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString(night ? "accent_dark" : "accent_light", "").isEmpty();
+        if ("zhuyue".equals(skin) && !own) return Color.parseColor(night ? "#3a8ef6" : "#2b80f7");
         return BrowserPane.pal(c, night, "accent");
     }
 

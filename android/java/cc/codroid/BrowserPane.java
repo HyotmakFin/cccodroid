@@ -214,7 +214,12 @@ public class BrowserPane extends LinearLayout {
      *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）| zhuyue（Kimi 式的黑白，强调色就是黑 / 白）| goucheng（构成主义：牛皮纸 + 墨黑 + 红）。
      *  键：bg 页面底 / card 对话框 / field 输入框 / line 分隔线 / fg 正文 / dim 次要字 / hint 提示字 / accent 强调色 */
     static int pal(Context c, boolean night, String k) {
-        String skin = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getString("skin", "native");
+        android.content.SharedPreferences ui = c.getSharedPreferences("ui", Context.MODE_PRIVATE);
+        if ("accent".equals(k)) {     // 界面里自定了强调色（见 MainActivity.accentPref）就用它
+            String own = ui.getString(night ? "accent_dark" : "accent_light", "");
+            if (own.matches("#[0-9a-f]{6}")) return Color.parseColor(own);
+        }
+        String skin = ui.getString("skin", "native");
         boolean qs = "qiusuo".equals(skin);
         String[] keys = { "bg", "card", "field", "line", "fg", "dim", "hint", "accent" };
         String[] v = "goucheng".equals(skin)

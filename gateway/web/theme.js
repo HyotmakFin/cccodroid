@@ -23,7 +23,7 @@
   try { if (k) sessionStorage.setItem("cc.bk", k); else k = sessionStorage.getItem("cc.bk") || ""; } catch {}
   const PLAIN = ["hasPane", "paneCanBack", "whatsNew", "nightMode", "keyed"];
   const KEYED = ["openUrl", "paneOpen", "paneBounds", "paneGoBack", "paneClose", "openBrowser", "shareText", "copyText",
-    "pickDevkit", "uninstall", "unfreeze", "whatsNewSeen", "setBars", "skinPref", "langPref", "themePref", "saveAs"];
+    "pickDevkit", "uninstall", "unfreeze", "whatsNewSeen", "setBars", "skinPref", "accentPref", "langPref", "themePref", "saveAs"];
   const w = {};
   for (const m of PLAIN) if (typeof raw[m] === "function") w[m] = (...a) => raw[m](...a);
   for (const m of KEYED) if (typeof raw[m] === "function") w[m] = (...a) => raw[m](k, ...a);
@@ -120,6 +120,11 @@
       const wedge = `rgba(${hex2rgb(acc).map((v) => Math.round(v * 255)).join(",")},${lum(BAR[skin][name]) > 0.4 ? .13 : .1})`;
       // 选择器带两个属性：压过各外观自己那段（同样两个属性），这段 style 插在 style.css 后面，同分时后者赢
       css = `html[data-theme][data-skin]{--accent:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--gc-wedge:${wedge};--zy-blue:${acc}}`;
+    }
+    // 外壳自己画的东西（加载动画、安装页、对话框）也跟着换：把浅色、深色底上实际用的颜色交过去，空串 = 用外观原色
+    const a = app();
+    if (a && typeof a.accentPref === "function") {
+      try { a.accentPref(hex ? accentFor(hex, skin, "light").acc : "", hex ? accentFor(hex, skin, "dark").acc : ""); } catch {}
     }
     if (!el) { if (!css) return; el = document.createElement("style"); el.id = "user-accent"; document.head.appendChild(el); }
     if (el.textContent !== css) el.textContent = css;

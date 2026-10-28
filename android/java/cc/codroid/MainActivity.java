@@ -1228,6 +1228,12 @@ public class MainActivity extends Activity {
                 if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s) || "goucheng".equals(s))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("skin", s).commit();
             }
+            /** 界面里自定的强调色（theme.js 按外观底色调过深浅的两份）：外壳的加载动画、安装页、对话框跟着换；空串 = 用外观原色 */
+            @android.webkit.JavascriptInterface public void accentPref(String k, String light, String dark) { if (!Env.bridgeOk(k)) return;
+                String re = "#[0-9a-f]{6}";
+                if (light == null || dark == null || !(light.isEmpty() && dark.isEmpty() || light.matches(re) && dark.matches(re))) return;
+                getSharedPreferences("ui", MODE_PRIVATE).edit().putString("accent_light", light).putString("accent_dark", dark).apply();
+            }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */
             /** 界面最终用的语言（i18n.js 解析过的 code，不是 auto）：外壳的通知、安装页、更新文案跟着换 */
             @android.webkit.JavascriptInterface public void langPref(String k, String code) { if (!Env.bridgeOk(k)) return; Tr.set(code); }
