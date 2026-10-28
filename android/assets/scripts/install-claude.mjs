@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
+import { rsaKeys, verifyDetached } from "../bin/pgp.mjs";     // 正本在 devkit/pgp.mjs，打包时拷进 app/bin
 
 const OFFICIAL = process.env.CCODROID_CLAUDE_OFFICIAL || "https://downloads.claude.ai/claude-code-releases";   // 两个变量只给测试换地址用
 // 清单镜像两条线：cccodroid.net 走 Cloudflare，dl.cccodroid.net 直连服务器（国内有的网络只通其中一条）
@@ -41,58 +42,6 @@ const DEST = path.join(process.env.HOME, ".local/share/cccodroid/claude");
 const CHANNEL = process.argv[2] || "stable";
 const say = (s) => console.log(s);
 const die = (s) => { console.log("✗ " + s); process.exit(1); };
-
-// 极简 OpenPGP：只认 v4 的 RSA 公钥包与 v4 RSA 分离签名（Anthropic 的 manifest.json.sig 就是这种）
-function dearmor(t) {
-  const body = String(t).replace(/\r/g, "").split("\n\n").slice(1).join("\n\n").split("\n=")[0];
-  return Buffer.from(body.replace(/\s/g, ""), "base64");
-}
-function packets(b) {
-  const out = [];
-  for (let o = 0; o < b.length;) {
-    const h = b[o++]; if (!(h & 0x80)) throw new Error("bad packet");
-    let tag, len;
-    if (h & 0x40) { tag = h & 63; const l = b[o++]; if (l < 192) len = l; else if (l < 224) len = ((l - 192) << 8) + b[o++] + 192; else if (l === 255) { len = b.readUInt32BE(o); o += 4; } else throw new Error("partial len"); }
-    else { tag = (h >> 2) & 15; const lt = h & 3; if (lt === 0) len = b[o++]; else if (lt === 1) { len = b.readUInt16BE(o); o += 2; } else if (lt === 2) { len = b.readUInt32BE(o); o += 4; } else len = b.length - o; }
-    out.push({ tag, body: b.subarray(o, o + len) }); o += len;
-  }
-  return out;
-}
-const mpi = (b, o) => { const bits = b.readUInt16BE(o), n = (bits + 7) >> 3; return [b.subarray(o + 2, o + 2 + n), o + 2 + n]; };
-const b64u = (x) => Buffer.from(x).toString("base64url");
-/** 公钥块里所有 RSA 钥（主钥 + 子钥）：[{fpr, jwk}] */
-function rsaKeys(armored) {
-  const keys = [];
-  for (const p of packets(dearmor(armored))) {
-    if ((p.tag !== 6 && p.tag !== 14) || p.body[0] !== 4 || p.body[5] !== 1) continue;
-    const [n, o1] = mpi(p.body, 6), [e] = mpi(p.body, o1);
-    const hdr = Buffer.from([0x99, p.body.length >> 8, p.body.length & 255]);
-    keys.push({ fpr: crypto.createHash("sha1").update(hdr).update(p.body).digest("hex").toUpperCase(), primary: p.tag === 6, jwk: { kty: "RSA", n: b64u(n), e: b64u(e) } });
-  }
-  return keys;
-}
-/** 验分离签名：data 是被签的原始字节，keys 是 {指纹: jwk}。返回签名用的指纹，不通过抛错 */
-function verifyDetached(data, sigArmored, keys) {
-  const sp = packets(dearmor(sigArmored)).find((p) => p.tag === 2);
-  if (!sp) throw new Error("no signature packet");
-  const s = sp.body;
-  if (s[0] !== 4 || s[1] !== 0 || s[2] !== 1) throw new Error("unsupported signature (want v4 binary RSA)");
-  const hashName = { 8: "sha256", 9: "sha384", 10: "sha512" }[s[3]];
-  if (!hashName) throw new Error("unsupported hash " + s[3]);
-  const hl = s.readUInt16BE(4), hashed = s.subarray(0, 6 + hl);
-  let fpr = "";
-  const sub = (buf) => { for (let o = 0; o < buf.length;) { let l = buf[o++]; if (l >= 192 && l < 255) l = ((l - 192) << 8) + buf[o++] + 192; else if (l === 255) { l = buf.readUInt32BE(o); o += 4; } const t = buf[o] & 0x7f; if (t === 33) fpr = buf.subarray(o + 2, o + l).toString("hex").toUpperCase(); o += l; } };
-  sub(s.subarray(6, 6 + hl));
-  const ul = s.readUInt16BE(6 + hl); if (!fpr) sub(s.subarray(8 + hl, 8 + hl + ul));
-  const jwk = keys[fpr];
-  if (!jwk) throw new Error("signed by unknown key " + (fpr || "?"));
-  const [sig] = mpi(s, 8 + hl + ul + 2);
-  const trailer = Buffer.alloc(6); trailer[0] = 4; trailer[1] = 0xff; trailer.writeUInt32BE(hashed.length, 2);
-  const pub = crypto.createPublicKey({ key: jwk, format: "jwk" });
-  const nlen = Buffer.from(jwk.n, "base64url").length, sigp = Buffer.concat([Buffer.alloc(Math.max(0, nlen - sig.length)), sig]);
-  if (!crypto.verify(hashName, Buffer.concat([data, hashed, trailer]), pub, sigp)) throw new Error("bad signature");
-  return fpr;
-}
 
 
 /** 小文件：curl 拿到内存，失败再试一次，还不行返回 null（不抛） */

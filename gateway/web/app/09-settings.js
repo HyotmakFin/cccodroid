@@ -292,6 +292,7 @@
   // 显示货币跟界面语言走：中文用人民币，其余用美元；账户币种不同就按汇率换算，标「≈」
   const billCur = () => (/^zh/.test(I18N.lang) ? "CNY" : "USD");
   function money(v, cur) {
+    cur = String(cur || "").replace(/[^A-Za-z]/g, "").slice(0, 8);     // 币种是平台接口给的，结果要拼进 HTML：只留字母（审查 10-29 L6）
     try { return new Intl.NumberFormat(I18N.lang, { style: "currency", currency: cur, maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 }).format(v); }
     catch { return cur + " " + v.toFixed(2); }
   }
@@ -311,7 +312,7 @@
     if (b.balanceError) rows.push(`<div class="prov-state err">${esc(t("余额查询失败：{msg}", { msg: b.balanceError }))}</div>`);
     else if (Number.isFinite(b.balance)) {
       const PART = { granted: t("赠送"), topped: t("充值"), voucher: t("代金券"), cash: t("现金") };
-      const parts = (b.parts || []).filter((x) => Number.isFinite(x.v)).map((x) => `${PART[x.k] || x.k} ${fmt(x.v, x.currency || b.currency)}`).join(" · ");
+      const parts = (b.parts || []).filter((x) => Number.isFinite(x.v)).map((x) => `${PART[x.k] || esc(x.k)} ${fmt(x.v, x.currency || b.currency)}`).join(" · ");
       rows.push(`<div class="bill-big">${t("余额")} <b>${fmt(b.balance, b.currency)}</b>${b.available === false ? ` <span class="badge warn">${t("不可用")}</span>` : ""}</div>` +
         (parts ? `<div class="tiny">${parts}</div>` : ""));
     } else if (b.kind === "openrouter" && Number.isFinite(b.usage)) {

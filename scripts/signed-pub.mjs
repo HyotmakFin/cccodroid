@@ -21,6 +21,15 @@ export async function signAndPublish({ file, data, msg, site }) {
   const pubPem = /-----BEGIN PUBLIC KEY-----\\n([A-Za-z0-9+/=]+)\\n/.exec(fs.readFileSync(path.join(ROOT, "gateway/gw/notices.mjs"), "utf8"))?.[1];
   const pub = crypto.createPublicKey(`-----BEGIN PUBLIC KEY-----\n${pubPem}\n-----END PUBLIC KEY-----\n`);
   if (!crypto.verify(null, body, pub, Buffer.from(sig, "base64"))) die("签出来的和 App 里的公钥对不上");
+  // 推送前先看一眼：别的改动已经暂存、或本地有没推的提交，push HEAD:main 会把它们一起发出去（审查 10-29 L19）
+  if (!process.env.PUB_DRY) {
+    if (git("diff", "--cached", "--name-only")) die("暂存区里已经有别的改动：先提交或撤出暂存区再发布");
+    if (!process.env.PUB_LOCAL) {
+      git("fetch", "-q", "origin", "main");
+      const ahead = git("rev-list", "origin/main..HEAD");
+      if (ahead) die(`本地有 ${ahead.split("\n").length} 个还没推的提交，这次推送会把它们一起带上：先推送或改用 PUB_LOCAL=1`);
+    }
+  }
   if (process.env.PUB_DRY) { console.log(body.toString("utf8") + `✓ 签名、自验都过了（PUB_DRY：不写文件、不推送）\n  提交说明：${msg}`); return; }
   fs.mkdirSync(path.dirname(F), { recursive: true });
   fs.rmSync(F, { force: true }); fs.writeFileSync(F, body);

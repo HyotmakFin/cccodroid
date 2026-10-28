@@ -13,8 +13,11 @@ import { flushPend, snapshot } from "./queue.mjs";
 //   - 回来看不到正在跑的那一轮，只能等它（已经被杀的）结束；
 //   - 排队在前端内存里，一刷新就丢。
 export const BOOT = Date.now().toString(36);
-const BUS = { seq: 0, ring: [], clients: new Set() };
+const BUS = { seq: 0, ring: [], bytes: 0, clients: new Set() };
 const RING_MAX = 4000;
+// 条数之外再按字节封顶：一条 Write / Edit 的入参可能几 MB，4000 条全是这种就是几个 GB（审查 10-29 L1）。
+// 挤掉的那段续不上时 hello 会改从各轮的 log 重放，不丢东西
+const RING_BYTES = 32 * 1024 * 1024;
 // 进程内订阅者：可选集成（如工作岛）不用再开一条 HTTP SSE，也不占令牌。
 const SUBSCRIBERS = new Set();
 
@@ -27,8 +30,10 @@ export function onPublish(fn) {
 export function publish(ev) {
   const seq = ++BUS.seq;
   const line = `id: ${BOOT}.${seq}\ndata: ${JSON.stringify(ev)}\n\n`;
-  BUS.ring.push({ seq, line });
-  if (BUS.ring.length > RING_MAX) BUS.ring.splice(0, BUS.ring.length - RING_MAX);
+  BUS.ring.push({ seq, line }); BUS.bytes += line.length;
+  let drop = 0;
+  while (drop < BUS.ring.length - 1 && (BUS.ring.length - drop > RING_MAX || BUS.bytes > RING_BYTES)) BUS.bytes -= BUS.ring[drop++].line.length;
+  if (drop) BUS.ring.splice(0, drop);
   for (const fn of SUBSCRIBERS) { try { fn(ev); } catch {} }
   for (const c of BUS.clients) busWrite(c, line);
 }

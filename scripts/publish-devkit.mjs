@@ -348,6 +348,9 @@ step.check = async () => {
     if (!verifySig(mods, sig)) fail("modules.json 验签失败");
     // 整包清单的签名（10-29 起 CI 才签，之前的版本没有）：有就必须验得过
     let lsig = null; try { lsig = (await getBuf(BASE + "devkit.lock.json.sig")).toString(); } catch {}
+    // 10-29 之后发的必须有：App 那边缺签名就拒装，这里不能比它松（审查 10-29 L21）
+    const ymd = (TAG.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})/) || []).slice(1).map(Number);
+    if (lsig == null && ymd.length && ymd[0] * 1e4 + ymd[1] * 100 + ymd[2] >= 20261029) fail("devkit.lock.json.sig 不在 Release 上");
     if (lsig != null && !verifySig(lockBuf, lsig)) fail("devkit.lock.json 验签失败");
     if (lsig != null && lock.release !== TAG) fail(`devkit.lock.json 签进去的 release 是 ${lock.release || "（空）"}，不是 ${TAG}——App 会拒装`);
     if (lock.gz.sha256 !== gz) fail("线上清单的 gz 和本地留的那份不一致");

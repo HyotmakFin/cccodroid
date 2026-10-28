@@ -35,7 +35,7 @@ import rikka.shizuku.Shizuku;
  * 安全：每个连接先查 SO_PEERCRED —— 不是本应用 uid 的一律断开，别的应用借不到这份权限。
  * 反过来客户端也得确认连的是真服务：以前用抽象套接字 "cc.codroid.priv"，名字全机共享，别的应用抢先绑上就能
  * 收走命令、伪造回应（审查 H2）。文件套接字放在私有目录里，别的应用连路径都进不去，抢不走。
- * 抽象套接字暂时还开着，给没跟着更新的旧脚本用；自带的客户端都已改连文件套接字。
+ * 抽象套接字已经关掉（审查 10-29 M2）：客户端 priv.mjs 在 files/app/bin，每次启动按内容哈希从 APK 刷新，不会留旧版。
  *
  * 协议（一问一答）：客户端先发一行 JSON 请求；
  *   op=exec 之后双向走帧：[1 字节类型][4 字节长度 BE][数据]
@@ -48,7 +48,6 @@ final class Priv {
     static String shq(String s) { return s.replace("'", "’").replace("\"", "”").replace("$", "＄").replace("`", "’"); }
 
     static final String TAG = "cccodroid-priv";
-    static final String SOCKET = "cc.codroid.priv";
     static final String MANAGER = "moe.shizuku.privileged.api";
     static final int REQ = 7331;
 
@@ -75,7 +74,6 @@ final class Priv {
             }
         });
         new Thread(Priv::serveFile, "priv-server-fs").start();
-        new Thread(Priv::serve, "priv-server").start();
     }
 
     static File sockFile(Context c) { return new File(c.getFilesDir(), ".priv.sock"); }
@@ -266,13 +264,6 @@ final class Priv {
     }
 
     // ── 套接字服务 ───────────────────────────────────────────────────────
-    private static void serve() {
-        LocalServerSocket ss;
-        try { ss = new LocalServerSocket(SOCKET); }
-        catch (IOException e) { Log.e(TAG, "开不了套接字（可能被别的应用抢先绑了；自带客户端走文件套接字，不受影响）", e); return; }
-        acceptLoop(ss);
-    }
-
     private static void acceptLoop(LocalServerSocket ss) {
         int me = Process.myUid();
         while (true) {

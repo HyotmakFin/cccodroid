@@ -90,7 +90,12 @@ async function loadIndex(repos = REPOS) {
 
 async function loadRepo(repo) {
   const { base, dist, component, arch } = repo;
-  const rel = (await get(`${base}dists/${dist}/Release`)).toString();
+  // Release 先验 Termux 自动构建钥的签名再用：清单签的是「cccodroid 打的包」，这一步保证包确实出自 Termux（审查 10-29 M4）。
+  // 和设备上 pkg.mjs 用同一份钥匙与验签代码（打 APK 时 build.sh 把 pgp.mjs 拷进 app/bin）；按需导入，开发端只拷了 devkit.mjs 也能加载
+  const { TERMUX_KEYS, verifyDetached } = await import("./pgp.mjs");
+  const relBuf = await get(`${base}dists/${dist}/Release`);
+  verifyDetached(relBuf, (await get(`${base}dists/${dist}/Release.gpg`)).toString(), TERMUX_KEYS);
+  const rel = relBuf.toString();
   const rp = `${component}/binary-${arch}/Packages.gz`;
   const want = rel.split("SHA256:")[1].split("\n").find((l) => l.trim().endsWith(" " + rp));
   if (!want) throw new Error("Release 里没有 " + rp);

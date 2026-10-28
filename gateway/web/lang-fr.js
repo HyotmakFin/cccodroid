@@ -2283,4 +2283,9 @@ window.I18N_DICT["fr"] = {
   "这个项目里有会话正在生成，等它结束再删。": "Une session de ce projet est encore en cours de génération. Attendez qu’elle se termine avant de supprimer.",
   "档案写不进去（存储满了或没权限），这次没存上": "Impossible d'écrire l'archive (stockage plein ou permission refusée) ; cette modification n'a pas été enregistrée",
   "同名模型正在下载": "Un modèle du même nom est déjà en cours de téléchargement",
+  "选的会话加起来超过 {n} MB，分几次导出": "Les conversations sélectionnées dépassent {n} Mo au total. Exportez-les en plusieurs fois.",
+  "[与网关的连接断了，正在重连…]": "[Connexion à la passerelle perdue, reconnexion…]",
+  "发现好几个配对服务，不知道是哪个：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}": "Plusieurs services d'appairage trouvés, impossible de savoir lequel est le bon. Saisissez aussi le port (le nombre après les deux-points sous « Adresse IP et port » dans la fenêtre d'appairage), par ex. {0}",
+  "有好几个配对服务：码和端口一起填，如 {0}（端口在配对框里）": "Plusieurs services d'appairage : saisissez le code et le port, par ex. {0} (le port est dans la fenêtre d'appairage)",
+  "下载地址被重定向到了不加密的 http，没有下载": "Le téléchargement a été redirigé vers du http non chiffré ; il n'a pas été effectué",
 };

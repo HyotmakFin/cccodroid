@@ -37,6 +37,7 @@ mkdir -p "$A/assets/app/archive"; cp "$SRC/archive/"* "$A/assets/app/archive/"  
 for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp -R "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
+cp "$ROOT/devkit/pgp.mjs" "$A/assets/app/bin/"     # OpenPGP 验签：pkg.mjs、install-claude.mjs 与 devkit 构建共用这一份
 mkdir -p "$A/assets/app/pre"; cp "$A/assets/pre/"* "$A/assets/app/pre/"     # pkg / apt：PATH 最前，压过工具包里的旧替身
 cp "$A/assets/TOOLS.md" "$A/assets/app/"     # 给 claude 的工具说明（网关读进系统提示）
 # 工具包下载地址（Release 目录，按序尝试）。测试时可用 DEVKIT_BASES="http://… https://…" 覆盖

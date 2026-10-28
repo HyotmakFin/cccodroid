@@ -540,6 +540,7 @@ final class Updater {
             } catch (Exception ex) { if (why.isEmpty()) why = ex.getMessage(); }
         }
         if (pinned()) {
+            claudeOlder = false;        // 固定版本是用户自己选的，旧也照装
             String pin = pinVer();
             claude.latest = pin;
             if (env.claudeOff() && !env.claudeReady()) { if (!"installing".equals(claude.state)) claude.set("missing", ""); return; }
@@ -558,6 +559,7 @@ final class Updater {
         // 从 latest 切回 stable 时，stable 的版本号更小，以前这里判成「已是最新」，结果一直停在 latest 的版本上
         if (!"installing".equals(claude.state)) {
             int c = cmpVer(v, claude.current);
+            claudeOlder = c < 0 && !claude.current.isEmpty();
             String tag = channel().equals("latest") ? Tr.t("latest 渠道") : "";
             if (c == 0) claude.set("uptodate", tag);
             else if (c > 0 || claude.current.isEmpty()) claude.set("available", tag);
@@ -575,6 +577,11 @@ final class Updater {
 
     /** 渠道上的新版被标成有问题时为 true：autoApply 不装它 */
     private volatile boolean claudeHeld;
+    /**
+     * 渠道给的版本比已装的旧（切回 stable 是正常情形）。版本号来自镜像、本身没签名，被人改小了全链校验照样过：
+     * 自动更新不装比当前旧的，等用户自己点（审查 10-29 M3）
+     */
+    private volatile boolean claudeOlder;
 
     /**
      * 维护者标成「有已知问题」的 Claude Code 版本（scripts/claude-verified.mjs 发布、网关 gw/ccverified.mjs 验过签存在 home 里的那份）。
@@ -603,7 +610,7 @@ final class Updater {
     /** 自动模式的规则：见类注释 */
     private void autoApply() {
         boolean unmetered = !ctx.getSystemService(ConnectivityManager.class).isActiveNetworkMetered();
-        if ("available".equals(claude.state) && unmetered && !claudeHeld) apply("claude", false);
+        if ("available".equals(claude.state) && unmetered && !claudeHeld && !claudeOlder) apply("claude", false);
         if ("available".equals(app.state)) apply("app", false);              // 几 MB，什么网都下
         else if ("ready".equals(app.state)) maybeSilentInstallApp();
         if ("available".equals(devkit.state) && unmetered) apply("devkit", false);

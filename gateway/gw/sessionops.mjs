@@ -370,20 +370,28 @@ export function zipRead(buf, max = 512 * 1024 * 1024) {
 }
 
 /** 导出：manifest.json + sessions/<id>.jsonl + sessions/<id>/…（子代理等） */
+// 原文和压出来的 zip 同时在内存里：不设总量的话，几 GB 的会话一导出就把网关撑爆（审查 10-29 L2）
+const EXPORT_MAX = 768 * 1024 * 1024;
 export function exportSessions(ids) {
   const entries = [], list = [];
+  let total = 0;
+  const read = (f) => {
+    total += fs.statSync(f).size;
+    if (total > EXPORT_MAX) throw new Error(tz("选的会话加起来超过 {n} MB，分几次导出", { n: EXPORT_MAX >> 20 }));
+    return fs.readFileSync(f);
+  };
   const walk = (dir, rel) => {
     for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
       const f = path.join(dir, d.name);
       if (d.isDirectory()) walk(f, rel + "/" + d.name);
-      else if (d.isFile()) entries.push({ name: rel + "/" + d.name, data: fs.readFileSync(f) });
+      else if (d.isFile()) entries.push({ name: rel + "/" + d.name, data: read(f) });
     }
   };
   for (const id of ids) {
     const found = findSessionFile(id);
     if (!found) continue;
     const meta = peekSession(found.file);
-    entries.push({ name: `sessions/${id}.jsonl`, data: fs.readFileSync(found.file) });
+    entries.push({ name: `sessions/${id}.jsonl`, data: read(found.file) });
     const side = path.join(PATHS.projects, found.project, id);
     if (fs.existsSync(side)) walk(side, `sessions/${id}`);
     list.push({ id, title: NAMES[id] || meta.title, renamed: !!NAMES[id], cwd: meta.cwd, mtime: fs.statSync(found.file).mtimeMs });

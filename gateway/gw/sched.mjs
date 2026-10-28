@@ -61,6 +61,8 @@ function cronField(spec, lo, hi) {
     let a = lo, b = hi;
     if (rng !== "*") { const m = rng.split("-"); a = +m[0]; b = m.length > 1 ? +m[1] : (stepS ? hi : a); }
     if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Error("bad cron");
+    // 先夹到 [lo, hi] 再循环：「1-999999999999」这种范围原样循环会同步空转几十分钟，把网关整个卡死（审查 M1）
+    a = Math.max(lo, a); b = Math.min(hi, b);
     for (let v = a; v <= b; v += step) if (v >= lo && v <= hi) set.add(v);
   }
   return set;

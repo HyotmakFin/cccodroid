@@ -1,0 +1,16 @@
+// 定时任务（gw/sched.mjs）：cron 解析
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parseCron } from "../gw/sched.mjs";
+
+test("超大范围夹到合法区间，不会空转卡死网关", () => {
+  const t0 = Date.now();
+  const c = parseCron("1-999999999999999999 * * * 0-99999999999");
+  assert.ok(Date.now() - t0 < 200);
+  assert.equal(c.min.size, 59);
+  assert.equal(c.dow.size, 7);
+});
+
+test("星期 7 并进 0，1-7 不变成空集", () => {
+  assert.deepEqual([...parseCron("0 9 * * 1-7").dow].sort(), [0, 1, 2, 3, 4, 5, 6]);
+});

@@ -2317,5 +2317,10 @@ window.I18N_DICT.en = {
   "紫": "Purple",
   "这个项目里有会话正在生成，等它结束再删。": "A session in this project is still generating. Wait for it to finish before deleting.",
   "档案写不进去（存储满了或没权限），这次没存上": "Couldn't write the archive file (storage full or no permission); this change wasn't saved",
-  "同名模型正在下载": "A model with the same name is already downloading"
+  "同名模型正在下载": "A model with the same name is already downloading",
+  "选的会话加起来超过 {n} MB，分几次导出": "The selected sessions add up to more than {n} MB. Export them in smaller batches.",
+  "[与网关的连接断了，正在重连…]": "[Lost connection to the gateway, reconnecting…]",
+  "发现好几个配对服务，不知道是哪个：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}": "Found several pairing services and can't tell which one is real. Enter the port too (the number after the colon under \"IP address & port\" in the pairing dialog), e.g. {0}",
+  "有好几个配对服务：码和端口一起填，如 {0}（端口在配对框里）": "Several pairing services: enter the code and the port together, e.g. {0} (the port is in the pairing dialog)",
+  "下载地址被重定向到了不加密的 http，没有下载": "The download was redirected to unencrypted http, so it was not downloaded"
 };

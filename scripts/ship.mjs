@@ -180,11 +180,12 @@ const S = {
   },
 };
 
-// 官网直链给的是不是新包（按大小核；CF 边缘可能慢几秒，重试几次）。预发布不进 /dl/cccodroid.apk，只核带版本号的。--check 也用它（只读）
+// 官网直链给的是不是新包（先按大小等 CF 边缘换新，几秒的事、重试几次；对上了再下回来核 sha256，审查 10-29 L20）。
+// 预发布不进 /dl/cccodroid.apk，只核带版本号的。--check 也用它（只读）
 function siteVerify() {
-  const want = [[`/dl/v${VER}/cccodroid.apk`, state.size], [`/dl/v${VER}/cccodroid-36.apk`, state.size36]];
-  if (!state.prerelease) want.push(["/dl/cccodroid.apk", state.size], ["/dl/cccodroid-36.apk", state.size36]);
-  for (const [f, size] of want) {
+  const want = [[`/dl/v${VER}/cccodroid.apk`, state.size, state.sha], [`/dl/v${VER}/cccodroid-36.apk`, state.size36, state.sha36]];
+  if (!state.prerelease) want.push(["/dl/cccodroid.apk", state.size, state.sha], ["/dl/cccodroid-36.apk", state.size36, state.sha36]);
+  for (const [f, size, sha] of want) {
     let got = "";
     for (let i = 0; i < 6; i++) {
       if (i) spawnSync("sleep", ["5"]);
@@ -192,7 +193,11 @@ function siteVerify() {
       if (+got === size) break;
     }
     if (+got !== size) throw new Error(`${SITE}${f} 给的是 ${got} 字节，新包 ${size}；等一会儿再跑同一条命令`);
-    console.log(`  ✓ ${f}  ${size}`);
+    const tmp = path.join(W, "site.apk");
+    run("curl", ["-fsSL", "--retry", "3", "-o", tmp, SITE + f]);
+    const h = shaFile(tmp); fs.rmSync(tmp);
+    if (h !== sha) throw new Error(`${SITE}${f} 下回来的 sha256 ${h} ≠ 新包 ${sha}`);
+    console.log(`  ✓ ${f}  ${size}  sha256 对上`);
   }
 }
 

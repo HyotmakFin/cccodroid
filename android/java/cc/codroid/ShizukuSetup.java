@@ -64,6 +64,8 @@ final class ShizukuSetup {
     volatile long done, total;
     private volatile boolean busy, activateAfterInstall, activateQueued;
     private volatile int pairPort = -1;
+    /** 这次配对期间看到的配对服务（名字 → 端口）。这类广播谁都能注册：不止一个时不替用户挑，要他照配对框填端口 */
+    private final java.util.Map<String, Integer> pairSeen = new java.util.concurrent.ConcurrentHashMap<>();
     private NsdManager.DiscoveryListener pairDisc;
 
     private ShizukuSetup(Context c) {
@@ -246,6 +248,7 @@ final class ShizukuSetup {
 
     private void startPairing() {
         pairPort = -1;
+        pairSeen.clear();
         startPairDiscovery();
         set("pairing", Tr.t("第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」直接输入（也可以填在这里）"));
         pairNote(Tr.t("在无线调试里点「使用配对码配对设备」，然后点下面的「填配对码」"), true);
@@ -292,6 +295,12 @@ final class ShizukuSetup {
                 if (given > 0) pairPort = given;
                 if (pairDisc == null) startPairDiscovery();
                 for (int i = 0; i < 40 && pairPort <= 0; i++) Thread.sleep(250);
+                // 同时有好几个配对服务：可能有别的应用在冒充（审查 10-29 H1），码要发给哪个端口只能让用户照配对框定
+                if (given <= 0 && new HashSet<>(pairSeen.values()).size() > 1) {
+                    set("pairing", Tr.f("发现好几个配对服务，不知道是哪个：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}", code + " 37285"));
+                    pairNote(Tr.f("有好几个配对服务：码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
+                    return;
+                }
                 if (pairPort <= 0) {
                     set("pairing", Tr.f("没找到配对服务（开着 VPN 时常这样）：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}", code + " 37285"));
                     pairNote(Tr.f("没找到配对服务：码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
@@ -525,9 +534,10 @@ final class ShizukuSetup {
         stopPairDiscovery();
         NsdManager nm = ctx.getSystemService(NsdManager.class);
         Set<String> mine = localAddrs();
-        pairDisc = new Disc(null, s -> {
+        Disc d = new Disc(null, s -> {
             NsdServiceInfo r = resolve(nm, s);
             if (r == null || r.getPort() <= 0) return;
+            pairSeen.put(s.getServiceName(), r.getPort());
             InetAddress h = r.getHost();
             if (h == null || mine.isEmpty() || mine.contains(h.getHostAddress()) || pairPort <= 0) {
                 boolean fresh = pairPort != r.getPort();
@@ -536,6 +546,8 @@ final class ShizukuSetup {
             }
             log("配对服务 " + s.getServiceName() + " → " + (h == null ? "?" : h.getHostAddress()) + ":" + r.getPort());
         });
+        d.lost = s -> pairSeen.remove(s.getServiceName());     // 配对框关了，服务就没了；重开会换新端口
+        pairDisc = d;
         nm.discoverServices("_adb-tls-pairing._tcp", NsdManager.PROTOCOL_DNS_SD, pairDisc);
     }
     private synchronized void stopPairDiscovery() {
@@ -546,7 +558,7 @@ final class ShizukuSetup {
 
     interface OnFound { void found(NsdServiceInfo s); }
     private static final class Disc implements NsdManager.DiscoveryListener {
-        final List<NsdServiceInfo> sink; final OnFound cb;
+        final List<NsdServiceInfo> sink; final OnFound cb; volatile OnFound lost;
         Disc(List<NsdServiceInfo> sink, OnFound cb) { this.sink = sink; this.cb = cb; }
         public void onStartDiscoveryFailed(String t, int e) { if (inst != null) inst.log("NSD 启动失败 " + t + " " + e); }
         public void onStopDiscoveryFailed(String t, int e) {}
@@ -557,7 +569,7 @@ final class ShizukuSetup {
             if (sink != null) sink.add(s);
             if (cb != null) new Thread(() -> cb.found(s), "nsd-resolve").start();
         }
-        public void onServiceLost(NsdServiceInfo s) {}
+        public void onServiceLost(NsdServiceInfo s) { if (lost != null) lost.found(s); }
     }
 
     /** resolveService 同一时间只能有一个在跑（否则 FAILURE_ALREADY_ACTIVE），所以串行 */

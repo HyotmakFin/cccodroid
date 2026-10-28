@@ -133,7 +133,7 @@ final class Installer {
     static byte[] httpGetSmall(String url) throws IOException {
         HttpURLConnection c = open(url);
         try {
-            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
+            if (code(c, url) != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
             try (InputStream in = c.getInputStream()) { return readAllBytes(in); }
         } finally { c.disconnect(); }
     }
@@ -218,7 +218,7 @@ final class Installer {
         HttpURLConnection c = open(url);
         c.setRequestProperty("Range", "bytes=" + (sg[0] + sg[2]) + "-" + sg[1]);
         try {
-            if (c.getResponseCode() != 206) throw new IOException("HTTP " + c.getResponseCode());
+            if (code(c, url) != 206) throw new IOException("HTTP " + c.getResponseCode());
             try (InputStream in = new BufferedInputStream(c.getInputStream(), 1 << 16);
                  java.io.RandomAccessFile raf = new java.io.RandomAccessFile(part, "rw")) {
                 byte[] buf = new byte[1 << 16];
@@ -243,7 +243,7 @@ final class Installer {
         HttpURLConnection c = open(url);
         if (have > 0) c.setRequestProperty("Range", "bytes=" + have + "-");
         try {
-            int code = c.getResponseCode();
+            int code = code(c, url);
             boolean append = code == 206;
             if (code != 200 && code != 206) throw new IOException("HTTP " + code);
             if (!append) have = 0;
@@ -282,6 +282,13 @@ final class Installer {
             if (n < MIN) throw new SlowException(Tr.f("太慢（30 秒只下了 {0} KB）", n >> 10));
             t0 = now; n = 0;
         }
+    }
+
+    /** 取响应码；https 被重定向成了 http 就不认：内容有哈希兜底，但下了什么会被路上看见（审查 10-29 L14） */
+    static int code(HttpURLConnection c, String url) throws IOException {
+        int code = c.getResponseCode();
+        if (url.startsWith("https:") && !"https".equals(c.getURL().getProtocol())) throw new IOException(Tr.t("下载地址被重定向到了不加密的 http，没有下载"));
+        return code;
     }
 
     static HttpURLConnection open(String url) throws IOException {
@@ -877,7 +884,8 @@ final class Installer {
             if (name.isEmpty() || name.equals("/")) { skip(in, size); continue; }
             File f = new File(root, name);
             // 比前缀要带上分隔符：只比 rootPath 的话 usr.newEvil/x 也算在 usr 里头（审查 低5）
-            if (!inside(f, rootPath) && type != '2') throw new IOException(Tr.t("越界条目: ") + name);
+            // 链接条目查的是它「放在哪」（父目录），指向哪不限：工具包里本来就有指到 usr 外的链接，顺着它写文件时上面这条照样拦（审查 10-29 L11）
+            if (!inside(type == '2' ? f.getParentFile() : f, rootPath)) throw new IOException(Tr.t("越界条目: ") + name);
             try {
                 switch (type) {
                     case '5':

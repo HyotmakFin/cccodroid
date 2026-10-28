@@ -183,10 +183,13 @@
       const x = TERM.list.find((y) => y.id === id);
       if (x) { x.alive = false; x.code = code; renderTermTabs(); }
     });
-    // 网关重启后这个终端就没了：别让 EventSource 无限重连
+    // 网关重启后这个终端就没了：重连拿到 404，EventSource 自己停下，这时说一声。
+    // 网关整个没了的时候它一直停在「连接中」，以前什么都不显示（复审 中12）：第一次断就先提示在重连
+    let lost = false;
+    es.onopen = () => { lost = false; };
     es.onerror = () => {
-      if (es.readyState !== EventSource.CLOSED) return;
-      xt.write("\r\n\x1b[2m" + t("[与网关的连接已断开]") + "\x1b[0m\r\n");
+      if (es.readyState === EventSource.CLOSED) { xt.write("\r\n\x1b[2m" + t("[与网关的连接已断开]") + "\x1b[0m\r\n"); return; }
+      if (!lost) { lost = true; xt.write("\r\n\x1b[2m" + t("[与网关的连接断了，正在重连…]") + "\x1b[0m\r\n"); }
     };
     return a;
   }

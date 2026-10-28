@@ -257,6 +257,9 @@ final class Notify {
             .setContentText(clip(body, 120))
             .setStyle(new Notification.BigTextStyle().bigText(clip(body, 600)))
             .setCategory(Notification.CATEGORY_REMINDER)
+            // 命令行里可能带着密钥：锁屏上只显示标题（审查 10-29 L16）
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(new Notification.Builder(ctx, CH_ASK).setSmallIcon(android.R.drawable.stat_sys_warning).setContentTitle(title).build())
             .setContentIntent(openIntent(sidOf(p), 1 + Math.abs(id.hashCode() % 10000)))
             .setAutoCancel(true);
         // 选择题要选项，通知里答不了；其它的给「拒绝」，「允许」必须进应用看完整内容再点

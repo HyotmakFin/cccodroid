@@ -2280,3 +2280,8 @@
 2280	Une session de ce projet est encore en cours de génération. Attendez qu’elle se termine avant de supprimer.
 2281	Impossible d'écrire l'archive (stockage plein ou permission refusée) ; cette modification n'a pas été enregistrée
 2282	Un modèle du même nom est déjà en cours de téléchargement
+2283	Les conversations sélectionnées dépassent {n} Mo au total. Exportez-les en plusieurs fois.
+2284	[Connexion à la passerelle perdue, reconnexion…]
+2285	Plusieurs services d'appairage trouvés, impossible de savoir lequel est le bon. Saisissez aussi le port (le nombre après les deux-points sous « Adresse IP et port » dans la fenêtre d'appairage), par ex. {0}
+2286	Plusieurs services d'appairage : saisissez le code et le port, par ex. {0} (le port est dans la fenêtre d'appairage)
+2287	Le téléchargement a été redirigé vers du http non chiffré ; il n'a pas été effectué

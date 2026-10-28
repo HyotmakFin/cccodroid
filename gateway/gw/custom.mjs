@@ -300,7 +300,9 @@ const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
 function customWrapper(id, p, appDir, libs, opts) {
   const prog = path.join(appDir, p.rel), sh = path.join(PREFIX, "bin", "sh");
   const er = SETTINGS.staticCompat !== false ? enosysRun() : "";
-  const head = `#!${sh}\n# cccodroid-custom-id: ${id}\n# 自定义组件「${id}」的入口：${p.rel}（${p.kind}）。由扩展页生成，卸载组件时一起删掉。\n`;
+  // 注释行里的名字来自用户导入的归档：换行抹掉，免得多出一行被当命令执行（审查 10-29 L3）
+  const one = (s) => String(s).replace(/[\r\n]/g, " ");
+  const head = `#!${sh}\n# cccodroid-custom-id: ${one(id)}\n# 自定义组件「${one(id)}」的入口：${one(p.rel)}（${p.kind}）。由扩展页生成，卸载组件时一起删掉。\n`;
   const erLine = `ER=${shq(er)}; [ -n "$ER" ] && [ -x "$ER" ] || ER=\n`;
   if (p.kind === "glibc") {
     if (opts.gpu) { const own = libs.filter((l) => l !== PATHS.glibcLib); return head + `exec ${shq(path.join(PREFIX, "bin", "lgpu-run"))}${own.length ? " -L " + shq(own.join(":")) : ""} -- ${shq(prog)} "$@"\n`; }

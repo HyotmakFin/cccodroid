@@ -2280,3 +2280,8 @@
 2280	Una sesión de este proyecto aún se está generando. Espera a que termine antes de eliminar.
 2281	No se pudo escribir el archivo (almacenamiento lleno o sin permiso); este cambio no se guardó
 2282	Ya se está descargando un modelo con el mismo nombre
+2283	Las conversaciones seleccionadas superan {n} MB en total. Expórtalas en varias tandas.
+2284	[Se perdió la conexión con la pasarela, reconectando…]
+2285	Se encontraron varios servicios de emparejamiento y no se sabe cuál es el bueno. Escribe también el puerto (el número tras los dos puntos en «Dirección IP y puerto» del cuadro de emparejamiento), p. ej. {0}
+2286	Varios servicios de emparejamiento: escribe el código y el puerto juntos, p. ej. {0} (el puerto está en el cuadro de emparejamiento)
+2287	La descarga se redirigió a http sin cifrar, así que no se descargó

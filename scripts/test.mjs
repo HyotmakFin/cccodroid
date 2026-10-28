@@ -29,8 +29,9 @@ fs.mkdirSync(home, { recursive: true });
 fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
 fs.symlinkSync(curl, path.join(prefix, "bin", "curl"));
 
-const env = { ...process.env, CCAPP_TEST: "1", CCAPP_HOME: home, HOME: home, CCAPP_PREFIX: prefix, CCAPP_PORT: "8799", CCAPP_LOG: path.join(tmp, "gateway.log"), CCAPP_TMP: tmp };
-for (const k of ["CCAPP_SHARED", "CCAPP_TOKEN_FILE", "CCAPP_COMPONENTS_INDEX", "CCAPP_COMPONENTS_COMMUNITY_INDEX"]) delete env[k];
+// 在 cccodroid 里跑时环境里有二十几个 CCAPP_* 指着真数据：一个不留全删，再只设测试要的（审查 L18）
+const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("CCAPP_")));
+const env = { ...clean, CCAPP_TEST: "1", CCAPP_HOME: home, HOME: home, CCAPP_PREFIX: prefix, CCAPP_PORT: "8799", CCAPP_LOG: path.join(tmp, "gateway.log"), CCAPP_TMP: tmp };
 
 const r = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...files.map((f) => path.join(TESTS, f))], { env, stdio: "inherit", cwd: ROOT });
 if (!process.env.KEEP_TEST_TMP) fs.rmSync(tmp, { recursive: true, force: true });
