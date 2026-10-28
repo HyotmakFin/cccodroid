@@ -118,6 +118,9 @@ export function listSessions(limit = 150) {
 // 每个 jsonl 只抽人和助手的正文（跳过工具结果、<…> 包起来的系统注入），按读到的字节偏移增量追加。
 // 索引放内存：首次搜索要扫一遍全部会话，之后只读新追加的部分。
 const SEARCH_IDX = new Map();   // file → { off, text, lower }
+// 常驻上限（按字符，text + lower 两份 UTF-16 约 4 字节/字）：最近的会话常驻，超出的旧会话搜时现读、用完就扔，
+// 搜得全但内存有顶（审查 中5）
+const SEARCH_KEEP_CHARS = 16e6;
 function searchText(line) {
   if (line.length > 4e6 || !(line.includes('"user"') || line.includes('"assistant"'))) return "";
   let ev; try { ev = JSON.parse(line); } catch { return ""; }
@@ -184,11 +187,14 @@ async function searchSessionsNow(q) {
   for (const k of SEARCH_IDX.keys()) if (!seen.has(k)) SEARCH_IDX.delete(k);
 
   const results = [];
+  let kept = 0;
   for (const f of files) {
     const meta = peekSession(f.file);
     const title = sessionTitle(f.id, meta);
     let e;
     try { e = await indexSessionFile(f.file, f.size); } catch { continue; }
+    kept += e.text.length;
+    if (kept > SEARCH_KEEP_CHARS) SEARCH_IDX.delete(f.file);
     let i = e.lower.indexOf(needle), count = 0, snippet = "";
     if (i >= 0) {
       const a = Math.max(0, i - 30), b = Math.min(e.text.length, i + needle.length + 60);
