@@ -491,7 +491,10 @@ final class Priv {
 
     private static String readLine(InputStream in) throws IOException {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
-        for (int c; (c = in.read()) >= 0 && c != '\n'; ) b.write(c);
+        for (int c; (c = in.read()) >= 0 && c != '\n'; ) {
+            if (b.size() >= (4 << 20)) throw new IOException("line too long");   // 一行不给无限长（审查 低13）
+            b.write(c);
+        }
         return b.toString("UTF-8");
     }
     private static byte[] readAll(InputStream in) throws IOException {

@@ -164,7 +164,10 @@ public class GatewayService extends Service {
         if (env.loader) pb.environment().put("TERMUX_EXEC__PROC_SELF_EXE", env.bin("node").getPath());   // 给 execpath.cjs
         pb.directory(env.app);
         pb.redirectErrorStream(true);
-        pb.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(env.home, "gateway.out")));
+        File gout = new File(env.home, "gateway.out");
+        // 一直追加会无限长：起网关前超过 8 MB 就挪成 .1（只留一份旧的 —— 审查 低16）
+        if (gout.length() > (8L << 20)) { File old = new File(env.home, "gateway.out.1"); old.delete(); gout.renameTo(old); }
+        pb.redirectOutput(ProcessBuilder.Redirect.appendTo(gout));
         proc = pb.start();
     }
 
