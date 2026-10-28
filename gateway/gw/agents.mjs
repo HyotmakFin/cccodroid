@@ -118,7 +118,7 @@ export function agentBook(run, { emit }) {
       try { if (fs.existsSync(f)) fs.renameSync(f, path.join(a.dir, "report.prev.md")); } catch {}   // 被叫醒又结束：上一份留着
       file = write(f, `# ${a.name}\n\n${text}\n`);
     }
-    book({ k: "done", id: a.id, status: a.status, why: clip(firstLine(text), WHY_MAX), file });
+    book({ k: "done", id: a.id, status: a.status, why: clip(firstLine(text), WHY_MAX), file, ...(a.steps ? { steps: a.steps } : {}) });   // 准确步数（task_progress 报的），界面自己数的可能因重连漏掉
     maybeSummary();
   };
 

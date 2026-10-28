@@ -59,6 +59,7 @@
     if (r.k === "done" && a) {
       if (at < a.lastAt) return;
       a.lastAt = at; a.status = r.status || "done"; a.endAt = at; a.why = r.why || ""; a.report = r.file || a.report; a.now = "";
+      if (r.steps > a.steps) a.steps = r.steps;
       if (a.by === "main" && av) av.mark("← " + a.name + " " + (a.status === "done" ? t("完成") : a.status === "stopped" ? t("已停止") : t("失败")));
       return agTouch(agCardOf(a));
     }
@@ -128,6 +129,18 @@
         bad ? `<span class="tool-state err">${esc(t("{n} 失败", { n: bad }))}</span>` : "",
       ].join("");
       const now = Date.now();
+      // 有在跑的：每秒只刷一下各行的「步数 · 用时」，不重建整张卡。以前只在来了新一步时才重画，两步之间计时是停的
+      clearTimeout(card.tick);
+      if (run) card.tick = setTimeout(function tick() {
+        if (!el.isConnected) return;
+        const t1 = Date.now(); let any = false;
+        for (const a of members()) if (a.status === "running") {
+          any = true;
+          const c = rows.querySelector(`.agr[data-id="${CSS.escape(a.id)}"] .agr-c`);
+          if (c) c.textContent = [a.steps ? t("{n} 步", { n: a.steps }) : "", fmtDur(t1 - a.at)].filter(Boolean).join(" · ");
+        }
+        if (any) card.tick = setTimeout(tick, 1000);
+      }, 1000);
       rows.innerHTML = ms.map((a) => {
         const dur = a.endAt ? fmtDur(a.endAt - a.at) : a.status === "running" ? fmtDur(now - a.at) : "";
         const meta = [a.steps ? t("{n} 步", { n: a.steps }) : "", dur].filter(Boolean).join(" · ");
