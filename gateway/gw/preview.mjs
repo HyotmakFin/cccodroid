@@ -17,6 +17,10 @@ import { PATHS } from "./config.mjs";
 // 否则 /sdcard/Download/a.html 里的脚本能借 Referer 爬到 /sdcard，把相册整个读走（10-25 安全审计 H-1）。
 // 页面本身就在存储根时，凭证只认这一个文件。
 const UP_LEVELS = 3;
+// 凭证闲置这么久就作废；预览页一直在用（每次取资源）就顺延（原来固定 12 小时，审查 10-29 高1）
+const CAP_IDLE = 3600e3;
+// 预览页的脚本能读到它所在目录树里的文件，所以这些一概不交：以点开头的路径（.env、.git、.npmrc…）、私钥证书一类
+const PREVIEW_DENY = /(^|\/)\.(?!well-known(\/|$))|\.(pem|key|p12|pfx|jks|keystore|kdbx|gpg|asc)$|(^|\/)id_[a-z0-9]+(\.pub)?$/i;
 const PREVIEW = { server: null, port: 0, starting: null, caps: new Map() };
 function previewStart() {
   if (PREVIEW.port) return Promise.resolve(PREVIEW.port);
@@ -24,6 +28,7 @@ function previewStart() {
   PREVIEW.starting = new Promise((resolve, reject) => {
     const srv = http.createServer(previewServe);
     srv.on("error", (e) => { PREVIEW.starting = null; reject(e); });
+    srv.unref();   // 网关有主服务撑着；单测里别让它拖住进程
     srv.listen(0, "127.0.0.1", () => { PREVIEW.server = srv; PREVIEW.port = srv.address().port; resolve(PREVIEW.port); });
   });
   return PREVIEW.starting;
@@ -60,7 +65,7 @@ async function previewGrant(p) {
   const key = root + "\0" + only;
   let cap = [...PREVIEW.caps].find(([, v]) => v.key === key)?.[0];   // 同一目录复用，刷新不换网址
   if (!cap) { cap = crypto.randomBytes(12).toString("hex"); if (PREVIEW.caps.size >= 200) PREVIEW.caps.delete(PREVIEW.caps.keys().next().value); }
-  PREVIEW.caps.set(cap, { root, bases, only, key, exp: now + 12 * 3600e3 });
+  PREVIEW.caps.set(cap, { root, bases, only, key, exp: now + CAP_IDLE });
   return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime };
 }
 function previewServe(req, res) {
@@ -87,6 +92,7 @@ function previewServe(req, res) {
   }
   const g = PREVIEW.caps.get(cap);
   if (g.exp < Date.now()) { PREVIEW.caps.delete(cap); return fail(404, "preview expired — reopen the file"); }
+  g.exp = Date.now() + CAP_IDLE;
   // 在 base 下找 rel：字面路径和解析过符号链接的真实路径都得在 base 里
   const lookup = (base) => {
     let full = path.resolve(base, ...rel);
@@ -96,6 +102,7 @@ function previewServe(req, res) {
     if (r.error) return r;
     if (r.file !== base && !r.file.startsWith(base + path.sep)) return { status: 403, error: "outside preview folder" };
     if (g.only && r.file !== g.only) return { status: 403, error: "outside preview folder" };
+    if (PREVIEW_DENY.test(path.relative(base, full)) || PREVIEW_DENY.test(path.relative(base, r.file))) return { status: 403, error: "not served in preview" };
     return r;
   };
   // 只在发凭证时定好的那几层里找（见 previewGrant），请求里怎么写路径都爬不出去
