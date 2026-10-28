@@ -20,14 +20,23 @@ When the window narrows (split screen, folding the device) the panes fall back t
 
 Everything is in one file: `gateway/web/layout.js`. The rest of the UI only hides and shows elements as before. `layout.js` watches those changes and sets classes on `<html>` (`data-lay`, `dock-l`, `has-right`, `ws-multi`, `short`) plus the CSS variables `--lw` and `--rw`. The matching styles are the last block of `style.css`.
 
-## Foldable hinge: help wanted
+## Foldables (experimental, since 0.4.18)
 
-We do not avoid the hinge precisely. That needs Jetpack WindowManager (AndroidX + Kotlin runtime), which our on-device build chain does not include. In book posture the default 50/50 split lines up with the hinge closely enough.
+The shell reads the fold from the vendor window extensions library that ships with the system (`androidx.window.extensions`), by reflection, so no AndroidX is needed (`android/java/cc/codroid/Fold.java`). The manifest declares the library as optional, so non-foldables install and run as before. `MainActivity.pushFold` converts the folds to CSS px relative to the WebView and hands them to the page:
 
-If you want to do it properly, call this from the Android shell:
+- `<html data-fold="none|flat|half" data-fold-dir="v|h" data-folds="N">`, plus `--fold-x/--fold-y/--fold-w/--fold-h` for the first fold;
+- `window.__ccFold = { fold, vendor, list: [{ dir, x, y, w, h, type, state }, …] }` (a tri-fold reports two folds) and a `ccfold` event.
 
-```js
-CCLayout.setAvoid(x)   // x = vertical line to avoid, in CSS px from the left; null to clear
-```
+`layout.js` then lays out by the folds:
 
-As long as the user has not dragged the divider, the workspace's edge is placed on that line. Getting the hinge position into the page is up to the shell. For example, feed `FoldingFeature.bounds` (divided by the display density) into `evaluateJavascript`.
+| Situation | Layout |
+|---|---|
+| One vertical fold, unfolded (book-style, wide foldable) | Three-column rules: docked sidebar on the left page, chat on the right. Opening a pane makes the sidebar step aside; the pane's edge sits on the fold |
+| Two vertical folds (tri-fold) | Sidebar, chat and pane on one panel each; both dividers sit on a fold |
+| One vertical fold, half-open | Same, and dialogs / bottom sheets cover only the chat page (`html.fold-half-v`, `--fpl` / `--fpr`) |
+| Horizontal fold, half-open (tabletop) | The composer starts below the fold (`html.fold-table`, `--fbelow`) |
+| Hinge with a width | Counted into the sidebar, whose content is inset (`--fgap`) |
+
+Dragged dividers are remembered under separate keys (`…_f`), so tablet widths are not touched; double-click a divider to snap back to the fold. Settings → Appearance → "Foldable layout (experimental)" turns it off; the row only shows on devices that have reported a fold. `CCLayout.setAvoid(x)` is still there for when there is no fold.
+
+**Testing without a foldable**: the Android emulator. Its Android 36 image maps device states to postures off by one (closed reports half-open, half-open reports flat, open reports nothing), so set the fold explicitly with `adb shell settings put global display_features "fold-[l,t,r,b]-flat"` (or `-half-opened`; separate several folds with `;`). On AVDs with a hinge sensor the device state overrides that after boot; there, hinge angle 120 gives "flat" and 10 gives "half".

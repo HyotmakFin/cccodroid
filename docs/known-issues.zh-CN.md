@@ -26,9 +26,9 @@
 - **诊断**：每次脱困都会在页面存储里（`localStorage` 的 `cc.freezeLog`）记下当时最近的触摸记录，只留最近 5 次。目前只有开发版能读到。
 - **以前的做法**（0.1.19 ～ 0.2.0-rc1）：检测到拖不动时由脚本接管滚动。实测它帮不上忙，有时还让情况更糟，已去掉。
 
-## 3. 折叠屏铰链
+## 3. 折叠屏（实验）
 
-宽屏布局不精确避开铰链，因为构建链里没有 Jetpack WindowManager。详见 [large-screen.md](large-screen.md) 的 "Foldable hinge: help wanted"。
+0.4.18 起排版跟着折痕走（见 [large-screen.md](large-screen.md) 的 "Foldables"）。目前只在 Android 模拟器上验过，真机可能有出入，欢迎到 [#19](https://github.com/greyoak111/cccodroid/issues/19) 反馈。不想要可以在 设置 → 外观 里关掉。
 
 ## 4. 非桌面方式启动时一闪而过的灰色蒙层
 

@@ -26,9 +26,9 @@ These are problems whose root cause we have **not found and cannot fully rule ou
 - **Diagnostics**: each unfreeze stores the recent touch log in page storage (`localStorage` key `cc.freezeLog`, last 5 times). For now only the development build can read it.
 - **Earlier approach** (0.1.19 to 0.2.0-rc1): when a drag did not scroll, a script took over the scrolling. In testing it did not help and sometimes made things worse, so it is gone.
 
-## 3. Foldable hinge
+## 3. Foldables (experimental)
 
-The wide layout does not avoid the hinge precisely, because the build chain lacks Jetpack WindowManager. See "Foldable hinge: help wanted" in [large-screen.md](large-screen.md).
+Since 0.4.18 the layout follows the fold (see "Foldables" in [large-screen.md](large-screen.md)). It has only been tested on the Android emulator, so real devices may differ. Please report in [#19](https://github.com/greyoak111/cccodroid/issues/19). You can turn it off in Settings → Appearance.
 
 ## 4. A brief grey scrim when not launched from the home screen
 
