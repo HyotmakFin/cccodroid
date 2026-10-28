@@ -581,7 +581,15 @@
       if (changed) MO.spring(ph, "pop", (p) => ({ opacity: Math.min(1, p * 1.6), transform: `translateY(${(1 - p) * 8}px)` }));
       if (!phIv) phIv = setInterval(phPaint, 1000);
     };
-    const keepTail = () => { if (liveTail && !ended) { bubble.appendChild(liveTail); phPlace(); } };
+    // 挪动节点会让 CSS 动画从头播：已经在末尾就不动；要挪时按全局时钟续上相位，闪烁节奏不乱跳
+    const keepTail = () => {
+      if (!liveTail || ended) return;
+      if (bubble.lastChild !== liveTail) {
+        bubble.appendChild(liveTail);
+        liveTail.firstChild.style.animationDelay = -(performance.now() % 2200) + "ms";
+      }
+      phPlace();
+    };
     const push = (b) => { undot(); blocks.push(b); last = b; any = true; keepTail(); return b; };
     const textB = () => (last && last.kind === "text" ? last : push(TextBlock(bubble, live)));
     // 正在攒的步骤组（工具 + 中间的思考）；一出正文就收口
