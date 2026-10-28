@@ -33,6 +33,7 @@
     if (!r || !r.k) return;
     const at = r.at || Date.now();
     if (r.k === "spawn") {
+      const fresh = !AG.byTool.has(r.tool) && av && !busReplay;   // 正在跑时新派的（不是翻历史 / 重连补的）
       let a = AG.agents.get(r.id);
       if (!a) {
         a = { id: r.id, tool: r.tool, name: r.name || "agent", parent: r.parent || null, by: r.by || "main", depth: r.depth || 1,
@@ -40,7 +41,7 @@
         AG.agents.set(a.id, a);
         if (a.tool) AG.byTool.set(a.tool, a);
       }
-      if (!a.parent) agCardFor(a.tool);       // 主会话派的：卡片挂在那张 Agent 卡所在的步骤组后面
+      if (!a.parent) { const had = AG.cards.size; const c = agCardFor(a.tool); if (fresh && c && AG.cards.size > had && c.tools.size === 1) MO.play(c.el, "mo-in-rise", 1400); }   // 卡片头一回出现：浮上来
       return agTouch(agCardOf(a));
     }
     if (r.k === "msg") {
@@ -107,7 +108,7 @@
     const card = { el, tools: new Set(), paint };
     el._agc = card;
     el.classList.add("open");
-    head.addEventListener("click", () => el.classList.toggle("open"));
+    head.addEventListener("click", () => { if (el.classList.toggle("open")) MO.play(el.querySelector(".agc-body"), "mo-in-fade", 400); });
     // 这张卡管的代理：顶层的按派出顺序，孙代理跟在上级后面
     const members = () => {
       const all = [...AG.agents.values()], out = [];
@@ -151,7 +152,7 @@
     }
     el.addEventListener("click", (e) => {
       if (e.target.closest(".fpath")) return;            // 交代 / 汇报 / 长消息：交给对话区的路径委托
-      if (e.target.closest(".agc-more")) { allMsgs = !allMsgs; paint(); return; }
+      if (e.target.closest(".agc-more")) { allMsgs = !allMsgs; paint(); MO.play(feed, "mo-in-fade", 400); return; }
       const r = e.target.closest(".agr, .agf");
       const id = r && (r.dataset.id || r.dataset.from);
       if (id && id !== "main") agReveal(id);

@@ -50,6 +50,8 @@
     return null;
   }
 
+  // 点了书签键：那颗键弹一下（加上、取消都弹，颜色本身说明是哪个）
+  const bmTick = (msg) => { const b = msg.querySelector(':scope > .msg-acts button[data-a="mark"]'); if (b) MO.play(b, "mo-tick", 900); };
   async function toggleMark(msg) {
     const sid = view.sessionId;
     if (!sid) return toast(t("这个会话还没存下来，答完一轮再加书签"), true);
@@ -57,7 +59,7 @@
     if (mine.length) {   // 已经有：再点一下取消
       try { await post("/api/bookmarks/del", { ids: mine.map((b) => b.id) }); } catch (e) { return toast(e.message, true); }
       BMK.items = BMK.items.filter((b) => !mine.includes(b));
-      paintMarks(msg);
+      paintMarks(msg); bmTick(msg);
       return toast(t("已取消书签"));
     }
     const tg = topIn(msg);
@@ -72,7 +74,7 @@
       });
       // 刚答完的回复界面上没有 uuid：网关认领到了就补上，之后按钮状态、再点取消都靠它
       if (!uuid && r.item) (user ? msg : tg.box).dataset.uuid = r.item.uuid;
-      if (sid === view.sessionId && r.item) { BMK.items.push(r.item); paintMarks(msg); }
+      if (sid === view.sessionId && r.item) { BMK.items.push(r.item); paintMarks(msg); bmTick(msg); }
       toast(t("已加书签"));
     } catch (e) {
       toast(e.status === 409 ? t("这个会话的书签已满 {n} 个，先删掉一些", { n: (e.body && e.body.limit) || 50 })
@@ -130,13 +132,27 @@
         <button class="bm-del" data-del="${esc(b.id)}" aria-label="${esc(t("删除"))}"><svg viewBox="0 0 24 24">${BM_DEL}</svg></button></div>`).join("")}</div>`).join("");
     box._items = items;
   }
+  /** 删掉一条：那行往旁边滑走淡掉，重画后其余的行从原位置顺势挪到新位置（只动 transform，不动高度） */
+  async function bmDropRow(row) {
+    const box = $("tab-bookmarks");
+    if (!MO.on() || !row || !row.animate) return loadBookmarks();
+    const before = new Map([...box.querySelectorAll("[data-bm], .pj-sec")].filter((el) => el !== row).map((el) => [el.dataset.bm || "sec:" + el.textContent, el.getBoundingClientRect().top]));
+    const s = MO.rtl() ? -1 : 1;
+    await row.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${-24 * s}px)` }], { duration: Math.round(170 / 1.1), easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.catch(() => {});
+    await loadBookmarks();
+    for (const el of box.querySelectorAll("[data-bm], .pj-sec")) {
+      const y0 = before.get(el.dataset.bm || "sec:" + el.textContent);
+      const dy = y0 == null ? 0 : y0 - el.getBoundingClientRect().top;
+      if (Math.abs(dy) > .5) MO.spring(el, "snap", (p) => ({ transform: `translateY(${dy * (1 - p)}px)` }));
+    }
+  }
   $("tab-bookmarks").addEventListener("click", async (e) => {
     const box = $("tab-bookmarks"), items = box._items || [];
     const d = e.target.closest("[data-del]");
     if (d) {
       try { await post("/api/bookmarks/del", { id: d.dataset.del }); } catch (err) { return toast(err.message, true); }
       BMK.items = BMK.items.filter((b) => b.id !== d.dataset.del); paintMarks();
-      return loadBookmarks();
+      return bmDropRow(d.closest("[data-bm]"));
     }
     const row = e.target.closest("[data-bm]"); if (!row) return;
     const b = items.find((x) => x.id === row.dataset.bm); if (!b) return;

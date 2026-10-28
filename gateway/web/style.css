@@ -2864,6 +2864,8 @@ html[data-motion="on"][dir="rtl"] #set-ov.narrow{animation-name:mo-page-r}
 /* 工具卡跑完：「完成」弹一下，卡片边缘闪一圈绿 */
 html[data-motion="on"] .tool-state.mo-tick{display:inline-block;animation:mo-tick var(--mo-pop) linear}
 html[data-motion="on"] .tool.mo-ok{position:relative}
+/* 书签键点了：弹一下 */
+html[data-motion="on"] .msg-acts button.mo-tick{animation:mo-tick var(--mo-pop) linear}
 html[data-motion="on"] .tool.mo-ok::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px var(--ok);pointer-events:none;animation:mo-ring calc(1.1s * var(--mo-x,1)) ease-out both}
 /* 跳章落地：章名一顶、蓝线从起点扫到终点再淡掉 */
 .ch-sep{position:relative}
