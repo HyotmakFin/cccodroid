@@ -661,7 +661,7 @@
       },
       get empty() { return !any; },
       get ended() { return ended; },
-      remove() { msgEl.remove(); },
+      remove() { phClear(); msgEl.remove(); },   // 阶段提示的每秒定时器一起停（审查 中14）
     };
   }
 

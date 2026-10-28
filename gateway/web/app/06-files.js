@@ -98,8 +98,10 @@
     renderFs();
   }
 
+  // 每次重画领一个号：读文本是异步的，先点 A 再点 B，A 的内容晚到不能把 B 盖掉（按钮也会绑到 A 上）—— 审查 中13
+  let fsPrevSeq = 0;
   async function renderFsPreview() {
-    const box = $("fs-preview");
+    const box = $("fs-preview"), seq = ++fsPrevSeq;
     if (!state.fs.sel) { box.classList.add("hidden"); box.innerHTML = ""; return; }
     const e = state.fs.entries.find((x) => x.name === state.fs.sel);
     if (!e) { box.classList.add("hidden"); return; }
@@ -119,6 +121,7 @@
         const txt = await fetch(fileUrl(full)).then((r) => r.text());
         body = `<pre class="fs-pre">${esc(txt.slice(0, 12000))}${txt.length > 12000 ? "\n" + t("…（已截断）") : ""}</pre>`;
       } catch { body = '<div class="tiny">' + t("读取失败") + '</div>'; }
+      if (seq !== fsPrevSeq) return;
     } else {
       body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;
     }

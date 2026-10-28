@@ -216,7 +216,7 @@
       let desc = '<div class="tiny ext-desc">' + esc(pickLang(c.desc)) + "</div>";
       if (c.error) desc += '<div class="tiny err">' + esc(c.error) + "</div>";
       if (miss.length && c.state !== "ok") desc += '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>";
-      if (c.homepage && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
+      if (webUrl(c.homepage) && c.state !== "ok") desc += '<div class="tiny"><a class="weblink" href="' + esc(c.homepage) + '">' + esc(c.homepage) + "</a></div>";
       if (c.state === "ok" && c.bin.length) desc += '<div class="tiny">' + t("命令：") + " " + c.bin.map((b) => "<code>" + esc(b) + "</code>").join(" ") + "</div>";
       if (c.id === "gh" && c.state === "ok") desc += '<div class="gh-auth" id="gh-auth">' + ghAuth.html + "</div>";
       if (c.id === "llama-cpp" && c.state === "ok") desc += '<details class="llm-dl" id="llm-dl"' + (llmDl.open ? " open" : "") + "><summary>" + t("下载模型") + '</summary><div id="llm-dl-body">' + llmDl.html + "</div></details>";
@@ -903,7 +903,7 @@
         : `<span class="tiny warn">${m.options.length ? t("要 npx（cccodroid 的工具包里有）") : t("本机装不了")}</span>`;
       return extItem(esc(m.title || m.name), meta, acts,
         `<div class="tiny mono">${esc(m.name)}</div><div class="tiny ext-desc">${esc(m.description)}</div>` +
-        (m.homepage ? `<div class="tiny"><a class="weblink" href="${esc(m.homepage)}">${esc(m.homepage)}</a></div>` : "") + `<div class="mcpcat-form hidden"></div>`);
+        (webUrl(m.homepage) ? `<div class="tiny"><a class="weblink" href="${esc(m.homepage)}">${esc(m.homepage)}</a></div>` : "") + `<div class="mcpcat-form hidden"></div>`);
     }).join("");
     if (!more) box.innerHTML = html || `<div class="tiny">${t("没找到。换个关键词试试（英文更全）。")}</div>`;
     else box.insertAdjacentHTML("beforeend", html);

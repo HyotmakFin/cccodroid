@@ -363,6 +363,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   };
 
   // ── 基础工具 ──────────────────────────────────────────────────────
+  /** 外来的链接（组件主页、厂商取 Key 页）只认 http(s)：拼进 href 之前过一下，其余一律当没有（审查 中10） */
+  const webUrl = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
