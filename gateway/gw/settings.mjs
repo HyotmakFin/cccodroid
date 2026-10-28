@@ -139,7 +139,8 @@ export async function routeSettings(req, res, u, p) {
     if (req.method === "POST") {
       const b = JSON.parse((await readBody(req)) || "{}");
       for (const k of ["model", "outputStyle", "effort", "appendSystemPrompt"]) {
-        if (k in b) SETTINGS[k] = b[k] || null;
+        // 只收字符串：塞个对象进来会落盘，之后每一轮都在 .trim() / spawn 那里抛错，重启也好不了（审查 10-29 低7）
+        if (k in b) { if (b[k] != null && typeof b[k] !== "string") return sendJson(res, 400, { error: `${k} must be a string` }); SETTINGS[k] = b[k] || null; }
       }
       // 权限模式只收 claude 认的值；正在跑的那一轮也当场切过去
       if ("permissionMode" in b && b.permissionMode !== SETTINGS.permissionMode) setPermMode(String(b.permissionMode || "default"));

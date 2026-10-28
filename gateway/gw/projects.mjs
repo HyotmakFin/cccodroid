@@ -198,12 +198,19 @@ export async function routeProjects(req, res, u, p) {
     const withDir = u.searchParams.get("withDir") === "1";
     if (withDir) {
       const r = real(proj.path);
+      // 先判断能不能删，再动会话（原来先把会话收进回收站、后面才拦）。拦这些（审查 10-29 低6）：
+      // 工作区 / home 本身及其上级、App 私有目录里工作区以外的地方（令牌、工具包、网关本体）、存储根和它下面一级（Download、DCIM…）、太浅的路径
+      const under = (a, b) => a === b || a.startsWith(b + "/");
+      const ws = real(CFG.workspace), home = real(CFG.home), appDir = path.dirname(home);
+      const appRoots = [appDir, "/data/data/" + path.basename(appDir), "/data/user/0/" + path.basename(appDir)];
+      if (r.split("/").length < 4 || under(ws, r) || under(home, r) || (appRoots.some((d) => under(r, d)) && !(under(r, ws) && r !== ws))
+        || /^\/storage\/(emulated\/\d+|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}|self\/primary)(\/[^/]+)?$/.test(r) || /^\/sdcard(\/[^/]+)?$/.test(r))
+        return sendJson(res, 400, { error: tz("这个目录不能删") });
       const inDir = (s) => s.cwd && (real(s.cwd) === r || real(s.cwd).startsWith(r + "/"));
       // 有会话正在这个目录里跑：先别删（目录删了它还在往里写，对话也收不进回收站）
       if (listSessions(5000).some((s) => inDir(s) && runOfSession(s.id))) return sendJson(res, 409, { error: "busy", message: tz("这个项目里有会话正在生成，等它结束再删。") });
       // 删目录前先把对话收进回收站（可恢复）；目录本身直接删
       for (const s of listSessions(5000)) if (inDir(s)) { try { trashSession(s.id); } catch {} }
-      if (r === real(CFG.workspace) || r === real(CFG.home) || r.split("/").length < 4) return sendJson(res, 400, { error: tz("这个目录不能删") });
       try { fs.rmSync(r, { recursive: true, force: true }); } catch (e) { return sendJson(res, 500, { error: e.message }); }
     }
     PROJECTS = PROJECTS.filter((x) => x.id !== proj.id); save();

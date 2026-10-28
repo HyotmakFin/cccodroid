@@ -24,14 +24,19 @@
     $("vw-body").querySelector('[data-a="aspdf"]')?.addEventListener("click", () => vwOffice());
   }
 
-  // 文档里的东西只留看得的：去掉脚本一类元素和事件属性，链接只留 http(s) / mailto / 页内，图片只留 data:
+  // 文档里的东西只留看得的。按白名单（审查 10-29 中4）：mammoth 只会产出下面这些标签和属性，别的标签拆掉外壳留文字、
+  // 脚本一类连内容一起删，属性一律只认这几个。链接只留 http(s) / mailto / 页内，图片只留 data:
+  const DOCX_TAGS = new Set("p h1 h2 h3 h4 h5 h6 strong b em i u s del sup sub a img ul ol li table thead tbody tfoot tr td th caption br hr blockquote pre code span div".split(" "));
+  const DOCX_DROP = "script,style,iframe,frame,object,embed,link,meta,form,input,button,textarea,select,base,svg,math,template,noscript,video,audio,source,track,picture,canvas";
+  const DOCX_ATTRS = new Set(["href", "src", "alt", "title", "id", "name", "colspan", "rowspan"]);
   function cleanHtml(html) {
     const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
-    doc.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,base,svg,math").forEach((n) => n.remove());
-    for (const el of doc.body.querySelectorAll("*")) {
+    doc.querySelectorAll(DOCX_DROP).forEach((n) => n.remove());
+    for (const el of [...doc.body.querySelectorAll("*")].reverse()) {   // 由里往外：拆外壳时里面的已经洗过
+      if (!DOCX_TAGS.has(el.localName)) { el.replaceWith(...el.childNodes); continue; }
       for (const a of [...el.attributes]) {
         const n = a.name.toLowerCase();
-        if (n.startsWith("on") || n === "style" || n === "srcset" || n === "formaction" || n === "class") el.removeAttribute(a.name);
+        if (!DOCX_ATTRS.has(n)) el.removeAttribute(a.name);
         // id / name 加前缀：免得文档里的锚点名顶掉界面自己的元素或全局变量（审查 低1）；页内链接跟着改
         else if (n === "id" || n === "name") el.setAttribute(a.name, "dx-" + a.value);
       }
