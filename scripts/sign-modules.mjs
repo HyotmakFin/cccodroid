@@ -1,5 +1,5 @@
 // 给模块化工具包的 modules.json 签名，写出 modules.json.sig（base64 的 ed25519 签名，和组件索引同一把钥匙）。
-// App 更新工具包时（Updater.planModules）用内置公钥验它，对不上就不按块装、退回整包。
+// App 更新工具包时（Updater.planModules）用内置公钥验它。也拿来签整包清单 devkit.lock.json（Updater.lockSigned 验）。
 //   CI：   INDEX_SIGNING_KEY=<PEM>          node scripts/sign-modules.mjs out/modules/modules.json
 //   本机： INDEX_SIGNING_KEY_FILE=<pem 路径> node scripts/sign-modules.mjs modules.json
 // 补签已发布的 Release：gh release download <tag> -p modules.json，签好后 gh release upload <tag> modules.json.sig --clobber

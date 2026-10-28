@@ -56,6 +56,12 @@ jobs:
           INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
         run: node scripts/sign-modules.mjs out/modules/modules.json
 
+      # 整包清单也签（审查 H3）：不是 APK 钉的那版、又没有验得过的签名，App 就不装整包
+      - name: 签名 devkit.lock.json
+        env:
+          INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
+        run: node scripts/sign-modules.mjs out/devkit.lock.json
+
       # 「经加载器」（targetSdk 36）的 APK 要从这个 glibc 包里抽 ld.so（devkit.mjs ldso）。Termux 仓库在 glibc 升版后会删掉旧包，
       # 所以随 Release 存一份，锁文件里的 sha256 照样核
       - name: 留存 glibc 包
@@ -102,5 +108,5 @@ jobs:
           and each recipe's \`build.sh\` names the upstream source; if you need a copy of the source matching this release, ask in Issues.
           NOTES
           gh release create "$TAG" $PRE --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md \
-            out/devkit-$T.tar.gz out/devkit.lock.json out/SBOM.tsv \
+            out/devkit-$T.tar.gz out/devkit.lock.json out/devkit.lock.json.sig out/SBOM.tsv \
             out/modules/*.tar.gz out/modules/module-*.lock.json out/modules/SBOM-*.tsv out/modules/modules.json out/modules/modules.json.sig out/glibc.deb
