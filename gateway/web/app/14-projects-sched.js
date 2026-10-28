@@ -548,7 +548,7 @@
     if (name !== "projects" && name !== "sched") pageTitleOv = "";
     if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }
     if (name === "sched") { renderSched(); loadSched(); loadProjects(); }
-    if (name === "lineage") { if (LIN.g) linPaint(prev !== name); loadLineage(); }
+    if (name === "lineage") { if (LIN.g) linPaint(prev !== name); else linState(t("加载中…")); loadLineage(); }   // 头一回进：图还没取回来先说一声，别空白（#38）
   }
   function closePage() {
     if (!curPage) return;

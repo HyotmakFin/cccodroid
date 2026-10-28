@@ -534,6 +534,7 @@
 
   // 用量页「额度与消费」：当前接口的明细 + 其他配过的接口各一行（点开看明细）+ 提醒设置
   const usOther = new Map();   // id → { login, limits } / { bill }
+  const usBrief = (id) => { const x = usOther.get(id); if (!x) return ""; const br = x.login ? loginBrief(x.limits) : billBrief(x.bill); return br.text || (x.login ? t("发一条消息后显示") : "—"); };
   async function loadAcctCard(force) {
     if (!$("us-acct")) return;
     const cur = await qbLoad(force);
@@ -543,11 +544,14 @@
       : cur.bill ? billRows(cur.bill, { id: cur.id }) : `<div class="tiny">${t("查不到这个接口的额度")}</div>`;
     let list = [];
     try { list = (await api("/api/providers")).providers || []; } catch {}
-    const others = list.filter((p) => !p.active && !p.local && (p.login || p.hasKey));
+    // 官方账户先问清登没登录再决定列不列：先列「读取中…」再删掉，行数一变下面的卡片就往上跳（#38）
+    const lst = list.some((p) => !p.active && p.login) ? await api("/api/login/status").catch(() => null) : null;
+    if (curPage !== "usage") return;
+    const others = list.filter((p) => !p.active && !p.local && (p.login ? !!(lst && lst.loggedIn) : p.hasKey));
     const box = $("us-acct-others");
     const keep = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.id));
     box.innerHTML = others.length ? `<div class="sub">${t("其他接口")}</div>` + others.map((p) =>
-      `<details class="qb-row" data-id="${esc(p.id)}"${keep.has(p.id) ? " open" : ""}><summary><span>${esc(pLabel(p))}</span><span class="grow"></span><span class="qb-brief tiny">${t("读取中…")}</span></summary><div class="qb-detail"></div></details>`).join("") : "";
+      `<details class="qb-row" data-id="${esc(p.id)}"${keep.has(p.id) ? " open" : ""}><summary><span>${esc(pLabel(p))}</span><span class="grow"></span><span class="qb-brief tiny">${esc(usBrief(p.id) || t("读取中…"))}</span></summary><div class="qb-detail"></div></details>`).join("") : "";
     const fill = (d) => {
       const x = usOther.get(d.dataset.id), det = d.querySelector(".qb-detail");
       if (!x) return;
@@ -557,8 +561,7 @@
     await Promise.all(others.map(async (p) => {
       let x;
       if (p.login) {
-        const st = await api("/api/login/status").catch(() => null);
-        x = { login: true, limits: st && st.loggedIn ? st.limits || null : null, out: !(st && st.loggedIn) };
+        x = { login: true, limits: lst.limits || null };
       } else {
         const b = await api(`/api/billing?id=${encodeURIComponent(p.id)}${force ? "&refresh=1" : ""}`).catch(() => null);
         x = { bill: b && !b.error ? b : null };
@@ -566,7 +569,6 @@
       usOther.set(p.id, x);
       const d = box.querySelector(`details[data-id="${CSS.escape(p.id)}"]`);
       if (!d) return;
-      if (x.out) { d.remove(); return; }          // 官方账户没登录：不列
       const br = x.login ? loginBrief(x.limits) : billBrief(x.bill);
       const el = d.querySelector(".qb-brief");
       el.textContent = br.text || (x.login ? t("发一条消息后显示") : "—");
