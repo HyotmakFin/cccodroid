@@ -321,6 +321,14 @@
           </div>
         </details>
       </details>
+      <!-- 常用指令（0.4.20）：就是 Claude Code 的自定义命令文件（commands/*.md），逻辑在 app/08-extensions.js 的 UC 一节、网关 gw/commands.mjs -->
+      <details class="field ext-sec" id="ext-cmd-sec" data-sec="ucmd" data-short="指令" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M15 4 9 20"/></svg></span><span data-i18n>常用指令</span> <span id="ext-c-count" class="pill"></span></summary>
+        <div class="tiny" data-i18n>常发的长提示存成一条指令，输入框里打 / 就能选。/指令名 后面跟的话会填进正文里的 $ARGUMENTS。存的是 Claude Code 官方的命令文件，终端里的 claude 也能用。</div>
+        <div class="ext-idx" id="cmd-scope"></div>
+        <div id="ext-cmds" class="list"></div>
+        <div class="row-actions"><button id="ext-c-new" class="btn sm ghost" data-i18n>新建指令</button></div>
+        <div id="cmd-form" class="ext-form uc-form hidden"></div>
+      </details>
       <details class="field ext-sec" data-sec="skill" open><summary><span class="sec-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg></span><span data-i18n>技能</span> <span id="ext-s-count" class="pill"></span></summary>
         <div class="ext-idx" id="skill-idx"></div>
         <div id="ext-skills" class="list"></div>

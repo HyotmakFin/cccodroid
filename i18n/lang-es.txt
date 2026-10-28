@@ -2231,3 +2231,26 @@
 2231	Puedes importar hasta 10 fuentes. Elimina una primero
 2232	Es una colección de fuentes (.ttc) y la vista web no puede usarla. Usa un ttf / otf individual
 2233	No es un archivo de fuente válido. Solo se admiten ttf, otf, woff y woff2
+2234	Indicaciones guardadas
+2235	Indicaciones
+2236	Guarda como comando una indicación larga que envías a menudo y elígela escribiendo / en el cuadro de texto. Lo que escribas después de /nombre rellena $ARGUMENTS en el texto. Se guardan como archivos de comando estándar de Claude Code, así que claude en la terminal también puede usarlas.
+2237	Nueva indicación
+2238	Insertar
+2239	Aún no hay indicaciones guardadas. Toca «Nueva indicación» para guardar una.
+2240	Este proyecto aún no tiene indicaciones propias. Las que guardes aquí van a .claude/commands del proyecto y viajan con el repositorio si está en git.
+2241	Nombre (escribe /nombre en el cuadro de texto; letras, números, - y _)
+2242	Descripción (se muestra en la lista /, opcional)
+2243	p. ej.: convertir un problema en issue
+2244	Pista de argumento (opcional)
+2245	p. ej.: <descripción del problema>
+2246	Indicación (lo que se envía a Claude; $ARGUMENTS se sustituye por lo que sigue a /nombre)
+2247	p. ej.: convierte el problema de abajo en un issue de GitHub: título de una línea y cuerpo con «Qué pasa», «Pasos para reproducir» y «Esperado».\n\n$ARGUMENTS
+2248	¿Eliminar /{name}?
+2249	/{name} guardada. Escribe / en el cuadro de texto para usarla
+2250	Gestionar indicaciones…
+2251	Guarda tus indicaciones frecuentes como /comandos
+2252	El nombre solo admite letras, números, - y _, hasta 40 caracteres
+2253	Ese nombre es de un comando integrado. Elige otro
+2254	La indicación no puede estar vacía
+2255	La indicación es demasiado larga (máx. 64 KB)
+2256	Ya existe una indicación con ese nombre

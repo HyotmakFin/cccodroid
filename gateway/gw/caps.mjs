@@ -6,6 +6,7 @@ import { bridgeAlive, runClaude, safeMode } from "./claude.mjs";
 import { LAST_SESSION, RUNS } from "./runs.mjs";
 import { NEXT, sendJson, uiTag } from "./http.mjs";
 import { QUEUE } from "./queue.mjs";
+import { cmdDescs } from "./commands.mjs";
 
 // ── 能力清单 ──────────────────────────────────────────────────────────
 let LAST_INIT = null;          // 最近一次 init 事件（含 tools / slash_commands / skills / agents）
@@ -46,6 +47,8 @@ const COMMAND_META = {
 };
 
 const FALLBACK_COMMANDS = Object.keys(COMMAND_META);
+/** 自带命令的名字（常用指令不许和它们重名） */
+export const builtinCommands = () => Object.keys(COMMAND_META);
 
 /** 权限规则（能力页「工具」一节标允许 / 询问 / 拒绝用）：用户级 ~/.claude/settings.json 的 permissions + 本应用设置里的允许 / 禁用工具 */
 function permRules() {
@@ -62,6 +65,9 @@ function permRules() {
 function capabilities() {
   const init = LAST_INIT || {};
   const cmds = (init.slash_commands || FALLBACK_COMMANDS).filter((c) => !c.startsWith("__"));
+  // 常用指令（commands/*.md）：说明从文件头读；刚建好、claude 还没重新报 init 的也先列上
+  const mine = cmdDescs();
+  for (const n of Object.keys(mine)) if (!cmds.includes(n)) cmds.push(n);
   return {
     ready: !!LAST_INIT,
     model: SETTINGS.model,
@@ -69,7 +75,7 @@ function capabilities() {
     tools: init.tools || [],
     slashCommands: cmds.map((c) => ({
       name: c,
-      ...(COMMAND_META[c] || { cat: "其他", desc: "", local: false }),
+      ...(COMMAND_META[c] || (mine[c] ? { cat: "常用指令", desc: mine[c].desc, hint: mine[c].hint, custom: mine[c].scope, local: false } : { cat: "其他", desc: "", local: false })),
     })),
     skills: init.skills || [],
     agents: init.agents || [],

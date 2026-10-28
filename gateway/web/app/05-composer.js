@@ -152,7 +152,7 @@
     let html = "", lastCat = null;
     items.forEach((it, i) => {
       if (it.cat && it.cat !== lastCat) { html += `<div class="pgroup">${esc(it.cat)}</div>`; lastCat = it.cat; }
-      html += `<div class="pitem ${i === sel ? "sel" : ""}" data-i="${i}">` +
+      html += `<div class="pitem ${i === sel ? "sel" : ""}${it.manage ? " pi-manage" : ""}" data-i="${i}">` +
         `<span class="pi-name ${state.popup.mode === "cmd" ? "cmd" : ""}">${esc(it.label)}</span>` +
         (it.cat && state.popup.mode === "file" ? `<span class="pi-cat">${it.dir ? t("目录") : t("文件")}</span>` : "") +
         (it.desc ? `<span class="pi-desc">${esc(it.desc)}</span>` : "") +
@@ -166,8 +166,12 @@
 
   function openCmdPalette(filter) {
     const caps = state.caps;
-    const cmds = (caps?.slashCommands || []).filter((c) => !filter || c.name.includes(filter));
-    showPopup("cmd", cmds.map((c) => ({ label: "/" + c.name, desc: c.desc ? t(c.desc) : "", cat: c.cat && t(c.cat), raw: c.name })),
+    // 常用指令（自己存的 commands/*.md）排在最前；说明是用户自己写的，不过翻译。没在筛选时顶上放一个「管理常用指令…」
+    const all = (caps?.slashCommands || []).filter((c) => !filter || c.name.includes(filter));
+    const cmds = all.filter((c) => c.custom).concat(all.filter((c) => !c.custom));
+    const items = cmds.map((c) => ({ label: "/" + c.name, desc: c.custom ? [c.desc, c.hint].filter(Boolean).join(" · ") : c.desc ? t(c.desc) : "", cat: c.cat && t(c.cat), raw: c.name }));
+    if (!filter) items.unshift({ label: t("管理常用指令…"), desc: t("把常发的长提示存成 /指令"), cat: t("常用指令"), raw: "", manage: true });
+    showPopup("cmd", items,
       t("斜杠命令") + (filter ? t(" · 匹配 “{q}”", { q: filter }) : ""));
   }
 
@@ -191,6 +195,12 @@
     const it = state.popup.items[i];
     if (!it) return;
     if (state.popup.mode === "cmd") {
+      if (it.manage) {
+        inputEl.value = ""; hidePopup(); autoGrow();
+        openPage("ext");
+        setTimeout(() => { const sec = $("ext-cmd-sec"); if (sec) { sec.open = true; sec.scrollIntoView({ block: "start", behavior: "smooth" }); } }, 60);
+        return;
+      }
       inputEl.value = "/" + it.raw + " ";
       hidePopup(); autoGrow(); inputEl.focus();
       return;

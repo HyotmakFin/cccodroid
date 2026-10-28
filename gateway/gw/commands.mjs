@@ -1,0 +1,118 @@
+// ── 常用指令（自定义斜杠命令，0.4.20）──────────────────────────────────
+// 就是 Claude Code 官方的自定义命令：一条指令 = commands 目录里一个 <名字>.md，正文是发给 Claude 的提示，
+// 可以用 $ARGUMENTS（/名字 后面跟的话）、$1 $2…。头部 frontmatter 只管两项：description（列表里的说明）、argument-hint（参数提示）。
+// 两个范围：所有项目 ~/.claude/commands；本项目 <工作目录>/.claude/commands（进 git 就跟着仓库走）。
+// 文件是 claude 自己读的：终端里敲 claude 也能用，换设备拷文件就带走。-p 下 $ARGUMENTS 展开已实测（10-28）。
+// 只管顶层的 .md；子目录里的（官方当命名空间用）照样能用，这里不列也不改。
+import fs from "node:fs";
+import path from "node:path";
+import { CFG, log } from "./config.mjs";
+import { NEXT, readBody, sendJson } from "./http.mjs";
+
+export const CMD_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
+const MAX_BODY = 64 * 1024;
+
+function cmdDir(scope, dir) {
+  if (scope === "user") return path.join(process.env.HOME || CFG.home, ".claude", "commands");
+  if (scope !== "project") throw new Error("bad scope");
+  const d = path.resolve(String(dir || CFG.workspace));
+  let ok = false; try { ok = fs.statSync(d).isDirectory(); } catch {}
+  if (!ok) throw new Error("project dir not found: " + d);
+  return path.join(d, ".claude", "commands");
+}
+
+/** 拆 frontmatter：只认开头 --- … --- 里的 key: value 单行；其余原样当正文 */
+export function parseCmd(txt) {
+  const out = { description: "", hint: "", body: String(txt || ""), extra: "" };
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(out.body);
+  if (!m) return out;
+  out.body = out.body.slice(m[0].length);
+  const keep = [];
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([A-Za-z-]+):\s*(.*)$/.exec(line);
+    const v = kv ? kv[2].trim().replace(/^(["'])(.*)\1$/, "$2") : "";
+    if (kv && kv[1] === "description") out.description = v;
+    else if (kv && kv[1] === "argument-hint") out.hint = v;
+    else if (line.trim()) keep.push(line);   // allowed-tools、model 这类我们不改的项：原样留着
+  }
+  out.extra = keep.join("\n");
+  return out;
+}
+const yq = (s) => (/^[\w\s一-鿿，。、（）()<>\[\].-]*$/.test(s) && !/^\s|\s$/.test(s) ? s : JSON.stringify(s));
+export function formatCmd({ description, hint, body, extra }) {
+  const fm = [];
+  if (description) fm.push(`description: ${yq(description)}`);
+  if (hint) fm.push(`argument-hint: ${yq(hint)}`);
+  if (extra) fm.push(extra);
+  const b = String(body || "").replace(/\r\n/g, "\n").replace(/\s+$/, "") + "\n";
+  return fm.length ? `---\n${fm.join("\n")}\n---\n${b}` : b;
+}
+
+export function listCmds(scope, dir) {
+  let d; try { d = cmdDir(scope, dir); } catch (e) { return { scope, error: e.message, items: [] }; }
+  let names = []; try { names = fs.readdirSync(d).filter((f) => f.endsWith(".md")).sort(); } catch {}
+  const items = [];
+  for (const f of names) {
+    const name = f.slice(0, -3);
+    let txt = ""; try { const st = fs.statSync(path.join(d, f)); if (!st.isFile() || st.size > MAX_BODY) continue; txt = fs.readFileSync(path.join(d, f), "utf8"); } catch { continue; }
+    const c = parseCmd(txt);
+    items.push({ name, description: c.description, hint: c.hint, body: c.body, extra: c.extra, editable: CMD_NAME_RE.test(name) });
+  }
+  return { scope, dir: d, items };
+}
+
+/** 能力页 / 斜杠列表用：名字 → 说明（全局 + 工作目录的，后者覆盖前者，和 claude 的优先级一致） */
+export function cmdDescs() {
+  const m = {};
+  for (const s of ["user", "project"]) for (const c of listCmds(s).items) m[c.name] = { desc: c.description, hint: c.hint, scope: s };
+  return m;
+}
+
+function saveCmd(b, builtin) {
+  const scope = b.scope === "project" ? "project" : "user";
+  const name = String(b.name || "").trim();
+  if (!CMD_NAME_RE.test(name)) return { ok: false, message: "名字只能用字母、数字、- 和 _，不超过 40 个字符" };
+  if (builtin.has(name)) return { ok: false, message: "和自带的命令重名了，换个名字" };
+  const body = String(b.body || "");
+  if (!body.trim()) return { ok: false, message: "指令内容不能是空的" };
+  if (Buffer.byteLength(body) > MAX_BODY) return { ok: false, message: "指令内容太长了（上限 64 KB）" };
+  const d = cmdDir(scope, b.dir), file = path.join(d, name + ".md");
+  const old = b.oldName && b.oldName !== name ? String(b.oldName) : "";
+  if (old && !CMD_NAME_RE.test(old)) return { ok: false, message: "bad name" };
+  if ((old || b.fresh) && fs.existsSync(file)) return { ok: false, message: "已经有同名的指令了" };
+  fs.mkdirSync(d, { recursive: true });
+  const desc = String(b.description || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
+  const hint = String(b.hint || "").replace(/[\r\n]+/g, " ").trim().slice(0, 80);
+  // 改名 / 编辑时把我们不管的 frontmatter 项（allowed-tools 等）带过去
+  let extra = "";
+  try { extra = parseCmd(fs.readFileSync(path.join(d, (old || name) + ".md"), "utf8")).extra; } catch {}
+  fs.writeFileSync(file + ".tmp", formatCmd({ description: desc, hint, body, extra }));
+  fs.renameSync(file + ".tmp", file);
+  if (old) { try { fs.unlinkSync(path.join(d, old + ".md")); } catch {} }
+  log(`[commands] 保存 /${name}（${scope}）${old ? "，原名 /" + old : ""}`);
+  return { ok: true, name, file };
+}
+
+// ── 路由：/api/commands（GET 两个范围的清单）/api/commands/save /api/commands/del ──
+export function commandRoutes(builtinNames) {
+  return async function routeCommands(req, res, u, p) {
+    if (!p.startsWith("/api/commands")) return NEXT;
+    if (req.method === "GET" && p === "/api/commands") {
+      const dir = u.searchParams.get("dir") || CFG.workspace;
+      return sendJson(res, 200, { scopes: [listCmds("user"), listCmds("project", dir)], workspace: path.resolve(dir) });
+    }
+    let b = {}; try { b = JSON.parse((await readBody(req)) || "{}"); } catch {}
+    try {
+      if (req.method === "POST" && p === "/api/commands/save") return sendJson(res, 200, saveCmd(b, new Set(builtinNames())));
+      if (req.method === "POST" && p === "/api/commands/del") {
+        const name = String(b.name || "");
+        if (!CMD_NAME_RE.test(name)) return sendJson(res, 400, { ok: false, message: "bad name" });
+        const f = path.join(cmdDir(b.scope === "project" ? "project" : "user", b.dir), name + ".md");
+        try { fs.unlinkSync(f); } catch (e) { if (e.code !== "ENOENT") throw e; }
+        log(`[commands] 删除 /${name}（${b.scope}）`);
+        return sendJson(res, 200, { ok: true });
+      }
+    } catch (e) { return sendJson(res, 200, { ok: false, message: e.message }); }
+    return NEXT;
+  };
+}

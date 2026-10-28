@@ -2231,3 +2231,26 @@
 2231	10 polices au maximum. Supprimez-en une d'abord
 2232	C'est une collection de polices (.ttc), inutilisable dans la vue web. Utilisez un seul ttf / otf
 2233	Ce n'est pas un fichier de police utilisable. Seuls ttf, otf, woff et woff2 sont pris en charge
+2234	Invites enregistrées
+2235	Invites
+2236	Enregistrez une longue invite que vous envoyez souvent, puis choisissez-la en tapant / dans la zone de saisie. Ce qui suit /nom remplace $ARGUMENTS dans le texte. Elles sont enregistrées comme fichiers de commande Claude Code standard, utilisables aussi par claude dans le terminal.
+2237	Nouvelle invite
+2238	Insérer
+2239	Aucune invite enregistrée. Touchez « Nouvelle invite » pour en ajouter une.
+2240	Ce projet n'a pas encore ses propres invites. Celles enregistrées ici vont dans .claude/commands du projet et suivent le dépôt s'il est sous git.
+2241	Nom (tapez /nom dans la zone de saisie ; lettres, chiffres, - et _)
+2242	Description (affichée dans la liste /, facultative)
+2243	ex. : mettre un problème au format ticket
+2244	Indication d'argument (facultative)
+2245	ex. : <description du problème>
+2246	Invite (envoyée à Claude ; $ARGUMENTS est remplacé par ce qui suit /nom)
+2247	ex. : transforme le problème ci-dessous en ticket GitHub : un titre d'une ligne, et un corps avec « Ce qui se passe », « Étapes pour reproduire » et « Attendu ».\n\n$ARGUMENTS
+2248	Supprimer /{name} ?
+2249	/{name} enregistrée. Tapez / dans la zone de saisie pour l'utiliser
+2250	Gérer les invites…
+2251	Enregistrer vos invites fréquentes en /commandes
+2252	Le nom ne peut contenir que des lettres, chiffres, - et _, 40 caractères max
+2253	Ce nom est celui d'une commande intégrée. Choisissez-en un autre
+2254	L'invite ne peut pas être vide
+2255	L'invite est trop longue (64 Ko max)
+2256	Une invite porte déjà ce nom

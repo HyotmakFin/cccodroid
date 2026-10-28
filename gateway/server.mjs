@@ -47,7 +47,7 @@ import { fetchModels, normEffort, routeModels } from "./gw/models.mjs";
 import { listSessions, routeSessions } from "./gw/sessions.mjs";
 import { bridgeProc, killTree, reapOrphans, routeClaude } from "./gw/claude.mjs";
 import { expireTrash } from "./gw/sessionops.mjs";
-import { routeCaps } from "./gw/caps.mjs";
+import { routeCaps, builtinCommands } from "./gw/caps.mjs";
 import { NEXT, sendJson, serveStatic } from "./gw/http.mjs";
 import { UPLOAD_DIR, routeFiles } from "./gw/files.mjs";
 import { routePreview } from "./gw/preview.mjs";
@@ -73,6 +73,7 @@ import { routeReconcile } from "./gw/reconcile.mjs";
 import { routeProjects } from "./gw/projects.mjs";
 import { routeBookmarks } from "./gw/bookmarks.mjs";
 import { routeFonts } from "./gw/fonts.mjs";
+import { commandRoutes } from "./gw/commands.mjs";
 import { routeSched } from "./gw/sched.mjs";
 import { routeSessModel } from "./gw/sessmodel.mjs";
 import { routeLineage } from "./gw/lineage.mjs";
@@ -82,7 +83,7 @@ import { COOKIE, TOKEN, denyLog, denyReason, tokenOk } from "./gw/access.mjs";
 import { startWorkIsland, stopWorkIslandSync } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
-const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeProjects, routeBookmarks, routeFonts, routeSched, routeSessModel, routeBackfill, routeLineage, routeArchive, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeModules, routeOrphans, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun, routeNotices, routeReconcile];
+const ROUTES = [routeClaude, routeFeedback, routeUsage, routeCaps, routeProviders, routeSettings, routeProjects, routeBookmarks, routeFonts, commandRoutes(builtinCommands), routeSched, routeSessModel, routeBackfill, routeLineage, routeArchive, routeSessions, routeExtensions, routeModels, routeTerminal, routeComponents, routeModules, routeOrphans, routeCustom, routeGit, routeLocal, routeOffice, routeFiles, routePreview, routeBus, routeQueue, routeDevside, routeLogin, routeRun, routeNotices, routeReconcile];
 
 // ── 路由 ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {

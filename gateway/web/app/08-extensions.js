@@ -111,7 +111,7 @@
     setTimeout(loadModules, 300);
   });
 
-  function loadExt() { loadModules(); loadComponents(60); loadCustom(); loadExtPlugins(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
+  function loadExt() { loadModules(); loadComponents(60); loadCustom(); loadExtPlugins(); loadExtCmds(); loadExtSkills(); loadExtMcp(); loadExtMarkets(); loadExtHooks(); }
 
   // ── 分类索引条：扩展页每节一条，横向滚动。点一下只看那一类，点「全部」复原；刷新列表后选中的分类保留 ──
   // 条目带 data-tags（空格分隔的分类键）。labels 定顺序和显示名；没列出的键（如插件市场名 m:<名字>）按名字附在后面
@@ -1138,3 +1138,79 @@
     box.classList.remove("hidden");
   });
 
+
+  // ── 常用指令（0.4.20）：commands 目录里的 <名字>.md，两个范围（所有项目 / 本项目），和 Hooks 那节一样用小标签切 ──
+  const UC = { data: null, scope: localStorage.getItem("cc.cmdScope") || "user", edit: null };
+  const ucScope = () => UC.data && UC.data.scopes.find((s) => s.scope === UC.scope);
+  async function loadExtCmds() {
+    try { UC.data = await api("/api/commands"); } catch (e) { $("ext-cmds").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    renderCmds();
+  }
+  function renderCmds() {
+    const d = UC.data; if (!d) return;
+    $("ext-c-count").textContent = d.scopes.reduce((a, s) => a + s.items.length, 0);
+    const proj = String(d.workspace || "").split("/").pop() || d.workspace;
+    const SC = { user: t("所有项目"), project: t("本项目（{name}）", { name: proj }) };
+    $("cmd-scope").innerHTML = d.scopes.map((s) => `<button class="idx-chip${s.scope === UC.scope ? " on" : ""}" data-cscope="${s.scope}">${esc(SC[s.scope])}<span>${s.items.length}</span></button>`).join("");
+    const sc = ucScope();
+    if (!sc) return;
+    if (sc.error) { $("ext-cmds").innerHTML = `<div class="tiny warn">${esc(sc.error)}</div>`; return; }
+    $("ext-cmds").innerHTML = sc.items.map((c, i) => `<div class="item uc-item" data-i="${i}">
+        <div class="it-title"><span class="mono">/${esc(c.name)}</span>${c.hint ? ` <span class="uc-hint">${esc(c.hint)}</span>` : ""}</div>
+        ${c.description ? `<div class="tiny ext-desc">${esc(c.description)}</div>` : ""}
+        <div class="it-snip">${esc(c.body.trim().slice(0, 240))}</div>
+        <div class="it-acts"><button data-uc="use">${t("插入输入框")}</button>${c.editable ? `<button data-uc="edit">${t("修改")}</button>` : ""}<button data-uc="del">${t("删除")}</button></div></div>`).join("")
+      || `<div class="tiny">${UC.scope === "user" ? t("还没有常用指令。点「新建指令」存一条。") : t("这个项目还没有自己的指令。存在这里的指令写进项目的 .claude/commands，项目进了 git 会跟着仓库走。")}</div>`;
+  }
+  function ucForm(c) {
+    UC.edit = c ? c.name : "";
+    const f = $("cmd-form");
+    f.innerHTML = `
+      <label class="tiny">${t("名字（输入框里打 /名字 调用；字母、数字、- 和 _）")}</label>
+      <div class="uc-name"><span class="mono">/</span><input data-f="name" class="mono" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="issue"></div>
+      <label class="tiny">${t("说明（显示在 / 列表里，可不填）")}</label>
+      <input data-f="description" maxlength="200" autocomplete="off" placeholder="${esc(t("例如：按议题模板整理问题"))}">
+      <label class="tiny">${t("参数提示（可不填）")}</label>
+      <input data-f="hint" maxlength="80" autocomplete="off" placeholder="${esc(t("例如：<问题描述>"))}">
+      <label class="tiny">${t("指令内容（发给 Claude 的话；$ARGUMENTS 换成 /名字 后面跟的内容）")}</label>
+      <textarea data-f="body" rows="7" spellcheck="false" placeholder="${esc(t("例如：把下面的问题整理成 GitHub 议题：标题一句话，正文分「现象」「复现步骤」「期望」三段。\n\n$ARGUMENTS"))}"></textarea>
+      <div class="row-actions"><button class="btn sm" data-uc="f-save">${c ? t("保存修改") : t("添加")}</button>
+        <button class="btn sm ghost" data-uc="f-cancel">${t("取消")}</button></div>`;
+    const q = (k) => f.querySelector(`[data-f="${k}"]`);
+    if (c) { q("name").value = c.name; q("description").value = c.description || ""; q("hint").value = c.hint || ""; q("body").value = c.body || ""; }
+    f.classList.remove("hidden");
+    MO.play(f, "mo-in-fade", 1400);
+    f.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    q(c ? "body" : "name").focus({ preventScroll: true });
+  }
+  function ucClose() { UC.edit = null; const f = $("cmd-form"); MO.leave(f, "mo-out-fade", 170, () => { f.classList.add("hidden"); f.innerHTML = ""; }); }
+  $("ext-c-new").addEventListener("click", () => ucForm(null));
+  $("ext-cmd-sec").addEventListener("click", async (e) => {
+    const chip = e.target.closest("[data-cscope]");
+    if (chip) { UC.scope = chip.dataset.cscope; localStorage.setItem("cc.cmdScope", UC.scope); if (UC.edit != null) ucClose(); return renderCmds(); }
+    const b = e.target.closest("[data-uc]"); if (!b) return;
+    const sc = ucScope(), it = b.closest(".uc-item"), c = it && sc ? sc.items[+it.dataset.i] : null;
+    const act = b.dataset.uc;
+    if (act === "use" && c) { closePage(); inputEl.value = "/" + c.name + " "; autoGrow(); inputEl.focus(); return; }
+    if (act === "edit" && c) return ucForm(c);
+    if (act === "del" && c) {
+      if (!confirm(t("删除指令 /{name}？", { name: c.name }))) return;
+      const r = await post("/api/commands/del", { scope: UC.scope, dir: UC.data.workspace, name: c.name }).catch((err) => ({ ok: false, message: err.message }));
+      if (!r.ok) return toast(r.message, true);
+      if (MO.on() && it.animate) await it.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${MO.rtl() ? 24 : -24}px)` }], { duration: 155, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.catch(() => {});
+      await loadExtCmds(); loadCaps();
+      return;
+    }
+    if (act === "f-cancel") return ucClose();
+    if (act === "f-save") {
+      const f = $("cmd-form"), q = (k) => f.querySelector(`[data-f="${k}"]`).value;
+      const body = { scope: UC.scope, dir: UC.data.workspace, name: q("name").trim().replace(/^\//, ""), description: q("description"), hint: q("hint"), body: q("body") };
+      if (UC.edit) { if (UC.edit !== body.name) body.oldName = UC.edit; } else body.fresh = true;
+      const r = await post("/api/commands/save", body).catch((err) => ({ ok: false, message: err.message }));
+      if (!r.ok) return toast(t("保存失败：{msg}", { msg: t(r.message || "") }), true);
+      toast(t("已保存 /{name}，输入框里打 / 就能用", { name: r.name }));
+      ucClose(); await loadExtCmds(); loadCaps();
+      const row = [...document.querySelectorAll("#ext-cmds .uc-item .mono")].find((x) => x.textContent === "/" + r.name);
+      if (row) MO.play(row.closest(".uc-item"), "mo-in-rise", 1400);
+    }
+  });
