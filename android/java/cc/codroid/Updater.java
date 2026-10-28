@@ -410,12 +410,13 @@ final class Updater {
         // 最新的就是 APK 钉的那版（常态：新工具包跟着新 APK 走）：校验值用 APK 自带的，不联网 ——
         // 国内连不上 github.com 时，以前这里取 devkit.lock.json 失败，整行报错（群友 10-22）
         JSONObject pin = devkitPin(ctx), lock;
-        boolean lockFromMirror = false;
+        byte[] lockBytes = null;
         if (pin != null && best.equals(pin.optString("tag")) && pin.optJSONObject("gz") != null) lock = pin;
         else {
             byte[][] got = new byte[1][];
-            lockFromMirror = fetchDevkitFile(base, "devkit.lock.json", got);
-            lock = new JSONObject(new String(got[0], StandardCharsets.UTF_8));
+            fetchDevkitFile(base, "devkit.lock.json", got);
+            lockBytes = got[0];
+            lock = new JSONObject(new String(lockBytes, StandardCharsets.UTF_8));
         }
         if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT) {
             devkit.set("uptodate", Tr.f("{0} 需要更新版本的 cccodroid", best)); return;
@@ -437,10 +438,22 @@ final class Updater {
         devkit.file = new File(env.files, gz.getString("file"));
         devkit.modules = null; devkit.modSha = null; devkit.moduleIds = null;
         planModules(base);
-        // 镜像来的 devkit.lock.json 没有签名：只有按块装（modules.json 验过签）时才用它，整包装要 GitHub 上那份
-        if (lockFromMirror && devkit.modules == null) throw new IOException(Tr.f("连不上 GitHub，{0} 的整包清单没法核实；过会儿再检查更新", best));
+        // 整包清单只靠 TLS 不够（装了根证书的代理、仓库被攻破都能换掉整个工具包 —— 审查 H3）：
+        // 不是 APK 钉的那份、又没有验得过的 .sig，就只许按块装（modules.json 验过签）；按块的没核实成就报错，不再静默退回整包
+        if (devkit.modules == null && lock != pin && !lockSigned(base, lockBytes))
+            throw new IOException(Tr.f("{0} 的工具包清单没核实成（签名对不上或没取到）；过会儿再检查更新", best));
         String mb = String.format(java.util.Locale.ROOT, "%.0f MB", devkit.size / 1048576.0);
         devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
+    }
+
+    /** devkit.lock.json 带了 ed25519 签名（devkit.lock.json.sig，和 modules.json 同一把钥匙）且验得过 */
+    private static boolean lockSigned(String base, byte[] lockBytes) {
+        if (lockBytes == null) return false;
+        try {
+            byte[][] got = new byte[1][];
+            fetchDevkitFile(base, "devkit.lock.json.sig", got);
+            return Ed25519.verifyIndex(lockBytes, new String(got[0], StandardCharsets.UTF_8));
+        } catch (Exception e) { return false; }
     }
 
     /** 工具包 Release 里的小文件：先 GitHub，连不上换 dl.cccodroid.net（同一份文件）。返回 true = 来自镜像 */
@@ -888,7 +901,18 @@ final class Updater {
             if (devkitMoving()) return r.put("ok", true).put("message", Tr.t("进行中"));
             String base = installedDevkitBase();
             if (base.isEmpty()) base = pinnedDevkitBase();
-            JSONObject lock = new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8));
+            boolean modular = new Installer(env, null).readModules() != null;
+            JSONObject pin = devkitPin(ctx), lock;
+            byte[] lockBytes = null;
+            if (pin != null && base.equals(pin.optString("base")) && pin.optJSONObject("gz") != null) lock = pin;
+            else {
+                lockBytes = Installer.httpGetSmall(base + "devkit.lock.json");
+                lock = new JSONObject(new String(lockBytes, StandardCharsets.UTF_8));
+                // 整包重装同样要清单可信（审查 H3）：没签名的整包旧版，改装本 APK 钉的那版
+                if (!modular && !lockSigned(base, lockBytes) && pin != null && pin.optJSONObject("gz") != null) {
+                    base = pin.optString("base"); lock = pin; lockBytes = null;
+                }
+            }
             if (!ctx.getPackageName().equals(lock.optString("target")) || lock.optInt("compat", 1) != DEVKIT_COMPAT)
                 return r.put("ok", false).put("message", Tr.f("{0} 与本版 cccodroid 不兼容", tagOf(base)));
             JSONObject gz = lock.getJSONObject("gz"), tar = lock.optJSONObject("tar");
@@ -900,7 +924,9 @@ final class Updater {
             devkit.alt = devkitMirror(base, gz.getString("file"));
             devkit.file = new File(env.files, gz.getString("file"));
             devkit.modules = null; devkit.modSha = null; devkit.moduleIds = null;
-            if (new Installer(env, null).readModules() != null) planModules(base);       // 模块化：按已装的块重装
+            if (modular) planModules(base);       // 模块化：按已装的块重装
+            if (devkit.modules == null && lock != pin && !lockSigned(base, lockBytes))
+                return r.put("ok", false).put("message", Tr.f("{0} 的工具包清单没核实成（签名对不上或没取到）；过会儿再试", tagOf(base)));
             devkit.set("available", Tr.t("修复：重装 ") + devkit.latest);
             repairing = true;
             Ledger.add(env, "repair", true, Tr.t("开始修复：重新下载 ") + devkit.latest, null);
