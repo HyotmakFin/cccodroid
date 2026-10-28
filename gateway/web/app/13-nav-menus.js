@@ -366,7 +366,7 @@
   $("side-recent").addEventListener("click", (e) => {
     if (e.target.closest("[data-all]")) return openPage("sessions");
     // 分组标题只认 .sr-g：外壳在 <html> 上设了 data-fold（折痕状态），按 [data-fold] 往上找会一路找到根元素，
-    // 点会话就被当成「折叠分组」，只重画不切换（0.4.18 引入，群友 Yhaizg 报）
+    // 点会话就被当成「折叠分组」，只重画不切换（0.4.18 引入，群友 chenshi723 报）
     const g = e.target.closest(".sr-g[data-sgfold]");
     if (g) {
       const k = g.dataset.sgfold;
