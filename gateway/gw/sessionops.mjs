@@ -233,13 +233,15 @@ export function trashSession(id) {
   fs.rmSync(slot, { recursive: true, force: true });
   fs.mkdirSync(slot, { recursive: true });
   const st = fs.statSync(found.file);
-  fs.renameSync(found.file, path.join(slot, id + ".jsonl"));
-  const side = path.join(PATHS.projects, found.project, id);
-  if (fs.existsSync(side)) fs.renameSync(side, path.join(slot, "dir"));
+  // 先写 meta 再挪文件：反过来的话，挪完、写 meta 之前被杀，回收站里就是个没 meta 的孤儿——列不出、恢复不了、过期也不清（审查 中3）。
+  // 这样被杀在中间，原会话还在原处，回收站这格没有 jsonl，listTrash 不列它，下次删同一个会话时整格重建
   fs.writeFileSync(path.join(slot, "meta.json"), JSON.stringify({
     id, project: found.project, title: NAMES[id] || meta.title, renamed: !!NAMES[id], pinned: PINS[id] || 0,
     cwd: meta.cwd, mtime: st.mtimeMs, size: st.size, deletedAt: Date.now(),
   }));
+  fs.renameSync(found.file, path.join(slot, id + ".jsonl"));
+  const side = path.join(PATHS.projects, found.project, id);
+  if (fs.existsSync(side)) fs.renameSync(side, path.join(slot, "dir"));
   if (PINS[id]) { delete PINS[id]; savePins(); }
   PEEK_CACHE.delete(found.file);
   delete NAMES[id]; saveNames();
@@ -253,6 +255,7 @@ export function listTrash() {
   try { ids = fs.readdirSync(TRASH_DIR); } catch { return []; }
   const out = [];
   for (const id of ids) {
+    if (!fs.existsSync(path.join(TRASH_DIR, id, id + ".jsonl"))) continue;   // 删到一半被打断的空格子
     try { out.push(JSON.parse(fs.readFileSync(path.join(TRASH_DIR, id, "meta.json"), "utf8"))); } catch {}
   }
   return out.sort((a, b) => b.deletedAt - a.deletedAt);
