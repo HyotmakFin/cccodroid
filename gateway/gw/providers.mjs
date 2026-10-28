@@ -588,6 +588,10 @@ function loadApiKey(p) {
       if (k) return k;
     } catch {}
   }
+  // 共享区的种子只给开发端（claude-apk）用：cccodroid 从不往那里放密钥，却会在没配密钥时去读 ——
+  // 别的应用往那里写一把自己的 key，用户的对话就全走它的账、它在控制台看得到全部提示词（审查 中6）。
+  // 显式给了 CCAPP_SEED 的照旧
+  if (PREFIX && !process.env.CCAPP_SEED) return null;
   try {
     const j = JSON.parse(fs.readFileSync(SEED_FILE, "utf8"));
     const k = j.apiKey || j.API_KEY || j.token || j.DEEPSEEK_API_KEY;
