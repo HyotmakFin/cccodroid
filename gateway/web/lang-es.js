@@ -2282,4 +2282,5 @@ window.I18N_DICT["es"] = {
   "紫": "Morado",
   "这个项目里有会话正在生成，等它结束再删。": "Una sesión de este proyecto aún se está generando. Espera a que termine antes de eliminar.",
   "档案写不进去（存储满了或没权限），这次没存上": "No se pudo escribir el archivo (almacenamiento lleno o sin permiso); este cambio no se guardó",
+  "同名模型正在下载": "Ya se está descargando un modelo con el mismo nombre",
 };

@@ -368,6 +368,9 @@ function modelFromUrl(raw) {
   if (/-\d{5}-of-\d{5}\.gguf$/i.test(name)) throw new Error(tz("分卷模型（…-00001-of-0000N.gguf）不支持，请找单文件版本"));
   if (/^mmproj/i.test(name)) throw new Error(tz("mmproj 是多模态投影文件，不能单独对话"));
   const id = name.replace(/\.gguf$/i, "");
+  // 同名还在下（或刚取消、curl 没退干净）就拒绝：两个 curl 会续写同一个 .part（审查 中4）。失败的才清掉重来
+  const cur = MDL.get(id);
+  if (cur && cur.phase !== "error") throw new Error(tz("同名模型正在下载"));
   MDL.delete(id);
   return modelFetch({ id, url: u.href }, [u.href]);
 }

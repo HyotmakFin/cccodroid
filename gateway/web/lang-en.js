@@ -2316,5 +2316,6 @@ window.I18N_DICT.en = {
   "品红": "Magenta",
   "紫": "Purple",
   "这个项目里有会话正在生成，等它结束再删。": "A session in this project is still generating. Wait for it to finish before deleting.",
-  "档案写不进去（存储满了或没权限），这次没存上": "Couldn't write the archive file (storage full or no permission); this change wasn't saved"
+  "档案写不进去（存储满了或没权限），这次没存上": "Couldn't write the archive file (storage full or no permission); this change wasn't saved",
+  "同名模型正在下载": "A model with the same name is already downloading"
 };
