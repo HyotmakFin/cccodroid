@@ -52,6 +52,7 @@
     const sentAtt = fromInput ? state.attachments : [];
     if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
     syncInterject();
+    const gen = view.gen;
     try {
       const r = await api("/api/chat", {
         method: "POST", headers: { "content-type": "application/json" },
@@ -66,6 +67,9 @@
           mode: mode || "auto",
         }),
       });
+      // 等回执期间切了会话：这一轮属于原来那个会话，别记进现在的视图（否则它的回复渲染到这边，
+      // 下一条新会话消息还会带着 follow 接进原来那一轮 —— 审查 中11）
+      if (gen !== view.gen) return;
       view.runIds.add(r.id);
       view.lastRunId = r.id;
       if (r.injected) toast(t("已插话：当前这一步做完，Claude 就会看到"));
