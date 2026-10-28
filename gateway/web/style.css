@@ -2572,6 +2572,11 @@ html.wel #hint-row #proj-chip:not(.hidden) ~ #model-chip > .chip:first-child{mar
 html.wel #chat{container-type:inline-size}
 .wl-mark{width:clamp(40px,7cqi,52px);height:clamp(40px,7cqi,52px)}
 html.wel-narrow .wl-hero{gap:var(--g2)}
+/* 还没接上模型：首屏不放输入框（发不出去），问候 + 两条路的卡片竖向居中铺开；接上以后 recheckSetup 摘掉 wel-setup */
+html.wel.wel-setup #composer{display:none}
+html.wel.wel-setup #chat{flex:0 1 auto;margin-top:auto}
+html.wel.wel-setup #hist{margin-top:0}
+html.wel.wel-setup #wl-below{flex:none;margin-bottom:auto;padding-top:var(--g2)}
 /* 头像：设了图片就铺满圆，不写字母 */
 .acct-av.img{background:center/cover no-repeat var(--bg3);color:transparent}
 .prof-row{display:flex;align-items:center;gap:var(--g2)}

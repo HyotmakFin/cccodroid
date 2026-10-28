@@ -369,13 +369,37 @@
     inputEl.placeholder = document.documentElement.classList.contains("wel") ? t("有什么可以帮你？") : t("输入 / 调用技能和命令");
   }
 
+  /** 接上模型没有（登录了，或填了 Key）；网关连不上返回 null */
+  async function setupReady() {
+    let s = null;
+    try { s = await api("/api/status"); } catch { return null; }
+    let ready = !!(s.keyMode === "key" || s.otherKey);
+    if (s.keyMode === "login") { try { ready = !!(await api("/api/login/status")).loggedIn; } catch {} }
+    return ready;
+  }
+  // 还没接上模型时，首屏不放输入框（什么都没配，打了也发不出去）：问候和两条路的卡片铺开（html.wel-setup）
+  function setupMode(on) {
+    const r = document.documentElement;
+    if (r.classList.contains("wel-setup") === on) return;
+    r.classList.toggle("wel-setup", on);
+    if (!on && r.classList.contains("wel")) { autoGrow(); MO.play($("composer"), "mo-in-rise", 900); }
+  }
+  /** 设置里填了 Key、浏览器里登录完回来（refreshStatus / 回到前台时调）：接上了就收起卡片、放出输入框 */
+  async function recheckSetup() {
+    if (!document.documentElement.classList.contains("wel-setup")) return;
+    if (!(await setupReady())) return;
+    const box = histEl.querySelector(":scope > .msg.welcome .setup-guide");
+    if (box) { box.classList.add("hidden"); box.textContent = ""; }
+    setupMode(false);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) recheckSetup(); });
+
   /** 还没接上模型（没登录、没填 Key）：欢迎页里把两条路并排摆出来，不替用户选 */
   async function fillSetupGuide(box) {
-    let s = null;
-    try { s = await api("/api/status"); } catch { return; }
-    let ready = s.keyMode === "key" || s.otherKey;
-    if (s.keyMode === "login") { try { ready = !!(await api("/api/login/status")).loggedIn; } catch {} }
-    if (ready || !box.isConnected) return;
+    const ready = await setupReady();
+    if (ready === null) return;
+    if (ready || !box.isConnected) { setupMode(false); return; }
+    if (box.childElementCount) { box.classList.remove("hidden"); setupMode(true); return; }   // 接回去的首屏：卡片已经画过、监听也挂过
     box.innerHTML = `<p><strong>${esc(t("开始之前，先接上模型（两条路选一条）："))}</strong></p>
       <div class="setup-paths">
         <div class="setup-path"><b>${esc(t("用 Claude 账户登录"))}</b>
@@ -387,6 +411,7 @@
       </div>
       <div class="tiny">${esc(t("两条路都在 ☰ → 设置 → 接口，以后随时能换。"))}</div>`;
     box.classList.remove("hidden");
+    setupMode(true);
     box.addEventListener("click", (e) => {
       const p = e.target.dataset && e.target.dataset.p;
       if (!p) return;
