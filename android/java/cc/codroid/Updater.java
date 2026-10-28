@@ -256,7 +256,10 @@ final class Updater {
                 n++;
                 String base = "https://github.com/" + REPO + "/releases/download/" + tag + "/";
                 try {
-                    hit = matchLock(new JSONObject(new String(Installer.httpGetSmall(base + "devkit.lock.json"), StandardCharsets.UTF_8)), sha, base);
+                    // 线上清单要验过签才拿来认本地文件：只靠 TLS 的话，换掉清单就能让自制工具包显示成「已发布的版本」（审查 10-29 低8）
+                    byte[] lb = Installer.httpGetSmall(base + "devkit.lock.json");
+                    if (!lockSigned(base, lb)) continue;
+                    hit = matchLock(new JSONObject(new String(lb, StandardCharsets.UTF_8)), sha, base);
                     if (hit != null) return hit;
                 } catch (Exception ignored) {}
             }
@@ -446,10 +449,13 @@ final class Updater {
         devkit.set("available", have.isEmpty() && env.devkitReady() ? mb + Tr.t(" · 无法确认已装的是哪一版，建议更新一次") : mb);
     }
 
-    /** devkit.lock.json 带了 ed25519 签名（devkit.lock.json.sig，和 modules.json 同一把钥匙）且验得过 */
-    private static boolean lockSigned(String base, byte[] lockBytes) {
+    /** devkit.lock.json 带了 ed25519 签名（devkit.lock.json.sig，和 modules.json 同一把钥匙）且验得过，
+     *  而且签进去的 release 就是下载地址里的这个 tag —— 旧版清单连签名一起搬到新 tag 下冒充新版过不去（审查 10-29 中2） */
+    static boolean lockSigned(String base, byte[] lockBytes) {
         if (lockBytes == null) return false;
         try {
+            String rel = new JSONObject(new String(lockBytes, StandardCharsets.UTF_8)).optString("release");
+            if (rel.isEmpty() || !rel.equals(tagOf(base))) return false;
             byte[][] got = new byte[1][];
             fetchDevkitFile(base, "devkit.lock.json.sig", got);
             return Ed25519.verifyIndex(lockBytes, new String(got[0], StandardCharsets.UTF_8));

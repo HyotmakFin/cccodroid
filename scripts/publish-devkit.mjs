@@ -349,6 +349,7 @@ step.check = async () => {
     // 整包清单的签名（10-29 起 CI 才签，之前的版本没有）：有就必须验得过
     let lsig = null; try { lsig = (await getBuf(BASE + "devkit.lock.json.sig")).toString(); } catch {}
     if (lsig != null && !verifySig(lockBuf, lsig)) fail("devkit.lock.json 验签失败");
+    if (lsig != null && lock.release !== TAG) fail(`devkit.lock.json 签进去的 release 是 ${lock.release || "（空）"}，不是 ${TAG}——App 会拒装`);
     if (lock.gz.sha256 !== gz) fail("线上清单的 gz 和本地留的那份不一致");
     if (state.done.fetch && state.done.fetch.gz !== gz) fail("线上清单的 gz 和 fetch 时记下的不一致");
     const src = fs.readFileSync(path.join(ROOT, "devkit-sources.txt"), "utf8").split("\n")[0].trim();

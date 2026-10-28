@@ -56,11 +56,16 @@ jobs:
           INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
         run: node scripts/sign-modules.mjs out/modules/modules.json
 
-      # 整包清单也签（审查 H3）：不是 APK 钉的那版、又没有验得过的签名，App 就不装整包
+      # 整包清单也签（审查 H3）：不是 APK 钉的那版、又没有验得过的签名，App 就不装整包。
+      # 签之前写上属于哪个 Release（release 字段）：App 核对它和下载地址里的 tag 一致，
+      # 旧版清单连同签名原样搬到新 tag 下冒充新版就过不去（审查 10-29 中2）
       - name: 签名 devkit.lock.json
         env:
           INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
-        run: node scripts/sign-modules.mjs out/devkit.lock.json
+          REL: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
+        run: |
+          node -e 'const fs=require("fs"),f="out/devkit.lock.json",j=JSON.parse(fs.readFileSync(f,"utf8"));j.release=process.env.REL||"";fs.writeFileSync(f,JSON.stringify(j,null,2))'
+          node scripts/sign-modules.mjs out/devkit.lock.json
 
       # 「经加载器」（targetSdk 36）的 APK 要从这个 glibc 包里抽 ld.so（devkit.mjs ldso）。Termux 仓库在 glibc 升版后会删掉旧包，
       # 所以随 Release 存一份，锁文件里的 sha256 照样核

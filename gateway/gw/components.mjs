@@ -85,7 +85,7 @@ async function compFetchIndex(src, mirror) {
 }
 
 /** 两个来源合并：预置（cccodroid 仓库）在前，社区（cccodroid-components）在后；id 撞了以预置为准。
- *  共享目录里放了 components/components.json 就代替预置来源（离线 / 测试），同样要签名。 */
+ *  共享目录里放了 components/components.json、且私有目录有 use-local-index 开关，就代替预置来源（离线 / 测试），同样要签名。 */
 // 磁盘缓存：上回验过签的合并索引存一份，重开 App 后扩展页先拿它出列表，不用等网络（群友：每次重开组件栏都要等好久）。
 // 文件在私有目录（和已装记录同处、同等可信）；名字别以 .json 结尾——COMP_DIR 里的 *.json 都当已装记录读
 const compCacheFile = () => COMP_DIR && path.join(COMP_DIR, "index.cache");
@@ -118,7 +118,9 @@ export async function compIndex(force) {
 }
 
 async function compIndexFetch() {
-  const local = process.env.CCAPP_SHARED && path.join(process.env.CCAPP_SHARED, "components", "components.json");
+  // 共享目录里的索引只在私有目录有 use-local-index 开关时才认：/sdcard 别的应用也能写，
+  // 放一份 GitHub 上公开的旧索引（签名是真的）就能把组件压回旧构建（审查 10-29 中2）
+  const local = process.env.CCAPP_SHARED && COMP_DIR && fs.existsSync(path.join(COMP_DIR, "use-local-index")) && path.join(process.env.CCAPP_SHARED, "components", "components.json");
   const sources = [
     { source: "preset", url: local && fs.existsSync(local) ? "file://" + local : COMP_INDEX },
     { source: "community", url: COMP_COMMUNITY_INDEX },
