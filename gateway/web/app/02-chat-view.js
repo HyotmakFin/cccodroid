@@ -60,6 +60,26 @@
     mark: '<path d="M7 3.5h10a1 1 0 0 1 1 1V20l-6-4.2L6 20V4.5a1 1 0 0 1 1-1z"/>',
     del: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
   };
+  // 消息底下按钮行里藏哪几个（0.4.20，设置 → 通用 → 消息下面的按钮；存 ccapp-ui.json 的 msgActs = { user: [...], bot: [...] }）。
+  // 只用一段样式藏起来，不改渲染：长对话里成百上千个按钮行不用重画
+  const ACTS = { user: ["copy", "resend", "rewind", "mark", "del"], bot: ["copy", "share", "fork", "mark", "del"] };
+  function msgActsHidden() {
+    const v = uiGet("msgActs") || {}, ok = (w, a) => (Array.isArray(a) ? a.filter((k) => ACTS[w].includes(k)) : []);
+    return { user: ok("user", v.user), bot: ok("bot", v.bot) };
+  }
+  function paintActHide() {
+    const h = msgActsHidden(), sel = [];
+    for (const w of ["user", "bot"]) {
+      for (const k of h[w]) sel.push(`.msg.${w} > .msg-acts > [data-a="${k}"]`);
+      if (h[w].length === ACTS[w].length) sel.push(`.msg.${w} > .msg-acts`);
+    }
+    let el = document.getElementById("acts-hide");
+    if (!el) { el = document.createElement("style"); el.id = "acts-hide"; document.head.appendChild(el); }
+    el.textContent = sel.length ? sel.join(",") + "{display:none !important}" : "";
+  }
+  paintActHide();
+  document.addEventListener("cc:ui", (e) => { if (e.detail.key === "msgActs") paintActHide(); if (e.detail.key === "accent" && window.Theme) Theme.apply(); });
+
   const UI_I = {
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',

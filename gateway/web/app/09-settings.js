@@ -792,3 +792,47 @@
     box.addEventListener("pointerup", end);
     box.addEventListener("pointercancel", end);
   })();
+
+  // ── 强调色（0.4.20）：预设八色 + 自定取色；实际用的颜色由 theme.js 按当前外观的底色调过（色块显示的就是调过的） ──
+  const AC_PRESETS = [["#2b6fd6", tk("蓝")], ["#0f8b8d", tk("青")], ["#2f8a4c", tk("绿")], ["#b7791f", tk("琥珀")], ["#d9622b", tk("橙")], ["#d23a2f", tk("红")], ["#c2408a", tk("品红")], ["#7a4fd0", tk("紫")]];
+  function renderAccent() {
+    const box = $("ac-sw"); if (!box || !window.Theme || !Theme.accentFor) return;
+    const cur = uiGet("accent") || "", skin = Theme.skin, mode = Theme.current || "light";
+    const sw = (hex) => Theme.accentFor(hex, skin, mode).acc;
+    const custom = cur && !AC_PRESETS.some(([h]) => h === cur);
+    box.innerHTML = `<button type="button" class="ac-dot ac-def${cur ? "" : " on"}" data-ac="" title="${esc(t("默认"))}"><svg viewBox="0 0 24 24"><path d="M6 18L18 6"/></svg></button>`
+      + AC_PRESETS.map(([h, n]) => `<button type="button" class="ac-dot${cur === h ? " on" : ""}" data-ac="${h}" title="${esc(t(n))}" style="background:${sw(h)}"></button>`).join("")
+      + `<label class="ac-dot ac-pick${custom ? " on" : ""}" title="${esc(t("自定颜色"))}"${custom ? ` style="background:${sw(cur)}"` : ""}><input type="color" value="${custom ? cur : "#2b6fd6"}"></label>`;
+  }
+  function setAccent(hex) {
+    uiSet("accent", hex || null);   // cc:ui → Theme.apply()（02-chat-view.js 里接）
+    renderAccent();
+    const on = $("ac-sw")?.querySelector(".on"); if (on) MO.play(on, "mo-tick", 900);
+  }
+  $("ac-sw")?.addEventListener("click", (e) => { const b = e.target.closest("[data-ac]"); if (b) setAccent(b.dataset.ac); });
+  // 取色器拖动时 input 连续触发：只改本地预览（不写网关），change（松手 / 关面板）才存
+  $("ac-sw")?.addEventListener("input", (e) => {
+    if (e.target.type !== "color") return;
+    const lab = e.target.closest(".ac-pick"); lab.style.background = Theme.accentFor(e.target.value, Theme.skin, Theme.current).acc;
+  });
+  $("ac-sw")?.addEventListener("change", (e) => { if (e.target.type === "color") setAccent(e.target.value.toLowerCase()); });
+  // 换外观 / 深浅时色块跟着重算（theme.js 只改 html 属性，不发事件）
+  new MutationObserver(() => renderAccent()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-skin"] });
+
+  // ── 消息下面的按钮（0.4.20）：每个按钮点一下切显示 / 隐藏，藏法见 02-chat-view.js 的 paintActHide ──
+  const ACT_NAME = { copy: tk("复制"), resend: tk("重发"), rewind: tk("回退到这里"), mark: tk("书签"), del: tk("删除"), share: tk("转发"), fork: tk("从这里分叉") };
+  function renderMsgActs() {
+    const box = $("ma-list"); if (!box) return;
+    const h = msgActsHidden();
+    box.innerHTML = [["user", t("你的消息")], ["bot", t("Claude 的回复")]].map(([w, lab]) => `<div class="ma-line"><span class="ma-who">${esc(lab)}</span>`
+      + ACTS[w].map((k) => `<button type="button" class="ma-chip${h[w].includes(k) ? "" : " on"}" data-w="${w}" data-k="${k}" aria-pressed="${!h[w].includes(k)}"><svg viewBox="0 0 24 24">${ICONS[k]}</svg><span>${esc(t(ACT_NAME[k]))}</span></button>`).join("") + "</div>").join("");
+  }
+  $("ma-list")?.addEventListener("click", (e) => {
+    const b = e.target.closest(".ma-chip"); if (!b) return;
+    const h = msgActsHidden(), w = b.dataset.w, k = b.dataset.k;
+    h[w] = h[w].includes(k) ? h[w].filter((x) => x !== k) : h[w].concat(k);
+    uiSet("msgActs", h.user.length || h.bot.length ? h : null);
+    renderMsgActs();
+  });
+  $("ma-reset")?.addEventListener("click", () => { uiSet("msgActs", null); renderMsgActs(); });
+  document.addEventListener("cc:ui", (e) => { if (e.detail.key === "msgActs") renderMsgActs(); if (e.detail.key === "accent") renderAccent(); });

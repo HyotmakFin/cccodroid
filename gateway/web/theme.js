@@ -63,6 +63,7 @@
     if (root.dataset.skin !== skin) root.dataset.skin = skin;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = BAR[skin][name];
+    applyAccent(skin, name);
     const a = app();
     // 先告诉壳风格，再让它换栏色 —— 栏色按风格取
     if (a && typeof a.skinPref === "function") { try { a.skinPref(skin); } catch {} }
@@ -75,6 +76,51 @@
     document.querySelectorAll("#seg-skin [data-sk]").forEach((b) => b.classList.toggle("on", b.dataset.sk === skin));
     document.querySelectorAll("#seg-mode [data-md]").forEach((b) => b.classList.toggle("on", b.dataset.md === mode));
     return name;
+  }
+
+  // ── 强调色（0.4.20）：用户在设置 → 通用里挑的颜色，存在 ccapp-ui.json 的 accent（本地镜像 localStorage cc.ui，这里同步读，启动不闪）。
+  //   同一个颜色在浅底、深底上看得清的深浅不一样：按当前外观的底色把亮度往对比度够的方向推，直到正文对比 ≥ 4.5:1；
+  //   按钮上的字（--on-accent）在白和近黑里挑对比高的；选中项的浅底（--active-bg）也由它派生。三套外观都盖：构成的红、逐月的蓝点缀也换成它
+  const hex2rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const lum = (h) => { const c = hex2rgb(h).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  function rgb2hsl([r, g, b]) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l];
+    const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    const h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h / 6, s, l];
+  }
+  function hsl2hex(h, s, l) {
+    const f = (n) => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+    return "#" + [0, 8, 4].map((n) => Math.round(f(n) * 255).toString(16).padStart(2, "0")).join("");
+  }
+  /** 把 hex 的亮度往离开 bg 的方向推，直到对比 ≥ min；推到头还不够就返回推到头的那个 */
+  function readable(hex, bg, min) {
+    let [h, s, l] = rgb2hsl(hex2rgb(hex)), out = hex;
+    const dir = lum(bg) > 0.4 ? -1 : 1;
+    for (let i = 0; i < 60 && contrast(out, bg) < min; i++) { l = Math.max(0, Math.min(1, l + dir * 0.015)); out = hsl2hex(h, s, l); }
+    return out;
+  }
+  const mix = (a, b, p) => "#" + hex2rgb(a).map((v, i) => Math.round((v * p + hex2rgb(b)[i] * (1 - p)) * 255).toString(16).padStart(2, "0")).join("");
+  function accentPref() { try { const v = (JSON.parse(localStorage.getItem("cc.ui")) || {}).accent; return /^#[0-9a-f]{6}$/i.test(v || "") ? v.toLowerCase() : ""; } catch { return ""; } }
+  /** 给定外观和深浅，算出实际用的三种颜色（设置页的色块预览也用它） */
+  function accentFor(hex, skin, name) {
+    const bg = BAR[skin][name], acc = readable(hex, bg, 4.5);
+    const on = contrast("#ffffff", acc) >= contrast("#141414", acc) ? "#ffffff" : "#141414";
+    return { acc, dim: mix(acc, bg, 0.45), on, soft: mix(acc, bg, lum(bg) > 0.4 ? 0.12 : 0.2) };
+  }
+  function applyAccent(skin, name) {
+    let el = document.getElementById("user-accent");
+    const hex = accentPref();
+    let css = "";
+    if (hex) {
+      const { acc, dim, on, soft } = accentFor(hex, skin, name);
+      // 选择器带两个属性：压过各外观自己那段（同样两个属性），这段 style 插在 style.css 后面，同分时后者赢
+      css = `html[data-theme][data-skin]{--accent:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--zy-blue:${acc}}`;
+    }
+    if (!el) { if (!css) return; el = document.createElement("style"); el.id = "user-accent"; document.head.appendChild(el); }
+    if (el.textContent !== css) el.textContent = css;
   }
 
   function set(v) {
@@ -167,6 +213,6 @@
   document.addEventListener("DOMContentLoaded", applyType);
   applyType();
 
-  window.Theme = { pref, set, system, apply, setType, type: typePref, setFonts, fontOf, fam, get fonts() { return ufonts.slice(); }, get current() { return document.documentElement.dataset.theme; } };
+  window.Theme = { pref, set, system, apply, accentFor, get skin() { return skinOf(pref); }, setType, type: typePref, setFonts, fontOf, fam, get fonts() { return ufonts.slice(); }, get current() { return document.documentElement.dataset.theme; } };
   apply();
 })();

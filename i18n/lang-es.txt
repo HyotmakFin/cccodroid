@@ -2262,3 +2262,18 @@
 2262	Restablecer
 2263	En ⋯
 2264	Para cada botón elige Fijo (siempre en la barra), En ⋯ (aparece al tocar ⋯) u Oculto. Mantén pulsada el asa de la izquierda y arrastra para cambiar el orden
+2265	Color de acento
+2266	El color de botones, enlaces y elementos seleccionados. Se aclara u oscurece según la apariencia para que siga siendo legible
+2267	Botones bajo los mensajes
+2268	Toca para mostrar u ocultar cada uno; oculta los que no uses
+2269	Tus mensajes
+2270	Respuestas de Claude
+2271	Color personalizado
+2272	Azul
+2273	Verde azulado
+2274	Verde
+2275	Ámbar
+2276	Naranja
+2277	Rojo
+2278	Magenta
+2279	Morado

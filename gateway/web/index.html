@@ -454,6 +454,17 @@
               </select>
             </div>
           </div>
+          <!-- 强调色（0.4.20）：色块由 app/09-settings.js 画，算色在 theme.js（按底色自动调深浅） -->
+          <div class="srow ac-row">
+            <div class="sl"><b data-i18n>强调色</b><p data-i18n>按钮、链接、选中项的颜色。会按当前外观的底色自动调深浅，保证看得清</p></div>
+            <div class="sc"><div class="ac-sw" id="ac-sw"></div></div>
+          </div>
+          <!-- 消息下面的按钮（0.4.20）：只藏不排序，存 ccapp-ui.json 的 msgActs -->
+          <div class="srow ma-row">
+            <div class="sl"><b data-i18n>消息下面的按钮</b><p data-i18n>点一下切换显示或隐藏，用不上的可以藏起来</p>
+              <div id="ma-list" class="ma-list"></div></div>
+            <div class="sc"><button type="button" id="ma-reset" class="btn sm ghost" data-i18n>恢复默认</button></div>
+          </div>
           <!-- 顶栏按钮（0.4.20）：常驻 / 收起 / 隐藏 + 拖动排序，存 ccapp-ui.json 的 topbar（app/09-settings.js 的 TB 一节） -->
           <div class="srow tb-row">
             <div class="sl"><b data-i18n>顶栏按钮</b><p data-i18n>每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序</p>

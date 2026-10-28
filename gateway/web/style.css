@@ -3136,3 +3136,21 @@ html[data-motion="on"] .tool.mo-flash::after{content:"";position:absolute;inset:
 .tb-ico svg{width:18px;height:18px;fill:none;stroke:var(--fg2);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
 .tb-item .tb-nm{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tb-item .tb-seg{flex:none}
+
+/* ── 强调色色块与消息按钮开关（0.4.20） ── */
+.ac-sw{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;max-width:360px}
+.ac-dot{width:26px;height:26px;border-radius:50%;border:0;padding:0;cursor:pointer;position:relative;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.ac-dot.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--fg)}
+.ac-def{background:var(--bg3);color:var(--fg3);display:grid;place-items:center}
+.ac-def svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.ac-pick{background:conic-gradient(#e5484d,#f5a623,#f2d94e,#46a758,#0f8b8d,#2b6fd6,#7a4fd0,#c2408a,#e5484d);overflow:hidden}
+.ac-pick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
+.ma-row{align-items:flex-start}
+.ma-list{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.ma-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ma-who{font-size:12.5px;color:var(--fg3);min-width:6.5em}
+.ma-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px 4px 8px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--fg3);font:inherit;font-size:12.5px;cursor:pointer}
+.ma-chip svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ma-chip:not(.on) span{text-decoration:line-through}
+.ma-chip.on{color:var(--fg);background:var(--panel)}
+.ma-chip:not(.on){border-style:dashed;opacity:.75}

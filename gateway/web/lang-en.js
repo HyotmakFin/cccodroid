@@ -2299,5 +2299,20 @@ window.I18N_DICT.en = {
   "隐藏": "Hidden",
   "恢复默认": "Restore default",
   "收进 ⋯": "In ⋯",
-  "每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序": "For each button choose Pinned (always on the top bar), In ⋯ (shown when you tap ⋯) or Hidden. Hold the handle on the left and drag to reorder"
+  "每个按钮选「常驻」（一直露在顶栏）、「收进 ⋯」（点 ⋯ 才出来）或「隐藏」；按住左边的把手上下拖，换先后顺序": "For each button choose Pinned (always on the top bar), In ⋯ (shown when you tap ⋯) or Hidden. Hold the handle on the left and drag to reorder",
+  "强调色": "Accent color",
+  "按钮、链接、选中项的颜色。会按当前外观的底色自动调深浅，保证看得清": "The color of buttons, links and selected items. It's lightened or darkened for the current appearance so it stays readable",
+  "消息下面的按钮": "Buttons under messages",
+  "点一下切换显示或隐藏，用不上的可以藏起来": "Tap to show or hide each one; hide the ones you don't use",
+  "你的消息": "Your messages",
+  "Claude 的回复": "Claude's replies",
+  "自定颜色": "Custom color",
+  "蓝": "Blue",
+  "青": "Teal",
+  "绿": "Green",
+  "琥珀": "Amber",
+  "橙": "Orange",
+  "红": "Red",
+  "品红": "Magenta",
+  "紫": "Purple"
 };

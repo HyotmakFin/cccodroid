@@ -2262,3 +2262,18 @@
 2262	Rétablir
 2263	Dans ⋯
 2264	Pour chaque bouton : Épinglé (toujours dans la barre), Dans ⋯ (visible en touchant ⋯) ou Masqué. Maintenez la poignée à gauche et faites glisser pour changer l'ordre
+2265	Couleur d'accent
+2266	La couleur des boutons, liens et éléments sélectionnés. Elle est éclaircie ou assombrie selon l'apparence pour rester lisible
+2267	Boutons sous les messages
+2268	Touchez pour afficher ou masquer chaque bouton ; masquez ceux que vous n'utilisez pas
+2269	Vos messages
+2270	Réponses de Claude
+2271	Couleur personnalisée
+2272	Bleu
+2273	Sarcelle
+2274	Vert
+2275	Ambre
+2276	Orange
+2277	Rouge
+2278	Magenta
+2279	Violet
