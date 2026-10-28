@@ -32,6 +32,7 @@ The thin line under the top bar shows **context usage**; the further right, the 
 - `/` opens slash commands and `@` references a file. Use Share → cccodroid in other apps to attach files directly.
 - The top row of ＋ next to the input box: Attach file, Take photo, Screenshot, Browse files. Photos are scaled to 2048 px on the long side before they're attached. **Long-press Screenshot to take it in 5 seconds**: switch to the app you want to capture in the meantime, and you'll be brought back afterwards.
 - Tool calls collapse into one line such as "3 steps · done"; tap to see each step. Steps that need you, or that failed, open on their own.
+- **Subagents** get their own card below the steps that launched them: one row per subagent with its status, step count and what it's doing; tap a row to open its steps. At the bottom, the message log shows "who → whom · what about". Each subagent's brief and report are saved under `.cccodroid/agents/` in the project folder; tap "Brief" or "Report" to read them.
 - Paths in replies open in the viewer; web links open in the in-app browser.
 - Every message has four buttons. Yours: copy, resend, rewind to here, delete. Claude's: copy, share, fork from here, delete.
 - **Rewind to here** first lists the files changed since, then lets you undo just the code, or the code and the conversation. Files changed by shell commands are not restored.
