@@ -14,6 +14,9 @@ import { NEXT, readBody, readBodyBuf, sendJson } from "./http.mjs";
 // ── 会话重命名表 ──────────────────────────────────────────────────────
 export let NAMES = {};
 try { NAMES = JSON.parse(fs.readFileSync(PATHS.names, "utf8")); } catch {}
+// 会话标题只在这里定：用户改过的 > 建档的最新一章题名 > 第一句提问。列表、详情、搜索都走它，免得顶栏和侧栏各说各的（#44）
+const sessionTitle = (id, meta) => NAMES[id] || archivedTitle(id) || meta.title;
+
 export function saveNames() {
   try { fs.writeFileSync(PATHS.names, JSON.stringify(NAMES, null, 2), { mode: 0o600 }); } catch {}
 }
@@ -100,8 +103,7 @@ export function listSessions(limit = 150) {
       no: ab.no, misc: ab.misc,
       created: meta.created || 0,
       pinned: PINS[s.id] || 0,
-      // 标题：用户改过的 > 建档的最新一章题名 > 第一句提问
-      title: NAMES[s.id] || archivedTitle(s.id) || meta.title,
+      title: sessionTitle(s.id, meta),
       archived: !NAMES[s.id] && !!archivedTitle(s.id),
       renamed: !!NAMES[s.id],
       cwd: meta.cwd,
@@ -184,7 +186,7 @@ async function searchSessionsNow(q) {
   const results = [];
   for (const f of files) {
     const meta = peekSession(f.file);
-    const title = NAMES[f.id] || meta.title;
+    const title = sessionTitle(f.id, meta);
     let e;
     try { e = await indexSessionFile(f.file, f.size); } catch { continue; }
     let i = e.lower.indexOf(needle), count = 0, snippet = "";
@@ -320,7 +322,7 @@ export async function routeSessions(req, res, u, p) {
       if (subs.size) for (const it of page.items) if (it.role === "tool_use" && subs.has(it.id)) it.sub = true;
       return sendJson(res, 200, {
         id,
-        title: NAMES[id] || meta.title,
+        title: sessionTitle(id, meta),
         cwd: meta.cwd,
         items: page.items,
         cursor: fwd !== null ? page.from : page.cursor,
