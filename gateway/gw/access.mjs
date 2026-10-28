@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { CFG } from "./config.mjs";
+import { CFG, PREFIX } from "./config.mjs";
 
 // ── 访问控制 ──────────────────────────────────────────────────────────
 // 只监听 127.0.0.1 在安卓上不是安全边界：同机任何有联网权限的应用都能连 127.0.0.1，
@@ -12,7 +12,7 @@ import { CFG } from "./config.mjs";
 //   3. /api/* 必须带令牌：X-CC-Token 头，或 cc_t_<端口> Cookie（宿主 WebView 首次加载首页时带 ?t=令牌 换来）。
 //      令牌在应用私有目录里（0600），别的应用读不到；首页带对 ?t= 时种一个 HttpOnly + SameSite=Strict 的 Cookie，
 //      之后界面的 fetch / EventSource / <img src> 都自动带上，前端不用改。
-//   令牌跨网关重启保持不变（WebView 不会因为网关重启掉线）；删掉文件即轮换。
+//   令牌跨网关重启保持不变；删掉文件即轮换。Cookie 的值见下面 SESSION。
 const TOKEN_FILE = process.env.CCAPP_TOKEN_FILE || path.join(CFG.home, ".gateway-token");
 export const TOKEN = (() => {
   try {
@@ -32,12 +32,29 @@ export const COOKIE = `cc_t_${CFG.port}`;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`]);
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
 
-export function tokenOk(t) {
+function same(t, want) {
   if (typeof t !== "string") return false;
   // 按字节比长度：非 ASCII 的字符串字符数相同、字节数不同，timingSafeEqual 会直接抛错把网关带走
-  const a = Buffer.from(t), b = Buffer.from(TOKEN);
+  const a = Buffer.from(t), b = Buffer.from(want);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+export const tokenOk = (t) => same(t, TOKEN);
+
+// ── 证明「我是真网关」（审查 S1）──
+// 安卓上 127.0.0.1 的端口全机共享：网关没起来（开机、崩溃后重拉的空档）时别的应用能先占住 8791。
+// 以前 App 只看端口上有没有人答话，就把令牌头、带 ?t=&k= 的首页地址交过去。现在 App 先发一个随机数 n，
+// 真网关用令牌算 HMAC 回过来（令牌只在双方私有目录里，冒牌的算不出），过了才交凭据。
+// BOOT 是这次启动的编号，一并算进去，App 据此知道网关换过了没有。
+export const BOOT = crypto.randomBytes(16).toString("hex");
+const mac = (s) => crypto.createHmac("sha256", TOKEN).update(s).digest("hex");
+export function proof(n) {
+  return /^[0-9a-f]{32,128}$/.test(String(n || "")) ? `${BOOT} ${mac(`proof:${n}:${BOOT}`)}` : null;
+}
+// cccodroid 里 Cookie 不用令牌本身，用按这次启动派生的会话值：会话中途网关挂了、端口被抢，
+// 界面重连时送出去的 Cookie 到了下一个真网关就作废。网关重启后 App 按新的 BOOT 种上新 Cookie（Env.proveGateway），
+// 界面的事件总线 2 秒一重连，自己就接上了。开发端照旧用令牌：gw-swap 热换网关时界面不能掉线
+export const SESSION = PREFIX ? mac("cookie:" + BOOT) : TOKEN;
+const sessionOk = (t) => same(t, SESSION);
 function cookieToken(req) {
   const m = new RegExp(`(?:^|;\\s*)${COOKIE}=([0-9a-f]{64})(?:;|$)`).exec(req.headers.cookie || "");
   return m ? m[1] : "";
@@ -55,6 +72,6 @@ export function denyReason(req, u) {
   // 地址栏直接打开是 none；claude、curl 这类不发这个头
   const site = req.headers["sec-fetch-site"];
   if (site && site !== "same-origin" && site !== "none") return 403;
-  if (tokenOk(cookieToken(req))) return null;
+  if (sessionOk(cookieToken(req))) return null;
   return 403;
 }

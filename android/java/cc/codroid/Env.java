@@ -16,11 +16,69 @@ final class Env {
         catch (Exception e) { return ""; }
     }
 
-    /** 连本机网关：自动带上令牌头。网关没生成令牌前会得到 403，调用方照"没就绪"处理即可 */
+    /** 连本机网关：先核身份，再带上令牌头。网关没起来、没生成令牌、或端口上不是它时抛 IOException，调用方照"没就绪"处理即可 */
     static java.net.HttpURLConnection gateway(String path) throws java.io.IOException {
+        if (!proveGateway()) throw new java.io.IOException("127.0.0.1:" + PORT + " 上不是 cccodroid 的网关（还没起来，或被别的应用占了）");
         java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:" + PORT + path).openConnection();
         c.setRequestProperty("X-CC-Token", token());
         return c;
+    }
+
+    // ── 核身份（审查 S1）：端口全机共享，交出令牌之前先确认对面是真网关。协议见 gateway/gw/access.mjs 的 proof ──
+    private static volatile long provedAt;
+    private static volatile String boot = "";
+    /** 网关换了一个（启动号变了）时回调，参数是这次的 Cookie 值；MainActivity 拿去种进 WebView */
+    static volatile java.util.function.Consumer<String> onBoot;
+
+    static boolean proveGateway() {
+        if (System.currentTimeMillis() - provedAt < 3000) return true;    // 刚核过：别每个请求都多跑一趟
+        String t = token();
+        if (t.isEmpty()) return false;
+        try {
+            byte[] nb = new byte[16];
+            new java.security.SecureRandom().nextBytes(nb);
+            String n = hex(nb);
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:" + PORT + "/__proof?n=" + n).openConnection();
+            c.setConnectTimeout(800); c.setReadTimeout(1500); c.setInstanceFollowRedirects(false); c.setUseCaches(false);
+            try {
+                if (c.getResponseCode() != 200) return false;
+                byte[] buf = new byte[256];
+                int len = 0;
+                try (java.io.InputStream in = c.getInputStream()) {
+                    for (int k; len < buf.length && (k = in.read(buf, len, buf.length - len)) > 0; ) len += k;
+                }
+                String[] p = new String(buf, 0, len, java.nio.charset.StandardCharsets.UTF_8).trim().split(" ");
+                if (p.length != 2 || !p[0].matches("[0-9a-f]{32}")) return false;
+                String want = hmac(t, "proof:" + n + ":" + p[0]);
+                if (!java.security.MessageDigest.isEqual(want.getBytes(), p[1].getBytes())) return false;
+                provedAt = System.currentTimeMillis();
+                if (!p[0].equals(boot)) {
+                    boot = p[0];
+                    java.util.function.Consumer<String> cb = onBoot;
+                    if (cb != null) cb.accept(hmac(t, "cookie:" + boot));
+                }
+                return true;
+            } finally { c.disconnect(); }
+        } catch (Exception e) { return false; }
+    }
+
+    /** 端口上有没有人在听（不发任何东西） */
+    static boolean portBusy() {
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", PORT), 500);
+            return true;
+        } catch (java.io.IOException e) { return false; }
+    }
+
+    private static String hmac(String key, String msg) throws Exception {
+        javax.crypto.Mac m = javax.crypto.Mac.getInstance("HmacSHA256");
+        m.init(new javax.crypto.spec.SecretKeySpec(key.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+        return hex(m.doFinal(msg.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+    private static String hex(byte[] b) {
+        StringBuilder sb = new StringBuilder();
+        for (byte x : b) sb.append(String.format("%02x", x & 0xff));
+        return sb.toString();
     }
 
     /** 原生桥（CCApp）的口令：每次进程启动随机生成，只经首页地址交给界面主框架。
@@ -171,7 +229,8 @@ final class Env {
         e.put("CCAPP_LOG", log.getPath());
         e.put("CCAPP_LEDGER", Ledger.file(this).getPath());   // 修复账本：网关记安全模式、界面能翻
         e.put("CCAPP_SEED", new File(home, "seed.json").getPath());
-        e.put("CCAPP_BIN", new File(app, "bin").getPath());   // 应用自带的小工具（priv）
+        e.put("CCAPP_BIN", new File(app, "bin").getPath());
+        e.put("CCAPP_PRIV_SOCK", new File(files, ".priv.sock").getPath());   // priv 中转（见 Priv.java）   // 应用自带的小工具（priv）
         e.put("CCAPP_TARGET_SDK", String.valueOf(targetSdk));
         e.put("CCAPP_EXEC", loader ? "loader" : "direct");
         e.put("CCAPP_NATIVE_LIB", nativeLib);

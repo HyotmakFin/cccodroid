@@ -3,7 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { COOKIE, TOKEN, denyReason, tokenOk } from "../gw/access.mjs";
+import crypto from "node:crypto";
+import { BOOT, COOKIE, SESSION, TOKEN, denyReason, proof, tokenOk } from "../gw/access.mjs";
 
 const req = (headers) => ({ headers });
 const url = (p) => new URL("http://127.0.0.1:8799" + p);
@@ -50,7 +51,23 @@ test("静态页不要令牌，/api/ 要", () => {
 
 test("/api/ 认请求头 X-CC-Token 或带端口的 Cookie", () => {
   assert.equal(denyReason(req({ host: HOST, "x-cc-token": TOKEN }), url("/api/state")), null);
-  assert.equal(denyReason(req({ host: HOST, cookie: `a=1; ${COOKIE}=${TOKEN}` }), url("/api/state")), null);
-  assert.equal(denyReason(req({ host: HOST, cookie: `cc_t_8790=${TOKEN}` }), url("/api/state")), 403);   // 别的端口的 Cookie
+  assert.equal(denyReason(req({ host: HOST, cookie: `a=1; ${COOKIE}=${SESSION}` }), url("/api/state")), null);
+  assert.equal(denyReason(req({ host: HOST, cookie: `cc_t_8790=${SESSION}` }), url("/api/state")), 403);   // 别的端口的 Cookie
   assert.equal(denyReason(req({ host: HOST, "x-cc-token": "x".repeat(64) }), url("/api/state")), 403);
+});
+
+test("cccodroid 里 Cookie 是按这次启动派生的会话值，令牌本身当 Cookie 不认（审查 S1）", () => {
+  const mac = (x) => crypto.createHmac("sha256", TOKEN).update(x).digest("hex");
+  if (process.env.CCAPP_PREFIX) {
+    assert.equal(SESSION, mac("cookie:" + BOOT));
+    assert.equal(denyReason(req({ host: HOST, cookie: `${COOKIE}=${TOKEN}` }), url("/api/state")), 403);
+  } else assert.equal(SESSION, TOKEN);
+});
+
+test("证明：回启动号和 HMAC，随机数不合格式就不答", () => {
+  const n = crypto.randomBytes(16).toString("hex");
+  const [boot, m] = proof(n).split(" ");
+  assert.equal(boot, BOOT);
+  assert.equal(m, crypto.createHmac("sha256", TOKEN).update(`proof:${n}:${BOOT}`).digest("hex"));
+  for (const bad of ["", "abc", "g".repeat(32), "a".repeat(129), null]) assert.equal(proof(bad), null);
 });

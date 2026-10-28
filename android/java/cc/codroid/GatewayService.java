@@ -139,6 +139,7 @@ public class GatewayService extends Service {
             if (paused) { update(Tr.t("正在更新开发工具包…")); sleep(1000); continue; }
             if (!env.devkitReady()) { update(Tr.t("工具链未安装")); sleep(3000); continue; }
             if (alive()) { update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT); sleep(5000); continue; }
+            if (squatted()) { update(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT)); sleep(10000); continue; }
             long t0 = System.currentTimeMillis();
             try {
                 spawnGateway();
@@ -179,14 +180,34 @@ public class GatewayService extends Service {
         try { if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) p.destroyForcibly(); } catch (InterruptedException ignored) {}
     }
 
-    /** 端口上已经有活的网关（比如服务重建前留下的那个）就别再起一个 */
+    /** 端口上已经有活的网关（比如服务重建前留下的那个）就别再起一个。
+     *  只认证明得了自己的（审查 S1）：以前任何答 200 的都算，探活时还把令牌头带过去了 */
     private boolean alive() {
-        if (proc != null && proc.isAlive()) return true;
-        try {
-            HttpURLConnection c = Env.gateway("/api/status");
-            c.setConnectTimeout(800); c.setReadTimeout(1500);
-            return c.getResponseCode() == 200;
-        } catch (Exception e) { return false; }
+        if (proc != null && proc.isAlive()) { Env.proveGateway(); return true; }   // 顺手核一下：网关换过了，Cookie 跟着换
+        return Env.proveGateway();
+    }
+
+    /** 端口有人占着、又证明不了自己。本应用自己的残留网关（旧版没有 /__proof，或令牌换过）就杀掉、返回 false 照常起；
+     *  杀不着的是别的应用 —— 不起网关，也不往那儿交任何东西 */
+    private boolean squatted() {
+        if (!Env.portBusy()) return false;
+        int me = android.os.Process.myUid(), killed = 0;
+        File[] ps = new File("/proc").listFiles();
+        for (File d : ps == null ? new File[0] : ps) {
+            String name = d.getName();
+            if (!name.matches("\\d+")) continue;
+            try {
+                if (android.system.Os.stat(d.getPath()).st_uid != me) continue;
+                String cmd = new String(java.nio.file.Files.readAllBytes(new File(d, "cmdline").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+                if (!cmd.contains(new File(env.app, "server.mjs").getPath())) continue;   // 只认本应用的网关脚本，用户自己的 server.mjs 不碰
+                Log.w(TAG, "端口上是本应用的残留网关 pid=" + name + "，杀掉重起");
+                android.os.Process.sendSignal(Integer.parseInt(name), 9);
+                killed++;
+            } catch (Exception ignored) {}
+        }
+        if (killed > 0) { sleep(1000); return false; }
+        Log.e(TAG, "端口 " + Env.PORT + " 被别的应用占着（证明不了自己是网关）");
+        return true;
     }
 
     private String last;

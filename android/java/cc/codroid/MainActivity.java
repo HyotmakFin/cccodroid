@@ -1295,7 +1295,13 @@ public class MainActivity extends Activity {
                 jsDialog(msg, true, def == null ? "" : def, r, r); return true;
             }
         });
-        web.loadUrl(Env.uiUrl());
+        // 网关换了一个（重启、崩溃重拉）：它只认按新启动号派生的 Cookie，这里种上，界面的事件总线重连时就接上了（审查 S1）
+        Env.onBoot = (v) -> ui.post(() -> {
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            cm.setCookie("http://127.0.0.1:" + Env.PORT, "cc_t_" + Env.PORT + "=" + v + "; Path=/; HttpOnly; SameSite=Strict");
+            cm.flush();
+        });
+        loadUi();
         // 平时启动沿用正在扫的那个标识（不重播进场）；从安装页过来就新起一个居中的
         boolean dark = uiDark();
         View keep = splash != null && splash.getVisibility() == View.VISIBLE ? splash : null;
@@ -1392,8 +1398,26 @@ public class MainActivity extends Activity {
     }
     private void bounceBack() {
         bounceStage = 2;
-        web.loadUrl(Env.uiUrl());
+        loadUi();
     }
+
+    /** 打开界面。地址里带着令牌和桥口令，先在后台核网关身份，过了才交出去（审查 S1）；
+     *  端口上没人在听就照旧打开（只会显示连不上，什么也漏不出去）；有人在听却证明不了自己，换成一页说明 */
+    private void loadUi() {
+        new Thread(() -> {
+            boolean ok = Env.proveGateway() || !Env.portBusy();
+            ui.post(() -> {
+                if (web == null) return;
+                if (ok) { web.loadUrl(Env.uiUrl()); return; }
+                boolean dark = uiDark();
+                String html = "<meta name=viewport content=\"width=device-width\"><body style=\"font:16px/1.6 sans-serif;padding:32px;background:"
+                    + css(BrowserPane.pal(this, dark, "bg")) + ";color:" + css(BrowserPane.pal(this, dark, "fg")) + "\">"
+                    + android.text.TextUtils.htmlEncode(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT)) + "</body>";
+                web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+            });
+        }, "ui-prove").start();
+    }
+    private static String css(int c) { return String.format("#%06x", c & 0xffffff); }
 
     private void jsDialog(String msg, boolean withCancel, String def, android.webkit.JsResult r, android.webkit.JsPromptResult pr) {
         final android.widget.EditText in = def == null ? null : new android.widget.EditText(this);

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // device-mcp.mjs —— cccodroid 的设备工具（MCP，stdio）。网关起 claude 时用 --mcp-config 挂上，名字叫 device。
 //
-// 自己不碰安卓：每次调用都经应用进程的套接字（\0cc.codroid.priv，只认同一个 uid）转给 DeviceTools.java。
+// 自己不碰安卓：每次调用都经应用进程的套接字（私有目录里的 .priv.sock，只认同一个 uid）转给 DeviceTools.java。
 // 哪些工具出现在 tools/list 里由应用决定 —— 用户在 设置 → 设备工具 里关掉的，模型根本看不到。
 // 零依赖，只用 Node 自带模块。
 import net from "node:net";
 import readline from "node:readline";
 
-const SOCKET = "\0cc.codroid.priv";
+// 私有目录里的文件套接字：别的应用抢不走（以前的抽象套接字 \0cc.codroid.priv 谁都能先绑 —— 审查 H2）
+const SOCKET = process.env.CCAPP_PRIV_SOCK || "/data/data/cc.codroid/files/.priv.sock";
 
 function app(req, timeoutMs = 20000) {
   return new Promise((resolve) => {

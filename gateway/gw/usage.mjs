@@ -311,7 +311,7 @@ export function privCall(req, timeoutMs = 20000) {
       if (req.op === "status") return devPrivStatus().then(resolve);
       return resolve({ ok: false, state: "unsupported", message: tz("开发端的 Shizuku 由 Shizuku 应用自己管理（priv 走 rish）") });
     }
-    const s = net.connect({ path: "\0cc.codroid.priv" }, () => s.write(JSON.stringify(req) + "\n"));
+    const s = net.connect({ path: process.env.CCAPP_PRIV_SOCK || "/data/data/cc.codroid/files/.priv.sock" }, () => s.write(JSON.stringify(req) + "\n"));
     let buf = "";
     const t = setTimeout(() => { s.destroy(); resolve({ ok: false, message: tz("超时") }); }, timeoutMs);
     s.on("data", (d) => (buf += d));

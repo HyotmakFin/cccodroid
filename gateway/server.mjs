@@ -80,7 +80,7 @@ import { routeSessModel } from "./gw/sessmodel.mjs";
 import { routeLineage } from "./gw/lineage.mjs";
 import { routeBackfill } from "./gw/backfill.mjs";
 import { routeArchive } from "./gw/archive.mjs";
-import { COOKIE, TOKEN, denyLog, denyReason, tokenOk } from "./gw/access.mjs";
+import { COOKIE, SESSION, denyLog, denyReason, proof, tokenOk } from "./gw/access.mjs";
 import { startWorkIsland, stopWorkIslandSync } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
@@ -111,9 +111,16 @@ const server = http.createServer(async (req, res) => {
     req.resume();
     return sendJson(res, deny, { error: deny === 421 ? "bad host" : "forbidden" });
   }
+  // App 核身份用（见 access.mjs 的 proof）：不要令牌，回的东西没有令牌算不出来
+  if (req.method === "GET" && p === "/__proof") {
+    const r = proof(u.searchParams.get("n"));
+    if (!r) return sendJson(res, 400, { error: "bad nonce" });
+    res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
+    return res.end(r);
+  }
   // 宿主 WebView 首次加载首页时带 ?t=令牌：种 Cookie，之后同源请求自动带上
   if (req.method === "GET" && (p === "/" || p === "/index.html") && tokenOk(u.searchParams.get("t") || "")) {
-    res.setHeader("Set-Cookie", `${COOKIE}=${TOKEN}; Path=/; HttpOnly; SameSite=Strict`);
+    res.setHeader("Set-Cookie", `${COOKIE}=${SESSION}; Path=/; HttpOnly; SameSite=Strict`);
   }
 
   try {

@@ -2,7 +2,8 @@
 // 协议见 android/java/cc/codroid/Priv.java。
 import net from "node:net";
 
-const SOCKET = "\0cc.codroid.priv";
+// 私有目录里的文件套接字：别的应用抢不走（以前的抽象套接字 \0cc.codroid.priv 谁都能先绑 —— 审查 H2）
+const SOCKET = process.env.CCAPP_PRIV_SOCK || "/data/data/cc.codroid/files/.priv.sock";
 const args = process.argv.slice(2);
 const HELP = `用法:
   priv '<命令>'           以 shell 身份执行（/system/bin/sh -c）

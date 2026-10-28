@@ -11,7 +11,8 @@ cccodroid 拿到设备后把 fd 递过来，这里带着 TERMUX_USB_FD 启动 ad
 """
 import json, os, socket, subprocess, sys
 
-SOCK = "\0cc.codroid.priv"
+# 私有目录里的文件套接字：别的应用抢不走（以前的抽象套接字谁都能先绑 —— 审查 H2）
+SOCK = os.environ.get("CCAPP_PRIV_SOCK") or "/data/data/cc.codroid/files/.priv.sock"
 
 
 def call(req, want_fd=False):

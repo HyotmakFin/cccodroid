@@ -6,12 +6,14 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
+import android.net.LocalSocketAddress;
 import android.os.Build;
 import android.os.Process;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -27,11 +29,13 @@ import rikka.shizuku.Shizuku;
  * 为什么绕一圈：Shizuku 的 binder 只在本应用的 Java 进程里，而终端里跑的 priv 是普通子进程（bash/node），
  * 拿不到 binder。所以本进程开一个本地套接字当中转：
  *
- *   priv 'cmd'（应用 uid 的子进程）→ 抽象命名空间套接字 "cc.codroid.priv"
+ *   priv 'cmd'（应用 uid 的子进程）→ 私有目录里的文件套接字 files/.priv.sock（$CCAPP_PRIV_SOCK）
  *     → 本类（核对对端 uid 必须是本应用自己）→ Shizuku.newProcess → shell 身份执行
  *
- * 安全：抽象套接字谁都能连，所以每个连接先查 SO_PEERCRED —— 不是本应用 uid 的一律断开，
- * 别的应用借不到这份权限。
+ * 安全：每个连接先查 SO_PEERCRED —— 不是本应用 uid 的一律断开，别的应用借不到这份权限。
+ * 反过来客户端也得确认连的是真服务：以前用抽象套接字 "cc.codroid.priv"，名字全机共享，别的应用抢先绑上就能
+ * 收走命令、伪造回应（审查 H2）。文件套接字放在私有目录里，别的应用连路径都进不去，抢不走。
+ * 抽象套接字暂时还开着，给没跟着更新的旧脚本用；自带的客户端都已改连文件套接字。
  *
  * 协议（一问一答）：客户端先发一行 JSON 请求；
  *   op=exec 之后双向走帧：[1 字节类型][4 字节长度 BE][数据]
@@ -70,7 +74,25 @@ final class Priv {
                 new Thread(() -> keepAlive(true), "keepalive").start();
             }
         });
+        new Thread(Priv::serveFile, "priv-server-fs").start();
         new Thread(Priv::serve, "priv-server").start();
+    }
+
+    static File sockFile(Context c) { return new File(c.getFilesDir(), ".priv.sock"); }
+    private static LocalSocket fsSock;   // 留着引用：被回收时会把监听的 fd 一起关掉
+
+    private static void serveFile() {
+        File f = sockFile(ctx);
+        LocalServerSocket ss;
+        try {
+            f.delete();                    // 上一个进程留下的套接字文件，不删 bind 会报地址已占用
+            LocalSocket b = new LocalSocket();
+            b.bind(new LocalSocketAddress(f.getPath(), LocalSocketAddress.Namespace.FILESYSTEM));
+            ss = new LocalServerSocket(b.getFileDescriptor());
+            fsSock = b;
+            android.system.Os.chmod(f.getPath(), 0600);
+        } catch (Exception e) { Log.e(TAG, "开不了文件套接字", e); return; }
+        acceptLoop(ss);
     }
 
     private static SharedPreferences prefs() { return ctx.getSharedPreferences("priv", Context.MODE_PRIVATE); }
@@ -247,7 +269,11 @@ final class Priv {
     private static void serve() {
         LocalServerSocket ss;
         try { ss = new LocalServerSocket(SOCKET); }
-        catch (IOException e) { Log.e(TAG, "开不了套接字", e); return; }
+        catch (IOException e) { Log.e(TAG, "开不了套接字（可能被别的应用抢先绑了；自带客户端走文件套接字，不受影响）", e); return; }
+        acceptLoop(ss);
+    }
+
+    private static void acceptLoop(LocalServerSocket ss) {
         int me = Process.myUid();
         while (true) {
             try {
