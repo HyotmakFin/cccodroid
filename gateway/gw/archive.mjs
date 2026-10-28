@@ -8,7 +8,7 @@
 // 交档：AI 在 Bash 里跑 archive/cc-archive.mjs → POST /api/archive（带网关令牌、本轮编号）→ 这里按规范校验，
 //   不合格把原因退回去，AI 改了再交。
 import path from "node:path";
-import { HERE, LAST_LANG, log } from "./config.mjs";
+import { HERE, LAST_LANG, log, tz } from "./config.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { RUNS } from "./runs.mjs";
 import { NAMES } from "./sessions.mjs";
@@ -44,7 +44,7 @@ export async function fileChapter(sid, { title, same, status, chapter, misc, by 
   entry.title = chapterView(rec, entry).sessionTitle;
   // AI 判断是测试 / 试模型这类用完即弃的会话：归进杂项。用户定过（归入或移出）的不动
   if (misc && entry.miscBy !== "user") { entry.misc = true; entry.miscBy = by; }
-  saveArchive();
+  if (!saveArchive()) return { ok: false, errors: [/^zh/i.test(LAST_LANG) ? "档案写不进去（存储满了或没权限），这次没存上，稍后再建" : "could not write the archive file (storage full or no permission); nothing was saved, try again later"] };
   log(`建档 ${archiveNo(sid, n)}「${v.title}」${same ? "（同上一章）" : ""}${by === "user" ? "（用户）" : ""}`);
   publish({ type: "archive", sessionId: sid, n, title: v.title, sessionTitle: NAMES[sid] || entry.title });
   return { ok: true, n, no: archiveNo(sid, n), title: v.title, sessionTitle: entry.title };
@@ -55,7 +55,7 @@ export function setMisc(sid, on) {
   const db = archiveDb();
   const entry = db.sessions[sid] || (db.sessions[sid] = { title: null, chapters: {} });
   entry.misc = !!on; entry.miscBy = "user";
-  saveArchive();
+  if (!saveArchive()) return { ok: false, error: tz("档案写不进去（存储满了或没权限），这次没存上") };
   publish({ type: "archive", sessionId: sid, misc: !!on });
   return { ok: true, misc: !!on };
 }
@@ -92,7 +92,8 @@ export async function routeArchive(req, res, u, p) {
   if (p === "/api/archive/misc" && req.method === "POST") {
     let b; try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     if (!SID.test(String(b.session || ""))) return sendJson(res, 400, { error: "bad session" });
-    return sendJson(res, 200, setMisc(String(b.session), !!b.misc));
+    const r = setMisc(String(b.session), !!b.misc);
+    return sendJson(res, r.ok ? 200 : 500, r);
   }
   if (p !== "/api/archive") return NEXT;
   if (req.method === "GET") {

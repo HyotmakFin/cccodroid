@@ -19,7 +19,8 @@ function save() {
   try {
     fs.writeFileSync(FILE + ".tmp", JSON.stringify(DB), { mode: 0o600 });
     fs.renameSync(FILE + ".tmp", FILE);
-  } catch (e) { log("写脉络记录失败: " + e.message); }
+    return true;
+  } catch (e) { log("写脉络记录失败: " + e.message); return false; }
 }
 
 /** 分叉 / 回退时记主父。at：子会话里最后一条和父会话共有的消息（分叉点） */

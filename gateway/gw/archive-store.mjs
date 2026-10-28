@@ -17,11 +17,13 @@ export function archiveDb() {
   return DB;
 }
 
+/** 返回写成没有：调用方要据此报错，别写失败了还回 ok（网关一重启内存里的就没了 —— 审查 中2） */
 export function saveArchive() {
   try {
     fs.writeFileSync(FILE + ".tmp", JSON.stringify(DB), { mode: 0o600 });
     fs.renameSync(FILE + ".tmp", FILE);
-  } catch (e) { log("写档案失败: " + e.message); }
+    return true;
+  } catch (e) { log("写档案失败: " + e.message); return false; }
 }
 
 /** 会话列表用：建过档的会话的最新题名；没建过返回 null */

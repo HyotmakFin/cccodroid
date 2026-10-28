@@ -2281,4 +2281,5 @@ window.I18N_DICT["fr"] = {
   "品红": "Magenta",
   "紫": "Violet",
   "这个项目里有会话正在生成，等它结束再删。": "Une session de ce projet est encore en cours de génération. Attendez qu’elle se termine avant de supprimer.",
+  "档案写不进去（存储满了或没权限），这次没存上": "Impossible d'écrire l'archive (stockage plein ou permission refusée) ; cette modification n'a pas été enregistrée",
 };
