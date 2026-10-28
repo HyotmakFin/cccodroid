@@ -5,17 +5,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { agentBook, readAgentIndex } from "../gw/agents.mjs";
+import { agentBook, readAgentIndex, takeAgentNote } from "../gw/agents.mjs";
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 const load = (name) => fs.readFileSync(path.join(FIX, name), "utf8").trim().split("\n").map((l) => JSON.parse(l));
 
 function play(evs) {
   const cwd = fs.mkdtempSync(path.join(process.env.CCAPP_TMP, "ag-"));
-  const run = { sessionId: "4a591756-e2e7", cwd }, out = [], injected = [];
-  const b = agentBook(run, { emit: (e) => out.push(e), inject: (t) => { injected.push(t); return true; } });
+  const run = { sessionId: "4a591756-e2e7", cwd }, out = [];
+  const b = agentBook(run, { emit: (e) => out.push(e) });
   for (const ev of evs) b.feed(ev);
-  return { cwd, out, injected, run };
+  return { cwd, out, run };
 }
 
 test("派出、孙代理层级、交代落盘", () => {
@@ -44,18 +44,19 @@ test("联络：谁为什么事联系谁，送达与否", () => {
   assert.equal(oks.find((o) => o.mid === msgs[1].mid).ok, true);
 });
 
-test("结束：汇报落盘，两个都完了才汇总并通知主会话", () => {
-  const { out, injected } = play(load("stream-agents-nested.jsonl"));
+test("结束：汇报落盘，两个都完了才汇总，给主会话留话（取一次就没了）", () => {
+  const { out, cwd, run } = play(load("stream-agents-nested.jsonl"));
   const dn = out.filter((e) => e.k === "done");
   assert.equal(dn.length, 2);
   assert.ok(dn.every((d) => d.status === "done"));
   assert.match(fs.readFileSync(dn[1].file, "utf8"), /未进行其他操作/);   // 汇报是子代理最后一段正文
   const sm = out.filter((e) => e.k === "summary");
   assert.equal(sm.length, 1);
-  assert.equal(injected.length, 1);
-  assert.match(injected[0], /^<cccodroid-agents>/);
-  assert.ok(injected[0].includes(sm[0].file));
-  assert.ok(injected[0].includes("report.md"));
+  const note = takeAgentNote(cwd, run.sessionId);
+  assert.match(note, /^<cccodroid-agents>/);
+  assert.ok(note.includes(sm[0].file));
+  assert.ok(note.includes("report.md"));
+  assert.equal(takeAgentNote(cwd, run.sessionId), "");
 });
 
 test("长消息替模型落成文件，消息里只剩一句事由", () => {
@@ -76,10 +77,10 @@ test("只派一个子代理不汇总", () => {
     { type: "system", subtype: "task_started", task_id: "a1", tool_use_id: "t1", description: "solo", task_type: "local_agent", spawn_depth: 1 },
     { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: [{ type: "text", text: "做完了" }] }] } },
   ];
-  const { out, injected } = play(evs);
+  const { out, cwd, run } = play(evs);
   assert.equal(out.find((e) => e.k === "done").status, "done");
   assert.equal(out.filter((e) => e.k === "summary").length, 0);
-  assert.equal(injected.length, 0);
+  assert.equal(takeAgentNote(cwd, run.sessionId), "");
 });
 
 // stream-agents-resume：同一题加了联络规矩再跑一遍。主会话两次给已结束的 alpha 发消息把它叫醒，alpha 先后结束三次

@@ -40,8 +40,17 @@ export function readAgentIndex(cwd, sessionId, n = 2000) {
   } catch { return []; }
 }
 
-/** 一轮 run 的联络簿。feed(ev) 吃 claude 的原始事件；emit 推界面；inject(text) 给主会话送一条消息 */
-export function agentBook(run, { emit, inject }) {
+/** 汇总留给主会话的话：不单独叫醒它（最后一个后台子代理的结束通知已经叫醒过一次，再塞一条就要多回一轮），
+ *  存在会话目录里，等用户下一条消息作为第二段带进去。取走即删；几批没取就攒在一起 */
+const NOTE = "note.txt";
+export function takeAgentNote(cwd, sessionId) {
+  if (!cwd || !sessionId) return "";
+  const f = path.join(agentsDir(cwd, sessionId), NOTE);
+  try { const t = fs.readFileSync(f, "utf8").trim(); fs.unlinkSync(f); return t; } catch { return ""; }
+}
+
+/** 一轮 run 的联络簿。feed(ev) 吃 claude 的原始事件；emit 推界面 */
+export function agentBook(run, { emit }) {
   const byTask = new Map();     // agentId(task_id) → agent
   const byTool = new Map();     // Agent 工具调用 id → agent（子代理自己发的事件靠它认出是谁）
   const briefs = new Map();     // Agent 工具调用 id → 完整 prompt（task_started 里的可能被截）
@@ -113,7 +122,7 @@ export function agentBook(run, { emit, inject }) {
     maybeSummary();
   };
 
-  // 一批（≥2 个）全部结束：写汇总，再给主会话送一条短消息（只给状态和路径，汇报全文主会话已在通知里收过）
+  // 一批（≥2 个）全部结束：写汇总，给主会话留一条短话（只给状态和路径，汇报全文主会话已在通知 / 工具结果里收过）
   const maybeSummary = () => {
     if (batch.some((a) => a.status === "running")) return;
     const all = batch; batch = [];
@@ -122,7 +131,7 @@ export function agentBook(run, { emit, inject }) {
     const rows = all.map((a) => `- ${a.name} (${a.id.slice(0, 6)}) — ${mark[a.status]}${a.dir ? ` — ${path.join(a.dir, "report.md")}` : ""}`);
     const sum = write(path.join(dir, "summary.md"), `# Sub-agent summary\n\n${rows.join("\n")}\n`);
     book({ k: "summary", ids: all.map((a) => a.id), file: sum });
-    inject && inject(`<cccodroid-agents>\nAll ${all.length} sub-agents of this batch have finished. Their briefs and reports are saved as files; read them when you need details instead of digging through ~/.claude:\n${rows.join("\n")}\nSummary: ${sum}\n</cccodroid-agents>`);
+    try { fs.appendFileSync(path.join(dir, NOTE), `<cccodroid-agents>\nThe ${all.length} sub-agents of an earlier batch have finished. Their briefs and reports are saved as files; read them when you need details instead of digging through ~/.claude:\n${rows.join("\n")}\nSummary: ${sum}\n</cccodroid-agents>\n`); } catch {}
   };
 
   const feed = (ev) => {

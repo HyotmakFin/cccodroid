@@ -15,7 +15,7 @@ import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
-import { SUBAGENT_HINT, agentBook } from "./agents.mjs";
+import { SUBAGENT_HINT, agentBook, takeAgentNote } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
@@ -208,7 +208,13 @@ export async function startRun(item) {
   child.stdin.on("error", () => {});
   const writeUser = (content) => child.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n");
   // 该建档时，提醒作为本轮消息的第二段跟进去：读用户消息的地方只认第一段、或跳过 <…> 开头的段，历史 / 搜索 / 分叉比对都看不见它。斜杠命令不带（包成两段 claude 就不认它是命令了）
-  writeUser(arch?.note && !message.trim().startsWith("/") ? [{ type: "text", text: message }, { type: "text", text: `<system-reminder>\n${arch.note}\n</system-reminder>` }] : message);
+  // 子代理汇总也是这样跟着用户的消息进去（见 takeAgentNote），不单独叫醒主会话
+  const withNotes = (msg, extra) => {
+    if (P.local || msg.trim().startsWith("/")) return msg;
+    const notes = [extra, takeAgentNote(run.cwd, run.sessionId)].filter(Boolean);
+    return notes.length ? [{ type: "text", text: msg }, ...notes.map((n) => ({ type: "text", text: `<system-reminder>\n${n}\n</system-reminder>` }))] : msg;
+  };
+  writeUser(withNotes(message, arch?.note));
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
@@ -217,21 +223,14 @@ export async function startRun(item) {
   run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
-    try { writeUser(item.message); } catch { return false; }
+    try { writeUser(withNotes(item.message)); } catch { return false; }
     run.pendingInject.push(item);
     saveRunMark();     // 马上落盘：送达前 App 被强停，下次启动它还能回到队列里，不会凭空消失
     log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容
     return true;
   };
-  // 子代理联络簿：落盘交代/汇报/长消息，推 ag 事件；一批子代理全部结束时给主会话送一条只带路径的短消息。
-  // 这条不是用户说的：sys 标记让回显、队列、断点续传都跳过它，记录里以 < 开头，历史也不显示
-  run.agents = agentBook(run, { emit, inject: (text) => {
-    if (!run.inputOpen || run.ended || run.aborted) return false;
-    try { writeUser(text); } catch { return false; }
-    run.pendingInject.push({ sys: true, message: text });
-    log("↪ 子代理汇总已交给主会话");
-    return true;
-  } });
+  // 子代理联络簿：落盘交代/汇报/长消息，推 ag 事件；一批全部结束时留一条只带路径的短话，跟着用户下一条消息进去
+  run.agents = agentBook(run, { emit });
   // 每轮 result 之后：没有待送达的插话就关 stdin，claude 随即退出；有就留着，它会接着处理
   // ── 权限确认（stream-json 控制协议）──
   // claude 要用需确认的工具时，往 stdout 发 control_request(can_use_tool) 然后等；我们回 control_response。
@@ -349,11 +348,11 @@ export async function startRun(item) {
   };
   const onReplay = () => {
     // 第一条回显是本轮的原始消息；之后每条都是一条送达的插话（按写入顺序）
-    const said = run.replays === 0 ? message : run.pendingInject[0] && !run.pendingInject[0].sys && run.pendingInject[0].message;
+    const said = run.replays === 0 ? message : run.pendingInject[0] && run.pendingInject[0].message;
     if (said && usageIsPrompt(said)) usageAdd({ m: 1 }, run.sessionId);
     if (run.replays++ === 0) return;
     const it = run.pendingInject.shift();
-    if (it && !it.sys) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
+    if (it) { emit({ type: "inject", text: it.message, cid: it.cid, itemId: it.id }); saveRunMark(); }
   };
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
@@ -417,7 +416,6 @@ export async function startRun(item) {
     buf = "";
     run.inputOpen = false;
     run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
-    run.pendingInject = run.pendingInject.filter((it) => !it.sys);
     if (run.pendingInject.length) {
       log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
       QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));
