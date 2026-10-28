@@ -543,6 +543,7 @@
     if (SUBNAVS[name]) paintSubnav(name);
     if (name === "help") loadHelp();
     if (name === "changelog") loadChangelog();
+    if (name === "bookmarks") loadBookmarks();
     if (name === "usage") { loadQuota(); loadUsage(); loadEnergy(); loadAcctCard(false); }
     if (name !== "projects" && name !== "sched") pageTitleOv = "";
     if (name === "projects") { if (prev !== name && !PJ.cur) PJ.detail = null; renderProjects(); loadProjects(); loadSched(); }

@@ -57,6 +57,7 @@
     resend: '<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>',
     fork: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9c0 5-7 4-11.2 8.6"/>',
     rewind: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
+    mark: '<path d="M7 3.5h10a1 1 0 0 1 1 1V20l-6-4.2L6 20V4.5a1 1 0 0 1 1-1z"/>',
     del: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
   };
   const UI_I = {
@@ -90,8 +91,9 @@
       ? `<button class="u-ref img" data-p="${esc(p)}"><img src="${fileUrl(p)}" alt="" loading="lazy"></button>`
       : `<button class="u-ref" data-p="${esc(p)}">${FILE}<span>${esc(p.split("/").pop())}</span></button>`).join("")}</div>`;
   }
-  function renderUser(text, parent) {
+  function renderUser(text, parent, uuid) {
     const b = mkMsg("user", null, parent);
+    if (uuid) b.parentElement.dataset.uuid = uuid;   // 书签落点
     userTextOf.set(b.parentElement, text);
     const [body, refs] = splitRefs(text);
     setHtml(b, body ? renderMd(body) : "");
@@ -105,12 +107,13 @@
     }
     const acts = document.createElement("div");
     acts.className = "msg-acts";
-    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("del", t("删除"));
+    acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("mark", t("书签")) + actBtn("del", t("删除"));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a;
       if (a === "copy") { copyText(text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
       if (a === "rewind") rewindTo(b.parentElement);
+      if (a === "mark") toggleMark(b.parentElement);
       if (a === "del") deleteMsg(b.parentElement, "user");
     });
     b.parentElement.appendChild(acts);
@@ -158,6 +161,7 @@
     el.append(frozen, tail);
     parent.appendChild(el);
     let text = "", fz = 0, timer = 0, shown = 0, ending = false;
+    el._src = () => text;   // 书签：没有 uuid 时按正文开头去文件里认领
 
     function paint(final) {
       if (timer) { clearTimeout(timer); timer = 0; }
@@ -199,6 +203,7 @@
       drop(n) { text = text.slice(0, Math.max(0, text.length - n)); shown = Math.min(shown, text.length); frozen.innerHTML = ""; fz = 0; paint(!live); return text.length; },
       remove() { if (timer) { clearTimeout(timer); timer = 0; } el.remove(); },
       get text() { return text; },
+      el,
     };
   }
 

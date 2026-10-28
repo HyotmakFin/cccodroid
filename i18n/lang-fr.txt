@@ -2186,3 +2186,14 @@
 2186	Se connecter
 2187	Taille de l'historique local
 2188	Taille du fichier d'historique de cette conversation sur l'appareil, messages et appels d'outils compris. Ce n'est ni la longueur de contexte actuelle du modèle, ni la consommation de tokens ou le coût. L'historique d'origine est conservé après la compaction du contexte, il ne fait donc que grossir.
+2189	Signet
+2190	Signet retiré
+2191	Signet ajouté
+2192	Cette conversation n'est pas encore enregistrée. Ajoutez un signet une fois la première réponse terminée.
+2193	Cette conversation a déjà {n} signets. Supprimez-en d'abord quelques-uns.
+2194	Message introuvable dans l'historique de la conversation. Réessayez dans un instant.
+2195	Emplacement du signet introuvable. Ouvert au dernier message.
+2196	Aucun signet pour l'instant. Touchez le bouton signet sous une question ou une réponse pour marquer cet endroit.
+2197	Question
+2198	Réponse
+2199	(Sans titre)

@@ -2929,3 +2929,14 @@ html.land .msg.bot .bubble{line-height:1.65}
 .pop-menu.ss-size-tip{max-width:min(320px,90vw)}
 .pop-menu.ss-size-tip .pm-head{white-space:normal;overflow:visible;line-height:1.5;font-size:12.5px}
 .pop-menu.ss-size-tip .pm-head:first-child{color:var(--fg);font-weight:600;font-size:13.5px}
+
+/* 书签（0.4.17）：按钮行加了的显示实心；落点那一段淡淡底色闪一下；书签页沿用项目页的行 */
+.msg-acts button[data-a="mark"].on{color:var(--accent)}
+.msg-acts button[data-a="mark"].on svg{fill:currentColor}
+.bm-hit{animation:bmhit 2.4s ease-out}
+@keyframes bmhit{0%,30%{background:var(--bg3);box-shadow:-6px 0 0 var(--bg3),6px 0 0 var(--bg3)}100%{background:transparent;box-shadow:none}}
+#tab-bookmarks .bm-row{cursor:pointer;gap:8px;align-items:center}
+#tab-bookmarks .bm-ex{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+#tab-bookmarks .bm-del{background:transparent;border:0;color:var(--fg3);width:32px;height:32px;border-radius:8px;display:grid;place-items:center;flex:none;padding:0}
+#tab-bookmarks .bm-del svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+#tab-bookmarks .bm-del:active{background:var(--bg3);color:var(--fg)}

@@ -39,11 +39,11 @@ export function transcriptItems(ev) {
     if (ev.isCompactSummary) { out.push({ role: "note", text: tr(LAST_LANG, tz("（此前的对话已被压缩成摘要）")), compact: true, uuid: ev.uuid || null }); return out; }
     const c = ev.message?.content;
     if (typeof c === "string") {
-      if (c && !c.startsWith("<")) out.push({ role: "user", text: c });
+      if (c && !c.startsWith("<")) out.push({ role: "user", text: c, uuid: ev.uuid || null });
     } else if (Array.isArray(c)) {
       const texts = c.filter((x) => x.type === "text" && x.text && !x.text.startsWith("<")).map((x) => x.text);
       if (c.some((x) => x.type === "image")) texts.push("[图片]");
-      if (texts.length) out.push({ role: "user", text: texts.join("\n") });
+      if (texts.length) out.push({ role: "user", text: texts.join("\n"), uuid: ev.uuid || null });
       for (const r of c) {
         if (r.type !== "tool_result") continue;
         let t = "";
@@ -54,7 +54,7 @@ export function transcriptItems(ev) {
     }
   } else if (ev.type === "assistant") {
     for (const c of ev.message?.content || []) {
-      if (c.type === "text" && c.text) out.push({ role: "assistant", text: c.text });
+      if (c.type === "text" && c.text) out.push({ role: "assistant", text: c.text, uuid: ev.uuid || null });   // uuid：书签落点
       else if (c.type === "thinking" && c.thinking) out.push({ role: "thinking", text: c.thinking.slice(0, 60000) });
       else if (c.type === "tool_use") out.push({ role: "tool_use", id: c.id, name: c.name, input: clipInput(c.input) });
     }
@@ -188,13 +188,14 @@ export async function readSessionForward(file, { after = 0, limit = 40, excludeF
   }
 }
 
-/** 找含某个 uuid 的那一行的起点（脉络跳转的兜底：索引里的偏移对不上时，比如文件被删消息改写过）。找不到返回 -1 */
-export async function findLineOffset(file, uuid) {
+/** 找含某个 uuid 的那一行的起点（脉络跳转的兜底：索引里的偏移对不上时，比如文件被删消息改写过）。找不到返回 -1
+ *  start：从这个行首往后找（书签带着它所在那一页的起点，大会话不用从头扫） */
+export async function findLineOffset(file, uuid, start = 0) {
   const needle = Buffer.from(`"uuid":"${uuid}"`), CH = 4 << 20;
   const fh = await fs.promises.open(file, "r");
   try {
     const size = (await fh.stat()).size;
-    let pos = 0, carry = Buffer.alloc(0), base = 0;
+    let pos = Math.max(0, Math.min(Number(start) || 0, size)), carry = Buffer.alloc(0), base = pos;
     while (pos < size) {
       const chunk = Buffer.alloc(Math.min(CH, size - pos)); await fh.read(chunk, 0, chunk.length, pos);
       pos += chunk.length;

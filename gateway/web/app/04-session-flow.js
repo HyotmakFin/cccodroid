@@ -84,6 +84,7 @@
   /** 打开某个会话（null = 新会话）。重连事件流：网关会把正在跑的那一轮从头重放过来。
    *  anchor：落在某一章开头（脉络里点站 / 章标题；压缩消息的 uuid，第一章是 "start"） */
   function openSession(id, jumpQ, anchor) {
+    if (id !== view.sessionId) saveLastRead();   // 切走前记下读到哪（在底部就作废）
     closePage();
     resetView(id);
     if (!id) showWelcome();   // 新会话当场画首屏，不等重连回来——中间空着那一下就是闪
@@ -99,7 +100,8 @@
   // 正看着中间某一段（窗口式）时照旧重开，回到最新
   function goSession(id, jumpQ) {
     if (id && id === view.sessionId && !jumpQ && view.next == null && !view.loading) { closePage(); closeDrawer(); return; }
-    closeDrawer(); openSession(id, jumpQ);
+    // 切回别的会话：上次离开时不在底部，就落回那时视口顶部那一段
+    closeDrawer(); openSession(id, jumpQ, id && !jumpQ && id !== view.sessionId ? lastReadOf(id) : null);
   }
 
   function newConversation(note) {
@@ -181,7 +183,10 @@
     const anchor = initial ? view.anchor : "", resume = initial ? view.resume : null, before = view.cursor;
     if (initial) { view.anchor = ""; view.resume = null; }
     const fwd = !!anchor || resume != null;
-    if (anchor) q.set("anchor", anchor);
+    // 锚点：章节是压缩消息 uuid（字符串）；书签 / 上次读到是 { uuid, off, para, quiet }
+    const aObj = anchor && typeof anchor === "object" ? anchor : null;
+    if (anchor) { q.set("anchor", aObj ? aObj.uuid : anchor); if (aObj && aObj.off > 0) q.set("off", String(aObj.off)); }
+    if (initial) loadMarks();
     else if (resume != null) q.set("after", String(resume));
     else if (!initial) q.set("before", String(before));
     const ex = fwd ? windowExclude() : liveExclude();
@@ -194,8 +199,8 @@
       view.loading = false;
       olderEl.textContent = t("加载更早的消息");
       if (anchor && e.status === 404) {
-        // 那一章的位置找不到了（记录被改写过）：退回最新
-        toast(t("没找到这一章的位置，已打开到最新"), true);
+        // 那一章 / 书签的位置找不到了（记录被改写过、回退截掉了）：退回最新；「上次读到」找不到就悄悄打开到最新
+        if (!aObj || !aObj.quiet) toast(aObj ? t("没找到书签的位置，已打开到最新") : t("没找到这一章的位置，已打开到最新"), true);
         return loadOlder(true);
       }
       if (e.status === 404 && initial) {
@@ -225,7 +230,7 @@
       if (r.contextTokens != null) updateCtx(r.contextTokens, state.ctxTotal);
       paintTitle();
       setStatus(t("就绪"), "ok");
-      if (anchor) return landOnChapter(page, gen);
+      if (anchor) return landOnChapter(page, gen, aObj);
       if (fwd) { stick = false; chatEl.scrollTop = 0; }   // 重连时接着原来那一段
       else { scrollDown(true); if (!seenSessions.has(id)) MO.play(histEl, "mo-in-rise", 1400); }
       seenSessions.add(id);
@@ -238,10 +243,11 @@
     if (view.jumpQ) jumpToHit();
   }
   // 落在某一章：先往上补一页（分隔线上面要有东西可看），再把分隔线放到视口上三分之一处、闪一下
-  async function landOnChapter(page, gen) {
+  async function landOnChapter(page, gen, aObj) {
     stick = false;
     if (view.cursor) await loadOlder(false);
     if (gen !== view.gen) return;
+    if (aObj) { landOnMark(page, aObj); progTop = chatEl.scrollTop; return; }
     const sep = page.querySelector(".ch-sep");
     const y = sep ? sep.getBoundingClientRect().top - chatEl.getBoundingClientRect().top + chatEl.scrollTop : 0;
     chatEl.scrollTop = Math.max(0, y - chatEl.clientHeight / 3);

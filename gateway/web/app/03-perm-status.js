@@ -398,7 +398,7 @@
     const acts = document.createElement("div");
     acts.className = "msg-acts";
     acts.innerHTML = actBtn("copy", t("复制")) + actBtn("share", t("转发")) +
-      (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")) + actBtn("del", t("删除")));
+      (msgEl.classList.contains("sys") ? "" : actBtn("fork", t("从这里分叉")) + actBtn("mark", t("书签")) + actBtn("del", t("删除")));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a, text = getText();
       if (a === "copy") { copyText(text); toast(t("已复制")); }
@@ -408,6 +408,7 @@
         else { copyText(text); toast(t("这里没有系统分享，已复制到剪贴板")); }
       }
       if (a === "fork") forkFrom(msgEl);
+      if (a === "mark") toggleMark(msgEl);
       if (a === "del") deleteMsg(msgEl, "bot");
     });
     msgEl.appendChild(acts);
@@ -596,7 +597,7 @@
       /** 工具结果回来：这一批工具都有结果了，下一步就是再请求模型 */
       toolDone(id) { if (pendTools.delete(id) && !pendTools.size) setPhase({ phase: "connect" }); },
       delta(t) { textB().append(t); },
-      text(t) { push(TextBlock(bubble, live)).set(t); },
+      text(t, uuid) { const b = push(TextBlock(bubble, live)); b.set(t); if (uuid) b.el.dataset.uuid = uuid; },
       thinkDelta(t) { thinkB().append(t); },
       thinking(t) { (inGroup() ? groupThink() : push(ThinkBlock(bubble))).set(t); },
       /** 流断了重来：删掉上一次请求逐字推出、却没进对话的半截（正文在最后一块，思考在它前面或步骤组里） */
@@ -698,11 +699,11 @@
     let av = null;
     const avs = [];
     for (const m of items) {
-      if (m.role === "user") { renderUser(m.text, page); av = null; continue; }
+      if (m.role === "user") { renderUser(m.text, page, m.uuid); av = null; continue; }
       if (m.role === "note") { (m.chapter ? chapterSep : addNote)(m.chapter ? m : m.text, page); av = null; continue; }
       if (m.role === "tool_result") { toolResult(m.id, m.ok, m.text); continue; }
       if (!av) { av = AssistantView(page, false); avs.push(av); }
-      if (m.role === "assistant") av.text(m.text);
+      if (m.role === "assistant") av.text(m.text, m.uuid);
       else if (m.role === "thinking") av.thinking(m.text);
       else if (m.role === "tool_use") {
         av.tool(m.id, m.name, m.input);
@@ -711,6 +712,7 @@
       }
     }
     for (const a of avs) a.finish();
+    paintMarks(page);
     return page;
   }
 

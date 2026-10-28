@@ -292,8 +292,12 @@ export async function routeSessions(req, res, u, p) {
         const a = String(u.searchParams.get("anchor"));
         if (a === "start") fwd = 0;
         else {
-          const c = rec?.compacts.find((x) => x.uuid === a);
-          fwd = c && await lineHas(found.file, c.off, a) ? c.off : await findLineOffset(found.file, a);
+          // 偏移：章节用脉络索引里的；书签自己带着（off）。都先核对那一行确实是它，对不上再整文件找
+          const c = rec?.compacts.find((x) => x.uuid === a), hint = c ? c.off : Number(u.searchParams.get("off"));
+          // 「上次读到」带的是那一页的起点，不是行首：核对不上就从那里往后找，再不行才从头
+          const ok = Number.isFinite(hint) && hint >= 0;
+          fwd = ok && await lineHas(found.file, hint, a) ? hint : ok && hint > 0 ? await findLineOffset(found.file, a, hint) : -1;
+          if (fwd < 0) fwd = await findLineOffset(found.file, a);
           if (fwd < 0) return sendJson(res, 404, { error: "anchor not found" });
         }
       } else if (u.searchParams.has("after")) fwd = Math.max(0, Number(u.searchParams.get("after")) || 0);

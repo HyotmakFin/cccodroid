@@ -2186,3 +2186,14 @@
 2186	Iniciar sesión
 2187	Tamaño del registro local
 2188	Tamaño del archivo de registro de esta conversación en el dispositivo, incluidos mensajes y llamadas a herramientas. No es la longitud de contexto actual del modelo, ni el uso de tokens ni el coste. El registro original se conserva tras compactar el contexto, así que sigue creciendo.
+2189	Marcador
+2190	Marcador quitado
+2191	Marcador añadido
+2192	Esta conversación aún no se ha guardado. Añade el marcador cuando termine la primera respuesta.
+2193	Esta conversación ya tiene {n} marcadores. Borra algunos primero.
+2194	No se encontró este mensaje en el registro de la conversación. Inténtalo de nuevo en un momento.
+2195	No se encontró la posición del marcador. Se abrió en el último mensaje.
+2196	Aún no hay marcadores. Toca el botón de marcador bajo una pregunta o respuesta para marcar ese punto.
+2197	Pregunta
+2198	Respuesta
+2199	(Sin título)

@@ -2223,5 +2223,16 @@ window.I18N_DICT.en = {
   "{path} 里的 {sel}：": "{sel} in {path}:",
   "登录账户": "Sign in",
   "本地记录大小": "Local record size",
-  "这条会话存在设备上的记录文件有多大，含聊天内容和工具调用。不是模型当前的上下文长度，也不是 token 用量或费用；压缩上下文后原始记录仍会保留，所以它会一直变大。": "How large this conversation's record file on the device is, including messages and tool calls. It is not the model's current context length, nor token usage or cost. The original record is kept after context compaction, so it keeps growing."
+  "这条会话存在设备上的记录文件有多大，含聊天内容和工具调用。不是模型当前的上下文长度，也不是 token 用量或费用；压缩上下文后原始记录仍会保留，所以它会一直变大。": "How large this conversation's record file on the device is, including messages and tool calls. It is not the model's current context length, nor token usage or cost. The original record is kept after context compaction, so it keeps growing.",
+  "书签": "Bookmark",
+  "已取消书签": "Bookmark removed",
+  "已加书签": "Bookmarked",
+  "这个会话还没存下来，答完一轮再加书签": "This conversation isn't saved yet. Add a bookmark after the first reply finishes.",
+  "这个会话的书签已满 {n} 个，先删掉一些": "This conversation already has {n} bookmarks. Remove some first.",
+  "没在会话记录里找到这条消息，稍后再试": "Couldn't find this message in the conversation record. Try again in a moment.",
+  "没找到书签的位置，已打开到最新": "Couldn't find the bookmarked spot. Opened at the latest message.",
+  "还没有书签。在提问或回复底下点书签键，就在那一处留了个记号。": "No bookmarks yet. Tap the bookmark button under a prompt or reply to mark that spot.",
+  "提问": "Prompt",
+  "回复": "Reply",
+  "（无标题）": "(Untitled)"
 };
