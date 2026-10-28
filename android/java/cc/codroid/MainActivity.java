@@ -1154,19 +1154,19 @@ public class MainActivity extends Activity {
                 return shouldOverrideUrlLoading(v, req.getUrl().toString());
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
-                if (url != null && url.startsWith("http://127.0.0.1:" + Env.PORT)) return false;
+                if (isOwnGateway(url)) return false;
                 openExternal(url);
                 return true;
             }
             @Override public void onPageFinished(WebView v, String url) {
                 if (bounceStage != 0) {   // 冻结脱困中：跳出去那一下落地了就马上跳回来；回到网关页面才算完
-                    if (url == null || !url.startsWith("http://127.0.0.1:")) { if (bounceStage == 1) bounceBack(); return; }
+                    if (!isOwnGateway(url)) { if (bounceStage == 1) bounceBack(); return; }
                     bounceStage = 0; web.setVisibility(View.VISIBLE);
                 }
                 // 网关页面落地就清历史：脱困跳转、看门狗重载留下的条目都没有回去的意义
-                if (url != null && url.startsWith("http://127.0.0.1:")) v.clearHistory();
+                if (isOwnGateway(url)) v.clearHistory();
                 pushInsets();
-                if (handoff != null && url != null && url.startsWith("http://127.0.0.1:")) ui.postDelayed(MainActivity.this::dropHandoff, 180);
+                if (handoff != null && isOwnGateway(url)) ui.postDelayed(MainActivity.this::dropHandoff, 180);
             }
         });
         web.addJavascriptInterface(new Object() {
@@ -1254,7 +1254,7 @@ public class MainActivity extends Activity {
         web.setDownloadListener((url, ua, cd, mime, len) -> {
             Uri u = Uri.parse(url);
             String p = u.getQueryParameter("path");
-            if (p == null || !p.startsWith("/") || !url.startsWith("http://127.0.0.1:" + Env.PORT + "/api/file")) return;
+            if (p == null || !p.startsWith("/") || !(isOwnGateway(url) && "/api/file".equals(Uri.parse(url).getPath()))) return;
             // 这条兜底任何 frame 都能触发（包括预览里的不可信网页），又不经网关：先拿令牌让网关按 /api/file 的规矩核一遍路径，
             // 放行了才复制。不然预览页放个下载链接就能把 .ssh、令牌之类弹到「保存到」面板（审查 低7）
             new Thread(() -> {
@@ -1655,6 +1655,16 @@ public class MainActivity extends Activity {
         if (last >= (1L << (8 * (5 - p.length)))) return false;
         ip |= last;
         return (ip >>> 24) == 127 || ip == 0;
+    }
+
+    /** 就是本应用的网关（http、127.0.0.1、本端口、不带用户名）：按网址解析判断，不按前缀——
+     *  前缀判断放得过 http://127.0.0.1:8791@evil.com/ 和 :87910（审查 10-29 中3） */
+    static boolean isOwnGateway(String url) {
+        if (url == null) return false;
+        try {
+            Uri u = Uri.parse(url.trim());
+            return "http".equalsIgnoreCase(u.getScheme()) && "127.0.0.1".equals(u.getHost()) && u.getPort() == Env.PORT && u.getUserInfo() == null;
+        } catch (Exception e) { return false; }
     }
 
     static boolean isGatewayUrl(String url) {
