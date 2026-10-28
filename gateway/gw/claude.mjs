@@ -283,12 +283,16 @@ export function claudeEnv(o = {}) {
   if (SETTINGS.autoCompactWindow && !p.local) {
     env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(SETTINGS.autoCompactWindow);
   }
-  // 厂商文档要求的额外变量（如 GLM 的 API_TIMEOUT_MS）。只收字符串，且不许借道改密钥/端点
+  // 厂商文档要求的额外变量（如 GLM 的 API_TIMEOUT_MS）。只收字符串，且不许借道改密钥/端点，
+  // 也不许碰「执行什么、加载什么」的变量：自定义厂商的配置能分享导入，带着 CLAUDE_CODE_SHELL(_PREFIX)、LD_PRELOAD、
+  // NODE_OPTIONS、PATH、BASH_ENV 之类就能让 claude 跑任意代码（审查 H8）。超时、重试、代理这类照常放行
   for (const [k, v] of Object.entries(p.extraEnv || {})) {
-    if (/^[A-Z_][A-Z0-9_]*$/.test(k) && !/^ANTHROPIC_(BASE_URL|API_KEY|AUTH_TOKEN)$/.test(k)) env[k] = String(v);
+    if (/^[A-Z_][A-Z0-9_]*$/.test(k) && !EXTRA_ENV_DENY.test(k)) env[k] = String(v);
   }
   return glibcEnv(env);
 }
+
+const EXTRA_ENV_DENY = /^(ANTHROPIC_(BASE_URL|API_KEY|AUTH_TOKEN)|LD_\w*|DYLD_\w*|NODE_\w*|BUN_\w*|PYTHON\w*|PERL5?\w*|RUBY\w*|GIT_\w*|SSL_\w*|CLAUDE_CODE_SHELL\w*|CLAUDE_CODE_ENTRYPOINT|CLAUDE_CODE_GIT_BASH_PATH|CLAUDE_CONFIG_DIR|PATH|HOME|SHELL|BASH_ENV|ENV|PREFIX|TMPDIR)$/;
 
 /** claude 是 glibc 程序，必须经 loader 启动 */
 export function claudeArgv(extra) {
