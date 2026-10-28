@@ -37,7 +37,7 @@
   const skinOf = (p) => (p.startsWith("qs-") ? "qiusuo" : p.startsWith("zy-") ? "zhuyue" : p.startsWith("gc-") ? "goucheng" : "native");
   const modeOf = (p) => p.replace(/^(qs|zy|gc)-/, "");
   // 状态栏 / 导航栏底色要和页面底色一致（壳那边也有一份同样的表：BrowserPane.bg）
-  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" }, zhuyue: { dark: "#111111", light: "#ffffff" }, goucheng: { dark: "#151412", light: "#f0e6d2" } };
+  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" }, zhuyue: { dark: "#111111", light: "#ffffff" }, goucheng: { dark: "#151412", light: "#f3eee3" } };
   const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
   const app = () => (window.CCApp && typeof window.CCApp.nightMode === "function" ? window.CCApp : null);
 

@@ -219,7 +219,7 @@ public class BrowserPane extends LinearLayout {
         String[] keys = { "bg", "card", "field", "line", "fg", "dim", "hint", "accent" };
         String[] v = "goucheng".equals(skin)
             ? (night ? new String[] { "#151412", "#1f1d1a", "#2a2723", "#4a453d", "#f0e6d2", "#c9bea7", "#9a8f7c", "#f0473b" }
-                     : new String[] { "#f0e6d2", "#f8f0dd", "#e8dbc0", "#c9bb9c", "#1a1a1a", "#4f483d", "#6b6255", "#c8211b" })
+                     : new String[] { "#f3eee3", "#faf7ef", "#e9e2d2", "#cdc2aa", "#1a1a1a", "#4f483d", "#6b6255", "#c8211b" })
             : "zhuyue".equals(skin)
             ? (night ? new String[] { "#111111", "#1f1f1f", "#292929", "#2b2b2b", "#f2f2f2", "#bdbdbd", "#7a7a7a", "#f2f2f2" }
                      : new String[] { "#ffffff", "#ffffff", "#f5f5f5", "#eeeeee", "#141414", "#5c5c5c", "#9a9a9a", "#141414" })
