@@ -586,7 +586,7 @@
       if (!liveTail || ended) return;
       if (bubble.lastChild !== liveTail) {
         bubble.appendChild(liveTail);
-        liveTail.firstChild.style.animationDelay = -(performance.now() % 2200) + "ms";
+        liveTail.firstChild.style.animationDelay = -(performance.now() % 2000) + "ms";
       }
       phPlace();
     };

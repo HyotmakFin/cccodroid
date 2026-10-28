@@ -264,9 +264,9 @@ td{color:var(--fg2)}
 
 .err-box{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err-fg);border-radius:10px;padding:9px 11px;font-size:13px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow:auto}
 
-/* 渐隐渐显而不是硬切（steps(2) 只有亮 / 灭两帧，看着像掉帧）；只动 opacity、单独成层，正文重排时由合成线程照常跑 */
-.cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;animation:blink 1.1s ease-in-out infinite alternate;border-radius:1px;will-change:opacity}
-@keyframes blink{from{opacity:1}to{opacity:.12}}
+/* 还是原来的亮 / 灭硬闪，但切换不再是一帧跳变：亮→灭、灭→亮各用约 80ms 走完几帧；只动 opacity、单独成层，正文重排时由合成线程照常跑 */
+.cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;animation:blink 1s linear infinite;border-radius:1px;will-change:opacity}
+@keyframes blink{0%,42%{opacity:1}50%,92%{opacity:0}100%{opacity:1}}
 .dots span{display:inline-block;width:5px;height:5px;margin:0 1.5px;border-radius:50%;background:var(--fg3);animation:bounce 1.3s infinite}
 .dots span:nth-child(2){animation-delay:.18s} .dots span:nth-child(3){animation-delay:.36s}
 @keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-4px);opacity:1}}
@@ -1524,7 +1524,7 @@ html[data-skin="qiusuo"] .tool-state.run::before{
 html[data-skin="qiusuo"] .dots span{background:var(--accent);animation:qs-pending 1s ease-in-out infinite alternate}
 html[data-skin="qiusuo"] .dots span:nth-child(2){animation-delay:.2s}
 html[data-skin="qiusuo"] .dots span:nth-child(3){animation-delay:.4s}
-html[data-skin="qiusuo"] .cursor{width:8px;height:8px;border-radius:50%;vertical-align:1px;animation:qs-pending 1.1s ease-in-out infinite alternate}
+html[data-skin="qiusuo"] .cursor{width:8px;height:8px;border-radius:50%;vertical-align:1px;animation:qs-pending 1s ease-in-out infinite alternate}
 @keyframes qs-pending{from{opacity:.35}to{opacity:1}}
 
 @media (prefers-reduced-motion:reduce){
