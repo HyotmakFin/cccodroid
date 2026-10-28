@@ -2278,3 +2278,5 @@
 2278	Magenta
 2279	Morado
 2280	Una sesión de este proyecto aún se está generando. Espera a que termine antes de eliminar.
+2281	No se pudo escribir el archivo (almacenamiento lleno o sin permiso); este cambio no se guardó
+2282	Ya se está descargando un modelo con el mismo nombre

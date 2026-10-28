@@ -2278,3 +2278,5 @@
 2278	Magenta
 2279	Violet
 2280	Une session de ce projet est encore en cours de génération. Attendez qu’elle se termine avant de supprimer.
+2281	Impossible d'écrire l'archive (stockage plein ou permission refusée) ; cette modification n'a pas été enregistrée
+2282	Un modèle du même nom est déjà en cours de téléchargement
