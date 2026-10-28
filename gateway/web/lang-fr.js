@@ -2214,4 +2214,9 @@ window.I18N_DICT["fr"] = {
   "主会话": "principal",
   "这个子代理的过程还没加载到": "Les étapes de ce sous-agent ne sont pas encore chargées",
   "更早的 {n} 步": "{n} étapes précédentes",
+  "构成": "Construct",
+  "构成 · 跟随系统": "Construct · Selon le système",
+  "构成 · 浅色": "Construct · Clair",
+  "构成 · 深色": "Construct · Sombre",
+  "原生、「求索」「逐月」或「构成」配色": "Couleurs natives, Qiusuo, Zhuyue ou Construct",
 };

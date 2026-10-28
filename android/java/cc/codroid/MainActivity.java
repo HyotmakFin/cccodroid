@@ -1210,9 +1210,9 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public void whatsNewSeen(String k) { if (!Env.bridgeOk(k)) return; WhatsNew.seen(MainActivity.this); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
             @android.webkit.JavascriptInterface public void setBars(String k, boolean dark) { if (!Env.bridgeOk(k)) return; ui.post(() -> applyBars(dark)); }
-            /** 界面里的风格（native / qiusuo / zhuyue）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
+            /** 界面里的风格（native / qiusuo / zhuyue / goucheng）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
             @android.webkit.JavascriptInterface public void skinPref(String k, String s) { if (!Env.bridgeOk(k)) return;
-                if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s))
+                if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s) || "goucheng".equals(s))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("skin", s).commit();
             }
             /** 界面里的外观设置（auto / light / dark），下次启动时安装页照着上色 */

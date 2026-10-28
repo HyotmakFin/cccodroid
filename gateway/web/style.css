@@ -2661,6 +2661,96 @@ html[data-skin="zhuyue"] .bubble ol > li::marker{color:var(--zy-blue);font-weigh
 html[data-skin="zhuyue"] .sel-menu button.on{color:var(--fg)}
 html[data-skin="zhuyue"] .sel-menu button.on svg{color:var(--zy-blue)}
 
+/* ───────────── 构成风格（设置 → 外观 → 构成 · 浅色 / 深色）─────────────
+   出自用户早年 mazz-editor 的「构成主义」主题（原件与视觉基线在 claude-workspace/themes/construct-from-mazz/）：
+   牛皮纸底 #f0e6d2、墨黑 #1a1a1a、宣传画红 #c8211b；零圆角、粗墨线、5px 实心错位投影，按钮按下往投影方向落 2px，
+   选中的分段是斜切红块。深色版是我们补的：炭黑底、纸色当墨（边线与投影都用纸色）、红提亮到 #f0473b 保对比。
+   顶栏不涂黑（安卓状态栏透明，黑顶栏会跟浅色状态栏图标打架），改成纸底 + 粗墨线 + 右端一块斜切红。
+   回复正文不加花样，只动外框；动效照旧走 MO，这里只多「按下落位」一处 transform。 */
+html[data-skin="goucheng"]{
+  --bg:#151412; --bg2:#1f1d1a; --bg3:#2a2723; --bg4:#35312b; --line:#4a453d;
+  --fg:#f0e6d2; --fg2:#c9bea7; --fg3:#9a8f7c;
+  --accent:#f0473b; --accent-dim:#7a2a24; --on-accent:#151412;
+  --ok:#8fbf6a; --err:#ff7b6e; --warn:#e0b04a; --tool:#8fb4e6; --purple:#c3a3e6;
+  --bar-bg:#151412; --bar-bg2:#151412; --veil:rgba(21,20,18,.88);
+  --strong:#fff8ea; --code-bg:#1f1d1a; --think-bg:#1b1a17; --more-bg:#2a2723; --more-line:#4a453d;
+  --user-bg:#2a2723; --user-line:#f0e6d2; --sys-bg:#1d2129; --sys-line:#3a4659;
+  --tool-bg:#1b1a17; --tool-line:#6b6255; --tool-sep:#2a2723; --cmd-bg:#1d1f22;
+  --err-bg:#3a1a17; --err-line:#7a2a24; --err-fg:#ffaaa0; --active-bg:#3a1f1b;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.55);
+  --panel:#1f1d1a; --input-bg:#1f1d1a; --radius:0px;
+  --gc-ink:#f0e6d2; --gc-hard:rgba(240,230,210,.3); --gc-red:#f0473b; --gc-stripe:rgba(240,230,210,.07); --gc-wedge:rgba(240,71,59,.1);
+}
+html[data-skin="goucheng"][data-theme="light"]{
+  --bg:#f0e6d2; --bg2:#f8f0dd; --bg3:#e8dbc0; --bg4:#dccfae; --line:#c9bb9c;
+  --fg:#1a1a1a; --fg2:#4f483d; --fg3:#6b6255;
+  --accent:#c8211b; --accent-dim:#e6a49a; --on-accent:#f8f0dd;
+  --ok:#3d6b35; --err:#9c1c16; --warn:#7f5d06; --tool:#1f4e8c; --purple:#6b3f8c;
+  --bar-bg:#f0e6d2; --bar-bg2:#f0e6d2; --veil:rgba(240,230,210,.9);
+  --strong:#000000; --code-bg:#e8dbc0; --think-bg:#ece1c9; --more-bg:#e8dbc0; --more-line:#c9bb9c;
+  --user-bg:#f8f0dd; --user-line:#1a1a1a; --sys-bg:#e3e4d6; --sys-line:#b9bda4;
+  --tool-bg:#f8f0dd; --tool-line:#1a1a1a; --tool-sep:#e8dbc0; --cmd-bg:#ece4d0;
+  --err-bg:#f3d8c2; --err-line:#d9947f; --err-fg:#9c1c16; --active-bg:#f3d8c2;
+  --shadow:rgba(26,26,26,.18); --scrim:rgba(26,26,26,.35);
+  --panel:#f8f0dd; --input-bg:#f8f0dd; --radius:0px;
+  --gc-ink:#1a1a1a; --gc-hard:#1a1a1a; --gc-red:#c8211b; --gc-stripe:rgba(26,26,26,.07); --gc-wedge:rgba(200,33,27,.13);
+}
+/* 顶栏：粗墨线收底，右端一块斜切红（纯装饰，不挡点击） */
+html[data-skin="goucheng"] #topbar{border-bottom:2px solid var(--gc-ink)}
+html[data-skin="goucheng"] #topbar::after{content:"";position:absolute;inset-inline-end:0;bottom:-2px;width:min(22vw,150px);height:6px;
+  background:var(--gc-red);clip-path:polygon(12% 0,100% 0,100% 100%,0 100%);pointer-events:none}
+html[data-skin="goucheng"][dir="rtl"] #topbar::after{clip-path:polygon(0 0,88% 0,100% 100%,0 100%)}
+html[data-skin="goucheng"] .icon-btn{border-radius:0}
+html[data-skin="goucheng"] #composer{border-top-color:transparent}
+/* 输入框：方角粗边 + 实心错位投影，聚焦时边线变红 */
+html[data-skin="goucheng"] #composer-inner,html[data-skin="goucheng"].wel #composer-inner{
+  border-radius:0;border:2px solid var(--gc-ink);background:var(--input-bg);box-shadow:4px 4px 0 var(--gc-hard)}
+html[data-skin="goucheng"] #composer-inner:focus-within{border-color:var(--gc-red)}
+/* 用户气泡、工具卡、子代理卡：方角墨线；气泡多一层小投影 */
+html[data-skin="goucheng"] .msg.user .bubble{border-radius:0;border-width:1.5px;box-shadow:3px 3px 0 var(--gc-hard)}
+html[data-skin="goucheng"] :is(.tool,.agc){border-radius:0}
+html[data-skin="goucheng"] .bubble :is(pre,code,blockquote,table){border-radius:0}
+/* 弹层、菜单、设置、底部面板、整页卡片：零圆角、2px 边、5px 硬投影 */
+html[data-skin="goucheng"] :is(.pop-menu,.set-sheet){border-radius:0;border:2px solid var(--gc-ink);box-shadow:5px 5px 0 var(--gc-hard)}
+html[data-skin="goucheng"] .pop-menu button{border-radius:0}
+html[data-skin="goucheng"] .sheet-panel{border-radius:0;border-top:2px solid var(--gc-ink)}
+html[data-skin="goucheng"] #pages .panel:not(.flat){border:1.5px solid var(--gc-ink);box-shadow:4px 4px 0 var(--gc-hard)}
+html[data-skin="goucheng"] .drawer-panel{border-inline-end:2px solid var(--gc-ink)}
+html[data-skin="goucheng"] :is(input[type=text],input[type=search],input[type=url],input[type=number],textarea,select,.chip){border-radius:0}
+html[data-skin="goucheng"] :is(#pages,#set-ov) select{border-radius:0;border-color:var(--gc-ink)}
+/* 按钮：实心错位投影，按下往投影方向落 2px（只动 transform） */
+html[data-skin="goucheng"] .side-new{border:2px solid var(--gc-ink);box-shadow:3px 3px 0 var(--gc-hard)}
+html[data-skin="goucheng"] .btn{border-radius:0;border:2px solid var(--gc-ink);box-shadow:3px 3px 0 var(--gc-hard);transition:transform .08s,box-shadow .08s}
+html[data-skin="goucheng"] .btn:active{opacity:1;transform:translate(2px,2px);box-shadow:1px 1px 0 var(--gc-hard)}
+html[data-skin="goucheng"] .btn.ghost{border-color:var(--gc-ink);color:var(--fg)}
+html[data-skin="goucheng"] :is(#pages,#set-ov) .btn.sm{border-radius:0}
+/* 分段：墨线槽，选中的一格是斜切红块 */
+html[data-skin="goucheng"] .seg{border-radius:0;background:transparent;border:1.5px solid var(--gc-ink);padding:1px}
+html[data-skin="goucheng"] .seg button{border-radius:0}
+html[data-skin="goucheng"] .seg button.on{background:var(--gc-red);color:var(--on-accent);box-shadow:none;font-weight:600;
+  clip-path:polygon(8% 0,100% 0,92% 100%,0 100%);padding-inline:14px}
+/* 侧栏当前项：浅红底 + 红色竖条 */
+html[data-skin="goucheng"] :is(.nav-item,.sr-item){border-radius:0}
+html[data-skin="goucheng"] :is(.nav-item.on,.sr-item.on){background:var(--active-bg);box-shadow:inset 3px 0 0 var(--gc-red)}
+html[data-skin="goucheng"][dir="rtl"] :is(.nav-item.on,.sr-item.on){box-shadow:inset -3px 0 0 var(--gc-red)}
+/* 首屏：右侧一大块斜切淡红 + -45° 细斜线底纹 + 问候下压一块斜切红（照原版欢迎页） */
+html[data-skin="goucheng"].wel #chat{background:linear-gradient(112deg,transparent 0 68%,var(--gc-wedge) 68%),repeating-linear-gradient(-45deg,transparent 0 11px,var(--gc-stripe) 11px 12px)}
+html[data-skin="goucheng"] .wl-mark{stroke:var(--gc-ink)}
+html[data-skin="goucheng"] .wl-mark circle{fill:var(--gc-red)}
+html[data-skin="goucheng"] .wl-greet{position:relative;padding-bottom:10px}
+html[data-skin="goucheng"] .wl-greet::after{content:"";position:absolute;left:50%;margin-left:-28px;bottom:0;width:56px;height:6px;background:var(--gc-red);
+  clip-path:polygon(10% 0,100% 0,90% 100%,0 100%)}
+/* 全方角：圆角散在上百条规则里，逐条压不完，这里统一压平；只有状态点这类本来就该是圆的小点留着 */
+html[data-skin="goucheng"] :not(:is(.who .dot,.dots span,.sr-dot,.nav-badge i,.fs-git-dot,.mdot,.sdot i,.pj-dot,.agr-dot,.lt-dots i,.sc-st)){border-radius:0 !important}
+/* 头像也是方的：墨线外框 + 小号硬投影；选中的账户外框换红（.prof-av 是设置里那枚，同一个类） */
+html[data-skin="goucheng"] .acct-av{border:2px solid var(--gc-ink);box-shadow:2px 2px 0 var(--gc-hard);box-sizing:border-box}
+html[data-skin="goucheng"] .side-acct.on .acct-av,html[data-skin="goucheng"] .prof-av:hover{border-color:var(--gc-red);box-shadow:2px 2px 0 var(--gc-hard)}
+html[data-skin="goucheng"] input[type=checkbox].sw::after{border-radius:0}
+html[data-skin="goucheng"] #btn-send{box-shadow:2px 2px 0 var(--gc-hard)}
+html[data-skin="goucheng"] #btn-send:active{transform:translate(2px,2px);box-shadow:none}
+/* 有序列表序号、链接用红 */
+html[data-skin="goucheng"] .bubble ol > li::marker{color:var(--gc-red);font-weight:700}
+
 /* 脉络 · 建档：只多几处灰色小字，不加颜色和图标按钮 */
 #tab-sessions .srow-sess .it-meta .no{color:var(--fg2)}
 .sess-grp .grp-act{margin-inline-start:auto;border:0;background:none;color:var(--fg3);font:inherit;font-size:11.5px;padding:2px 0;cursor:pointer}

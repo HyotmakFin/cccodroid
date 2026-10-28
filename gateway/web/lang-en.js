@@ -2248,5 +2248,10 @@ window.I18N_DICT.en = {
   "汇总": "Summary",
   "主会话": "main",
   "这个子代理的过程还没加载到": "This sub-agent's steps haven't loaded yet",
-  "更早的 {n} 步": "{n} earlier steps"
+  "更早的 {n} 步": "{n} earlier steps",
+  "构成": "Construct",
+  "构成 · 跟随系统": "Construct · Follow system",
+  "构成 · 浅色": "Construct · Light",
+  "构成 · 深色": "Construct · Dark",
+  "原生、「求索」「逐月」或「构成」配色": "Native, Qiusuo, Zhuyue or Construct colors"
 };

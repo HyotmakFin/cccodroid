@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
-//  theme.js —— 外观：三套风格（原生 / 求索 / 逐月）× 浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
+//  theme.js —— 外观：四套风格（原生 / 求索 / 逐月 / 构成）× 浅色 / 深色 / 跟随系统（无依赖；放在 <head> 里同步加载，避免先闪一下深色）
 //
-//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"，求索风格加前缀 "qs-"，逐月加 "zy-"。
-//  结果写到 <html data-theme="light|dark" data-skin="native|qiusuo|zhuyue">，样式只认这两个属性（style.css 里的变量表）。
+//  设置存在 localStorage["ccapp.theme"]："auto"（默认）| "light" | "dark"，求索风格加前缀 "qs-"，逐月加 "zy-"，构成加 "gc-"。
+//  结果写到 <html data-theme="light|dark" data-skin="native|qiusuo|zhuyue|goucheng">，样式只认这两个属性（style.css 里的变量表）。
 //
 //  「跟随系统」靠什么判断：
 //    · 壳里有 CCApp.nightMode() 就以它为准 —— 应用主题固定是深色时，WebView 的
@@ -32,12 +32,12 @@
 
 (function () {
   const LS = "ccapp.theme";
-  const MODES = ["auto", "light", "dark", "qs-auto", "qs-light", "qs-dark", "zy-auto", "zy-light", "zy-dark"];
-  const PREFIX = { native: "", qiusuo: "qs-", zhuyue: "zy-" };
-  const skinOf = (p) => (p.startsWith("qs-") ? "qiusuo" : p.startsWith("zy-") ? "zhuyue" : "native");
-  const modeOf = (p) => p.replace(/^(qs|zy)-/, "");
+  const MODES = ["auto", "light", "dark", "qs-auto", "qs-light", "qs-dark", "zy-auto", "zy-light", "zy-dark", "gc-auto", "gc-light", "gc-dark"];
+  const PREFIX = { native: "", qiusuo: "qs-", zhuyue: "zy-", goucheng: "gc-" };
+  const skinOf = (p) => (p.startsWith("qs-") ? "qiusuo" : p.startsWith("zy-") ? "zhuyue" : p.startsWith("gc-") ? "goucheng" : "native");
+  const modeOf = (p) => p.replace(/^(qs|zy|gc)-/, "");
   // 状态栏 / 导航栏底色要和页面底色一致（壳那边也有一份同样的表：BrowserPane.bg）
-  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" }, zhuyue: { dark: "#111111", light: "#ffffff" } };
+  const BAR = { native: { dark: "#1f1e1d", light: "#faf9f5" }, qiusuo: { dark: "#151517", light: "#ffffff" }, zhuyue: { dark: "#111111", light: "#ffffff" }, goucheng: { dark: "#151412", light: "#f0e6d2" } };
   const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
   const app = () => (window.CCApp && typeof window.CCApp.nightMode === "function" ? window.CCApp : null);
 

@@ -2211,3 +2211,8 @@
 2211	principal
 2212	Los pasos de este subagente aún no se han cargado
 2213	{n} pasos anteriores
+2214	Construct
+2215	Construct · Según el sistema
+2216	Construct · Claro
+2217	Construct · Oscuro
+2218	Colores Nativo, Qiusuo, Zhuyue o Construct
