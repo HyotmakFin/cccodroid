@@ -499,27 +499,14 @@ final class Installer {
         }
     }
 
-    /** 换名之后的几步。可重入：中途被打断，下次启动 recover() 会再跑一遍 */
-    private void finish() throws IOException {
-        File old = usrOld(), pend = new File(env.usr, PENDING);
-        JSONObject p;
-        try { p = new JSONObject(new String(java.nio.file.Files.readAllBytes(pend.toPath()), StandardCharsets.UTF_8)); }
-        catch (Exception e) { p = new JSONObject(); }
-        if (old.isDirectory()) carryOver(old, env.usr);
-        new File(env.usr, "tmp").mkdirs();
-        env.home.mkdirs();
-
+    /** 基础块和给出的各模块依次跑 first-run，再按改动时间剔除本机校验基线（见 pruneManifest）。返回各模块的目录 */
+    private java.util.List<File> firstRuns(java.util.List<JSONObject> modList) throws IOException {
         long since = System.currentTimeMillis() - 2000;      // 文件系统时间戳精度留点余量
         ui.step(Tr.t("首次运行配置…"));
         int rc = run(env.bin("bash").getPath(), new File(env.usr, "libexec/devkit/first-run.sh").getPath());
         if (rc != 0) ui.step(Tr.f("（first-run 返回 {0}，不影响使用）", rc));
-        // 模块化：其余各块按依赖顺序跑自己的 first-run，再写 .ok（网关据此认「已装」）
         java.util.List<File> modDirs = new java.util.ArrayList<>();
-        org.json.JSONArray mods = p.optJSONArray("modules");
-        JSONObject mj = readModules();
-        if (mods != null && mj != null) for (int i = 0; i < mods.length(); i++) {
-            JSONObject m = moduleById(mj, mods.optString(i));
-            if (m == null || "base".equals(m.optString("kind"))) continue;
+        for (JSONObject m : modList) {
             File dir = new File(env.usr, m.optString("dir"));
             modDirs.add(dir);
             File fr = new File(dir, "first-run.sh");
@@ -531,12 +518,52 @@ final class Installer {
         }
         // Guile 的编译缓存必须比源码新（哪怕包里两者同一秒），否则 gdb 启动时陷入重编译死循环
         run(env.bin("bash").getPath(), "-c", "find \"$PREFIX/lib/guile\" -name '*.go' -exec touch {} + 2>/dev/null; true");
-        writeResolvConf();
         pruneManifest(new File(env.usr, MANIFEST), new File(env.usr, LOCAL_MANIFEST), since);
-        for (File dir : modDirs) {
-            pruneManifest(new File(dir, "MANIFEST"), new File(dir, "MANIFEST.local"), since);
-            write(new File(dir, ".ok"), "{\"at\":" + System.currentTimeMillis() + "}\n");
+        for (File dir : modDirs) pruneManifest(new File(dir, "MANIFEST"), new File(dir, "MANIFEST.local"), since);
+        return modDirs;
+    }
+
+    /** 0.4.17 及以前：36 的包首次安装时，first-run 跑在「部署界面与网关」之前，LD_PRELOAD 要的 app/lib/exec-shim-bionic.so
+     *  还不在，bash 一起来就报 CANNOT LINK，first-run 整个没跑（postinst、Guile 缓存都缺）。
+     *  判据：openssh 的 postinst 在缺主机钥匙时一定会生成 —— 有 openssh、却一把主机钥匙都没有，就是没跑过 */
+    boolean firstRunMissed() {
+        if (!new File(env.usr, "libexec/devkit/postinst/openssh").isFile()) return false;
+        File[] k = new File(env.usr, "etc/ssh").listFiles((d, n) -> n.startsWith("ssh_host_") && n.endsWith("_key"));
+        return k == null || k.length == 0;
+    }
+    /** 补跑一次：基础块 + 已装好的各模块（有 .ok 的） */
+    void repairFirstRun() throws IOException {
+        java.util.List<JSONObject> modList = new java.util.ArrayList<>();
+        JSONObject mj = readModules();
+        org.json.JSONArray all = mj == null ? null : mj.optJSONArray("modules");
+        if (all != null) for (int i = 0; i < all.length(); i++) {
+            JSONObject m = all.optJSONObject(i);
+            if (m != null && !"base".equals(m.optString("kind")) && new File(new File(env.usr, m.optString("dir")), ".ok").isFile()) modList.add(m);
         }
+        firstRuns(modList);
+    }
+
+    /** 换名之后的几步。可重入：中途被打断，下次启动 recover() 会再跑一遍 */
+    private void finish() throws IOException {
+        File old = usrOld(), pend = new File(env.usr, PENDING);
+        JSONObject p;
+        try { p = new JSONObject(new String(java.nio.file.Files.readAllBytes(pend.toPath()), StandardCharsets.UTF_8)); }
+        catch (Exception e) { p = new JSONObject(); }
+        if (old.isDirectory()) carryOver(old, env.usr);
+        new File(env.usr, "tmp").mkdirs();
+        env.home.mkdirs();
+
+        // 模块化：其余各块按依赖顺序跑自己的 first-run，再写 .ok（网关据此认「已装」）
+        java.util.List<JSONObject> modList = new java.util.ArrayList<>();
+        org.json.JSONArray mods = p.optJSONArray("modules");
+        JSONObject mj = readModules();
+        if (mods != null && mj != null) for (int i = 0; i < mods.length(); i++) {
+            JSONObject m = moduleById(mj, mods.optString(i));
+            if (m != null && !"base".equals(m.optString("kind"))) modList.add(m);
+        }
+        java.util.List<File> modDirs = firstRuns(modList);
+        writeResolvConf();
+        for (File dir : modDirs) write(new File(dir, ".ok"), "{\"at\":" + System.currentTimeMillis() + "}\n");
         try { p.put("at", System.currentTimeMillis()); } catch (org.json.JSONException ignored) {}
         // 这一版的 carryOver 已经按相对路径认主了：告诉网关别对这份工具包做「旧版残留」清理（见 gw/orphans.mjs）
         write(new File(env.files, ".orphans-v1"), "{\"by\":\"installer\",\"at\":" + System.currentTimeMillis() + "}\n");

@@ -169,14 +169,19 @@ public class MainActivity extends Activity {
                 }
                 Updater.get(this).dropStagedIfInstalled();
                 ins.dropTrash();                  // 卸载删到一半被打断的残骸
+                // 界面与网关先部署：first-run 的 bash 要预加载 app/lib/exec-shim-bionic.so（36 的包），晚了就 CANNOT LINK、first-run 整个没跑
+                deployAssets();
                 if (!env.devkitReady()) {
                     installFirstDevkit(ins);
                     say(Tr.t("✓ 开发工具包就绪"));
                     Ledger.add(env, "install", true, Tr.t("首次安装开发工具包"), null);
                     // 旧版在首装期间可能已经按「全部模块」下好了一份同版本的更新：装好以后它就是多余的，别在下面被当成更新装上
                     Updater.get(this).dropStagedIfInstalled();
+                } else if (ins.firstRunMissed()) {
+                    // 0.4.17 及以前首装 36 的包时 first-run 没跑成（见 Installer.firstRunMissed）：补跑一次
+                    try { ins.repairFirstRun(); Ledger.add(env, "repair", true, Tr.t("补跑了首次安装时没跑成的首次配置"), null); }
+                    catch (Exception e) { Ledger.add(env, "repair", false, Tr.t("补跑首次配置失败：") + e.getMessage(), null); }
                 }
-                deployAssets();
                 if (!env.claudeReady() && !env.claudeOff()) {      // 用户自己卸的不装回，等他在设置里选版本
                     Updater u0 = Updater.get(this);
                     ins.installClaude(new File(env.app, "scripts/install-claude.sh"), u0.pinned() ? u0.pinVer() : "latest".equals(u0.channel()) ? "latest" : "stable");
