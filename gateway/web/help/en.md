@@ -30,7 +30,7 @@ The thin line under the top bar shows **context usage**; the further right, the 
 
 - **Appearance**: Settings → General → Appearance offers four styles: Native, Qiusuo, Zhuyue and Construct, each in light and dark. Construct has square corners, heavy ink lines and red on kraft paper, for when you want something bolder.
 - **Top bar buttons**: Settings → General → Top bar buttons. Each button can be Pinned (always on the top bar, no need to tap ⋯ first), In ⋯, or Hidden. Hold the handle on the left and drag to reorder. Restore default puts everything back.
-- **Fonts**: the interface, replies and monospace text can each use a different font. Under Settings → General → Imported fonts, import a ttf / otf / woff / woff2 file, then pick it with Custom… on the row you want. Characters the font lacks (say, Chinese in a Latin font) fall back to the built-in fonts, and the terminal follows the monospace font.
+- **Fonts**: the interface and replies can each use a different font. Under Settings → General → Imported fonts, import a ttf / otf / woff / woff2 file, then pick it with Custom… on the row you want. Characters the font lacks (say, Chinese in a Latin font) fall back to the built-in fonts. Code and the terminal always use the built-in monospace font.
 - **Saved prompts**: save long prompts you send often and pick them by typing / in the input box; see Extensions below.
 - **Sidebar shortcuts**: Customize pinned items… at the bottom of More in the sidebar.
 

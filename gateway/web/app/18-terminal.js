@@ -122,23 +122,12 @@
     requestAnimationFrame(() => { termFit(a); a.xt.focus(); });
   }
 
-  // 终端的字体跟着设置里的「等宽字体」走（导入的字体也算）：读 CSS 变量 --mono，xterm 只认字符串
-  const termMono = () => getComputedStyle(document.documentElement).getPropertyValue("--mono").trim()
-    || "'CC Mono', ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace";
-  // 换了等宽字体：先把字体真下载下来（canvas 量字宽不会等字体），再换上、重新量行列
-  document.addEventListener("cc:type", async (e) => {
-    if (e.detail.key !== "monofont" || !TERM.inst.size) return;
-    const fam = termMono();
-    try { await document.fonts.load(`${TERM.font}px ${fam}`); } catch {}
-    for (const x of TERM.inst.values()) { x.xt.options.fontFamily = fam; termFit(x); }
-  });
-
   function mountTerm(id) {
     const el = document.createElement("div");
     el.className = "term-screen";
     $("term-screens").appendChild(el);
     const xt = new window.Terminal({
-      fontSize: TERM.font, fontFamily: termMono(),
+      fontSize: TERM.font, fontFamily: "'CC Mono', ui-monospace, 'Droid Sans Mono', 'Noto Sans Mono CJK SC', monospace",
       theme: termTheme(), scrollback: 5000, cursorBlink: true, allowProposedApi: false,
       macOptionIsMeta: true, convertEol: false,
       // claude 打的 OSC 8 超链接（登录授权页等）：交给系统浏览器，别在 WebView 里开
@@ -150,11 +139,6 @@
     const a = { id, el, xt, fit, es: null, ro: null, q: "", sending: Promise.resolve(), timer: 0, cols: 0, rows: 0 };
     TERM.inst.set(id, a);
     termScrubber(a);
-    // 用的是导入的等宽字体、它又还没下载：等下载完换一下字体名逼 xterm 重新量字宽，不然第一屏的格子按回落字体算
-    if (document.documentElement.dataset.monofont === "u") {
-      const fm = xt.options.fontFamily;
-      document.fonts.load(`${TERM.font}px ${fm}`).then(() => { if (!TERM.inst.has(id)) return; xt.options.fontFamily = "monospace"; xt.options.fontFamily = fm; termFit(a); }).catch(() => {});
-    }
 
     xt.onData((d) => termSend(a, termMods(d)));
     // 终端里的网址点一下就用系统浏览器打开（登录授权页那种长地址会折成好几行，按折行拼回来再找）

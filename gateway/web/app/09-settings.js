@@ -656,9 +656,9 @@
 
 
   // ── 导入的字体（0.4.20）：清单在网关 /api/fonts（gw/fonts.mjs），槽位与 @font-face 由 theme.js 管 ──
-  //   设置 → 通用里三个字体槽位（界面 / 回复 / 等宽）都有「自选…」：点了弹菜单列出导入的字体，末尾「导入字体…」；
+  //   设置 → 通用里两个字体槽位（界面 / 回复）都有「自选…」：点了弹菜单列出导入的字体，末尾「导入字体…」；
   //   一个都没导入时直接打开选文件。从某个槽位进去导入的，导入完就用在那个槽位上。
-  const UF_SLOT = { uf: "uifont", rf: "readfont", mf: "monofont" };
+  const UF_SLOT = { uf: "uifont", rf: "readfont" };
   let ufFor = "";   // 从哪个槽位点的「导入字体…」：导完就用上
   async function loadFonts() {
     const r = await api("/api/fonts").catch(() => null);
@@ -706,7 +706,7 @@
     popMenu(b, items);
   }
   document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf=pick], #seg-readfont [data-rf=pick], #seg-monofont [data-mf=pick]");
+    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf=pick], #seg-readfont [data-rf=pick]");
     if (b) { const d = Object.keys(UF_SLOT).find((x) => b.dataset[x]); pickFont(b, d); }
   });
   $("uf-add")?.addEventListener("click", () => { ufFor = ""; $("uf-file").click(); });
