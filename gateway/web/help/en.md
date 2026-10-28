@@ -26,6 +26,16 @@ The menu button at the top left opens the sidebar: places to go at the top (Chat
 
 The thin line under the top bar shows **context usage**; the further right, the fuller. Its second half shows what is left on the current provider: the share of the 5-hour and weekly limits used when you sign in with a Claude account, or the balance for DeepSeek, Kimi and similar. Tap the line for details; every provider’s quota and spending, plus low-quota reminders, are under **Quota and spending** at the top of the Usage page. In the input area, ＋ attaches files and opens common actions. The row below shows the model, thinking effort and permission mode; tap any of them to change it.
 
+## Make it yours
+
+- **Appearance**: Settings → General → Appearance offers four styles: Native, Qiusuo, Zhuyue and Construct, each in light and dark. Construct has square corners, heavy ink lines and red on kraft paper, for when you want something bolder.
+- **Top bar buttons**: Settings → General → Top bar buttons. Each button can be Pinned (always on the top bar, no need to tap ⋯ first), In ⋯, or Hidden. Hold the handle on the left and drag to reorder. Restore default puts everything back.
+- **Fonts**: the interface, replies and monospace text can each use a different font. Under Settings → General → Imported fonts, import a ttf / otf / woff / woff2 file, then pick it with Custom… on the row you want. Characters the font lacks (say, Chinese in a Latin font) fall back to the built-in fonts, and the terminal follows the monospace font.
+- **Saved prompts**: save long prompts you send often and pick them by typing / in the input box; see Extensions below.
+- **Sidebar shortcuts**: Customize pinned items… at the bottom of More in the sidebar.
+
+These choices are stored in the app's own data, so clearing the WebView cache won't lose them.
+
 ## Conversations
 
 - **Enter sends.** Sending while Claude is busy queues the message; ⚡ interjects into the running turn without stopping it.
@@ -88,6 +98,7 @@ Layout follows the window width, not orientation:
 
 - **Toolkit modules**: install and remove as needed; each shows what it is for, its size and what uses it. Typing a missing command in the terminal tells you which module has it.
 - **Components**: large tools such as Chromium, Blender, Godot, LibreOffice, llama.cpp and GPU drivers, installed when you need them. Signatures are checked first, and each component ships a skill so Claude knows how to use it.
+- **Saved prompts**: create one under Saved prompts on the Extensions page: give it a name (say, issue) and write what should be sent to Claude. Then type `/issue your details` in the input box, and the text after the name fills `$ARGUMENTS`. A prompt can be for all projects or just the current one. They're stored as standard Claude Code command files, so claude in the terminal can use them too.
 - **Plugins, skills, MCP**: add and manage them on the Extensions page; changes apply from the next message. More → Capabilities shows everything Claude can use this turn.
 - **pkg**: in the terminal, `pkg install rust` installs packages from the Termux repository; `pkg verified` lists the ones tested on device.
 
