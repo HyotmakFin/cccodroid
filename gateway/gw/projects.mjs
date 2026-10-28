@@ -12,6 +12,7 @@ import { PEEK_CACHE, findSessionFile, listSessions } from "./sessions.mjs";
 import { trashSession } from "./sessionops.mjs";
 import { termEnv } from "./terminal.mjs";
 import { killTree } from "./claude.mjs";
+import { runOfSession } from "./runs.mjs";
 
 const FILE = path.join(CFG.home, "ccapp-projects.json");
 // 项目颜色：和界面强调色同一套饱和度，按顺序分配（用户可改）
@@ -103,6 +104,8 @@ function gitClone(url, dest) {
 export function moveSession(sid, projectId) {
   const found = findSessionFile(sid);
   if (!found) throw new Error(tz("找不到这个会话"));
+  // 正在生成的会话不能搬：claude 还开着原文件往里追加，搬完删掉原文件，这一轮的记录就没了（审查 H5；删除那边早有这道检查）
+  if (runOfSession(sid)) throw new Error(tz("这个会话正在生成中。"));
   const p = projectId ? projectById(projectId) : null;
   if (projectId && !p) throw new Error(tz("项目不存在"));
   const cwd = p ? real(p.path) : real(CFG.workspace);
@@ -195,8 +198,11 @@ export async function routeProjects(req, res, u, p) {
     const withDir = u.searchParams.get("withDir") === "1";
     if (withDir) {
       const r = real(proj.path);
+      const inDir = (s) => s.cwd && (real(s.cwd) === r || real(s.cwd).startsWith(r + "/"));
+      // 有会话正在这个目录里跑：先别删（目录删了它还在往里写，对话也收不进回收站）
+      if (listSessions(5000).some((s) => inDir(s) && runOfSession(s.id))) return sendJson(res, 409, { error: "busy", message: tz("这个项目里有会话正在生成，等它结束再删。") });
       // 删目录前先把对话收进回收站（可恢复）；目录本身直接删
-      for (const s of listSessions(5000)) if (s.cwd && (real(s.cwd) === r || real(s.cwd).startsWith(r + "/"))) { try { trashSession(s.id); } catch {} }
+      for (const s of listSessions(5000)) if (inDir(s)) { try { trashSession(s.id); } catch {} }
       if (r === real(CFG.workspace) || r === real(CFG.home) || r.split("/").length < 4) return sendJson(res, 400, { error: tz("这个目录不能删") });
       try { fs.rmSync(r, { recursive: true, force: true }); } catch (e) { return sendJson(res, 500, { error: e.message }); }
     }

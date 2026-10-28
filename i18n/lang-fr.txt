@@ -2277,3 +2277,4 @@
 2277	Rouge
 2278	Magenta
 2279	Violet
+2280	Une session de ce projet est encore en cours de génération. Attendez qu’elle se termine avant de supprimer.

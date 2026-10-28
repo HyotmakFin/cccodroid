@@ -2277,3 +2277,4 @@
 2277	Rojo
 2278	Magenta
 2279	Morado
+2280	Una sesión de este proyecto aún se está generando. Espera a que termine antes de eliminar.

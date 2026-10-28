@@ -2280,4 +2280,5 @@ window.I18N_DICT["es"] = {
   "红": "Rojo",
   "品红": "Magenta",
   "紫": "Morado",
+  "这个项目里有会话正在生成，等它结束再删。": "Una sesión de este proyecto aún se está generando. Espera a que termine antes de eliminar.",
 };
