@@ -98,8 +98,17 @@ export function sendJson(res, code, obj) {
   res.end(b);
 }
 
-// 界面自己的静态文件：不许别的站点把它套进 frame（界面内部的 iframe 同源，不受影响），不让浏览器猜类型
-const STATIC_SAFE = { "x-content-type-options": "nosniff", "content-security-policy": "frame-ancestors 'self'" };
+// 界面自己的静态文件：不许别的站点把它套进 frame（界面内部的 iframe 同源，不受影响），不让浏览器猜类型。
+// CSP 只管脚本（审查 H1）：界面所有脚本都是同源文件、没有内联脚本和内联事件，所以 script-src 'self' 不碍事，
+// 而 XSS 要用的 <img onerror>、javascript: 链接、内联 <script> 全被拦 —— 万一哪天转义漏了一处，也到不了「调网关跑命令」那一步。
+// 留着 unsafe-eval：打开 docx 的 mammoth 里有 new Function（它不吃页面内容，留着不削弱上面那条）；wasm-unsafe-eval 给 pdf.js 的解码器。
+// 图片、样式、连接、iframe 不收紧：外链图、预览窗格（另一个端口）都要用，收紧了容易误伤，换来的防护不大。
+// Referrer-Policy：首屏 URL 带着 t= / k=，别经 Referer 漏给任何地方（审查 中8）
+const STATIC_SAFE = {
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+  "content-security-policy": "frame-ancestors 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'",
+};
 export function serveStatic(req, res, urlPath) {
   let rel = urlPath === "/" ? "/index.html" : urlPath;
   rel = rel.replace(/^\/+/, "");
