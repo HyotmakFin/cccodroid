@@ -480,7 +480,16 @@ async function handleCustom(req, res, p, u) {
     const up = path.join(CUSTOM_DIR, ".uploads"); fs.mkdirSync(up, { recursive: true });
     try { for (const f of fs.readdirSync(up)) if (Date.now() - fs.statSync(path.join(up, f)).mtimeMs > 3600000) fs.rmSync(path.join(up, f), { force: true }); } catch {}
     const out = path.join(up, crypto.randomBytes(4).toString("hex") + "-" + name);
-    await new Promise((resolve, reject) => { const w = fs.createWriteStream(out); req.pipe(w); w.on("finish", resolve); w.on("error", reject); req.on("error", reject); });
+    // 边收边数：超过上限就断开、删掉半截，别把私有空间写满（审查 中7；其他上传口都有上限，只这里漏了）
+    const MAX = 2 * 1024 ** 3;
+    if (+req.headers["content-length"] > MAX) return sendJson(res, 413, { ok: false, message: "file too large (max 2 GB)" });
+    try {
+      await new Promise((resolve, reject) => {
+        const w = fs.createWriteStream(out); let n = 0;
+        req.on("data", (c) => { n += c.length; if (n > MAX) { req.unpipe(w); w.destroy(); req.destroy(); reject(Object.assign(new Error("file too large (max 2 GB)"), { big: true })); } });
+        req.pipe(w); w.on("finish", resolve); w.on("error", reject); req.on("error", reject);
+      });
+    } catch (e) { fs.rmSync(out, { force: true }); return sendJson(res, e.big ? 413 : 500, { ok: false, message: e.message }); }
     const r = await customAnalyze(out);
     fs.rmSync(out, { force: true });
     if (r.ok) r.source = r.source.replace(/^[0-9a-f]{8}-/, "");
