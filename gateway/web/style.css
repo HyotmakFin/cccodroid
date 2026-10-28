@@ -1514,7 +1514,7 @@ html[data-skin="qiusuo"] .run-phase.bad{color:var(--err);background:none;animati
 html[data-skin="qiusuo"] .tool-state.run{color:var(--fg3)}
 html[data-skin="qiusuo"] .tool-state.run::before{
   content:"";display:inline-block;width:9px;height:9px;margin-inline-end:5px;vertical-align:-1px;
-  border-radius:50%;border:1.6px solid color-mix(in srgb,currentColor 25%,transparent);border-top-color:currentColor;
+  border-radius:50%;border:1.6px solid rgba(128,128,128,.3);border:1.6px solid color-mix(in srgb,currentColor 25%,transparent);border-top-color:currentColor;
   animation:qs-spin 1.5s linear infinite;
 }
 @keyframes qs-spin{to{transform:rotate(360deg)}}

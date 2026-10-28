@@ -223,3 +223,13 @@
   window.Theme = { pref, set, system, apply, accentFor, get skin() { return skinOf(pref); }, setType, type: typePref, setFonts, fontOf, fam, get fonts() { return ufonts.slice(); }, get current() { return document.documentElement.dataset.theme; } };
   apply();
 })();
+
+// 老内核（Chrome 104 一档）没有 :has() / @container / color-mix()：用到它们的规则整条作废，补一份改写过的（见 compat-old.js）
+(() => {
+  try {
+    if (CSS.supports("selector(:has(a))") && CSS.supports("color", "color-mix(in srgb, red 50%, blue)") && CSS.supports("container-type", "inline-size")) return;
+    const s = document.createElement("script");
+    s.src = "/compat-old.js";
+    document.head.appendChild(s);
+  } catch {}
+})();
