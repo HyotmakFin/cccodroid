@@ -76,8 +76,7 @@
   });
 
   $("btn-new").addEventListener("click", () => {
-    newConversation();
-    toast(t("已开始新会话"));
+    if (newConversation()) toast(t("已开始新会话"));
   });
 
   // 截屏当附件（经 priv / Shizuku）。立刻截：分屏时连另一半一起截；延时截：先切到要截的应用，截完自动回来

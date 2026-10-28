@@ -106,11 +106,20 @@
     closeDrawer(); openSession(id, jumpQ, id && !jumpQ && id !== view.sessionId ? lastReadOf(id) : null);
   }
 
+  /** 眼前就是一张空白、还没发过东西的新对话（不在项目里、这页没起过一轮、也没有在途的发送） */
+  function blankNew() {
+    return !view.sessionId && !view.projectId && !view.runIds.size && !view.cids.size && !view.lastRunId
+      && !histEl.querySelector(".msg:not(.welcome)") && !liveEl.querySelector(".msg");
+  }
   function newConversation(note) {
+    // 已经在空白新对话上又点「新对话」（侧栏 / 顶栏 ＋）：现场不动，只收起整页、聚焦输入框。
+    // 以前每点一次都重置视图、重连事件流，顶栏在「新会话」「已连接」之间来回闪（#40）。带 note 的（/clear 等）照旧重开
+    if (!note && blankNew()) { closePage(); inputEl.focus(); return false; }
     openSession(null);
     updateCtx(0, state.ctxTotal);
     setStatus(note || t("新会话"), "ok");
     inputEl.focus();
+    return true;
   }
 
   function liveExclude() {
