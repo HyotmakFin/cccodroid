@@ -549,7 +549,7 @@ final class Installer {
         JSONObject p;
         try { p = new JSONObject(new String(java.nio.file.Files.readAllBytes(pend.toPath()), StandardCharsets.UTF_8)); }
         catch (Exception e) { p = new JSONObject(); }
-        if (old.isDirectory()) carryOver(old, env.usr);
+        if (old.isDirectory()) carryOverOnce(old);
         new File(env.usr, "tmp").mkdirs();
         env.home.mkdirs();
 
@@ -569,7 +569,40 @@ final class Installer {
         write(new File(env.files, ".orphans-v1"), "{\"by\":\"installer\",\"at\":" + System.currentTimeMillis() + "}\n");
         write(new File(env.usr, ".devkit-ok"), p + "\n");       // 从这一刻起才算装好
         pend.delete();
+        new File(env.files, CARRY_TRY).delete();
         if (old.exists()) { ui.step(Tr.t("清理旧版本…")); deleteTree(old); }
+    }
+
+    /** 搬用户自装包的「进行中」标记：放在 files/ 下（不在 usr 里），搬完删掉 */
+    static final String CARRY_TRY = ".carry-try", CARRY_KEPT = "usr.old-kept";
+    /** 这次收尾跳过了搬家时为 true（给修复账本用） */
+    boolean carrySkipped;
+
+    /**
+     * carryOver 只试一次（群友报修，0.4.17 魅族 18 / Flyme）：有的机器上 f2fs 的 rename 会卡在内核里不返回（D 状态，
+     * 同一时间别的应用的 rename 也卡），进程杀不掉、成了僵尸，App 再也打不开；而 .devkit-pending 还在，下次启动 recover()
+     * 又从 carryOver 开始，又卡 —— 自己把自己锁死。rename 没法设超时，所以改成：进去之前落个标记，上一次带着标记死了，
+     * 这次就不搬了 —— 旧目录整个换名留给用户（一次顶层 rename），工具包照常装完。搬的只是用户自己 pip / npm -g 装的包，
+     * 跳过不影响工具包本身能用。
+     */
+    private void carryOverOnce(File old) throws IOException {
+        File tryF = new File(env.files, CARRY_TRY);
+        if (tryF.exists()) {
+            carrySkipped = true;
+            File kept = new File(env.files, CARRY_KEPT);
+            if (kept.exists()) deleteTree(kept);      // 更早留下的那份：工具包已经又换过一版，没用了
+            boolean ok = old.renameTo(kept);
+            ui.step(ok ? Tr.f("上次搬你自己装的 pip / npm 包时卡住了，这次跳过；原来的目录留在 {0}", kept.getPath())
+                       : Tr.t("上次搬你自己装的 pip / npm 包时卡住了，这次跳过"));
+            tryF.delete();
+            return;
+        }
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(tryF)) {
+            o.write(("{\"at\":" + System.currentTimeMillis() + "}\n").getBytes(StandardCharsets.UTF_8));
+            o.getFD().sync();                          // 要在卡住之前落到盘上，否则下次看不见
+        }
+        carryOver(old, env.usr);
+        tryF.delete();
     }
 
     /**
@@ -625,6 +658,7 @@ final class Installer {
             ui.step(Tr.t("上次的开发工具包更新被打断了，接着完成…"));
             finish();
             recovered = (recovered == null ? "" : recovered + Tr.t("；")) + Tr.t("上次更新在收尾阶段被打断：重跑首次配置并写好校验基线");
+            if (carrySkipped) recovered += Tr.t("；上次搬用户自装包时卡住，这次跳过，旧目录留在 usr.old-kept");
             return true;
         }
         if (!env.usr.exists() && old.isDirectory()) { old.renameTo(env.usr); did = true; recovered = Tr.t("新版没换上：退回旧版"); }   // 新版没成：退回旧版
