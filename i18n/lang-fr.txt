@@ -2216,3 +2216,18 @@
 2216	Construct · Clair
 2217	Construct · Sombre
 2218	Couleurs natives, Qiusuo, Zhuyue ou Construct
+2219	Perso…
+2220	Police à chasse fixe
+2221	Code, cartes d'outils et terminal
+2222	Polices importées
+2223	ttf, otf, woff ou woff2, 40 Mo max chacune, 10 au plus. Une fois importée, choisissez-la avec « Perso… » ci-dessus ; les caractères manquants utilisent les polices intégrées
+2224	Importer une police…
+2225	Un fichier de police ne peut pas dépasser 40 Mo
+2226	Importation de {name}…
+2227	Cette police est déjà importée : {name}
+2228	{name} importée
+2229	Supprimer la police {name} ? Les endroits qui l'utilisent reviennent à la police par défaut.
+2230	Supprimer la police {name} ?
+2231	10 polices au maximum. Supprimez-en une d'abord
+2232	C'est une collection de polices (.ttc), inutilisable dans la vue web. Utilisez un seul ttf / otf
+2233	Ce n'est pas un fichier de police utilisable. Seuls ttf, otf, woff et woff2 sont pris en charge

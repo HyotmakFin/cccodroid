@@ -11,7 +11,7 @@
     paintSetCats();
     renderSideNav();
     closeDrawer();
-    loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false);
+    loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); loadFonts();
   }
   function closeSettings() {
     if (!setOpen) return;

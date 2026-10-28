@@ -2216,3 +2216,18 @@
 2216	Construct · Claro
 2217	Construct · Oscuro
 2218	Colores Nativo, Qiusuo, Zhuyue o Construct
+2219	Propia…
+2220	Fuente monoespaciada
+2221	Código, tarjetas de herramientas y terminal
+2222	Fuentes importadas
+2223	ttf, otf, woff o woff2, hasta 40 MB cada una, 10 como máximo. Después de importarla, elígela con «Propia…» arriba; los caracteres que falten usan las fuentes integradas
+2224	Importar fuente…
+2225	El archivo de fuente no puede superar 40 MB
+2226	Importando {name}…
+2227	Esta fuente ya está importada: {name}
+2228	{name} importada
+2229	¿Eliminar la fuente {name}? Donde se use volverá a la fuente predeterminada.
+2230	¿Eliminar la fuente {name}?
+2231	Puedes importar hasta 10 fuentes. Elimina una primero
+2232	Es una colección de fuentes (.ttc) y la vista web no puede usarla. Usa un ttf / otf individual
+2233	No es un archivo de fuente válido. Solo se admiten ttf, otf, woff y woff2

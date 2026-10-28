@@ -106,33 +106,71 @@
   // ── 字体与正文字号：和配色一样同步生效，避免先闪一下系统字体 ──
   //   界面字体  ccapp.uifont   cc（默认：自带 Inter + 思源黑体）| system（跟随系统）
   //   回复字体  ccapp.readfont serif（默认：自带 Spectral + 思源宋体）| sans
+  //   等宽字体  ccapp.monofont cc（默认：自带 CC Mono）
   //   正文字号  ccapp.fs       s | m（默认）| l
-  //   结果写到 <html data-uifont data-readfont data-fs>，样式只认这三个属性
-  const TYPE = { uifont: ["cc", "system"], readfont: ["serif", "sans"], fs: ["m", "s", "l"] };
+  //   三个字体槽位还能填导入的字体 "u:<id>"（0.4.20 起，见 gw/fonts.mjs），这时属性写 "u"，具体是哪个字体由下面注入的 <style id="user-fonts"> 定。
+  //   结果写到 <html data-uifont data-readfont data-monofont data-fs>，样式只认这几个属性
+  const TYPE = { uifont: ["cc", "system"], readfont: ["serif", "sans"], monofont: ["cc"], fs: ["m", "s", "l"] };
+  const SLOTS = ["uifont", "readfont", "monofont"];
+  // 导入字体的清单在网关（/api/fonts），这里缓存一份，好在页面一开头就把 @font-face 写进去；界面启动后会再和网关对一次
+  const UF = "ccapp.ufonts";
+  let ufonts = [];
+  try { const j = JSON.parse(localStorage.getItem(UF) || "[]"); if (Array.isArray(j)) ufonts = j.filter((f) => f && /^[0-9a-f]{12}$/.test(f.id)); } catch {}
+  const okVal = (k, v) => (TYPE[k] || []).includes(v) || (SLOTS.includes(k) && typeof v === "string" && v.startsWith("u:") && ufonts.some((f) => "u:" + f.id === v));
   const typePref = {};
-  for (const k in TYPE) { let v = null; try { v = localStorage.getItem("ccapp." + k); } catch {} typePref[k] = TYPE[k].includes(v) ? v : TYPE[k][0]; }
+  for (const k in TYPE) { let v = null; try { v = localStorage.getItem("ccapp." + k); } catch {} typePref[k] = okVal(k, v) ? v : TYPE[k][0]; }
+  const FMT = { ttf: "truetype", otf: "opentype", woff: "woff", woff2: "woff2" };
+  const fam = (id) => `"CCU ${id}"`;
+  function paintFonts() {
+    let el = document.getElementById("user-fonts");
+    if (!el) { el = document.createElement("style"); el.id = "user-fonts"; document.head.appendChild(el); }
+    // 只声明不下载：@font-face 要等真有元素用到这个字体时才去取
+    let css = ufonts.map((f) => `@font-face{font-family:${fam(f.id)};src:url("/api/fonts/file/${f.id}") format("${FMT[f.fmt] || f.fmt}");font-display:swap}`).join("\n");
+    const id = (k) => (typePref[k].startsWith("u:") ? typePref[k].slice(2) : "");
+    // 导入的字体排第一，缺字（比如英文字体里没有中文）照旧落回自带字体
+    if (id("uifont")) css += `\nhtml[data-uifont="u"]{--font-ui:${fam(id("uifont"))},"CC Inter","CC Hei",sans-serif}`;
+    if (id("readfont")) css += `\nhtml[data-readfont="u"]{--font-read:${fam(id("readfont"))},var(--font-serif)}`;
+    if (id("monofont")) css += `\nhtml[data-monofont="u"]{--mono:${fam(id("monofont"))},"CC Mono",ui-monospace,"Droid Sans Mono","Noto Sans Mono CJK SC",monospace}`;
+    if (el.textContent !== css) el.textContent = css;
+  }
   function applyType() {
     const root = document.documentElement;
-    for (const k in TYPE) if (root.dataset[k] !== typePref[k]) root.dataset[k] = typePref[k];
-    document.querySelectorAll("#seg-uifont [data-uf]").forEach((b) => b.classList.toggle("on", b.dataset.uf === typePref.uifont));
-    document.querySelectorAll("#seg-readfont [data-rf]").forEach((b) => b.classList.toggle("on", b.dataset.rf === typePref.readfont));
-    document.querySelectorAll("#seg-fs [data-fs]").forEach((b) => b.classList.toggle("on", b.dataset.fs === typePref.fs));
+    paintFonts();
+    for (const k in TYPE) { const v = typePref[k].startsWith("u:") ? "u" : typePref[k]; if (root.dataset[k] !== v) root.dataset[k] = v; }
+    const SEG = { uifont: ["#seg-uifont", "uf"], readfont: ["#seg-readfont", "rf"], monofont: ["#seg-monofont", "mf"], fs: ["#seg-fs", "fs"] };
+    for (const k in SEG) {
+      const [sel, d] = SEG[k], v = typePref[k].startsWith("u:") ? "pick" : typePref[k];
+      document.querySelectorAll(`${sel} [data-${d}]`).forEach((b) => b.classList.toggle("on", b.dataset[d] === v));
+    }
   }
   function setType(k, v) {
-    if (!TYPE[k] || !TYPE[k].includes(v)) return;
+    if (!okVal(k, v)) return;
+    const was = typePref[k];
     typePref[k] = v;
     try { localStorage.setItem("ccapp." + k, v); } catch {}
     applyType();
+    // 终端（xterm 画在 canvas 上，不吃 CSS 变量）要自己换字体再量一遍
+    if (was !== v) document.dispatchEvent(new CustomEvent("cc:type", { detail: { key: k, value: v } }));
   }
+  /** 网关的字体清单（导入 / 删除后、界面启动时）：更新缓存；正在用的字体没了就退回默认 */
+  function setFonts(list) {
+    ufonts = (Array.isArray(list) ? list : []).filter((f) => f && /^[0-9a-f]{12}$/.test(f.id)).map((f) => ({ id: f.id, name: f.name, fmt: f.fmt }));
+    try { localStorage.setItem(UF, JSON.stringify(ufonts)); } catch {}
+    for (const k of SLOTS) if (!okVal(k, typePref[k])) setType(k, TYPE[k][0]);
+    applyType();
+  }
+  const fontOf = (k) => (typePref[k].startsWith("u:") ? ufonts.find((f) => "u:" + f.id === typePref[k]) || null : null);
   document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf], #seg-readfont [data-rf], #seg-fs [data-fs]"); if (!b) return;
+    // 「自选…」不在这里管（要弹菜单、可能还要导入），界面那边接（09-settings.js 的字体一节）
+    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf], #seg-readfont [data-rf], #seg-monofont [data-mf], #seg-fs [data-fs]"); if (!b) return;
     if (b.dataset.uf) setType("uifont", b.dataset.uf);
     else if (b.dataset.rf) setType("readfont", b.dataset.rf);
+    else if (b.dataset.mf) setType("monofont", b.dataset.mf);
     else setType("fs", b.dataset.fs);
   });
   document.addEventListener("DOMContentLoaded", applyType);
   applyType();
 
-  window.Theme = { pref, set, system, apply, setType, type: typePref, get current() { return document.documentElement.dataset.theme; } };
+  window.Theme = { pref, set, system, apply, setType, type: typePref, setFonts, fontOf, fam, get fonts() { return ufonts.slice(); }, get current() { return document.documentElement.dataset.theme; } };
   apply();
 })();

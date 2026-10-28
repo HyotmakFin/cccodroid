@@ -2253,5 +2253,20 @@ window.I18N_DICT.en = {
   "构成 · 跟随系统": "Construct · Follow system",
   "构成 · 浅色": "Construct · Light",
   "构成 · 深色": "Construct · Dark",
-  "原生、「求索」「逐月」或「构成」配色": "Native, Qiusuo, Zhuyue or Construct colors"
+  "原生、「求索」「逐月」或「构成」配色": "Native, Qiusuo, Zhuyue or Construct colors",
+  "自选…": "Custom…",
+  "等宽字体": "Monospace font",
+  "代码、工具卡和终端里的字": "Code, tool cards and the terminal",
+  "导入的字体": "Imported fonts",
+  "支持 ttf、otf、woff、woff2，单个不超过 40 MB，最多 10 个。导入后在上面点「自选…」选用；缺的字会用自带字体补上": "ttf, otf, woff or woff2, up to 40 MB each, 10 at most. After importing, pick it with \"Custom…\" above; characters the font lacks fall back to the built-in fonts",
+  "导入字体…": "Import font…",
+  "字体文件不能超过 40 MB": "Font files can't be larger than 40 MB",
+  "正在导入 {name}…": "Importing {name}…",
+  "这个字体已经导入过了：{name}": "This font is already imported: {name}",
+  "已导入 {name}": "Imported {name}",
+  "删除字体 {name}？正在用它的地方会换回默认字体。": "Delete font {name}? Places using it go back to the default font.",
+  "删除字体 {name}？": "Delete font {name}?",
+  "最多导入 10 个字体，先删掉一个再导入": "You can import up to 10 fonts. Delete one first",
+  "这是字体集合（.ttc），浏览器用不了；请换成单个的 ttf / otf": "This is a font collection (.ttc), which the web view can't use. Please use a single ttf / otf",
+  "不是能用的字体文件，只支持 ttf、otf、woff、woff2": "Not a usable font file. Only ttf, otf, woff and woff2 are supported"
 };

@@ -463,6 +463,7 @@
     connectBus(false);                   // hello 到了就会去取历史 / 接上正在跑的那一轮
 
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
+    loadFonts();                         // 导入字体的清单和本地缓存对一下（换过机、清过缓存时把 @font-face 补回来）
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
     setInterval(refreshStatus, 45000);
     // 设置里有几类（设备与权限、更新、通知、用量……）要等接口回话才显示：开机空下来先拉一遍，

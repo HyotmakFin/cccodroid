@@ -654,3 +654,69 @@
     }
   }
 
+
+  // ── 导入的字体（0.4.20）：清单在网关 /api/fonts（gw/fonts.mjs），槽位与 @font-face 由 theme.js 管 ──
+  //   设置 → 通用里三个字体槽位（界面 / 回复 / 等宽）都有「自选…」：点了弹菜单列出导入的字体，末尾「导入字体…」；
+  //   一个都没导入时直接打开选文件。从某个槽位进去导入的，导入完就用在那个槽位上。
+  const UF_SLOT = { uf: "uifont", rf: "readfont", mf: "monofont" };
+  let ufFor = "";   // 从哪个槽位点的「导入字体…」：导完就用上
+  async function loadFonts() {
+    const r = await api("/api/fonts").catch(() => null);
+    if (r && window.Theme && Theme.setFonts) Theme.setFonts(r.items || []);
+    paintFonts(r ? r.items || [] : null);
+  }
+  function paintFonts(items) {
+    // 自选按钮上写当前用的字体名（没选导入字体时只写「自选…」）
+    for (const [d, k] of Object.entries(UF_SLOT)) {
+      const f = window.Theme && Theme.fontOf ? Theme.fontOf(k) : null;
+      document.querySelectorAll(`[data-${d}="pick"]`).forEach((b) => {
+        b.classList.toggle("named", !!f);
+        const i = b.querySelector(".uf-cur"); if (i) { i.textContent = f ? f.name : ""; i.style.fontFamily = f ? Theme.fam(f.id) : ""; }
+        b.title = f ? f.name : "";
+      });
+    }
+    const box = $("uf-list"); if (!box || !items) return;
+    // 清单每行用它自己的字体显示名字，一眼能看出长什么样
+    box.innerHTML = items.map((f) => `<div class="uf-item" data-uf-id="${esc(f.id)}"><span class="uf-nm" style="font-family:${esc(Theme.fam(f.id))},var(--font-ui)">${esc(f.name)}</span>`
+      + `<small>${esc(f.fmt)} · ${esc(fmtSize(f.size))}</small><button type="button" class="icon-btn uf-del" title="${esc(t("删除"))}"><svg viewBox="0 0 24 24">${ICONS.del}</svg></button></div>`).join("");
+    box.classList.toggle("hidden", !items.length);
+  }
+  async function importFont(file) {
+    if (!file) return;
+    if (file.size > 40 * 1024 * 1024) { toast(t("字体文件不能超过 40 MB"), true); return; }
+    toast(t("正在导入 {name}…", { name: file.name }));
+    let r;
+    try {
+      const res = await fetch("/api/fonts?name=" + encodeURIComponent(file.name), { method: "POST", body: file, headers: { "X-CC-Lang": I18N.lang } });
+      r = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(r.message || r.error || "HTTP " + res.status);
+    } catch (e) { toast(t("导入失败：{msg}", { msg: e.message }), true); return; }
+    await loadFonts();
+    if (ufFor) { Theme.setType(ufFor, "u:" + r.font.id); paintFonts(null); }
+    ufFor = "";
+    toast(r.dup ? t("这个字体已经导入过了：{name}", { name: r.font.name }) : t("已导入 {name}", { name: r.font.name }));
+    const row = document.querySelector(`#uf-list [data-uf-id="${r.font.id}"]`); if (row) MO.play(row, "mo-in-rise", 1400);
+  }
+  function pickFont(b, d) {
+    const k = UF_SLOT[d], fonts = (window.Theme && Theme.fonts) || [], cur = Theme.type[k];
+    const add = () => { ufFor = k; $("uf-file").click(); };
+    if (!fonts.length) return add();
+    const items = fonts.map((f) => ({ label: f.name, small: f.fmt, cur: cur === "u:" + f.id, icon: cur === "u:" + f.id ? '<path d="M5 12l5 5 9-10"/>' : "", fn: () => { Theme.setType(k, "u:" + f.id); paintFonts(null); } }));
+    items.push("hr", { label: t("导入字体…"), icon: '<path d="M12 5v14M5 12h14"/>', fn: add });
+    popMenu(b, items);
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("#seg-uifont [data-uf=pick], #seg-readfont [data-rf=pick], #seg-monofont [data-mf=pick]");
+    if (b) { const d = Object.keys(UF_SLOT).find((x) => b.dataset[x]); pickFont(b, d); }
+  });
+  $("uf-add")?.addEventListener("click", () => { ufFor = ""; $("uf-file").click(); });
+  $("uf-file")?.addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; importFont(f); });
+  $("uf-list")?.addEventListener("click", async (e) => {
+    const del = e.target.closest(".uf-del"); if (!del) return;
+    const row = del.closest("[data-uf-id]"), id = row.dataset.ufId, f = (Theme.fonts || []).find((x) => x.id === id);
+    const using = Object.values(UF_SLOT).filter((k) => Theme.type[k] === "u:" + id).length;
+    if (!confirm(using ? t("删除字体 {name}？正在用它的地方会换回默认字体。", { name: f ? f.name : id }) : t("删除字体 {name}？", { name: f ? f.name : id }))) return;
+    try { await post("/api/fonts/del", { id }); } catch (err) { toast(err.message, true); return; }
+    if (MO.on() && row.animate) await row.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${MO.rtl() ? 24 : -24}px)` }], { duration: 155, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" }).finished.catch(() => {});
+    await loadFonts();
+  });
