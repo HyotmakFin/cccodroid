@@ -17,6 +17,7 @@
     if (pct >= 100) ctxBar.classList.add("danger");
     else if (pct >= 85) ctxBar.classList.add("warn");
     ctxFill.style.width = pct + "%";
+    ctxBar.style.setProperty("--p", pct + "%");   // 快满时字按这条分界线分两色（style.css #ctxbar.warn #ctxtxt）
     $("ctxctx").textContent = line > 0
       ? t("上下文 {used} / 压缩线 {line} · {pct}%", { used: fmtTok(state.ctxUsed), line: fmtTok(line), pct })
       : t("上下文 {used} / {total} · {pct}%", { used: fmtTok(state.ctxUsed), total: fmtTok(state.ctxTotal), pct });

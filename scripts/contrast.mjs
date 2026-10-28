@@ -124,7 +124,7 @@ const PAIRS = [
   ["--tool", "--bg", MINOR, "工具名"], ["--purple", "--bg", MINOR, "紫色标记"],
   ["--err-fg", "--err-bg", BODY, "错误框"], ["--think-ink", "--bg", MINOR, "思考标题"],
   // 上下文条的字（#ctxtxt）平常是 --fg2，进度条只有一截、在条的左边；快满 / 满了时字压在暖色 / 红色上，
-  // 改用 --fg 加一圈 --bg 描边（style.css #ctxbar.warn #ctxtxt），所以那时核的是 --fg 对 --bg（上面正文那条）
+  // 字按进度分界线分两色：条上近黑 #111、空白处 --fg（style.css #ctxbar.warn #ctxtxt），空白处核的是 --fg 对 --bg2
   ["--fg2", "--bg2", MINOR, "上下文条的字"],
 ];
 

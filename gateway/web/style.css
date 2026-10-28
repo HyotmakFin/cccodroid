@@ -100,8 +100,10 @@ html.tb-still #tb-tools,html.tb-still #tb-tools *,html.tb-still #btn-more path{t
 /* 快满 / 满了：不换成纯黄纯红那种跳出来的色块，仍从本主题的强调色渐变过去，终点是按每套主题深浅调过的暖色 / 红色 */
 #ctxbar.warn #ctxfill{background:linear-gradient(90deg,var(--accent-dim),var(--ctx-warn))}
 #ctxbar.danger #ctxfill{background:linear-gradient(90deg,var(--ctx-warn),var(--ctx-err))}
-/* 这时字压在暖色 / 红色上：换正文色，加一圈页面底色描边，压在条上、落在空白处都看得清（scripts/contrast.mjs 核过） */
-#ctxbar:is(.warn,.danger) #ctxtxt{color:var(--fg);text-shadow:0 0 2px var(--bg),0 0 3px var(--bg),0 0 5px var(--bg)}
+/* 这时字一半压在暖色 / 红色上、一半落在空白处：不再加描边衬底（观感差，10-28 用户定去掉），
+   改成按进度分界线把同一行字分两色——压在条上的是近黑（各主题暖色 / 红色上对比度都 ≥5:1），空白处是正文色 */
+#ctxbar:is(.warn,.danger) #ctxtxt{background:linear-gradient(90deg,#111 var(--p,0%),var(--fg) var(--p,0%));-webkit-background-clip:text;background-clip:text;color:transparent}
+#ctxbar:is(.warn,.danger) #ctxtxt *,#ctxbar:is(.warn,.danger) #ctxtxt *::before{color:transparent!important}
 :root{--ctx-warn:#c98f4e;--ctx-err:#c95f4a}
 html[data-theme="light"]{--ctx-warn:#dba15c;--ctx-err:#cf6a4c}
 html[data-skin="qiusuo"]{--ctx-warn:#b9955f;--ctx-err:#c46a78}
