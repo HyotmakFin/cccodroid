@@ -11,14 +11,17 @@
 // 只用于自定义接口：预置厂商没出过这事；官方账户的登录令牌按条款不能经过我们（见 claude.mjs）。
 import http from "node:http";
 import https from "node:https";
+import crypto from "node:crypto";
 import { log } from "./config.mjs";
 
-export const STREAMFIX = { port: 0 };
+// key：每次启动随机，编进给 claude 的地址里。端口虽随机，但同机程序扫得到；没有它就当开放代理用（审查 H6）。
+// 不拦回环目标：本地跑的 LiteLLM / llama-server 就是合法的自定义接口
+export const STREAMFIX = { port: 0, key: crypto.randomBytes(16).toString("hex") };
 
 /** claude 的 ANTHROPIC_BASE_URL：上游地址编进路径，claude 往后补 /v1/messages */
 export function fixedBaseUrl(baseUrl) {
   if (!STREAMFIX.port || !/^https?:\/\//.test(baseUrl || "")) return baseUrl;
-  return `http://127.0.0.1:${STREAMFIX.port}/u/${Buffer.from(baseUrl).toString("base64url")}`;
+  return `http://127.0.0.1:${STREAMFIX.port}/u/${STREAMFIX.key}/${Buffer.from(baseUrl).toString("base64url")}`;
 }
 
 /** SSE 修补状态机：feed 进上游原文，吐出要发给 claude 的文本；finish 在上游结束时调用，返回补的尾巴或 null（= 该断就断） */
@@ -87,14 +90,15 @@ export function sseRepairer() {
 }
 
 function handle(req, res) {
-  const m = /^\/u\/([A-Za-z0-9_-]+)(\/.*)?$/.exec(req.url || "");
+  const m = /^\/u\/([0-9a-f]{32})\/([A-Za-z0-9_-]+)(\/.*)?$/.exec(req.url || "");
+  if (!m || !crypto.timingSafeEqual(Buffer.from(m[1]), Buffer.from(STREAMFIX.key))) { res.writeHead(404); res.end(); return; }
   let base;
-  try { base = m && new URL(Buffer.from(m[1], "base64url").toString()); } catch {}
+  try { base = new URL(Buffer.from(m[2], "base64url").toString()); } catch {}
   if (!base || !/^https?:$/.test(base.protocol)) { res.writeHead(404); res.end(); return; }
-  const target = new URL(base.href.replace(/\/+$/, "") + (m[2] || "/"));
+  const target = new URL(base.href.replace(/\/+$/, "") + (m[3] || "/"));
   const isMsg = req.method === "POST" && /\/v1\/messages(\?|$)/.test(target.pathname + target.search);
   const headers = { ...req.headers, host: target.host };
-  delete headers.connection;
+  delete headers.connection; delete headers.cookie;   // 只有 claude 会来，用不着 Cookie；别把浏览器的带出去
   if (isMsg) headers["accept-encoding"] = "identity";   // 要读 SSE，别让上游压缩
   const mod = target.protocol === "https:" ? https : http;
   const up = mod.request(target, { method: req.method, headers }, (ur) => {
