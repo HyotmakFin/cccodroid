@@ -3129,6 +3129,8 @@ html[data-motion="on"] .tool.mo-flash::after{content:"";position:absolute;inset:
 .tb-list{margin-top:8px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
 .tb-item{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 2px;border-bottom:1px solid var(--line);background:var(--panel);position:relative}
 .tb-item:last-child{border-bottom:0}
+.tb-item.tb-g1{box-shadow:inset 0 2px 0 var(--line)}
+.tb-item[data-g="off"] .tb-ico,.tb-item[data-g="off"] .tb-nm{opacity:.5}
 .tb-list.sorting .tb-item{transition:transform .2s cubic-bezier(.32,.72,0,1)}
 .tb-list.sorting .tb-item.dragging{transition:none;z-index:2;box-shadow:0 6px 18px var(--shadow)}
 .tb-grip{flex:none;width:30px;height:34px;display:grid;place-items:center;color:var(--fg3);cursor:grab;touch-action:none}

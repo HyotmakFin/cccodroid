@@ -724,15 +724,22 @@
   // ── 顶栏按钮（0.4.20）：设置 → 通用。每个按钮 常驻 / 收起 / 隐藏，按住把手拖动排序；摆法见 19-boot.js 的 paintTopbar ──
   const TB_NAME = { files: tk("文件浏览器"), term: tk("终端"), web: tk("浏览器"), palette: tk("命令面板"), new: tk("新会话") };
   const GRIP = '<svg viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg>';
+  // 清单照顶栏实际的样子排：先常驻、再收进 ⋯、最后隐藏，组内按 order。看到什么顺序顶栏就是什么顺序
+  const tbMode = (c, k) => (c.off.includes(k) ? "off" : c.pin.includes(k) ? "pin" : "fold");
+  const TB_GROUPS = ["pin", "fold", "off"];
+  function tbShown(c) {
+    // 浏览器键只在有内置浏览器的壳里出现；没有的不列，免得设了没反应
+    const keys = c.order.filter((k) => !$(TB_BTNS[k]).classList.contains("hidden"));
+    return TB_GROUPS.flatMap((g) => keys.filter((k) => tbMode(c, k) === g));
+  }
   function renderTbList() {
     const box = $("tb-list"); if (!box) return;
     const c = tbConf();
-    // 浏览器键只在有内置浏览器的壳里出现；没有的不列，免得设了没反应
-    const keys = c.order.filter((k) => !$(TB_BTNS[k]).classList.contains("hidden"));
-    box.innerHTML = keys.map((k) => {
-      const m = c.off.includes(k) ? "off" : c.pin.includes(k) ? "pin" : "fold";
+    let prev = "";
+    box.innerHTML = tbShown(c).map((k) => {
+      const m = tbMode(c, k), first = m !== prev && prev; prev = m;
       const ico = $(TB_BTNS[k]).querySelector("svg").outerHTML;
-      return `<div class="tb-item" data-k="${k}"><span class="tb-grip" title="${esc(t("拖动换顺序"))}">${GRIP}</span><span class="tb-ico">${ico}</span><span class="tb-nm">${esc(t(TB_NAME[k]))}</span>`
+      return `<div class="tb-item${first ? " tb-g1" : ""}" data-k="${k}" data-g="${m}"><span class="tb-grip" title="${esc(t("拖动换顺序"))}">${GRIP}</span><span class="tb-ico">${ico}</span><span class="tb-nm">${esc(t(TB_NAME[k]))}</span>`
         + `<span class="seg tb-seg">${[["pin", t("常驻")], ["fold", t("收进 ⋯")], ["off", t("隐藏")]].map(([v, l]) => `<button type="button" data-tbm="${v}"${v === m ? ' class="on"' : ""}>${esc(l)}</button>`).join("")}</span></div>`;
     }).join("");
   }
@@ -744,10 +751,20 @@
   $("tb-reset")?.addEventListener("click", () => tbSave({ order: TB_ORDER.slice(), pin: [], off: [] }));
   $("tb-list")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-tbm]"); if (!b) return;
-    const k = b.closest("[data-k]").dataset.k, c = tbConf();
+    const k = b.closest("[data-k]").dataset.k, c = tbConf(), to = b.dataset.tbm;
+    if (tbMode(c, k) === to) return;
+    // 换组的那个落在两组交界：改常驻排到常驻末尾（紧挨 ⋯），改收起 / 隐藏排到那组开头
+    const list = tbShown(c).filter((x) => x !== k);
     c.pin = c.pin.filter((x) => x !== k); c.off = c.off.filter((x) => x !== k);
-    if (b.dataset.tbm === "pin") c.pin.push(k); else if (b.dataset.tbm === "off") c.off.push(k);
-    tbSave(c);
+    if (to === "pin") c.pin.push(k); else if (to === "off") c.off.push(k);
+    const groups = TB_GROUPS.map((g) => list.filter((x) => tbMode(c, x) === g));
+    groups[TB_GROUPS.indexOf(to)][to === "pin" ? "push" : "unshift"](k);
+    const shown = groups.flat();
+    c.order = shown.concat(c.order.filter((x) => !shown.includes(x)));
+    const row = b.closest(".tb-item"), y0 = row.getBoundingClientRect().top;
+    tbSave(c);   // cc:ui → 重画；换了位置的那行从原处弹到新位置
+    const nr = $("tb-list").querySelector(`[data-k="${k}"]`);
+    if (nr) { const dy = y0 - nr.getBoundingClientRect().top; if (Math.abs(dy) > .5) MO.spring(nr, "snap", (p) => ({ transform: `translateY(${dy * (1 - p)}px)` })); }
   });
   // 拖动排序：被拖的那行跟手走，其余行让位（都是 transform），松手按落点重排，被拖的那行弹回它的新位置
   (() => {
@@ -758,17 +775,19 @@
       e.preventDefault();
       const row = g.closest(".tb-item"), rows = [...box.children], i = rows.indexOf(row);
       const step = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : row.offsetHeight;
-      d = { row, rows, i, to: i, y0: e.clientY, step, id: e.pointerId };
+      // 只在本组里排：跨组靠右边的三选一，不靠拖
+      const gi = rows.map((r, j) => (r.dataset.g === row.dataset.g ? j : -1)).filter((j) => j >= 0);
+      d = { row, rows, i, to: i, y0: e.clientY, step, id: e.pointerId, a: gi[0], z: gi[gi.length - 1] };
       try { g.setPointerCapture(e.pointerId); } catch {}
       row.classList.add("dragging"); box.classList.add("sorting");
     });
     box.addEventListener("pointermove", (e) => {
       if (!d || e.pointerId !== d.id) return;
-      const dy = e.clientY - d.y0, n = d.rows.length;
-      const lo = -d.i * d.step - d.step * .4, hi = (n - 1 - d.i) * d.step + d.step * .4;
+      const dy = e.clientY - d.y0;
+      const lo = (d.a - d.i) * d.step - d.step * .4, hi = (d.z - d.i) * d.step + d.step * .4;
       const y = Math.max(lo, Math.min(hi, dy));
       d.row.style.transform = `translateY(${y}px)`;
-      d.to = Math.max(0, Math.min(n - 1, d.i + Math.round(y / d.step)));
+      d.to = Math.max(d.a, Math.min(d.z, d.i + Math.round(y / d.step)));
       d.rows.forEach((r, j) => {
         if (r === d.row) return;
         const s = d.i < j && j <= d.to ? -d.step : d.to <= j && j < d.i ? d.step : 0;
