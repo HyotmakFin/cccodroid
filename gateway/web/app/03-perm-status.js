@@ -665,16 +665,18 @@
     const el = document.createElement("span");
     el.className = "tag run-timer live";
     const t0 = startedAt || Date.now();
-    let tail = null;     // 回复末尾光标旁的那一份。有它时顶部那份先藏着，结束后才显示「用时」—— 两处同时跳秒太吵
+    let tail = null;     // 回复末尾光标旁的那一份。生成中顶部那份一律藏着，结束后才显示「用时」—— 两处同时跳秒太吵
+    // 藏用行内 display：.tag 的样式写了 display，盖过 hidden 属性，以前顶部那份一直露着、停在 0s
+    const show = (on) => { el.style.display = on ? "" : "none"; };
     const tick = () => { const d = fmtDur(Date.now() - t0); if (tail) tail.textContent = d; else el.textContent = d; };
     tick();
     let iv = setInterval(tick, 1000);
     return {
-      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; el.hidden = !!tail; tick(); },
+      attach(av) { av.msgEl.querySelector(".who")?.appendChild(el); tail = av.tailTime; show(false); tick(); },
       stop(at) {          // at：真正结束的时刻（重放时事件比现在早）
         if (!iv) return;
         clearInterval(iv); iv = 0;
-        el.classList.remove("live"); el.hidden = false;
+        el.classList.remove("live"); show(true);
         el.textContent = t("用时 {d}", { d: fmtDur((at || Date.now()) - t0, true) });
       },
     };
