@@ -356,7 +356,7 @@
       ? groups.filter(([, l]) => l.length).map(([g, l, k]) => {
           // 分组可以收起：点标题切换，收起时标出有几个；记在本机
           const shut = folds().has(k);
-          return `<h4 class="sr-g${shut ? " shut" : ""}" data-fold="${k}" role="button" aria-expanded="${!shut}"><svg viewBox="0 0 24 24"><path d="M8 10l4 4 4-4"/></svg><span>${esc(g)}</span>${shut ? `<em>${l.length}</em>` : ""}</h4>`
+          return `<h4 class="sr-g${shut ? " shut" : ""}" data-sgfold="${k}" role="button" aria-expanded="${!shut}"><svg viewBox="0 0 24 24"><path d="M8 10l4 4 4-4"/></svg><span>${esc(g)}</span>${shut ? `<em>${l.length}</em>` : ""}</h4>`
             + (shut ? "" : l.map(row).join("") + (k === "older" && more ? `<button class="sr-all" data-all>${esc(t("全部对话"))}</button>` : ""));
         }).join("")
         + `<div class="sr-hint">${esc(t("长按会话：置顶、重命名、导出、删除"))}</div>`
@@ -365,9 +365,11 @@
   $("side-scroll").addEventListener("scroll", (e) => e.target.classList.toggle("scrolled", e.target.scrollTop > 2), { passive: true });
   $("side-recent").addEventListener("click", (e) => {
     if (e.target.closest("[data-all]")) return openPage("sessions");
-    const g = e.target.closest("[data-fold]");
+    // 分组标题只认 .sr-g：外壳在 <html> 上设了 data-fold（折痕状态），按 [data-fold] 往上找会一路找到根元素，
+    // 点会话就被当成「折叠分组」，只重画不切换（0.4.18 引入，群友 Yhaizg 报）
+    const g = e.target.closest(".sr-g[data-sgfold]");
     if (g) {
-      const k = g.dataset.fold;
+      const k = g.dataset.sgfold;
       if (folds().has(k)) folds().delete(k); else folds().add(k);
       try { localStorage.setItem("cc.sideFold", JSON.stringify([...folds()])); } catch {}
       return renderSideRecent();
