@@ -31,11 +31,14 @@
     for (const el of doc.body.querySelectorAll("*")) {
       for (const a of [...el.attributes]) {
         const n = a.name.toLowerCase();
-        if (n.startsWith("on") || n === "style" || n === "srcset" || n === "formaction") el.removeAttribute(a.name);
+        if (n.startsWith("on") || n === "style" || n === "srcset" || n === "formaction" || n === "class") el.removeAttribute(a.name);
+        // id / name 加前缀：免得文档里的锚点名顶掉界面自己的元素或全局变量（审查 低1）；页内链接跟着改
+        else if (n === "id" || n === "name") el.setAttribute(a.name, "dx-" + a.value);
       }
       if (el.hasAttribute("href")) {
         const h = el.getAttribute("href").trim();
         if (/^(https?:|mailto:)/i.test(h)) { el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); }
+        else if (h.startsWith("#") && h.length > 1) el.setAttribute("href", "#dx-" + h.slice(1));
         else if (!h.startsWith("#")) el.removeAttribute("href");
       }
       if (el.hasAttribute("src") && !/^data:image\/(png|jpe?g|gif|webp|bmp)[;,]/i.test(el.getAttribute("src"))) el.removeAttribute("src");

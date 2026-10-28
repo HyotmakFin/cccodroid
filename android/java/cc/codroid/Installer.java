@@ -876,7 +876,8 @@ final class Installer {
             name = name.substring(strip.length());
             if (name.isEmpty() || name.equals("/")) { skip(in, size); continue; }
             File f = new File(root, name);
-            if (!f.getCanonicalPath().startsWith(rootPath) && type != '2') throw new IOException(Tr.t("越界条目: ") + name);
+            // 比前缀要带上分隔符：只比 rootPath 的话 usr.newEvil/x 也算在 usr 里头（审查 低5）
+            if (!inside(f, rootPath) && type != '2') throw new IOException(Tr.t("越界条目: ") + name);
             try {
                 switch (type) {
                     case '5':
@@ -891,9 +892,11 @@ final class Installer {
                     case '1': {
                         String target = link.startsWith("./") ? link.substring(2) : link;
                         if (target.startsWith(strip)) target = target.substring(strip.length());
+                        File tf = new File(root, target);
+                        if (!inside(tf, rootPath)) throw new IOException(Tr.t("越界条目: ") + name);
                         f.getParentFile().mkdirs();
                         f.delete();
-                        Os.link(new File(root, target).getPath(), f.getPath());
+                        Os.link(tf.getPath(), f.getPath());
                         break;
                     }
                     case '0': case '7': {
@@ -915,6 +918,11 @@ final class Installer {
             }
             skip(in, size);
         }
+    }
+
+    private static boolean inside(File f, String rootPath) throws IOException {
+        String p = f.getCanonicalPath();
+        return p.equals(rootPath) || p.startsWith(rootPath + File.separator);
     }
 
     private static boolean readFully(InputStream in, byte[] b) throws IOException {

@@ -121,7 +121,7 @@ export function serveStatic(req, res, urlPath) {
     }
   }
   const full = path.join(PATHS.web, rel);
-  if (!full.startsWith(PATHS.web) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
+  if (!full.startsWith(PATHS.web + path.sep) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
     log(`404 ${rel}`);
     return sendJson(res, 404, { error: "not found", path: rel });
   }

@@ -1409,6 +1409,9 @@ public class MainActivity extends Activity {
     }
 
     private void openExternal(String url) {
+        // 只放网页和邮件：别的协议（intent:、market:、content: …）整页跳转到这儿时一律不理（审查 低15）
+        String sc = url == null ? "" : String.valueOf(Uri.parse(url).getScheme()).toLowerCase(java.util.Locale.ROOT);
+        if (!sc.equals("https") && !sc.equals("http") && !sc.equals("mailto")) { android.util.Log.w("cccodroid", "openExternal: 不放行 " + sc); return; }
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
         catch (Exception e) { android.widget.Toast.makeText(this, Tr.t("没有可用的浏览器：") + url, android.widget.Toast.LENGTH_LONG).show(); }
     }

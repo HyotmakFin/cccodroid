@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -113,7 +114,7 @@ function termNew({ cols, rows, login, cwd: want } = {}) {
   });
   if (login) setTimeout(() => { try { child.stdin.write("claude auth login" + (login === "console" ? " --console" : "") + "\r"); } catch {} }, 400);
   const seq = nextTermSeq();
-  const id = seq.toString(36) + Math.random().toString(36).slice(2, 6);
+  const id = seq.toString(36) + crypto.randomBytes(8).toString("hex");   // 别靠 Math.random 那 20 来位（审查 低20）
   const t = {
     id, title: `${path.basename(shell) === "bash" ? "bash" : "sh"} ${seq}`, cols, rows,
     created: Date.now(), alive: true, code: null, child,
