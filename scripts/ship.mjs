@@ -3,12 +3,12 @@
 //  ship.mjs —— App 发版一条命令：改版本号 → 更新日志 → 提交 → 打包 → 核包 →（点头后）推送 → Release → 对账 → 装机
 //
 //  用法:  node scripts/ship.mjs <版本> [--title "一句话"]       本地走到核包为止（改版本号、提交、打包），不碰网络
-//         node scripts/ship.mjs <版本> --publish                 接着推送、建 Release、下载回来核哈希
+//         node scripts/ship.mjs <版本> --publish                 接着推送、建 Release、下载回来核哈希、同步官网并清 CF 直链缓存
 //         node scripts/ship.mjs <版本> … --install               最后用 priv 覆盖安装到本机（会关掉正在用的 cccodroid）
 //         node scripts/ship.mjs <版本> --from <步骤>             从某步重来（之前的步骤视为已完成）
 //         node scripts/ship.mjs <版本> --check                   只对账：清单、包、提交、Release 逐项核一遍，不改东西
 //         node scripts/ship.mjs dev [--install]                  只打包当前工作树（不改版本号、不提交），给装机自测用
-//  步骤:  preflight → bump → changelog → commit → build → verify ┃ push → release → check ┃ install
+//  步骤:  preflight → bump → changelog → commit → build → verify ┃ push → release → check → site ┃ install
 //  状态记在 ~/.work/ship/<版本>/state.json：断了再跑同一条命令，从没做完的那步接着来。
 //
 //  发版前要写好 android/assets/whatsnew/v<版本>.zh.md 和 .en.md（App 里弹的、Release 正文都是它）。
@@ -29,8 +29,10 @@ const WN = path.join(ROOT, "android/assets/whatsnew");
 const APK = path.join(ROOT, "dist/cccodroid.apk");
 // 双方案：cccodroid.apk 是 targetSdk 28（默认、兼容最好），cccodroid-36.apk 给系统不让装 28 的机器。同版本号、同钥匙，互相覆盖安装
 const APK36 = path.join(ROOT, "dist/cccodroid-36.apk");
-const STEPS = ["preflight", "bump", "changelog", "commit", "build", "verify", "push", "release", "check", "install"];
-const PUBLIC = ["push", "release", "check"];
+const STEPS = ["preflight", "bump", "changelog", "commit", "build", "verify", "push", "release", "check", "site", "install"];
+const PUBLIC = ["push", "release", "check", "site"];
+// 官网 cccodroid.net：VPS 上的 cccodroid-site.service 从 GitHub 生成静态站（含 /dl/ 直链），前面是 Cloudflare
+const SITE = "https://cccodroid.net", VPS = "root@167.160.161.115", VPS_KEY = path.join(HOME, ".ssh/vps-keys/167.160.161.115-root");
 
 const argv = process.argv.slice(2);
 const opt = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv.splice(i, 2)[1] : undefined; };
@@ -164,8 +166,37 @@ const S = {
       const latest = JSON.parse(sh("gh", ["api", `repos/${REPO}/releases/latest`])).tag_name;
       if (latest !== tag) throw new Error(`Latest 是 ${latest}，不是 ${tag}`);
     }
+    state.prerelease = !!rel.prerelease;
     console.log(`  ✓ ${rel.html_url}  下载哈希一致${rel.prerelease ? "（预发布）" : "，已是 Latest"}`);
   },
+  async site() {
+    // 1) 让 VPS 现在就重新生成（平时靠定时器，等不及）；钥匙只交路径，不读出来
+    run("ssh", ["-F", "/dev/null", "-i", path.join(VPS_KEY, "id_ed25519"), "-o", "IdentitiesOnly=yes", "-o", `UserKnownHostsFile=${path.join(VPS_KEY, "known_hosts")}`,
+      "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", VPS, "systemctl start cccodroid-site.service"]);
+    // 2) 清 CF 上直链的缓存：不清的话 /dl/cccodroid.apk 还会给旧包（0.4.11 起每次都要手动清）
+    const files = ["/dl/cccodroid.apk", "/dl/cccodroid-36.apk", `/dl/v${VER}/cccodroid.apk`, `/dl/v${VER}/cccodroid-36.apk`, "/", "/known-issues"].map((f) => SITE + f);
+    run("cf", ["POST", "/zones/zone:cccodroid.net/purge_cache", JSON.stringify({ files })], { env: { ...process.env, CF_WRITE: "1" }, stdio: ["ignore", "ignore", "inherit"] });
+    siteVerify();
+  },
+};
+
+// 官网直链给的是不是新包（按大小核；CF 边缘可能慢几秒，重试几次）。预发布不进 /dl/cccodroid.apk，只核带版本号的。--check 也用它（只读）
+function siteVerify() {
+  const want = [[`/dl/v${VER}/cccodroid.apk`, state.size], [`/dl/v${VER}/cccodroid-36.apk`, state.size36]];
+  if (!state.prerelease) want.push(["/dl/cccodroid.apk", state.size], ["/dl/cccodroid-36.apk", state.size36]);
+  for (const [f, size] of want) {
+    let got = "";
+    for (let i = 0; i < 6; i++) {
+      if (i) spawnSync("sleep", ["5"]);
+      try { got = (sh("curl", ["-fsSI", SITE + f]).match(/^content-length:\s*(\d+)/im) || [])[1] || ""; } catch { got = "失败"; }
+      if (+got === size) break;
+    }
+    if (+got !== size) throw new Error(`${SITE}${f} 给的是 ${got} 字节，新包 ${size}；等一会儿再跑同一条命令`);
+    console.log(`  ✓ ${f}  ${size}`);
+  }
+}
+
+Object.assign(S, {
   install() {
     // 本机装着哪套就装哪套：别因为发版把 36 的机器换回 28
     const cur = sh("priv", ["dumpsys package cc.codroid | grep -m1 -o 'targetSdk=[0-9]*' || true"]);
@@ -184,15 +215,15 @@ const S = {
     }
     console.log("  没能自动打开，手动点开就好");
   },
-};
+});
 
 // ── 主流程 ──
 const plan = DEV ? ["build", "verify", ...(INSTALL ? ["install"] : [])]
   : STEPS.filter((s) => (PUBLIC.includes(s) ? PUBLISH : s === "install" ? INSTALL : true));
 if (CHECK_ONLY) {
   let bad = 0;
-  for (const s of ["verify", ...(state.done.release ? ["check"] : [])]) {
-    try { await S[s](); console.log(`✓ ${s}`); } catch (e) { bad++; console.log(`✗ ${s}：${e.message}`); }
+  for (const s of ["verify", ...(state.done.release ? ["check"] : []), ...(state.done.site ? ["site"] : [])]) {
+    try { await (s === "site" ? siteVerify() : S[s]()); console.log(`✓ ${s}`); } catch (e) { bad++; console.log(`✗ ${s}：${e.message}`); }
   }
   process.exit(bad ? 1 : 0);
 }
