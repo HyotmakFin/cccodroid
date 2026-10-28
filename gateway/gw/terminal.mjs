@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { CFG, HERE, PATHS, PREFIX, log } from "./config.mjs";
-import { claudeEnv, ensureShell, killTree } from "./claude.mjs";
+import { claudeEnv, ensureShell, killTree, termKeyFile } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 
 // ── 应用内终端 ────────────────────────────────────────────────────────
@@ -80,6 +80,9 @@ export function termEnv() {
   const loc = path.join(PATHS.toolchain, "dshtc", "prefix", "glibc", "lib", "locale");
   if (!PREFIX && !env.LOCPATH && fs.existsSync(loc)) env.LOCPATH = loc;
   env.CCAPP_TERMINAL = "1";
+  // 终端里直接敲 claude 也用应用配的这家：claudeEnv 不带密钥（防 env 泄漏），这里只给钥匙文件的路径，见 termKeyFile
+  const kf = termKeyFile();
+  if (kf) env.CCAPP_KEY_FILE = kf; else delete env.CCAPP_KEY_FILE;
   // 经加载器：claudeEnv 摘掉了 LD_PRELOAD（给 glibc 用的），终端这边全是 bionic，得挂回 termux-exec，ptyhost 才拉得起 shell
   if (process.env.CCAPP_BIONIC_PRELOAD) env.LD_PRELOAD = process.env.CCAPP_BIONIC_PRELOAD;
   return env;
@@ -104,7 +107,7 @@ function termNew({ cols, rows, login, cwd: want } = {}) {
   // login：给手动登录用的终端。环境和账户登录一样清掉第三方厂商的地址 / 密钥 / 模型，
   // 开好后替用户敲下 claude auth login —— 授权码由用户贴给 claude 自己的提示，网关只当字节通道
   const env = termEnv();
-  if (login) for (const k of Object.keys(env)) if (/^ANTHROPIC_/.test(k)) delete env[k];
+  if (login) for (const k of Object.keys(env)) if (/^ANTHROPIC_|^CCAPP_KEY_FILE$/.test(k)) delete env[k];
   const child = spawn(pc[0], [...pc.slice(1), String(rows), String(cols), shell], {
     cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe", "pipe"],
   });

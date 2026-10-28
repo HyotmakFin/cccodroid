@@ -440,7 +440,23 @@ export function settingsArgs(p = PROVIDER) {
   } else {
     try { fs.unlinkSync(file); } catch {}
   }
+  if (fs.existsSync(termKeyPath(p))) termKeyFile(p);   // 开着的终端跟着换：密钥改了不用重开
   return [...(safe ? ["--safe-mode"] : []), ...(Object.keys(st).length ? ["--settings", JSON.stringify(st)] : [])];
+}
+
+/** 应用内终端里自己敲的 claude 用哪把钥匙：和网关起的一样不进环境变量，单放一个 0600 文件，
+ *  终端环境里只给路径（CCAPP_KEY_FILE），bin/claude 包装见到它就照 settingsArgs 的办法挂 apiKeyHelper。
+ *  不复用 settingsArgs 那份：终端的地址和型号是开终端那一刻定的，换了全局那家以后，共用文件会让旧地址拿到新钥匙 */
+const termKeyPath = (p) => KEY_FILE + "-term-" + String(p.id).replace(/[^\w.-]/g, "_");
+export function termKeyFile(p = PROVIDER) {
+  const file = termKeyPath(p), key = keyOf(p);
+  if (!key) { try { fs.unlinkSync(file); } catch {} return ""; }
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, key, { mode: 0o600 });
+    fs.chmodSync(file, 0o600);
+    return file;
+  } catch (e) { log("写终端密钥文件失败: " + e.message); return ""; }
 }
 
 /** 跑一次 claude 并收集全部 stdout（用于取 CLI 状态类输出） */
