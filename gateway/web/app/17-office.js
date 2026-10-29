@@ -1,21 +1,15 @@
   // ── Office 文档 ──────────────────────────────────────────────────
   // docx：mammoth 转成网页（看文字、标题、表格、图片，不追求版式）；表格：SheetJS 读出来画成网格。
   // 两者都可以切到「原版式」—— 和 ppt / doc 等一样交给 LibreOffice 转成 PDF（网关缓存结果）。
-  const scriptP = {};
-  function loadScript(src) {
-    return scriptP[src] || (scriptP[src] = new Promise((ok, no) => {
-      const s = document.createElement("script");
-      s.src = src; s.onload = ok;
-      s.onerror = () => { delete scriptP[src]; s.remove(); no(new Error(t("加载失败：{src}", { src }))); };
-      document.head.appendChild(s);
-    }));
-  }
+  // 脚本加载用 01 段的 loadScript：这里以前另声明了一个同名的，把那边（带 css 参数）的盖掉了，
+  // 对话里先出现公式时 KaTeX 的样式不加载（审查 #49 P1-1）
   async function vwFetchBuf() {
     const r = await fetch(fileUrl(VW.path));
     if (!r.ok) throw new Error("HTTP " + r.status);
     return r.arrayBuffer();
   }
-  const vwStill = (p0) => VW.path === p0 && !viewerEl.classList.contains("hidden");
+  // 领一个号：同一文档里切版式（网页 ↔ 原版式）、换了文档、关了查看器，之前在途的读取 / 转换 / 安装回来都不许再写正文（审查 #48 04-F04、04-F05）
+  const vwTake = () => { VW.mgen = (VW.mgen || 0) + 1; const g = VW.gen, m = VW.mgen; return () => VW.gen === g && VW.mgen === m && !viewerEl.classList.contains("hidden"); };
   const vwLoading = (msg) => { $("vw-body").innerHTML = `<div class="vw-empty">${msg || t("读取中…")}</div>`; };
   function vwFail(msg, withPdf) {
     $("vw-body").innerHTML = `<div class="vw-empty"><div>${esc(msg)}</div>
@@ -52,7 +46,7 @@
   }
 
   async function vwDocx() {
-    const p0 = VW.path;
+    const still = vwTake();
     vwActs([[t("原版式"), "aspdf"]]);
     vwLoading();
     let r;
@@ -60,10 +54,10 @@
       await loadScript("/office/mammoth.browser.min.js");
       r = await window.mammoth.convertToHtml({ arrayBuffer: await vwFetchBuf() });
     } catch (e) {
-      if (vwStill(p0)) vwFail(t("这个文档读不出来：{msg}", { msg: e.message || String(e) }), true);
+      if (still()) vwFail(t("这个文档读不出来：{msg}", { msg: e.message || String(e) }), true);
       return;
     }
-    if (!vwStill(p0)) return;
+    if (!still()) return;
     const html = cleanHtml(r.value || "");
     $("vw-body").innerHTML = `<div class="vw-doc"><article class="vw-docx bubble">${html || `<p class="dim">${t("（文档是空的）")}</p>`}</article></div>`;
     // 目录之类的页内链接：在查看器里滚过去，别去改页面地址
@@ -80,18 +74,18 @@
 
   const SHEET_MAX_R = 5000, SHEET_MAX_C = 200;
   async function vwSheet() {
-    const p0 = VW.path;
+    const still = vwTake();
     vwActs([[t("原版式"), "aspdf"]]);
     vwLoading();
     let wb;
     try {
       await loadScript("/office/xlsx.full.min.js");
-      wb = window.XLSX.read(await vwFetchBuf(), { type: "array", cellStyles: false, cellNF: true });
+      wb = window.XLSX.read(await vwFetchBuf(), { type: "array", cellStyles: true, cellNF: true });   // cellStyles 才读得出隐藏行列和列宽（审查 C-006）
     } catch (e) {
-      if (vwStill(p0)) vwFail(t("这个表格读不出来：{msg}", { msg: e.message || String(e) }), true);
+      if (still()) vwFail(t("这个表格读不出来：{msg}", { msg: e.message || String(e) }), true);
       return;
     }
-    if (!vwStill(p0)) return;
+    if (!still()) return;
     const meta = (wb.Workbook && wb.Workbook.Sheets) || [];
     const names = wb.SheetNames.filter((n, i) => !(meta[i] && meta[i].Hidden));
     VW.wb = wb; VW.sheets = names.length ? names : wb.SheetNames;
@@ -143,20 +137,22 @@
       for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) if (r !== m.s.r || c !== m.s.c) covered.add(r + "," + c);
     }
     const cols = ws["!cols"] || [], rows = ws["!rows"] || [];
+    const hid = (c) => cols[c] && cols[c].hidden;    // 隐藏的列和行一样不画，别当普通格子露出来
     let h = `<table class="vw-grid"><colgroup><col class="rh">`;
     for (let c = rg.s.c; c <= c1; c++) {
-      const w = cols[c] ? (cols[c].hidden ? 0 : cols[c].wpx || (cols[c].wch ? cols[c].wch * 7 + 5 : 0)) : 0;
+      if (hid(c)) continue;
+      const w = cols[c] ? cols[c].wpx || (cols[c].wch ? cols[c].wch * 7 + 5 : 0) : 0;
       h += `<col style="width:${w ? Math.max(24, Math.min(400, Math.round(w))) : 80}px">`;
     }
     h += `</colgroup><thead><tr><th class="corner"></th>`;
-    for (let c = rg.s.c; c <= c1; c++) h += `<th>${X.utils.encode_col(c)}</th>`;
+    for (let c = rg.s.c; c <= c1; c++) if (!hid(c)) h += `<th>${X.utils.encode_col(c)}</th>`;
     h += `</tr></thead><tbody>`;
     for (let r = rg.s.r; r <= r1; r++) {
       if (rows[r] && rows[r].hidden) continue;
       h += `<tr data-r="${r}"><th>${r + 1}</th>`;
       for (let c = rg.s.c; c <= c1; c++) {
         const k = r + "," + c;
-        if (covered.has(k)) continue;
+        if (covered.has(k) || hid(c)) continue;
         const cell = ws[X.utils.encode_cell({ r, c })];
         const sp = span.get(k);
         const txt = sheetText(cell);
@@ -175,42 +171,42 @@
 
   // ppt / doc / … 以及 docx、表格的「原版式」：网关用 LibreOffice 转成 PDF（第一次要等，之后读缓存）
   async function vwOffice() {
-    const p0 = VW.path, back = VW.kind === "docx" || VW.kind === "sheet";
+    const still = vwTake(), back = VW.kind === "docx" || VW.kind === "sheet";
     closeViewerPdf();
     vwActs(back ? [[t("网页版式"), "native"]] : []);
     vwLoading(`<div>${t("正在用 LibreOffice 转成 PDF…")}</div><div class="tiny dim">${t("第一次打开会慢一些，转好的会缓存起来")}</div>`);
     let r;
     try {
       r = await api("/api/office/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: VW.path }) });
-    } catch (e) { if (vwStill(p0)) vwFail(e.message, false); return; }
-    if (!vwStill(p0)) return;
-    if (r.missing) return vwOfficeMissing(r.can);
+    } catch (e) { if (still()) vwFail(e.message, false); return; }
+    if (!still()) return;
+    if (r.missing) return vwOfficeMissing(r.can, still);
     if (!r.ok) return vwFail(r.message || t("转换失败"), false);
     return vwPdf(r.url, back ? [[t("网页版式"), "native"]] : []);
   }
-  function vwOfficeMissing(can) {
+  function vwOfficeMissing(can, still) {
     if (!can) return vwFail(t("这种文件要用 LibreOffice 转换后才能看，这里没有 LibreOffice。"), false);
     $("vw-body").innerHTML = `<div class="vw-empty">
       <div>${t("看这类文件要先装 LibreOffice（下载约 190 MB，装好约 830 MB）。装一次，以后 PPT、Word、Excel 都能直接看。")}</div>
       <button class="btn sm" data-a="lo-install">${t("安装 LibreOffice")}</button>
       <button class="btn ghost sm" data-a="share">${shareIco()}${t("分享")}</button></div>`;
     $("vw-body").querySelector('[data-a="lo-install"]').addEventListener("click", vwOfficeInstall);
-    api("/api/office/info").then((j) => { if (j.install && j.install.running) vwOfficeInstall(); }).catch(() => {});
+    api("/api/office/info").then((j) => { if (still() && j.install && j.install.running) vwOfficeInstall(); }).catch(() => {});
   }
   async function vwOfficeInstall() {
-    const p0 = VW.path;
+    const still = vwTake();
     $("vw-body").innerHTML = `<div class="vw-empty"><div>${t("正在安装 LibreOffice…可以先去干别的，装好回来再打开。")}</div>
       <div class="tiny dim vw-lo-line"></div></div>`;
     let j;
-    try { j = await api("/api/office/install", { method: "POST" }); } catch (e) { return vwFail(e.message, false); }
+    try { j = await api("/api/office/install", { method: "POST" }); } catch (e) { return still() && vwFail(e.message, false); }
     while (!j.have && j.install && j.install.running) {
-      if (!vwStill(p0)) return;
+      if (!still()) return;
       const el = $("vw-body").querySelector(".vw-lo-line");
       if (el) el.textContent = j.install.line || "";
       await new Promise((ok) => setTimeout(ok, 1500));
       try { j = await api("/api/office/info"); } catch {}
     }
-    if (!vwStill(p0)) return;
+    if (!still()) return;
     if (j.have) { toast(t("LibreOffice 装好了")); return vwOffice(); }
     vwFail(t("LibreOffice 没装上：{msg}", { msg: (j.install && j.install.line) || "?" }), false);
     $("vw-body").querySelector(".vw-empty").insertAdjacentHTML("beforeend", `<button class="btn ghost sm" data-a="lo-retry">${t("重试")}</button>`);
@@ -230,7 +226,7 @@
   }
 
   async function vwPdf(url, extra) {
-    const p0 = VW.path;
+    const still = vwTake();
     vwActs([["−", "zoom-"], ["+", "zoom+"]].concat(extra || []));
     $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
     let lib, doc;
@@ -246,10 +242,10 @@
       };
       doc = await task.promise;
     } catch (e) {
-      $("vw-body").innerHTML = `<div class="vw-empty">${t("PDF 打不开：{msg}", { msg: esc(e.message || String(e)) })}</div>`;
+      if (still()) $("vw-body").innerHTML = `<div class="vw-empty">${t("PDF 打不开：{msg}", { msg: esc(e.message || String(e)) })}</div>`;
       return;
     }
-    if (!vwStill(p0) || VW.pdf) { doc.loadingTask.destroy(); return; }
+    if (!still() || VW.pdf) { doc.loadingTask.destroy(); return; }
     VW.pdf = doc;
     const p1 = await doc.getPage(1);
     const vp = p1.getViewport({ scale: 1 });
@@ -347,7 +343,9 @@
     if (VW.dirty && !confirm(t("有未保存的修改，丢弃？"))) return;
     if (VW.dirty) draftClear();
     VW.dirty = false;
+    VW.gen = (VW.gen || 0) + 1;    // 关了：还在途的读取 / 转换回来也别再往正文里写
     closeViewerPdf();
+    vwMdStop();          // 长 Markdown 的分段 observer：以前要等下一次预览才断（审查 #49 P3-7）
     vwDropEd();
     vwHtmlStop();
     MO.hide(viewerEl, MO.paneOut(), 170, () => { $("vw-body").innerHTML = ""; });   // 内容等滑出去了再清，别先白一下

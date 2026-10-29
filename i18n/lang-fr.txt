@@ -2285,3 +2285,30 @@
 2285	Plusieurs services d'appairage trouvés, impossible de savoir lequel est le bon. Saisissez aussi le port (le nombre après les deux-points sous « Adresse IP et port » dans la fenêtre d'appairage), par ex. {0}
 2286	Plusieurs services d'appairage : saisissez le code et le port, par ex. {0} (le port est dans la fenêtre d'appairage)
 2287	Le téléchargement a été redirigé vers du http non chiffré ; il n'a pas été effectué
+2288	Vous avez changé de conversation : ce message n'a pas été envoyé
+2289	Non envoyé : {msg}
+2290	Récupérer
+2291	Échec de la suppression : {msg}
+2292	Impossible de charger la liste des compétences : {msg}
+2293	Impossible de charger le journal de réparation : {msg}
+2294	Collez d'abord une clé API, puis enregistrez
+2295	Impossible de charger l'utilisation : {msg}
+2296	Impossible de charger les capacités : {msg}
+2297	Impossible de charger les projets : {msg}
+2298	Impossible de charger les instructions : {msg}. La modification est désactivée pour ne pas écraser l'original.
+2299	Impossible de charger les tâches planifiées : {msg}
+2300	Impossible de charger les détails de la tâche : {msg}
+2301	Une autre conversation est en cours : la tâche est en file d'attente et s'exécutera à son tour
+2302	Impossible de calculer la prochaine exécution : {e}
+2303	Le nombre doit être d'au moins 1
+2304	Le fichier est encore en cours de chargement. Réessayez dans un instant.
+2305	Impossible d'afficher l'image (fichier endommagé ou format non pris en charge)
+2306	Impossible de fermer le terminal : {msg}
+2307	[La saisie n'a pas atteint le terminal. La passerelle est peut-être en train de redémarrer.]
+2308	Échec de l'actualisation : {msg}
+2309	« {n} » {w}
+2310	La tâche a été désactivée ou supprimée pendant qu'elle attendait
+2311	L'heure de l'exécution unique est passée : la tâche a été désactivée
+2312	Cette tâche est déjà en cours
+2313	(Ce modèle ne prend pas en charge le protocole Anthropic à cette adresse : choisissez un modèle compatible, ou passez à l'adresse que la plateforme fournit pour Claude Code)
+2314	Très grand

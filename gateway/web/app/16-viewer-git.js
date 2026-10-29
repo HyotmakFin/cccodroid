@@ -17,13 +17,13 @@
   /** 打开：dir 可以是目录或文件；opts.file 指定先看哪个文件的对比，opts.tab = "history" 看历史 */
   async function openGit(dir, opts = {}) {
     Object.assign(GIT, { dir, root: "", tab: opts.tab || "changes", status: null, file: opts.file || "", view: opts.file ? (opts.tab === "history" ? { kind: "log" } : { kind: "diff" }) : null });
-    GIT.sel = new Set();
-    MO.cancel(gitEl); gitEl.classList.remove("hidden");
+    GIT.sel = new Set(); GIT.known = null;    // 重开和第一次一样默认全选（审查 C-010）
+    MO.cancel(gitEl); gitEl.classList.remove("hidden"); window.CCLayout && CCLayout.raise("git");
     $("git-name").textContent = String(dir).split("/").pop();
     $("git-info").textContent = "";
     await gitLoad();
   }
-  function closeGit() { MO.hide(gitEl, MO.paneOut(), 170, () => { $("git-body").innerHTML = ""; $("git-sync").classList.add("hidden"); }); }
+  function closeGit() { dropReq("git"); dropReq("gitbody"); MO.hide(gitEl, MO.paneOut(), 170, () => { $("git-body").innerHTML = ""; $("git-sync").classList.add("hidden"); }); }
   $("git-close").addEventListener("click", closeGit);
   $("git-reload").addEventListener("click", () => gitLoad());
   gitEl.querySelector(".git-tabs").addEventListener("click", (e) => {
@@ -33,8 +33,11 @@
 
   async function gitLoad() {
     $("git-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    // 先开 A 仓库再开 B：A 的状态迟到不许盖上来，不然显示的是 A、撤销提交却作用于 B（审查 #49 P2-2）
+    const ok = latest("git"), dir = GIT.dir;
     let s;
-    try { s = await gapi("status"); } catch (e) { $("git-body").innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    try { s = await gapi("status"); } catch (e) { if (ok()) $("git-body").innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (!ok() || GIT.dir !== dir) return;
     if (s.notRepo) {
       $("git-info").textContent = "";
       $("git-sync").classList.add("hidden");
@@ -103,6 +106,7 @@
   });
 
   function gitRender() {
+    dropReq("gitbody");    // 切了标签 / 视图：在途的历史、对比、分支读取作废（审查 C-007）
     gitEl.querySelectorAll(".git-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === GIT.tab));
     if (GIT.view && GIT.view.kind === "diff") return gitShowDiff(GIT.file, GIT.view.commit);
     if (GIT.view && GIT.view.kind === "commit") return gitShowCommit(GIT.view.commit);
@@ -159,8 +163,9 @@
     const box = $("git-body");
     box.innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
     let r;
-    try { r = await gapi("branches"); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
-    if (GIT.tab !== "branches") return;
+    const ok = latest("gitbody");
+    try { r = await gapi("branches"); } catch (e) { if (ok()) box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (!ok() || GIT.tab !== "branches") return;
     const row = (b, remote) => `<div class="git-row gbr${b.current ? " cur" : ""}" data-b="${esc(b.name)}" data-remote="${remote ? 1 : ""}">
         <span class="gbr-mark">${b.current ? "✓" : ""}</span>
         <span class="gp">${gbdi(b.name)}<span class="tiny gbr-sub">${esc(b.subject || "")}</span></span>
@@ -271,17 +276,20 @@
         try { await gpost("discard", { file }); toast(t("已撤销")); GIT.view = null; GIT.file = ""; gitLoad(); } catch (e2) { toast(e2.message, true); }
       }
     };
+    const ok = latest("gitbody");
     try {
       const r = await gapi("diff", { file: file || "", commit: commit || "" });
-      $("git-diff").innerHTML = diffHtml(r.diff) + (r.truncated ? `<div class="tiny">${t("改动太多，只显示了前一部分")}</div>` : "");
-    } catch (e) { $("git-diff").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; }
+      if (ok()) $("git-diff").innerHTML = diffHtml(r.diff) + (r.truncated ? `<div class="tiny">${t("改动太多，只显示了前一部分")}</div>` : "");
+    } catch (e) { if (ok()) $("git-diff").innerHTML = `<div class="tiny">${esc(e.message)}</div>`; }
   }
 
   async function gitShowLog(file, append) {
     const box = $("git-body");
     if (!append) { GIT.log = []; box.innerHTML = `<div class="tiny">${t("读取中…")}</div>`; }
     let r;
-    try { r = await gapi("log", { n: 50, skip: GIT.log.length, file: file || "" }); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    const ok = latest("gitbody");
+    try { r = await gapi("log", { n: 50, skip: GIT.log.length, file: file || "" }); } catch (e) { if (ok()) box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (!ok()) return;
     GIT.log = GIT.log.concat(r.commits || []);
     if (!GIT.log.length) { box.innerHTML = `<div class="vw-empty">${t("还没有提交记录。")}</div>`; return; }
     box.innerHTML = (file ? `<div class="row-actions git-back"><span class="tiny">${esc(t("只看 {f} 的历史", { f: file }))}</span>
@@ -304,7 +312,9 @@
     box.onclick = null;
     box.innerHTML = `<div class="tiny">${t("读取中…")}</div>`;
     let c;
-    try { c = await gapi("show", { commit: hash }); } catch (e) { box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    const ok = latest("gitbody");
+    try { c = await gapi("show", { commit: hash }); } catch (e) { if (ok()) box.innerHTML = `<div class="vw-empty">${esc(e.message)}</div>`; return; }
+    if (!ok()) return;
     box.innerHTML = `<div class="row-actions git-back"><button class="btn ghost sm" data-a="back">${t("← 返回历史")}</button>
         <button class="btn ghost sm" data-a="all">${t("看整次提交的对比")}</button></div>
       <div class="prov-state"><b>${esc(c.message.split("\n")[0])}</b>${c.message.includes("\n") ? `<pre class="tiny" style="white-space:pre-wrap;margin:4px 0 0">${esc(c.message.split("\n").slice(1).join("\n").trim())}</pre>` : ""}
@@ -363,11 +373,14 @@
     closeViewerPdf();
     vwDropEd();
     vwHtmlStop();
-    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "", wb: null, sheets: null });
+    Object.assign(VW, { path, kind: kind || "other", size: size || 0, text: "", mtime: 0, dirty: false, zoom: 1, git: null, gitInfo: "", wb: null, sheets: null, ready: false });
+    // 换了文档就换代：上一个文档还在途的读取、转换、保存回执一律作废（审查 C-001、04-F04、04-F05）
+    VW.gen = (VW.gen || 0) + 1;
+    vwActs([]);    // 上一个文档的「保存」先撤掉：读取中点它会把空正文存进新文件（私下反馈 10-29）
     $("vw-name").textContent = path.split("/").pop();
     $("vw-name").title = path;
     $("vw-info").textContent = fmtSize(VW.size);
-    MO.cancel(viewerEl); viewerEl.classList.remove("hidden");
+    MO.cancel(viewerEl); viewerEl.classList.remove("hidden"); window.CCLayout && CCLayout.raise("viewer");   // 被文件盖着时再开别的文件也要提上来（审查 UI05-001）
     if (VW.kind === "text" && isHtml(path) && localStorage.getItem("cc.vw.htmlmode") !== "edit") return vwHtml();
     if (VW.kind === "text") return vwLoadText(isMd(path) ? (localStorage.getItem("cc.vw.mdmode") === "edit" ? "edit" : "md") : "edit");
     if (VW.kind === "image") return vwImage();
@@ -519,19 +532,25 @@
       return;
     }
     $("vw-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
+    const gen = VW.gen;
+    VW.ready = false;
+    let text, mtime;
     try {
       const r = await fetch(fileUrl(VW.path));
       if (!r.ok) throw new Error("HTTP " + r.status);
-      VW.mtime = Number(r.headers.get("x-mtime")) || 0;
-      VW.text = await r.text();
+      mtime = Number(r.headers.get("x-mtime")) || 0;
+      text = await r.text();
     } catch (e) {
-      $("vw-body").innerHTML = `<div class="vw-empty">${t("读取失败")}: ${esc(e.message)}</div>`;
+      if (gen === VW.gen) $("vw-body").innerHTML = `<div class="vw-empty">${t("读取失败")}: ${esc(e.message)}</div>`;
       return;
     }
+    if (gen !== VW.gen) return;
+    VW.mtime = mtime; VW.text = text;
     VW.dirty = false;
-    const path = VW.path, draft = await draftTake();
-    if (VW.path !== path) return;
+    const draft = await draftTake();
+    if (gen !== VW.gen) return;
     if (draft != null) { VW.text = draft; VW.dirty = true; mode = "edit"; }
+    VW.ready = true;
     vwRenderText(mode);
     vwGitCheck();
   }
@@ -790,8 +809,9 @@
     return out;
   }
   let mdObs = null;
+  function vwMdStop() { if (mdObs) { mdObs.disconnect(); mdObs = null; } }
   function vwMdPreview(text) {
-    if (mdObs) { mdObs.disconnect(); mdObs = null; }
+    vwMdStop();
     const body = $("vw-body");
     if (text.length < MD_LAZY_MIN) {
       body.innerHTML = `<div class="vw-md bubble">${renderMd(text, mdImgSrc)}</div>`; enhanceMd(body);
@@ -847,8 +867,10 @@
   /** md 里的图片地址 → 能加载的地址（相对路径按这个文件所在目录算） */
   function mdImgSrc(u) {
     if (/^(https?:|data:|blob:)/i.test(u)) return u;
-    try { u = decodeURI(u); } catch {}
-    let p = u.startsWith("/") ? u : VW.path.replace(/\/[^/]*$/, "") + "/" + u;
+    // 按段 decodeURIComponent：decodeURI 不解 %23 %3F（# ?），fig%23one.png 会被当成字面带百分号的文件名（审查 #50 S2-08）
+    const dec = (x) => { try { return decodeURIComponent(x); } catch { return x; } };
+    const rel = u.startsWith("/");
+    let p = (rel ? "" : VW.path.replace(/\/[^/]*$/, "")) + "/" + u.split("/").map(dec).join("/");
     const out = [];
     for (const seg of p.split("/")) { if (seg === "..") out.pop(); else if (seg !== "." && seg !== "") out.push(seg); }
     return fileUrl("/" + out.join("/"));
@@ -890,13 +912,19 @@
   }
 
   async function vwSave(force) {
-    const text = vwText();
+    // 还没读完（或读失败）就没有正文可存：存了就是拿空内容盖掉文件
+    if (!VW.ready || !VW.mtime && VW.size) return toast(t("文件还没读完，等一下再保存"), true);
+    if (VW.saving) return;
+    const text = vwText(), gen = VW.gen, path = VW.path;
     let r;
+    VW.saving = true;
     try {
-      r = await fetch(`/api/file/save?path=${encodeURIComponent(VW.path)}&mtime=${VW.mtime}${force ? "&force=1" : ""}`, {
+      r = await fetch(`/api/file/save?path=${encodeURIComponent(path)}&mtime=${VW.mtime}${force ? "&force=1" : ""}`, {
         method: "POST", body: text,
       });
-    } catch (e) { return toast(t("保存失败：{msg}", { msg: e.message }), true); }
+    } catch (e) { VW.saving = false; return toast(t("保存失败：{msg}", { msg: e.message }), true); }
+    VW.saving = false;
+    if (gen !== VW.gen) { if (r.ok) toast(t("已保存")); return; }   // 已经换了别的文件：别动现在这个的状态
     if (r.status === 409) {
       if (confirm(t("文件在你打开之后被改过了（可能是 Claude 改的）。\n确定：用你的版本覆盖\n取消：放弃你的修改，重新载入"))) return vwSave(true);
       VW.dirty = false;
@@ -906,8 +934,9 @@
     let j = {};
     try { j = await r.json(); } catch {}
     if (!r.ok) return toast(t("保存失败：{msg}", { msg: j.error || r.status }), true);
-    VW.text = text; VW.mtime = j.mtime; VW.size = j.size; VW.dirty = false;
-    draftClear();
+    VW.mtime = j.mtime; VW.size = j.size;
+    // 保存在途时又改了：存下去的只是那一刻的版本，新改的还没存，别把「未保存」清掉（审查 C-002）
+    if (vwText() === text) { VW.text = text; VW.dirty = false; draftClear(); } else VW.text = text;
     vwInfo();
     vwRenderActs();
     toast(t("已保存"));
@@ -919,6 +948,11 @@
     $("vw-body").innerHTML = `<div class="vw-img"><img src="${fileUrl(VW.path)}" alt=""></div>`;
     const box = $("vw-body").querySelector(".vw-img");
     const img = box.querySelector("img");
+    // 坏图 / 读不了：说清楚，给个重试（审查 C-011）
+    img.addEventListener("error", () => {
+      box.innerHTML = `<div class="vw-empty"><div>${t("图片读不出来（文件损坏，或格式不支持）")}</div><button class="btn ghost sm" data-a="img-retry">${t("重试")}</button></div>`;
+      box.querySelector('[data-a="img-retry"]').onclick = () => vwImage();
+    });
     img.addEventListener("load", () => { $("vw-info").textContent = `${img.naturalWidth}×${img.naturalHeight} · ${fmtSize(VW.size)}`; });
     img.addEventListener("click", (e) => {
       // 放大时以点到的位置为中心

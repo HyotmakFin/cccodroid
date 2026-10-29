@@ -65,6 +65,8 @@ function cronField(spec, lo, hi) {
     a = Math.max(lo, a); b = Math.min(hi, b);
     for (let v = a; v <= b; v += step) if (v >= lo && v <= hi) set.add(v);
   }
+  // 「5-3」这种反向范围或越界值展开是空的：保存时就报错，别存下一个永远不跑的任务（审查 v0.5.3 B6）
+  if (!set.size) throw new Error("bad cron");
   return set;
 }
 export function parseCron(expr) {
@@ -164,6 +166,8 @@ function taskProvider(t) {
 const usesLogin = (t) => { try { return isLoginMode(taskProvider(t)); } catch { return false; } };
 
 // ── 跑一次 ──
+const NULL_AT = new Map();  // 排不出下次时间的任务上次重算的时刻
+const MANUAL = new Set();   // 手动「立刻跑一次」还没落到队列里的任务
 const RUNNING = new Map();   // key → { taskId, startedAt, attempt, trial }
 let keyN = 0;
 async function fire(t, { reason = "due", attempt = 0, trial = false } = {}) {
@@ -193,6 +197,7 @@ async function fire(t, { reason = "due", attempt = 0, trial = false } = {}) {
       const deadline = Date.now() + 30 * 60000;
       while ([...RUNS.values()].some((r) => !r.idle)) {
         if (Date.now() > deadline) return skip(tz("有对话在跑，排队 30 分钟仍没轮到"));
+        if (byId(t.id) !== t || (reason === "due" && !t.on)) return skip(tz("排队时任务被关掉或删了"));
         await new Promise((r) => setTimeout(r, 30000));
       }
     }
@@ -262,7 +267,13 @@ function tick() {
   const gap = DB.lastTick ? now - DB.lastTick : 0;
   for (const t of DB.tasks) {
     if (!t.on) continue;
-    if (t.nextAt == null) { refreshNext(t, now); continue; }
+    if (t.nextAt == null) {
+      // 只跑一次、时间已过还没跑过：关掉并记一笔，免得界面一直显示启用却永远不跑（审查 v0.5.3 B7）
+      if (t.freq?.kind === "once" && !t.pausedUntil) { t.on = false; addRun({ taskId: t.id, at: now, st: "skip", msg: tz("只跑一次的时间已过，任务已关") }); continue; }
+      // 排不出下次的（如 2 月 31 日）每 30 秒重算一遍要扫满一年：一小时看一次就够
+      if (now - (NULL_AT.get(t.id) || 0) < 3600e3) continue;
+      NULL_AT.set(t.id, now); refreshNext(t, now); continue;
+    }
     if (t.nextAt > now) continue;
     const late = now - t.nextAt;
     // 晚了 3 分钟以上：应用没在跑 / 机器睡死了 —— 按「错过了」的设置来，不默默补跑
@@ -396,7 +407,13 @@ export async function routeSched(req, res, u, p) {
   }
   if (sub === "/run" && req.method === "POST") {
     const b = await body();
-    const item = await fire(t, { reason: "manual", trial: !!b.trial });
+    // 同一任务手动跑还没结束（在排队或在跑）就别再起一次：连点会重复执行、重复花钱（审查 E05 / v0.5.3 B5）
+    if (MANUAL.has(t.id) || [...RUNNING.values()].some((r) => r.taskId === t.id)) return sendJson(res, 409, { error: tz("这个任务已经在跑了") });
+    MANUAL.add(t.id);
+    const go = fire(t, { reason: "manual", trial: !!b.trial }).finally(() => MANUAL.delete(t.id));
+    // 有对话在跑时 fire 会排队等最多 30 分钟：别让请求一直挂着，先回「已排队」
+    const item = await Promise.race([go, new Promise((r) => setTimeout(() => r("queued"), 3000))]);
+    if (item === "queued") return sendJson(res, 200, { ok: true, queued: true });
     return sendJson(res, 200, { ok: !!item, id: item && item.id });
   }
   if (sub === "/pause" && req.method === "POST") {

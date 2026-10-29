@@ -83,6 +83,7 @@
     if (!r) return;
     await loadSettings();
     await refreshStatus();
+    refreshSessModel();       // 跟随默认的会话：标签、模型面板跟着换到新接口（审查 D-02）
     toast(t("已切到 {name}（下一条消息生效）", { name: p.label }));
   }
 
@@ -148,7 +149,8 @@
       <div id="login-flow"></div>
       <div class="tiny">${esc(pHint(p))}</div>`;
     let st;
-    try { st = await api("/api/login/status"); } catch (e) { $("login-state").textContent = t("查询失败：{msg}", { msg: e.message }); return; }
+    // 查询期间换了卡：迟到的失败别去碰已经不在的节点（审查 D-06）
+    try { st = await api("/api/login/status"); } catch (e) { const el = $("login-state"); if (el && state.provView === p.id) el.textContent = t("查询失败：{msg}", { msg: e.message }); return; }
     if (state.provView !== p.id) return;      // 查询期间用户换了卡
     paintLoginState(st, p);
     if (st.pending) watchLogin(p);
@@ -262,6 +264,7 @@
     $("btn-login-term").onclick = async () => {
       await post("/api/login/cancel").catch(() => {});
       clearInterval(state.loginTimer);
+      closeSettings();       // 终端窗格在设置模态下面，不关设置就点不着（审查 P2-6）
       openLoginTerm(method === "console" ? "console" : "claudeai");
     };
     watchLogin(p);
@@ -624,11 +627,14 @@
       if (act === "use") return useProvider(p);
       if (act === "clear") {
         if (!confirm(t("清除 {name} 的 Key？", { name: p.label }))) return;
-        await post("/api/providers/save", { id: p.id, clearKey: true }).catch((e2) => toast(e2.message, true));
+        // 没清掉就别说「已清除」（审查 D-04）
+        try { await post("/api/providers/save", { id: p.id, clearKey: true }); } catch (e2) { return toast(e2.message, true); }
         return reloadProv(t("已清除"));
       }
       const body = { id: p.id, apiKey: $("pc-key").value.trim() };
       if ($("pc-endpoint")) body.endpoint = $("pc-endpoint").value;
+      // 还没 Key、输入框也空着：点保存不能说「已保存」，其实什么都没配上（审查 P3-3）
+      if (act === "save" && !body.apiKey && !p.hasKey && !(body.endpoint && body.endpoint !== p.endpoint)) return toast(t("先把 API Key 粘进来再保存"), true);
       if (act === "save" || body.apiKey || body.endpoint !== p.endpoint) {
         try { await post("/api/providers/save", body); } catch (e2) { return toast(e2.message, true); }
         $("pc-key").value = "";

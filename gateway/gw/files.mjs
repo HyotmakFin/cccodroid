@@ -32,12 +32,19 @@ function inWorkspace(real) {
 
 export function safeFilePath(p) {
   if (!p) return { error: "path required" };
-  let full = String(p).trim();
-  if (full.startsWith("file://")) { try { full = fileURLToPath(full); } catch {} }
-  if (!path.isAbsolute(full)) full = path.join(CFG.workspace, full);
-
+  // 先按原样找：「report.txt 」（末尾真有空格）和「report.txt」是两个文件，先 trim 会认成另一个（私下反馈 10-29）。
+  // 原样找不到才去掉首尾空白再试（从对话里复制出来的路径常带个换行）
+  const resolve = (s) => {
+    let full = s;
+    if (full.startsWith("file://")) { try { full = fileURLToPath(full); } catch {} }
+    if (!path.isAbsolute(full)) full = path.join(CFG.workspace, full);
+    return fs.realpathSync(full);
+  };
   let real;
-  try { real = fs.realpathSync(full); } catch (e) { return { error: "not found", detail: e.message }; }
+  try { real = resolve(String(p)); } catch (e) {
+    const tp = String(p).trim();
+    try { if (tp === String(p)) throw e; real = resolve(tp); } catch (e2) { return { error: "not found", detail: e2.message }; }
+  }
 
   for (const root of inWorkspace(real) ? [SEED_FILE] : [CFG.home, CFG.runtime, SEED_FILE]) {
     if (!root) continue;
@@ -168,6 +175,8 @@ export async function routeFiles(req, res, u, p) {
     // 先收完请求体再比 mtime：收的过程中磁盘上的文件也可能被改
     const buf = await readBodyBuf(req, 16 * 1024 * 1024);
     let cur = null; try { cur = fs.statSync(r.file); } catch {}
+    // 已有文件必须带打开时的 mtime：没带（0）说明界面还没读完就点了保存，会把它清空（私下反馈 10-29）
+    if (cur && !base && u.searchParams.get("force") !== "1") return sendJson(res, 409, { error: "not loaded", mtime: cur.mtimeMs, size: cur.size });
     if (cur && base && Math.abs(cur.mtimeMs - base) > 1 && u.searchParams.get("force") !== "1") {
       return sendJson(res, 409, { error: "changed on disk", mtime: cur.mtimeMs, size: cur.size });
     }

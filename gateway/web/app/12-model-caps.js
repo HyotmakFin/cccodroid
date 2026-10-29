@@ -70,8 +70,12 @@
       state.pendingModel = patch ? { ...(state.pendingModel || {}), ...patch } : null;
       return refreshSessModel();
     }
+    const sid = view.sessionId;
     const r = await api("/api/session-model", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch ? { id: view.sessionId, ...patch } : { id: view.sessionId, reset: true }) });
+      body: JSON.stringify(patch ? { id: sid, ...patch } : { id: sid, reset: true }) });
+    // 回执慢、人已经切到别的会话：A 的结果不许写进 B 的标签（审查 D-01）。抛出去让调用方别接着重画
+    if (view.sessionId !== sid) { const e = new Error(""); e.stale = true; throw e; }
+    smSeq++;                               // 在途的旧查询作废，以这次回执为准
     state.sessModel = r.rec || null;
     state.sessEff = r.provider ? r : null;
     provChanged();
@@ -160,14 +164,14 @@
       if (!e.target.closest(".mp-reset")) return;
       if (curProv() !== globalProv() && view.sessionId && !confirm(switchWarn(globalProv()))) return;
       close();
-      try { await pickSessModel(null); } catch (er) { return toast(er.message, true); }
+      try { await pickSessModel(null); } catch (er) { return er.stale || toast(er.message, true); }
       paintModel(chipName());
       loadCtxModel();
     });
     effBox.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-eff]");
       if (!b) return;
-      try { await pickSessModel({ effort: b.dataset.eff }); } catch (er) { return toast(er.message, true); }
+      try { await pickSessModel({ effort: b.dataset.eff }); } catch (er) { return er.stale || toast(er.message, true); }
       info.effort = b.dataset.eff;
       paintEff(effLevels, b.dataset.eff);
       paintFollow();
@@ -225,7 +229,7 @@
       if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
       close();
       if (!switching && id === cur() && own() && own().model != null) return;   // 跟随默认时点同一个也算「单独选」：钉住，默认再改它也不变
-      try { await pickSessModel(switching ? { provider: to, model: id } : { model: id }); } catch (er) { return toast(er.message, true); }
+      try { await pickSessModel(switching ? { provider: to, model: id } : { model: id }); } catch (er) { return er.stale || toast(er.message, true); }
       paintModel(chipName());
       loadCtxModel();
       if (switching) toast(t("这个会话改用「{name}」，下一条消息起生效", { name: provLabel(to) }));
@@ -302,6 +306,7 @@
                     t("该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。");
       }
       acPaint((cur && cur.context_window) || state.ctxTotal, r.autoCompactWindow);
+      return true;
     } catch (e) {
       $("model-info").textContent = t("拉取模型清单失败：{msg}", { msg: e.message });
     }
@@ -373,9 +378,12 @@
       renderDirs();
       fillMem();
       await loadProviders();
-      await loadModels();
-      $("set-model").value = state.settings.model || "";
-      $("set-effort").value = state.settings.effort || "";
+      // 清单拉成功时下拉框已经按网关算好的「实际生效」选上了；再拿原始设置盖一遍，
+      // 存的值这家不支持（比如 high，这家只有 low/medium）就成了空白（审查 D-03）。拉失败才退回原始值
+      if (!(await loadModels())) {
+        $("set-model").value = state.settings.model || "";
+        $("set-effort").value = state.settings.effort || "";
+      }
       const pe = $("set-parallel");
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
       $("set-static").checked = state.settings.staticCompat !== false;
@@ -415,7 +423,20 @@
       renderDirs();
             toast(t("已保存"));
       return r;
-    } catch (e) { toast(e.message || t("保存失败"), true); }
+    } catch (e) { toast(e.message || t("保存失败"), true); revertSet(patch); }
+  }
+  // 没存上：控件回到真正存着的值，别留着没保存的样子让人以为生效了（审查 D-05）
+  function revertSet(patch) {
+    const S = state.settings || {};
+    const v = { model: ["set-model", S.model || ""], effort: ["set-effort", S.effort || ""], outputStyle: ["set-style", S.outputStyle || ""],
+      maxParallel: ["set-parallel", S.maxParallel || 3] };
+    const c = { staticCompat: ["set-static", S.staticCompat !== false], idleCompaction: ["set-idlecompact", S.idleCompaction !== false],
+      workIsland: ["set-workisland", S.workIsland === true] };
+    for (const k of Object.keys(patch || {})) {
+      if (v[k] && $(v[k][0])) $(v[k][0]).value = v[k][1];
+      if (c[k] && $(c[k][0])) $(c[k][0]).checked = c[k][1];
+    }
+    if ("model" in patch || "effort" in patch) loadModels();
   }
 
   $("set-provider").addEventListener("change", (e) => {
@@ -532,9 +553,13 @@
 
   async function loadCaps() {
     try {
-      state.caps = await api("/api/capabilities");
+      state.caps = await api("/api/capabilities"); state.capsErr = "";
       renderCaps();
-    } catch {}
+    } catch (e) {
+      // 一次都没拿到过：说清楚读取失败、给重试，别只剩空标题（审查 F-008）
+      state.capsErr = e.message || "?";
+      if (!state.caps) { renderCaps(); $("cap-tiles").innerHTML = `<div class="tile big"><span class="k">${esc(t("能力清单读取失败：{msg}", { msg: state.capsErr }))}</span><button class="btn sm ghost" id="caps-retry">${esc(t("重试"))}</button></div>`; $("caps-retry").onclick = () => loadCaps(); }
+    }
   }
 
   function chips(el, arr, hl) {

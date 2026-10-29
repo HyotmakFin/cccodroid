@@ -360,6 +360,9 @@ function upsertProvider(id, b) {
   if (!PRESETS[id] && !PROVIDERS_RAW.providers[id] && !isNew) return { error: "unknown provider" };
   const cur = { ...(PROVIDERS_RAW.providers[id] || {}) };
   const str = (v) => String(v == null ? "" : v).trim();
+  // 预置厂商还没 Key、这次又什么都没给：别回「已保存」，其实什么都没配上（审查 P3-3）
+  if (PRESETS[id] && !isNew && "apiKey" in b && !str(b.apiKey) && !cur.apiKey && !b.clearKey
+    && !["endpoint", "defaultModel", "fastModel"].some((k) => k in b && str(b[k]) && str(b[k]) !== str(cur[k]))) return { error: "need_key", message: tz("先把 API Key 粘进来再保存") };
   if ("apiKey" in b && str(b.apiKey)) cur.apiKey = str(b.apiKey);   // 空串 = 不改（界面上不回显旧密钥）
   if (b.clearKey) delete cur.apiKey;
   for (const k of ["endpoint", "defaultModel", "fastModel"]) if (k in b) { if (str(b[k])) cur[k] = str(b[k]); else delete cur[k]; }

@@ -390,7 +390,7 @@ export async function routeSessions(req, res, u, p) {
     if (req.method === "POST" && action === "rewind") {
       const b = JSON.parse((await readBody(req)) || "{}");
       if (runOfSession(id)) return sendJson(res, 409, { error: "busy", message: tz("这个会话正在生成中，等它答完再回退。") });
-      const loc = locateUserTurn(id, String(b.userText || ""), b.after);
+      const loc = locateUserTurn(id, String(b.userText || ""), b.after, String(b.uuid || "").slice(0, 64));
       if (!loc.ok) return sendJson(res, loc.status || 400, { error: "locate", message: loc.message });
       const uuid = loc.users[loc.best].uuid;
       // 真回退也先试算一次：要拿到会动哪些文件，回退后逐个核对（见 rewindFixup）
@@ -413,7 +413,7 @@ export async function routeSessions(req, res, u, p) {
       let fork = null;
       if (b.conversation && loc.best === 0) fork = { ok: true, fresh: true };   // 退到第一条之前 = 空会话，前端直接开新会话
       else if (b.conversation) {
-        fork = forkSession(id, String(b.userText || ""), b.after, { before: true });
+        fork = forkSession(id, String(b.userText || ""), b.after, { before: true, uuid: String(b.uuid || "").slice(0, 64) });
         if (!fork.ok) return sendJson(res, fork.status || 400, { error: "fork", message: fork.message, files: fx });
       }
       return sendJson(res, 200, { ok: true, files: fx, fork });
@@ -423,7 +423,7 @@ export async function routeSessions(req, res, u, p) {
     if (req.method === "POST" && (action === "delmsg" || action === "undodel")) {
       const b = JSON.parse((await readBody(req)) || "{}");
       let r;
-      try { r = action === "delmsg" ? deleteMessage(id, String(b.userText || ""), Number(b.after) || 0, b.which === "user" ? "user" : "bot") : undoDelete(id, String(b.undo || "")); }
+      try { r = action === "delmsg" ? deleteMessage(id, String(b.userText || ""), Number(b.after) || 0, b.which === "user" ? "user" : "bot", String(b.uuid || "").slice(0, 64)) : undoDelete(id, String(b.undo || "")); }
       catch (e) { r = { ok: false, status: 500, message: e.message }; }
       return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: action, message: tr(LAST_LANG, r.message) });
     }
@@ -431,7 +431,7 @@ export async function routeSessions(req, res, u, p) {
     if (req.method === "POST" && action === "fork") {
       const b = JSON.parse((await readBody(req)) || "{}");
       let r;
-      try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0); }
+      try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0, { uuid: String(b.uuid || "").slice(0, 64) }); }
       catch (e) { r = { ok: false, status: 500, message: e.message }; }
       return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: "fork", message: tr(LAST_LANG, r.message) });
     }

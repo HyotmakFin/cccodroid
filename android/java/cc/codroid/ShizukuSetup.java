@@ -226,24 +226,38 @@ final class ShizukuSetup {
         }
         if (wirelessOn() == 0) { log("无线调试没开，也没有 WRITE_SECURE_SETTINGS 去开它"); return false; }
         set("connecting", Tr.t("寻找本机的无线调试端口…"));
-        List<Integer> ports = discover("_adb-tls-connect._tcp", 8000);
-        // mDNS 找不到（实测开着 VPN 时就找不到）：扫本机回环口，认出回 STLS 的那个端口
-        if (ports.isEmpty()) { log("mDNS 没找到，改扫本机端口"); ports = probeLocalAdb(); }
-        log("连接端口候选 " + ports);
-        boolean untrusted = false;
-        for (int port : ports) {
-            String serial = "127.0.0.1:" + port;
-            String out = adb(20, "connect", serial);
-            if (!out.contains("connected to")) { untrusted = true; continue; }
-            String st = adb(10, "-s", serial, "get-state").trim();
-            if (!st.equals("device")) { adb(10, "disconnect", serial); log(serial + " 状态 " + st); return false; }
-            if (!prefs().getBoolean("paired", false)) prefs().edit().putBoolean("paired", true).putLong("pairedAt", System.currentTimeMillis()).apply();    // 钥匙被信任了（不管是哪次配对的）：重启后能自动来
+        boolean[] untrusted = new boolean[1];
+        String serial = trustedSerial(untrusted);
+        if (serial != null) {
+            markPaired();    // 钥匙被信任了（不管是哪次配对的）：重启后能自动来
             startServer(serial);
             return true;
         }
         // 端口在、却连不上：本机已不再信任我们的 adb 钥匙（在无线调试里被"取消保存"了），得重新配对
-        if (untrusted && prefs().getBoolean("paired", false)) { prefs().edit().putBoolean("paired", false).apply(); log("钥匙不再被信任，需要重新配对"); }
+        if (untrusted[0] && prefs().getBoolean("paired", false)) { prefs().edit().putBoolean("paired", false).apply(); log("钥匙不再被信任，需要重新配对"); }
         return false;
+    }
+
+    /** 找一个认我们钥匙的无线调试端口，连上并返回 serial；没有返回 null。有端口拒绝我们时 untrusted[0]=true */
+    private String trustedSerial(boolean[] untrusted) throws Exception {
+        List<Integer> ports = discover("_adb-tls-connect._tcp", 8000);
+        // mDNS 找不到（实测开着 VPN 时就找不到）：扫本机回环口，认出回 STLS 的那个端口
+        if (ports.isEmpty()) { log("mDNS 没找到，改扫本机端口"); ports = probeLocalAdb(); }
+        log("连接端口候选 " + ports);
+        for (int port : ports) {
+            String serial = "127.0.0.1:" + port;
+            String out = adb(20, "connect", serial);
+            if (!out.contains("connected to")) { untrusted[0] = true; continue; }
+            String st = adb(10, "-s", serial, "get-state").trim();
+            if (st.equals("device")) return serial;
+            adb(10, "disconnect", serial); log(serial + " 状态 " + st);
+            return null;
+        }
+        return null;
+    }
+
+    private void markPaired() {
+        if (!prefs().getBoolean("paired", false)) prefs().edit().putBoolean("paired", true).putLong("pairedAt", System.currentTimeMillis()).apply();
     }
 
     private void startPairing() {
@@ -312,17 +326,23 @@ final class ShizukuSetup {
                     pairNote(Tr.t("配对没成功，填新的配对码"), true);
                     return;
                 }
-                prefs().edit().putBoolean("paired", true).putLong("pairedAt", System.currentTimeMillis()).apply();
+                // 「配对成功」是对方说的：冒充的配对服务也能这么回（审查 v0.5.3 H1 残余）。
+                // 连上无线调试、确认钥匙真被信任了才记 paired、才报成功
                 stopPairDiscovery();
-                pairOk = 1; pairCheckedAt = System.currentTimeMillis();
                 if (Priv.running()) {     // 只是补配对（Shizuku 本来就在跑）：不用重启它
+                    String s = trustedSerial(new boolean[1]);
+                    if (s == null) { failNote(Tr.t("配对回了成功，但本机的无线调试不认我们的钥匙，配对可能被别的应用截了。到「无线调试」里取消多出来的配对设备，再重新配对")); return; }
+                    adb(10, "disconnect", s);
+                    markPaired();
+                    pairOk = 1; pairCheckedAt = System.currentTimeMillis();
                     cancelNote();
                     set("done", Tr.t("✓ 已重新配对。重启手机后会自动激活（需连着 Wi‑Fi）"));
                     return;
                 }
                 pairNote(Tr.t("✓ 配对成功，正在启动 Shizuku…"), false);
                 Thread.sleep(1500);
-                if (!connectAndStart()) failNote(Tr.t("已配对，但连不上无线调试：确认「无线调试」开关开着，再点「激活」"));
+                if (!connectAndStart()) { failNote(Tr.t("配对回了成功，但连不上无线调试：确认「无线调试」开关开着再点「激活」；还不行就到「无线调试」里取消多出来的配对设备，重新配对")); return; }
+                pairOk = 1; pairCheckedAt = System.currentTimeMillis();
             } catch (Exception e) {
                 // 别只改状态：通知还停在常驻的「配对中…」，用户划不掉
                 failNote(Tr.t("配对出错：") + e.getMessage());

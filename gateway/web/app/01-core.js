@@ -220,8 +220,11 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     function leave(el, cls, dur, done) {
       cancel(el); stopJs(el);
       if (!on()) return done();
+      // 进场还没播完就退：退场从它此刻的位置 / 透明度起步（关键帧 from 读这两个变量），不然先瞬移到全开再退（审查 #48 NAV-03）
+      const cs = getComputedStyle(el);
+      el.style.setProperty("--mo-from", cs.transform || "none"); el.style.setProperty("--mo-op", cs.opacity || "1");
       el.classList.add(cls);
-      el._moLeave = { cls, t: setTimeout(() => { el._moLeave = null; el.classList.remove(cls); done(); }, k(dur)) };
+      el._moLeave = { cls, t: setTimeout(() => { el._moLeave = null; el.classList.remove(cls); unfrom(el); done(); }, k(dur)) };
     }
     /** 停掉元素上还在播的脚本动画（弹簧尾巴约 0.6 秒，期间它压着 transform —— 不停掉的话，
      *  紧接着的退场 / 手指拖动都看不出效果，松手才「啪」地跳过去）。CSS 动画不动，由类名管 */
@@ -231,7 +234,15 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     }
     /** 回程：内容马上要被换掉 / 藏掉时，留一张它的替身播退场（push 往右滑走、back 往左退一点变暗、fade 淡掉、drop 往下沉）。
      *  替身插在原元素旁边（above = 盖在新内容上面，否则垫在下面），吃得到同样的样式；播完删掉 */
-    function ghost(el, kind, above = true) {
+    /** 元素自己是透明底时，往上找第一层不透明的底色（替身脱离原位置后就透出底下的东西了） */
+    function solidBg(el) {
+      const clear = (c) => !c || c === "transparent" || /rgba\([^)]*,\s*0\)$/.test(c);
+      if (!clear(getComputedStyle(el).backgroundColor)) return "";
+      for (let p = el.parentElement; p; p = p.parentElement) { const c = getComputedStyle(p).backgroundColor; if (!clear(c)) return c; }
+      return getComputedStyle(document.body).backgroundColor || "";
+    }
+    // top：垫在下面时要盖在替身上的那个元素（默认是 el 自己 —— 同一个元素换内容的情况；换成另一个元素时要传进来）
+    function ghost(el, kind, above = true, top = el) {
       if (!on() || !el || !el.isConnected || !el.animate) return;
       const r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
       const g = el.cloneNode(true);
@@ -240,6 +251,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       // id 照留（按 id 写的样式才吃得到）：替身插在真身后面，getElementById / querySelector 拿到的总是真身
       g.classList.add("mo-ghost");   // 按类名批量切 hidden 的地方要跳过它（:not(.mo-ghost)）
       g.setAttribute("aria-hidden", "true"); g.inert = true;
+      const gbg = solidBg(el); if (gbg) g.style.backgroundColor = gbg;   // 透明底的替身滑过新内容会叠字（设置窄屏往回收）
       Object.assign(g.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px",
         margin: "0", pointerEvents: "none", zIndex: above ? "5" : "0", animation: "none", overflow: "hidden", boxSizing: "border-box" });
       const st = el.scrollTop; el.after(g); if (st) g.scrollTop = st;
@@ -254,7 +266,15 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
         if (t || b) g.style.clipPath = `inset(${t}px 0 ${b}px 0)`;
         break;
       }
-      if (!above) el.style.zIndex = el.style.zIndex || "1";
+      // 垫在下面：上面那个必须是定位元素才压得住替身（静态元素的 z-index 不起作用，fixed 的替身反倒画在它上面）
+      let lift = null;
+      if (!above && top) {
+        lift = { pos: top.style.position, z: top.style.zIndex, bg: top.style.backgroundColor };
+        { const b = solidBg(top); if (b) top.style.backgroundColor = b; }   // 透明底的新内容挡不住身后的替身（项目页换层同理）
+        if (getComputedStyle(top).position === "static") top.style.position = "relative";
+        if (!top.style.zIndex) top.style.zIndex = "1";
+        if (top !== el) top.classList.add("mo-lift");    // 换成另一个元素时再垫一圈底色：新内容比旧的短 / 窄，露出来的旧替身也别透着叠字（样式见 .mo-lift）
+      }
       const s = rtl() ? -1 : 1;
       const fr = { push: [{ transform: "none" }, { transform: `translateX(${100 * s}%)` }],
         back: [{ transform: "none", opacity: 1 }, { transform: `translateX(${-18 * s}%)`, opacity: .4 }],
@@ -262,10 +282,11 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
         drop: [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(16px)" }] }[kind];
       const dur = kind === "back" ? ms("snap") * .5 : k(170);
       const a = g.animate(fr, { duration: dur, easing: kind === "back" ? "cubic-bezier(.2,.8,.2,1)" : OUT, fill: "forwards" });
-      const fin = () => { g.remove(); if (!above && el.style.zIndex === "1") el.style.zIndex = ""; };
+      const fin = () => { g.remove(); if (lift) { top.style.position = lift.pos; top.style.zIndex = lift.z; top.style.backgroundColor = lift.bg; top.classList.remove("mo-lift"); } };
       a.finished.then(fin, fin);
     }
-    function cancel(el) { const l = el && el._moLeave; if (!l) return; clearTimeout(l.t); el.classList.remove(l.cls); el._moLeave = null; }
+    function unfrom(el) { el.style.removeProperty("--mo-from"); el.style.removeProperty("--mo-op"); }
+    function cancel(el) { const l = el && el._moLeave; if (!l) return; clearTimeout(l.t); el.classList.remove(l.cls); unfrom(el); el._moLeave = null; }
     /** 浮层收起：先淡出（小浮层再缩一点），再移走；还在 OV 栈里的说明又被打开了，不删 */
     function outRemove(el, still) {
       if (!on() || !el.animate || !el.isConnected) return el.remove();
@@ -368,6 +389,12 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // 只认最新一次请求：const ok = latest("fs"); const r = await api(…); if (!ok()) return;
+  // 先发的慢、后发的快时，迟到的旧响应不许再改界面。dropReq("fs") 让在途的全部作废（关面板、切走时用）
+  const LATEST = {};
+  const latest = (k) => { const n = (LATEST[k] = (LATEST[k] || 0) + 1); return () => LATEST[k] === n; };
+  const dropReq = (k) => { LATEST[k] = (LATEST[k] || 0) + 1; };
+
   let toastTimer = null;
   function toast(msg, isErr) {
     MO.cancel(toastEl);
@@ -455,12 +482,14 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   const touchOff = () => { touching = false; touchEndAt = Date.now(); };
   chatEl.addEventListener("touchend", touchOff, { passive: true });
   chatEl.addEventListener("touchcancel", touchOff, { passive: true });
-  chatEl.addEventListener("wheel", (e) => { if (e.deltaY < 0) stick = false; }, { passive: true });
+  // 滚轮 / 触控板也算「手在动」：小步往上滚时，随后的 scroll 判断要按 4px 算，不然又被 40px 的宽限判回贴底（审查 #48 06-02）
+  let wheelAt = 0;
+  chatEl.addEventListener("wheel", (e) => { wheelAt = Date.now(); if (e.deltaY < 0) stick = false; }, { passive: true });
   // 对话区只挂一个 scroll 监听，事件里不读排版，攒到下一帧统一处理：跟底判断、翻到顶加载更早的、↓ 圆钮
   const chatScrollHooks = [];
   let chatScrollRaf = 0;
   chatEl.addEventListener("scroll", () => {
-    const byHand = touching || Date.now() - touchEndAt < 2000;
+    const byHand = touching || Date.now() - touchEndAt < 2000 || Date.now() - wheelAt < 500;
     if (byHand && progTop >= 0 && chatEl.scrollTop < progTop - 1) stick = false;
     if (chatScrollRaf) return;
     chatScrollRaf = requestAnimationFrame(() => {
@@ -470,6 +499,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       for (const f of chatScrollHooks) f();
     });
   }, { passive: true });
+  // 本地图片回复说完才拿到尺寸、把内容撑高：贴着底的接着跟下去（审查 #48 06-03）。load 不冒泡，捕获阶段接
+  chatEl.addEventListener("load", (e) => { if (e.target.tagName === "IMG") scrollDown(); }, true);
   function scrollDown(force) {
     if (force) stick = true;
     else if (!stick || touching) return;

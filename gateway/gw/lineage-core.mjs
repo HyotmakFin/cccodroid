@@ -48,8 +48,10 @@ export async function scanSession(file, prev) {
     if (r === prev) r = { ...prev, uu: prev.uu.slice(), ts: prev.ts.slice(), compacts: prev.compacts.map((c) => ({ ...c })), refs: (prev.refs || []).map((x) => ({ ...x })) };
     r.head = head; r.size = st.size; r.birth = st.birthtimeMs || r.birth || 0;
     let pos = r.off, rest = Buffer.alloc(0);
-    const CH = 4 << 20;
+    // 每读 1MB 让一下事件循环：大会话首次建索引要读几百 MB，一口气读完网关会冻住好几秒（审查 v0.5.3 B1）
+    const CH = 1 << 20;
     while (pos < st.size) {
+      if (pos > r.off) await new Promise((ok) => setImmediate(ok));
       const buf = Buffer.alloc(Math.min(CH, st.size - pos));
       const n = fs.readSync(fd, buf, 0, buf.length, pos);
       if (!n) break;

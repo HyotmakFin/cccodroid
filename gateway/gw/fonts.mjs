@@ -68,7 +68,7 @@ function woffName(buf) {
     if (buf.toString("latin1", r, r + 4) !== "name") continue;
     const off = buf.readUInt32BE(r + 4), clen = buf.readUInt32BE(r + 8), olen = buf.readUInt32BE(r + 12);
     const raw = buf.subarray(off, off + clen);
-    return parseName(clen < olen ? zlib.inflateSync(raw) : raw);
+    return parseName(clen < olen ? zlib.inflateSync(raw, { maxOutputLength: 16 << 20 }) : raw);
   }
   return "";
 }
@@ -90,7 +90,7 @@ function woff2Name(buf) {
     at += len;
   }
   if (nameAt < 0) return "";
-  const all = zlib.brotliDecompressSync(buf.subarray(p, p + csize));
+  const all = zlib.brotliDecompressSync(buf.subarray(p, p + csize), { maxOutputLength: 64 << 20 });
   return parseName(all.subarray(nameAt, nameAt + nameLen));
 }
 export function fontName(buf, fmt) {

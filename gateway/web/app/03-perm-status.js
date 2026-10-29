@@ -26,7 +26,9 @@
   }
   const permSuggestsEdits = (p) => (p.suggestions || []).some((s) => s.type === "setMode" && s.mode === "acceptEdits");
 
-  function diffHtml(oldS, newS) {
+  // 别叫 diffHtml：各段拼在同一个作用域里，16 段版本面板的 diffHtml(text) 会把它盖掉，
+  // 权限卡上 Edit 的新内容就不显示了，人可能在看不到要写什么的情况下点了允许（审查 #49 P1-1）
+  function permDiffHtml(oldS, newS) {
     const lines = (s, c) => String(s || "").split("\n").slice(0, 60).map((l) => `<span class="${c}">${c === "del" ? "-" : "+"} ${esc(l)}</span>`).join("\n");
     return `<pre class="perm-diff">${lines(oldS, "del")}\n${lines(newS, "add")}</pre>`;
   }
@@ -38,10 +40,10 @@
         h = `<pre class="perm-cmd">${esc(i.command || "")}</pre>` + (i.description ? `<div class="perm-sub">${esc(i.description)}</div>` : "");
         break;
       case "Edit":
-        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + diffHtml(i.old_string, i.new_string);
+        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + permDiffHtml(i.old_string, i.new_string);
         break;
       case "MultiEdit":
-        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + (i.edits || []).slice(0, 8).map((e) => diffHtml(e.old_string, e.new_string)).join("");
+        h = `<div class="perm-path">${esc(i.file_path || "")}</div>` + (i.edits || []).slice(0, 8).map((e) => permDiffHtml(e.old_string, e.new_string)).join("");
         break;
       case "Write": {
         const c = String(i.content || ""), ls = c.split("\n");
@@ -236,7 +238,7 @@
       const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
       html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">${uiI("target")}</span>
         <span class="rs-txt">${t("目标")} · ${esc(g.condition)}</span>
-        <span class="rs-meta">${[g.checks ? t("已检查 {n} 次", { n: g.checks }) : "", el ? t("已用 {d}", { d: el }) : ""].filter(Boolean).join(" · ")}</span>
+        <span class="rs-meta">${g.checks ? t("已检查 {n} 次", { n: g.checks }) : ""}${g.checks && el ? " · " : ""}${el ? `<span class="rs-el" aria-hidden="true">${t("已用 {d}", { d: el })}</span>` : ""}</span>
         <button class="rs-goal-stop">${t("放弃")}</button></div>
         ${g.reason ? `<div class="rs-sub">${t("还差：")}${esc(g.reason)}</div>` : ""}</div>`;
     } else if (g && g.done) {
@@ -263,7 +265,18 @@
     const tasksShown = !!tasksHtml(0), fold = tasksShown && !tasksOpen;
     const more = fold ? (g ? 1 : 0) + bg.length : 0;
     html = tasksHtml(more) + (fold ? "" : html);
-    runStrip.innerHTML = html;
+    // 目标计时每秒重画整条：展开的清单、后台任务列表滚到哪儿要接着留在哪儿（审查 #48 UI07-04）
+    // 只有计时变了：只改那一格的字（它不进读屏），别整条重写 —— 整条在 role=status 里，读屏会每秒念一遍（审查 #49 待确认-5）
+    const key = html.replace(/<span class="rs-el"[^>]*>[^<]*<\/span>/, "");
+    const elx = runStrip.querySelector(".rs-el"), elm = html.match(/<span class="rs-el"[^>]*>([^<]*)<\/span>/);
+    if (key === runStrip._key && elx && elm) { if (elx.textContent !== elm[1]) elx.innerHTML = elm[1]; }
+    else if (html !== runStrip._html) {
+      runStrip._key = key;
+      const tl = runStrip.querySelector(".rs-tlist"), bl = runStrip.querySelector(".rs-blist"), ty = tl ? tl.scrollTop : 0, by = bl ? bl.scrollTop : 0;
+      runStrip.innerHTML = html; runStrip._html = html;
+      if (ty) { const x = runStrip.querySelector(".rs-tlist"); if (x) x.scrollTop = ty; }
+      if (by) { const x = runStrip.querySelector(".rs-blist"); if (x) x.scrollTop = by; }
+    }
     runStrip.classList.toggle("hidden", !html);
     // 目标进行中：每秒刷新「已用」；别的情况停掉
     if (g && g.active && g.setAt) { if (!goalTick) goalTick = setInterval(renderRunStrip, 1000); }
@@ -345,6 +358,8 @@
   });
 
   // 顶栏（输入框下）的权限标签：点开切模式，对应官方 TUI 的 Shift+Tab
+  // 能 Tab 到就要能用 Enter / 空格打开（审查 #48 03-F06）
+  permEl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); permEl.click(); } });
   permEl.addEventListener("click", () => {
     if (OV.at(permEl)) return OV.close(OV.at(permEl));
     const m = document.createElement("div");
@@ -376,7 +391,8 @@
   });
 
   async function changePermMode(mode) {
-    if (!mode || mode === state.permissionMode) return;
+    // 不能只看标签一样就不发：标签可能是旧的（重放过旧事件），用户要收紧时必须真送到网关（安全通告 GHSA-2w6p）
+    if (!mode || (mode === state.permissionMode && mode === "bypassPermissions")) return;
     if (mode === "bypassPermissions" && !confirm(t("切到「全部放行」？\n\nClaude 将不再询问，可以直接改写、删除文件，运行任意命令，访问网络。只在你信任当前任务、且出了事能承受的时候用。"))) {
       $("set-perm").value = state.permissionMode;
       return;
@@ -429,7 +445,7 @@
     try {
       const r = await api("/api/session/" + encodeURIComponent(sid) + "/delmsg", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userText: userTextOf.get(turn), after, which }),
+        body: JSON.stringify({ userText: userTextOf.get(turn), after, which, uuid: turn.dataset.uuid || "" }),
       });
       if (which === "user") { userTextOf.delete(msgEl); msgEl.remove(); } else msgEl.remove();
       toastAct(t("已删除"), t("撤销"), async () => {
@@ -456,7 +472,7 @@
     try {
       const r = await api("/api/session/" + encodeURIComponent(sid) + "/fork", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userText: userTextOf.get(prev), after }),
+        body: JSON.stringify({ userText: userTextOf.get(prev), after, uuid: prev.dataset.uuid || "" }),
       });
       openSession(r.id);
       loadSessions();
@@ -475,7 +491,7 @@
     if (idx < 0) return;
     const userText = userTextOf.get(msgEl), after = users.length - 1 - idx;
     const post = (extra) => api("/api/session/" + encodeURIComponent(sid) + "/rewind", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userText, after, ...extra }),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userText, after, uuid: msgEl.dataset.uuid || "", ...extra }),
     });
     toast(t("正在查这之后改过哪些文件…"));
     let d;
@@ -731,7 +747,8 @@
         av.tool(m.id, m.name, m.input);
         if (AG.byTool.has(m.id)) agTouch(agCardFor(m.id));   // 联络簿先到、卡片所在的这页后到
         const c = m.sub && view.sessionId && TOOL_CARDS.get(m.id), sid = view.sessionId;
-        if (c && c.isAgent) c.subLazy(async () => (await api(`/api/session/${encodeURIComponent(sid)}/agent?tool=${encodeURIComponent(m.id)}`)).items || []);
+        const mk = (tid) => async () => (await api(`/api/session/${encodeURIComponent(sid)}/agent?tool=${encodeURIComponent(tid)}`)).items || [];
+        if (c && c.isAgent) c.subLazy(mk(m.id), mk);
       }
     }
     for (const a of avs) a.finish();

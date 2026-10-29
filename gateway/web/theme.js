@@ -119,7 +119,7 @@
       // 构成首屏右侧那块斜切色块（--gc-wedge）原来写死成半透明红，自定颜色时漏了没跟着换；照原版的透明度从强调色派生
       const wedge = `rgba(${hex2rgb(acc).map((v) => Math.round(v * 255)).join(",")},${lum(BAR[skin][name]) > 0.4 ? .13 : .1})`;
       // 选择器带两个属性：压过各外观自己那段（同样两个属性），这段 style 插在 style.css 后面，同分时后者赢
-      css = `html[data-theme][data-skin]{--accent:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--gc-wedge:${wedge};--zy-blue:${acc}}`;
+      css = `html[data-theme][data-skin]{--accent:${acc};--accent-btn:${acc};--accent-dim:${dim};--on-accent:${on};--active-bg:${soft};--gc-red:${acc};--gc-wedge:${wedge};--zy-blue:${acc}}`;
     }
     // 外壳自己画的东西（加载动画、安装页、对话框）也跟着换：把浅色、深色底上实际用的颜色交过去，空串 = 用外观原色
     const a = app();
@@ -159,10 +159,10 @@
   // ── 字体与正文字号：和配色一样同步生效，避免先闪一下系统字体 ──
   //   界面字体  ccapp.uifont   cc（默认：自带 Inter + 思源黑体）| system（跟随系统）
   //   回复字体  ccapp.readfont serif（默认：自带 Spectral + 思源宋体）| sans
-  //   正文字号  ccapp.fs       s | m（默认）| l
+  //   正文字号  ccapp.fs       s | m（默认）| l | xl（特大，给看不清的人；审查 #49 待确认-1）
   //   界面、回复两个字体槽位还能填导入的字体 "u:<id>"（0.4.20 起，见 gw/fonts.mjs；等宽不开放：终端和代码按格子排，换字体容易错位），这时属性写 "u"，具体是哪个字体由下面注入的 <style id="user-fonts"> 定。
   //   结果写到 <html data-uifont data-readfont data-fs>，样式只认这几个属性
-  const TYPE = { uifont: ["cc", "system"], readfont: ["serif", "sans"], fs: ["m", "s", "l"] };
+  const TYPE = { uifont: ["cc", "system"], readfont: ["serif", "sans"], fs: ["m", "s", "l", "xl"] };
   const SLOTS = ["uifont", "readfont"];
   // 导入字体的清单在网关（/api/fonts），这里缓存一份，好在页面一开头就把 @font-face 写进去；界面启动后会再和网关对一次
   const UF = "ccapp.ufonts";

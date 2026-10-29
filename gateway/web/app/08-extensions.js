@@ -23,8 +23,11 @@
       <div class="xr-r">${right || ""}</div>${o.extra || ""}${o.more ? `<div class="it-more">${o.more}</div>` : ""}</div>`;
   // 点行（不是点按钮、链接、输入框）展开 / 收起说明
   $("tab-ext").addEventListener("click", (e) => {
-    if (e.target.closest("button, a, input, select, textarea, label, summary, details, .gh-auth, .llm-dl")) return;
-    const r = e.target.closest(".xrow, .ccard"); if (r && r.querySelector(".it-more")) r.classList.toggle("open");
+    // 只排除行「里面」的按钮、链接、折叠块：整个分区本身就是 <details>，以前一律被它挡掉，组件和模块的说明永远点不开（审查 F-001）
+    const r = e.target.closest(".xrow, .ccard"); if (!r || !r.querySelector(".it-more")) return;
+    const i = e.target.closest("button, a, input, select, textarea, label, summary, details, .gh-auth, .llm-dl");
+    if (i && r.contains(i)) return;
+    r.classList.toggle("open");
   });
   const extItem = (title, meta, acts, desc, tags) => `<div class="item"${tags ? ` data-tags="${esc(tags.join(" "))}"` : ""}>
       <div class="it-title">${title}</div>
@@ -423,7 +426,13 @@
     const body = $("llm-dl-body");
     if (body) {
       const typing = document.activeElement && document.activeElement.id === "llm-url";
-      if (typing) { const box = document.createElement("div"); box.innerHTML = llmDl.html; box.querySelector(".llm-url").replaceWith(body.querySelector(".llm-url")); body.replaceChildren(...box.childNodes); }
+      // 正打字的输入框原地不动，只换它前面的节点：把聚焦的元素挪到新位置，多数 WebView 上会丢焦点、收输入法（审查 F9）
+      if (typing) {
+        const box = document.createElement("div"); box.innerHTML = llmDl.html; box.querySelector(".llm-url").remove();
+        const keep = body.querySelector(".llm-url");
+        for (const x of [...body.childNodes]) if (x !== keep) x.remove();
+        keep.before(...box.childNodes);
+      }
       else body.innerHTML = llmDl.html;
       body.querySelectorAll(".llm-fam").forEach((d) => d.addEventListener("toggle", () => { d.open ? llmDl.fam.add(d.dataset.fam) : llmDl.fam.delete(d.dataset.fam); }));
       const inp = $("llm-url"); if (inp) inp.addEventListener("input", () => { llmDl.url = inp.value; });
@@ -513,10 +522,17 @@
 
   async function searchPlugins(more) {
     const box = $("ext-catalog");
-    if (!more) { ext.offset = 0; ext.q = $("ext-p-q").value.trim(); box.innerHTML = `<div class="tiny">${t("正在拉取插件目录…")}</div>`; }
+    // 翻页在途再点「再显示」：两次都按同一个 offset 取，同一页追加两遍、最后一页反而没取（审查 F-003）
+    if (more && ext.busy) return;
+    // 连着搜两个词，慢的那个迟到不许盖掉新词的结果（审查 F-004）；新搜索也让在途的翻页作废
+    if (!more) { latest("plugcat"); ext.busy = false; ext.offset = 0; ext.q = $("ext-p-q").value.trim(); box.innerHTML = `<div class="tiny">${t("正在拉取插件目录…")}</div>`; }
+    const n = LATEST.plugcat, ok = () => LATEST.plugcat === n;
+    if (more) ext.busy = true;
     let r;
     try { r = await api(`/api/ext/plugins?available=1&q=${encodeURIComponent(ext.q)}&offset=${ext.offset}`); }
-    catch (e) { box.innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    catch (e) { if (!ok()) return; ext.busy = false; box.innerHTML = `<div class="tiny">${esc(e.message)}</div>`; return; }
+    if (!ok()) return;
+    ext.busy = false;
     if (r.ok === false) { box.innerHTML = `<div class="tiny">${esc(r.message)}</div>`; return; }
     const html = (r.available || []).map((p) => extItem(
       esc(p.name),
@@ -552,7 +568,14 @@
   }
 
   async function loadExtSkills() {
-    const r = await api("/api/ext/skills").catch(() => ({ items: [] }));
+    // 读失败不能显示成「还没有技能」、计数 0（审查 F-007）
+    const r = await api("/api/ext/skills").catch((e) => ({ items: [], err: e.message || "?" }));
+    if (r.err) {
+      $("ext-s-count").textContent = "—";
+      $("ext-skills").innerHTML = `<div class="tiny err">${esc(t("技能列表读取失败：{msg}", { msg: r.err }))}</div><div class="it-acts"><button class="btn ghost sm" id="ext-s-retry">${esc(t("重试"))}</button></div>`;
+      $("ext-s-retry").onclick = () => loadExtSkills();
+      return;
+    }
     $("ext-s-count").textContent = (r.items || []).length;
     $("ext-skills").innerHTML = (r.items || []).map((s) => extItem(esc(s.name), "",
       `<button data-x="skill-rm" data-id="${esc(s.dir)}">${t("删除")}</button>`,
@@ -740,6 +763,12 @@
     const to = parseInt(q("timeout").value, 10);
     return { event: q("event").value, matcher: q("matcher").value.trim(), command: q("command").value.trim(), timeout: to > 0 ? to : 0 };
   };
+  // 「自己写一条」展开时要真的给出表单：以前只展开一块空白，没法从零新建（审查 09-03 / #49 P2-10）
+  $("hook-form-box").addEventListener("toggle", () => {
+    const box = $("hook-form-box");
+    if (box.open && !$("hook-form").children.length && HK.data) { HK.edit = null; HK.recipe = null; hkForm({}); }
+    else if (!box.open) { HK.edit = null; HK.recipe = null; $("hook-form").innerHTML = ""; }
+  });
   function hkCloseForm() { HK.edit = null; HK.recipe = null; $("hook-form").innerHTML = ""; $("hook-form-box").open = false; }
 
   async function hkSave(hooks, extra) {
@@ -1044,6 +1073,10 @@
     if (!b || b.disabled) return;
     const x = b.dataset.x, id = b.dataset.id;
     if (x === "install") return installPlugin(id, b);
+    const url = { uninstall: "/api/ext/plugins/uninstall", enable: "/api/ext/plugins/enable", disable: "/api/ext/plugins/disable",
+      "skill-rm": "/api/ext/skills/delete", "mcp-rm": "/api/ext/mcp/remove", "market-rm": "/api/ext/marketplaces/remove" }[x];
+    // 别的监听管的按钮（MCP 目录添加、技能目录重试…）也带 data-x：不认识的不归这里，以前会 POST /undefined 再报失败（审查 F-002）
+    if (!url) return;
     const ask = {
       uninstall: t("卸载插件 {name}？", { name: id }),
       "skill-rm": t("删除技能 {name}？文件夹会被整个删掉。", { name: id }),
@@ -1052,8 +1085,6 @@
     }[x];
     if (ask && !confirm(ask)) return;
     b.disabled = true;
-    const url = { uninstall: "/api/ext/plugins/uninstall", enable: "/api/ext/plugins/enable", disable: "/api/ext/plugins/disable",
-      "skill-rm": "/api/ext/skills/delete", "mcp-rm": "/api/ext/mcp/remove", "market-rm": "/api/ext/marketplaces/remove" }[x];
     const key = x === "skill-rm" ? "dir" : x === "mcp-rm" || x === "market-rm" ? "name" : "id";
     const r = await post(url, { [key]: id }).catch((err) => ({ ok: false, message: err.message }));
     toast(r.ok ? t("完成") : t("失败：{msg}", { msg: r.message || "" }), !r.ok);
@@ -1078,7 +1109,7 @@
   }
   async function setSafe(on) {
     const r = await post("/api/safe-mode", { on }).catch((e) => ({ ok: false, message: e.message }));
-    if (!r.ok) return toast(r.message || "", true);
+    if (!r.ok) { paintSafeMode(!on); return toast(r.message || "", true); }   // 没切成：开关拨回去（审查 D-05）
     paintSafeMode(r.safeMode);
     toast(r.safeMode ? t("已进入安全模式，下一条消息生效") : t("已退出安全模式，下一条消息生效"));
   }
@@ -1128,7 +1159,9 @@
   $("btn-ledger").addEventListener("click", async () => {
     const box = $("ledger-list");
     if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
-    const r = await api("/api/ledger").catch(() => ({ items: [] }));
+    // 读失败不能显示成「还没有记录」（审查 D-07）
+    const r = await api("/api/ledger").catch((e) => ({ items: [], err: e.message }));
+    if (r.err) { box.innerHTML = `<div class="tiny">${esc(t("修复账本读取失败：{msg}", { msg: r.err }))}</div>`; box.classList.remove("hidden"); return; }
     const K = LEDGER_KIND();
     box.innerHTML = (r.items || []).map((e) => `<div class="item ledger ${e.ok ? "" : "bad"}">
         <div class="it-meta"><span>${esc(new Date(e.at).toLocaleString())}</span><span class="badge">${esc(K[e.kind] || e.kind)}</span><span>${e.ok ? "✓" : "✗"}</span></div>
@@ -1165,6 +1198,7 @@
   function ucForm(c) {
     UC.edit = c ? c.name : "";
     const f = $("cmd-form");
+    MO.cancel(f);   // 上一次「取消」的退场还没播完：它到点会把这张新表单藏掉、清空（审查 09-04）
     f.innerHTML = `
       <label class="tiny">${t("名字（输入框里打 /名字 调用；字母、数字、- 和 _）")}</label>
       <div class="uc-name"><span class="mono">/</span><input data-f="name" class="mono" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="issue"></div>

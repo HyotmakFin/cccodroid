@@ -1,7 +1,9 @@
   // ── 设置：弹窗。宽屏居中（左分类、右内容）；窄屏铺满，先列分类，点进去看一类，返回键回分类 ──
   var setOpen = false;
   var setCatShown = "-";   // 上次画的是哪一类：null = 窄屏的分类列表，"-" = 刚打开还没画过
+  let setFrom = null;
   function openSettings(cat) {
+    setFrom = document.activeElement;
     OV.closeAll();
     setOpen = true;
     MO.cancel($("set-ov"));
@@ -12,6 +14,8 @@
     renderSideNav();
     closeDrawer();
     loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); loadFonts(); renderTbList(); renderAccent(); renderMsgActs();
+    // 焦点进模态：不然键盘 / 读屏还停在被盖住的背景上（审查 P2-12）
+    requestAnimationFrame(() => { if (setOpen && !$("set-ov").contains(document.activeElement)) ($("set-cats").querySelector("button.on:not(.hidden)") || $("set-x")).focus({ preventScroll: true }); });
   }
   function closeSettings() {
     if (!setOpen) return;
@@ -20,7 +24,27 @@
     MO.leave(ov, ov.classList.contains("narrow") ? "mo-out-push" : "mo-out-fade", 170, () => ov.classList.add("hidden"));
     setCatShown = "-";
     renderSideNav();
+    // 焦点还给打开设置前的那个按钮（它还在、看得见的话）
+    if ($("set-ov").contains(document.activeElement)) document.activeElement.blur();
+    if (setFrom && setFrom.isConnected && setFrom.getClientRects().length) try { setFrom.focus({ preventScroll: true }); } catch {}
+    setFrom = null;
   }
+  // Esc 关设置（窄屏先回分类列表）；菜单、弹层开着时 OV 在捕获阶段先接走了（审查 P2-12）
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && setOpen && !e.defaultPrevented) { e.preventDefault(); setBack(); } });
+  // Tab 别跑出模态
+  $("set-ov").addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const fs = [...$("set-ov").querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")].filter((x) => !x.disabled && x.getClientRects().length);
+    if (!fs.length) return;
+    if (e.shiftKey && document.activeElement === fs[0]) { e.preventDefault(); fs[fs.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === fs[fs.length - 1]) { e.preventDefault(); fs[0].focus(); }
+  });
+  // 开关、下拉框没有关联标题，读屏只念「复选框」：挂到同一行的粗体标题上（审查 P2-13）
+  document.querySelectorAll("#tab-settings .srow").forEach((row, i) => {
+    const b = row.querySelector(".sl > b"); if (!b) return;
+    if (!b.id) b.id = "srow-t" + i;
+    row.querySelectorAll(".sc input, .sc select, .sc textarea").forEach((c) => { if (!c.getAttribute("aria-label") && !c.getAttribute("aria-labelledby") && !(c.id && document.querySelector(`label[for="${c.id}"]`))) c.setAttribute("aria-labelledby", b.id); });
+  });
   $("set-x").addEventListener("click", closeSettings);
   $("set-back").addEventListener("click", () => setBack());
   $("set-ov").addEventListener("click", (e) => { if (e.target.id === "set-ov") closeSettings(); });
@@ -82,7 +106,7 @@
     if (setCatShown !== "-" && setCatShown !== setCatOpen && pagesNarrow()) {
       const old = setCatShown ? document.querySelector(`.set-cat[data-cat="${setCatShown}"]:not(.mo-ghost)`) : $("set-cats");
       if (old && old.getClientRects().length) {
-        if (setCatOpen) MO.ghost(old, "back", false);
+        if (setCatOpen) MO.ghost(old, "back", false, document.querySelector(`.set-cat[data-cat="${setCatOpen}"]:not(.mo-ghost)`));
         else MO.ghost(old, "push");
       }
     }
@@ -110,12 +134,16 @@
   }
   $("set-cats").addEventListener("click", (e) => {
     const b = e.target.closest("[data-cat]"); if (!b) return;
+    const was = setCatOpen;
     setCatOpen = b.dataset.cat; paintSetCats();
+    // 宽屏换类也回到顶上：各类共用一个滚动区，不归零会接着上一类的位置，顶上几项被跳过（审查 SET-02-02）
     if (pagesNarrow()) $("tab-settings").scrollTop = 0;
+    else if (was !== setCatOpen) for (let p = document.querySelector(`.set-cat[data-cat="${setCatOpen}"]`); p && p !== document.body; p = p.parentElement) if (p.scrollTop) p.scrollTop = 0;
   });
   addEventListener("resize", () => { if (setOpen) paintSetCats(); });
   // 侧栏常驻项：打开侧栏、展开「更多」、进入勾选
   $("set-navpins").addEventListener("click", () => {
+    closeSettings();     // 设置是模态、盖在侧栏上面：不关就勾不着（审查 V-02 / P2-6）
     localStorage.setItem("cc.navMore", "1"); navEdit = true;
     if (!(window.CCLayout && (CCLayout.docked() || CCLayout.expand()))) drawerEl.classList.remove("hidden");
     renderSideNav();

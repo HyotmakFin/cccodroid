@@ -228,10 +228,15 @@
       kpi.push(`<div class="tile big${pct >= 90 ? " hot" : pct >= 70 ? " warm" : ""}"><span class="k">${esc(t("本周额度 · 官方账户"))}</span><span class="n num">${pct}%</span>
         <div class="bar-mini"><i style="width:${pct}%"></i></div><span class="k">${esc([reset, pace].filter(Boolean).join(" · "))}</span></div>`);
     }
+    // 没读成过：说读取失败、给重试，别把 0 当成真数字（审查 F-006）
+    if (!us.raw && us.err) kpi.push(`<div class="tile big"><span class="k">${esc(t("用量读取失败：{msg}", { msg: us.err }))}</span><button class="btn sm ghost" id="us-retry">${esc(t("重试"))}</button></div>`);
+    else {
     kpi.push(`<div class="tile"><span class="k">${esc(t("今天"))}</span><span class="n num">${usTok(today.i + today.o)}</span><span class="k">${esc(t("tokens · {n} 轮对话", { n: usNum(today.t) }))}</span></div>`);
     kpi.push(`<div class="tile"><span class="k">${esc(t("本月"))}</span><span class="n num">${usTok(month.i + month.o)}</span><span class="k">${esc(t("tokens · {n} 个会话", { n: usNum(month.s.size) }))}</span></div>`);
     kpi.push(`<div class="tile"><span class="k">${esc(t("缓存命中"))}</span><span class="n num">${month.c && month.i ? Math.round((month.c / month.i) * 100) + "%" : "—"}</span><span class="k">${esc(t("本月 · 越高越省"))}</span></div>`);
+    }
     $("us-kpis").innerHTML = kpi.join("");
+    const rt = $("us-retry"); if (rt) rt.onclick = () => { rt.disabled = true; loadUsage(); };
     setPageSub("usage", q ? t("本周额度 {p}%", { p: Math.round(q.used) }) : t("今天 {n} tokens", { n: usTok(today.i + today.o) }));
     // 每天用量：最近 14 天，单序列（不要图例），今天那根用强调色
     const days = Array.from({ length: 14 }, (_, i) => { const d = usAddDays(d0, i - 13), x = us.days.get(usDayKey(d)); return { d, v: x ? x.i + x.o : 0, t: x ? x.t : 0 }; });
@@ -304,13 +309,14 @@
   });
   async function loadUsage() {
     try {
-      us.raw = await api("/api/usage");
+      us.raw = await api("/api/usage"); us.err = "";
+      if (/^✗/.test($("us-result").textContent)) $("us-result").textContent = "";   // 恢复了：旧的失败提示别留着
       if (!us.month) { const n = new Date(); us.month = [n.getFullYear(), n.getMonth()]; }
       usBuild(); usPaint();
       if (!$("us-field").classList.contains("hidden")) usRender();
       // 第一次打开：把装这个版本之前的历史会话补算进来
       if (!us.raw.imported && !us.raw.importing && !us.busy) usImport(true);
-    } catch (e) { $("us-result").textContent = "✗ " + e.message; }
+    } catch (e) { us.err = e.message || "?"; $("us-result").textContent = "✗ " + e.message; usPaint(); }
   }
   async function usImport(auto) {
     us.busy = true;
@@ -324,12 +330,13 @@
   }
   $("us-year").addEventListener("click", (e) => {
     const b = e.target.closest(".us-mb");
-    if (!b) return;
+    if (!b || !us.raw) return;
     us.month = b.dataset.ym.split("-").map(Number);
     usRender();
   });
-  $("us-prev").addEventListener("click", () => { const d = usMonth0(us.month[0], us.month[1] - 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
-  $("us-next").addEventListener("click", () => { const d = usMonth0(us.month[0], us.month[1] + 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
+  // 用量还没读回来时月份还没定：翻月先等一等，不然 null[0] 报脚本错误（审查 F-009）
+  $("us-prev").addEventListener("click", () => { if (!us.month || !us.raw) return; const d = usMonth0(us.month[0], us.month[1] - 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
+  $("us-next").addEventListener("click", () => { if (!us.month || !us.raw) return; const d = usMonth0(us.month[0], us.month[1] + 1); us.month = [d.getFullYear(), d.getMonth()]; usRender(); });
   $("us-off").addEventListener("change", async (e) => {
     try { await post("/api/usage/set", { off: !e.target.checked }); loadUsage(); } catch (err) { toast(err.message, true); }
   });
@@ -347,6 +354,7 @@
   $("us-actions").addEventListener("click", async (e) => {
     const act = e.target.dataset && e.target.dataset.act;
     if (!act) return;
+    if (!us.month || !us.raw) return;
     const [y, m] = us.month;
     try {
       if (act === "save") {
@@ -378,8 +386,10 @@
 
   async function loadEnergy() {
     api("/api/energy?view=day").then((d) => { usDash.energy = d; usPaint(); }).catch(() => {});
-    try { en.data = await api("/api/energy?view=" + en.view); en.sel = -1; enRender(); if (en.data.sys) enSys(en.data.sys); }
-    catch (e) { $("en-cap").textContent = "✗ " + e.message; }
+    // 快速切 小时 / 日 / 周：慢的那次迟到不许盖掉现在这一档（数据形状也不一样，会报类型错误）（审查 F-005）
+    const ok = latest("energy"), v = en.view;
+    try { const d = await api("/api/energy?view=" + v); if (!ok() || en.view !== v) return; en.data = d; en.sel = -1; enRender(); if (d.sys) enSys(d.sys); }
+    catch (e) { if (ok()) $("en-cap").textContent = "✗ " + e.message; }
   }
   $("en-seg").addEventListener("click", (e) => {
     const v = e.target.dataset && e.target.dataset.v;

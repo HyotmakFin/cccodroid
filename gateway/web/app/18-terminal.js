@@ -42,8 +42,15 @@
     }) : base;
   }
 
-  async function openTerm() {
-    MO.cancel(termEl); termEl.classList.remove("hidden");
+  // 宽屏下窗格已经开着、被别的盖住：再点入口要把它提到最上面（审查 UI05-001）
+  const raisePane = (id) => window.CCLayout && CCLayout.raise(id);
+  // 首次加载 xterm 时连点两下顶栏入口：两次都拿到空列表、各建一个终端（审查 UI05-004）
+  function openTerm() {
+    if (TERM.opening) { MO.cancel(termEl); termEl.classList.remove("hidden"); raisePane("term"); return TERM.opening; }
+    return (TERM.opening = openTerm0().finally(() => { TERM.opening = null; }));
+  }
+  async function openTerm0() {
+    MO.cancel(termEl); termEl.classList.remove("hidden"); raisePane("term");
     try { await loadXterm(); } catch (e) { toast(t("终端组件加载失败：{msg}", { msg: e.message }), true); return; }
     let r;
     try { r = await api("/api/term/list"); } catch (e) { toast(t("终端打不开：{msg}", { msg: e.message }), true); return; }
@@ -61,13 +68,15 @@
   }
 
   function closeTerm() {
+    $("term-textview").classList.add("hidden");
     MO.hide(termEl, MO.paneOut());
     TERM.inst.get(TERM.cur)?.xt.blur();
+    for (const a of TERM.inst.values()) termDetach(a);   // 收起了就不占连接，下次打开重连回放
   }
 
   /** 手动登录：开一个新终端，网关替你敲好 claude auth login；授权码贴给 claude 自己的提示 */
   async function openLoginTerm(method) {
-    MO.cancel(termEl); termEl.classList.remove("hidden");
+    MO.cancel(termEl); termEl.classList.remove("hidden"); raisePane("term");
     try { await loadXterm(); } catch (e) { toast(t("终端组件加载失败：{msg}", { msg: e.message }), true); return; }
     try { const r = await api("/api/term/list"); TERM.list = (r.terms || []).filter((x) => x.alive || TERM.inst.has(x.id)); } catch {}
     await newTerm({ login: method === "console" ? "console" : true });
@@ -106,9 +115,14 @@
   async function killTerm(id) {
     const x = TERM.list.find((y) => y.id === id);
     if (x && x.alive !== false && !confirm(t("关闭这个终端？里面正在跑的程序会被结束。"))) return;
-    try { await api(`/api/term/${id}/kill`, { method: "POST", body: "{}" }); } catch {}
+    // 关闭失败（网关出错）不能当成关掉了：标签和输出一删，里面的程序却还在跑，人也不知道（审查 C-008）
+    // 404 = 网关已经不认识这个终端（重启过），本来就没了，照常清掉
+    // 先断本地的输出流再发 kill：连接池满的时候 kill 请求排在它后面，等它就永远等不到（审查 #49 P2-7）
     const a = TERM.inst.get(id);
-    if (a) { try { a.es?.close(); } catch {} a.ro?.disconnect(); a.xt.dispose(); a.el.remove(); TERM.inst.delete(id); }
+    if (a) termDetach(a);
+    try { await api(`/api/term/${id}/kill`, { method: "POST", body: "{}" }); }
+    catch (e) { if (e.status !== 404) { toast(t("关闭终端失败：{msg}", { msg: e.message }), true); if (a && TERM.cur === id) termAttach(a); return; } }
+    if (a) { a.ro?.disconnect(); a.xt.dispose(); a.el.remove(); TERM.inst.delete(id); }
     TERM.list = TERM.list.filter((y) => y.id !== id);
     if (TERM.cur === id) TERM.cur = TERM.list.length ? TERM.list[TERM.list.length - 1].id : null;
     renderTermTabs();
@@ -116,10 +130,12 @@
   }
 
   function showTerm(id) {
-    for (const [k, a] of TERM.inst) a.el.classList.toggle("hidden", k !== id);
+    for (const [k, a] of TERM.inst) { a.el.classList.toggle("hidden", k !== id); if (k !== id) termDetach(a); }
     let a = TERM.inst.get(id);
     if (!a) a = mountTerm(id);
-    requestAnimationFrame(() => { termFit(a); a.xt.focus(); });
+    termAttach(a);
+    // 被别的窗格盖着时别抢焦点：按键会打进看不见的终端（审查 UI05-001）
+    requestAnimationFrame(() => { termFit(a); if (!document.documentElement.classList.contains("has-right") || termEl.classList.contains("ws-top")) a.xt.focus(); });
   }
 
   function mountTerm(id) {
@@ -155,11 +171,14 @@
           rows.push(i); text += s;
         }
         const out = [];
-        for (const m of text.matchAll(/https?:\/\/[^\s"'<>]+/g)) {
+        // 规则同聊天区：中文标点、句末标点、配不上对的右括号不算网址（审查 F3）
+        for (const m of text.matchAll(/https?:\/\/[^\s"'<>）】」，。；、]+/g)) {
+          let url = m[0].replace(/[.,;:!?*]+$/, "");
+          while (url.endsWith(")") && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) url = url.slice(0, -1).replace(/[.,;:!?*]+$/, "");
+          if (!url) continue;
           const at = (k) => ({ x: (k % xt.cols) + 1, y: rows[Math.floor(k / xt.cols)] + 1 });
-          const st = at(m.index), en = at(m.index + m[0].length - 1);
+          const st = at(m.index), en = at(m.index + url.length - 1);
           if (y < st.y || y > en.y) continue;
-          const url = m[0];
           out.push({ range: { start: st, end: en }, text: url, activate: () => openExternal(url) });
         }
         cb(out.length ? out : undefined);
@@ -172,13 +191,22 @@
     a.ro = new ResizeObserver(() => termFit(a));
     a.ro.observe(el);
 
+    return a;
+  }
+
+  /** 只有正在看的终端连着输出流：每个终端一条常驻 SSE，开到五六个就把同源连接占满，
+   *  输入、关闭、别的接口全排队（审查 #49 P2-7）。连上时网关先发 replay（整段缓冲），切回来照样接得上 */
+  function termDetach(a) { if (a.es) { try { a.es.close(); } catch {} a.es = null; } }
+  function termAttach(a) {
+    if (a.es || a.exited) return;
+    const { id, xt } = a;
     const es = new EventSource(`/api/term/${id}/stream`);
     a.es = es;
     es.addEventListener("replay", (m) => { xt.reset(); try { xt.write(JSON.parse(m.data)); } catch {} });
     es.addEventListener("o", (m) => { try { xt.write(JSON.parse(m.data)); } catch {} });
     es.addEventListener("exit", (m) => {
       let code = null; try { code = JSON.parse(m.data).code; } catch {}
-      es.close();
+      es.close(); if (a.es === es) a.es = null; a.exited = true;
       xt.write("\r\n\x1b[2m" + t("[进程已退出，代码 {code}]", { code }) + "\x1b[0m\r\n");
       const x = TERM.list.find((y) => y.id === id);
       if (x) { x.alive = false; x.code = code; renderTermTabs(); }
@@ -191,12 +219,13 @@
       if (es.readyState === EventSource.CLOSED) { xt.write("\r\n\x1b[2m" + t("[与网关的连接已断开]") + "\x1b[0m\r\n"); return; }
       if (!lost) { lost = true; xt.write("\r\n\x1b[2m" + t("[与网关的连接断了，正在重连…]") + "\x1b[0m\r\n"); }
     };
-    return a;
   }
 
   /** 粘住的 Ctrl / Alt 作用到下一次输入（软键盘打出来的字、底排的键都算） */
   function termMods(d) {
     if (!TERM.ctrl && !TERM.alt) return d;
+    // 一整块（粘贴、输入法一次交上来的词）不吃粘住的 Ctrl / Alt，也不把它消耗掉：留给下一个单键（审查 F7）
+    if (d.length > 1 && !d.startsWith("\x1b")) return d;
     if (TERM.ctrl && d.length === 1) {
       const c = d.toUpperCase().charCodeAt(0);
       if (c >= 64 && c <= 95) d = String.fromCharCode(c - 64);
@@ -216,7 +245,10 @@
       const body = a.q;
       a.q = ""; a.timer = 0;
       // 串起来发，保证顺序（并发的 fetch 不保证先到先处理）
-      a.sending = a.sending.then(() => fetch(`/api/term/${a.id}/in`, { method: "POST", body }).catch(() => {}));
+      // 没送到要说一声：网关重启时按键无声丢掉，人以为命令已经发出去了（审查 F4）
+      a.sending = a.sending.then(() => fetch(`/api/term/${a.id}/in`, { method: "POST", body })
+        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); })
+        .catch(() => { if (!a.lostIn) { a.lostIn = true; a.xt.write("\r\n\x1b[2m" + t("[输入没送到终端，网关可能在重启]") + "\x1b[0m\r\n"); setTimeout(() => { a.lostIn = false; }, 3000); } }));
     }, 6);
   }
 
@@ -359,6 +391,7 @@
     while (lines.length && !lines[lines.length - 1]) lines.pop();
     $("term-text-pre").textContent = lines.join("\n");
     $("term-textview").classList.remove("hidden");
+    raisePane("term");
     const pre = $("term-text-pre");
     pre.scrollTop = pre.scrollHeight;
   });

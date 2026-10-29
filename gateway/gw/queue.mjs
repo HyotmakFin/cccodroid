@@ -11,7 +11,7 @@ import { goalCheck, tasksCheck } from "./goal.mjs";
 import { LAST_SESSION, RUNS, latestRun, maxParallel, runFlag, runList } from "./runs.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { BOOT, publish } from "./bus.mjs";
-import { startRun } from "./run.mjs";
+import { pickProvider, startRun } from "./run.mjs";
 import { RATE_LIMITS } from "./stream.mjs";
 
 // ── 生成与排队 ────────────────────────────────────────────────────────
@@ -24,6 +24,9 @@ export const RUN_LANE = new Map();       // runId → 车道（跟在它后面�
 //   "n:<runId>"   新会话还没拿到会话号：以第一条消息的 runId 为名，后面跟着发的（follow）都进这条车道
 function laneOf(item) {
   if (item.follow && RUN_LANE.get(item.follow)) return RUN_LANE.get(item.follow);
+  // 跟着的那条自己还在排队、没起跑（RUN_LANE 里还没有它）：沿用它的车道，不然另开一条、变成两个会话（审查 #50 S2-03）
+  const q = item.follow && QUEUE.find((x) => x.id === item.follow);
+  if (q) return laneOfItem(q);
   return item.sessionId ? "s:" + item.sessionId : "n:" + (item.follow || item.id);
 }
 export const laneOfItem = (q) => q.lane || (q.lane = laneOf(q));
@@ -41,7 +44,7 @@ const newRunId = () => `r${BOOT}${(++RUN_N).toString(36)}`;
 const runInfo = (r) => r && {
   id: r.id, cid: r.cid, text: r.text.slice(0, 2000), sessionId: r.sessionId, follow: r.follow, startedAt: r.startedAt,
   perms: r.perms ? [...r.perms.values()] : [],
-  idle: !!r.idle, bg: r.bgTasks || 0, bgList: r.bgList || [], auto: r.auto || null,
+  idle: !!r.idle, bg: r.bgTasks || 0, bgList: r.bgList || [], auto: r.auto || null, permMode: r.permMode || null,
 };
 
 /** 改权限模式：存进设置（下一轮沿用），正在跑的那一轮当场切（set_permission_mode） */
@@ -50,7 +53,11 @@ export function setPermMode(mode) {
   if (SETTINGS.permissionMode !== mode) log(`权限模式 ${SETTINGS.permissionMode} → ${mode}`);   // 排障时看得出是谁、何时切的
   SETTINGS.permissionMode = mode;
   saveSettings();
-  for (const r of RUNS.values()) if (r.setMode) r.setMode(mode);
+  for (const r of RUNS.values()) if (r.setMode) {
+    r.setMode(mode);
+    // 重放（切回会话、断线重连）时 init 里还是起跑时的模式，会把界面改回去，用户想收紧也发不出去（安全通告 GHSA-2w6p）
+    for (const e of r.log || []) if (e.type === "init") e.permissionMode = mode;
+  }
   publish({ type: "perm_mode", mode });
   return true;
 }
@@ -168,9 +175,14 @@ export function abortRun(run) {
   // 停止要和排队的消息严格隔开：此刻排着的一律挂起，不许这一轮一结束就自动发出去
   // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
   // 并行时只挂起这个会话自己排着的，别的会话不受影响
-  for (const q of QUEUE) if (sameLane(q, run)) { q.held = true; q.intr = false; }
+  holdLane(run);
   if (run.child) killTree(run.child);
   return true;
+}
+
+/** 把这个会话排着的消息全挂起：点停止、权限卡上「拒绝并停止」都走这里 */
+export function holdLane(run) {
+  for (const q of QUEUE) if (sameLane(q, run)) { q.held = true; q.intr = false; }
 }
 
 // ── 空闲压缩（上游 2.1.299 起只在终端交互模式里有；网关每轮起一个进程，用不上，照它的条件自己做）──
@@ -286,7 +298,8 @@ export async function routeQueue(req, res, u, p) {
     try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     if (!String(b.message || "").trim()) return sendJson(res, 400, { error: "empty message" });
     // 看这条消息要用的那家（新会话首条选的 / 会话钉的 / 全局的），不是只看全局
-    const bp = (b.pin && typeof b.pin.provider === "string" && !b.sessionId && providerById(b.pin.provider)) || sessProvider(b.sessionId || null);
+    const bp = pickProvider({ sessionId: b.sessionId ? String(b.sessionId) : null, follow: b.follow || null, projectId: b.projectId ? String(b.projectId) : null,
+      pin: !b.sessionId && b.pin && typeof b.pin.provider === "string" ? { provider: b.pin.provider } : null }).P;
     if (!keyOf(bp) && !bp.login && !/^\/(model|models|effort|autocompact)\b/.test(String(b.message).trim())) {
       return sendJson(res, 503, {
         error: "no_api_key",

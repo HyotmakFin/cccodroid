@@ -24,7 +24,8 @@ function save() {
 }
 
 /** 文件尾部倒着找：最后一条 role 相同、正文以 head 开头的消息 → { uuid, off }。只看最后 8 MB（刚答完的那几条） */
-export async function claimTail(file, role, head) {
+export async function claimTail(file, role, head, nth = 0) {
+  let skip = Math.max(0, Math.floor(Number(nth) || 0));   // 后面还有几条同样开头的（界面数的）：跳过它们
   const want = String(head || "").trim().slice(0, 200);
   if (!want) return null;
   const fh = await fs.promises.open(file, "r");
@@ -40,7 +41,7 @@ export async function claimTail(file, role, head) {
       if (!line) continue;
       let ev = null; try { ev = JSON.parse(line); } catch { continue; }
       if (!ev.uuid) continue;
-      if (transcriptItems(ev).some((it) => it.role === role && String(it.text).trim().startsWith(want))) return { uuid: ev.uuid, off: from + start };
+      if (transcriptItems(ev).some((it) => it.role === role && String(it.text).trim().startsWith(want))) { if (skip-- > 0) continue; return { uuid: ev.uuid, off: from + start }; }
     }
     return null;
   } finally { await fh.close(); }
@@ -81,7 +82,7 @@ export async function routeBookmarks(req, res, u, p) {
       off = await findLineOffset(found.file, uuid, hint);
       if (off < 0 && hint) off = await findLineOffset(found.file, uuid);
     } else {
-      const c = await claimTail(found.file, role, b.head);
+      const c = await claimTail(found.file, role, b.head, b.nth);
       if (c) ({ uuid, off } = c);
     }
     if (!uuid || off < 0) return sendJson(res, 404, { error: "message not found" });

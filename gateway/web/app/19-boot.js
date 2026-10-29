@@ -69,7 +69,8 @@
   $("btn-palette").addEventListener("click", () => { openCmdPalette(""); inputEl.focus(); });
   $("btn-close-drawer").addEventListener("click", () => { if (window.CCLayout && CCLayout.docked()) CCLayout.collapse(); closeDrawer(true); });
   drawerEl.addEventListener("click", (e) => { if (e.target === drawerEl) closeDrawer(); });
-  $("btn-refresh-sessions").addEventListener("click", () => { loadSessions(); toast(t("已刷新")); });
+  // 刷新失败要说失败（审查 B-OBSERVED-1）
+  $("btn-refresh-sessions").addEventListener("click", async () => { const r = await loadSessions(); r === true ? toast(t("已刷新")) : toast(t("刷新失败：{msg}", { msg: r.message }), true); });
   $("btn-close-session").addEventListener("click", () => {
     closeDrawer();
     newConversation(t("已断开，下一条消息开新会话"));
@@ -111,6 +112,8 @@
     p.style.maxHeight = Math.min(Math.round(w * 1.618), ar.top - 10 - 16) + "px";
   }
   $("btn-plus").addEventListener("click", openSheet);
+  // Esc 收起加号面板（审查 #48 03-F05）
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented && !sheetEl.classList.contains("hidden") && !sheetEl._moLeave) { e.preventDefault(); MO.hide(sheetEl, "mo-out-sheet"); } });
   // 布局（layout.js）在浮层开合后会补发一次 resize，窗口其实没变 —— 只有宽度真变了才收，不然一开就闪没
   addEventListener("resize", () => { if (!sheetEl.classList.contains("hidden") && sheetEl.classList.contains("pop") && innerWidth !== sheetW) sheetEl.classList.add("hidden"); });
   // 截屏格长按 0.5 秒 = 5 秒后截屏（帮助里有写）；长按触发后吞掉随后的那次 click
@@ -218,6 +221,8 @@
       sessionStorage.removeItem(FZ_DRAFT);
       if (d && !inputEl.value) { inputEl.value = d; inputEl.dispatchEvent(new Event("input")); }
     } catch {}
+    // 普通的重新载入（切语言、换执行方式、刷新状态）也一样：页面卸掉前把没发的草稿记下（审查 #49 待确认-3）
+    addEventListener("pagehide", () => { try { if (inputEl.value) sessionStorage.setItem(FZ_DRAFT, inputEl.value); } catch {} });
     function unfreeze(why) {
       try {
         const log = JSON.parse(localStorage.getItem(FZ_LOG) || "[]");
@@ -437,6 +442,7 @@
     if (OV.back()) return true;     // 菜单、速览卡、弹层：关最上面那个
     const steps = [
       ["lightbox", () => MO.hide($("lightbox"), "mo-out-fade")],
+      ["set-ov", setBack],             // 设置是模态（z80），盖在右侧窗格上面：先关它，别把底下看不见的窗格关了（审查 V-01）
       ["term-textview", () => $("term-textview").classList.add("hidden")],
       ["browser", closeBrowser],
       ["term", closeTerm],
@@ -445,7 +451,6 @@
       ["files", closeFiles],
       ["popup", hidePopup],
       ["sheet", () => MO.hide($("sheet"), "mo-out-sheet")],
-      ["set-ov", setBack],
       ["drawer", closeDrawer],
       // 项目 / 定时任务的详情：先回列表，再关整页
       ["pages", () => { if (curPage === "projects" && PJ.cur) { PJ.cur = null; PJ.detail = null; renderProjects(); } else if (curPage === "sched" && SC.cur) { SC.cur = null; SC.detail = null; renderSched(); } else closePage(); }],

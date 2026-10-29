@@ -66,10 +66,17 @@
     if (!tg) return;
     const user = isUserMsg(msg), uuid = boxUuid(msg, tg.box);
     const src = user ? userTextOf.get(msg) || "" : tg.box._src ? tg.box._src() : "";
+    // 没有 uuid 时网关从尾部按开头认领：同样的话后面又出现过几次，就跳过几次，免得认成后一条（审查 #50 S2-02）
+    const head = src.trim().slice(0, 200);
+    let nth = 0;
+    if (!uuid && head) for (const m of chatEl.querySelectorAll(user ? ".msg.user" : ".msg.bot")) {
+      if (m === msg || !(msg.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      for (const b of markBoxes(m)) { const t2 = user ? userTextOf.get(m) || "" : b._src ? b._src() : ""; if (t2.trim().startsWith(head)) nth++; }
+    }
     try {
       const r = await post("/api/bookmarks", {
         session: sid, uuid, hint: Number(msg.closest(".page")?.dataset.from) || 0, para: tg.para,
-        role: user ? "user" : "assistant", head: src.trim().slice(0, 200),
+        role: user ? "user" : "assistant", head, nth,
         excerpt: ((tg.el && tg.el.innerText) || src).trim().slice(0, 120),
       });
       // 刚答完的回复界面上没有 uuid：网关认领到了就补上，之后按钮状态、再点取消都靠它

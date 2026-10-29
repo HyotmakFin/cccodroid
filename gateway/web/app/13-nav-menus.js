@@ -41,7 +41,8 @@
       const r = panel.getBoundingClientRect(), cs = getComputedStyle(panel);
       const g = panel.cloneNode(true);
       g.classList.add("mo-ghost"); g.inert = true; g.setAttribute("aria-hidden", "true");
-      Object.assign(g.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", inset: "auto",
+      // inset 要写在 left/top 前面：写在后面会把它俩重置成 auto，替身落回 x=0 —— 弹出途中收起时先跳回全开再退（审查 #48 NAV-05）
+      Object.assign(g.style, { position: "fixed", inset: "auto", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px",
         margin: "0", padding: cs.padding, background: cs.backgroundColor, borderInlineEnd: cs.borderInlineEnd, boxSizing: "border-box",
         overflow: "hidden", zIndex: "45", pointerEvents: "none", animation: "none", transform: "none" });
       const sc = drawerEl.querySelector("#side-scroll"), st = sc ? sc.scrollTop : 0;
@@ -504,14 +505,14 @@
   function pjMark(p) { return `<span class="pj-mark"><i style="background:${esc(p.color || "var(--accent)")}"></i>${esc(p.name)}</span>`; }
   function pjOfSession(id) { const s = (state.sessions || []).find((x) => x.id === id); return s ? pjOfCwd(s.cwd) : null; }
   async function loadProjects() {
-    try { const r = await api("/api/projects"); PJ.list = r.projects || []; PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; }
-    catch { return; }
+    try { const r = await api("/api/projects"); PJ.list = r.projects || []; PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; PJ.err = ""; }
+    catch (e) { PJ.err = e.message || "?"; if (curPage === "projects" && !PJ.cur) renderProjects(); return; }
     paintProjChip();
     if (curPage === "projects") renderProjects();
     if (curPage === "sessions") renderSessions();
   }
   async function loadSched() {
-    try { SC.data = await api("/api/sched"); } catch { return; }
+    try { SC.data = await api("/api/sched"); SC.err = ""; } catch (e) { SC.err = e.message || "?"; if (curPage === "sched" && !SC.cur && !SC.data) renderSched(); return; }
     if (curPage === "sched") renderSched();
     if (curPage === "projects" && PJ.cur) renderProjects();
     if (curPage === "sessions") renderSessions();

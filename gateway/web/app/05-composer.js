@@ -41,7 +41,8 @@
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: text.slice(8).trim() }),
         });
-        if (fromInput) { inputEl.value = ""; autoGrow(); }
+        // 等回执期间又写了新草稿：别把它清掉（审查 #50 S2-01）
+        if (fromInput && inputEl.value.trim() === typed) { inputEl.value = ""; autoGrow(); }
         toast(t("已重命名")); loadSessions();
       } catch (e) { toast(e.message, true); }
       return;
@@ -53,7 +54,12 @@
     if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
     syncInterject();
     const gen = view.gen;
+    // 新会话第一条的回执还没到就又发：等它回来，拿到 run 号再带着 follow 发，不然两条各起一个会话（审查 #51 第1项）
+    const prior = !view.sessionId && !view.lastRunId ? view.firstSend : null;
+    let done;
+    if (!view.sessionId) view.firstSend = new Promise((ok) => (done = ok));
     try {
+      if (prior) { await prior; if (gen !== view.gen) throw Object.assign(new Error(t("会话已切换，这条没发")), { moved: true }); }
       const r = await api("/api/chat", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -72,17 +78,29 @@
       if (gen !== view.gen) return;
       view.runIds.add(r.id);
       view.lastRunId = r.id;
+      lastSendAt = Date.now();
       if (r.injected) toast(t("已插话：当前这一步做完，Claude 就会看到"));
       else if (!r.started) toast(mode === "inject" ? t("这一轮正在收尾，插不进去 —— 已排到最前，马上发出")
         : srv.run && !srv.run.idle ? t("已排队，这一轮结束后发出") : atCap() ? t("同时在跑的会话已到上限，已排队，有空位就发出") : t("已排队：这个会话的上一轮还没完全结束，结束后发出"));
     } catch (e) {
       view.cids.delete(cid);
-      if (fromInput && !inputEl.value) { inputEl.value = typed; autoGrow(); }   // 别把用户的话吞了
-      if (fromInput && !state.attachments.length && sentAtt.length) { state.attachments = sentAtt; renderAttachments(); }
-      toast(e.message || t("发送失败"), true);
-      if (e.status === 503) openDrawer("settings");
-    }
+      // 别把用户的话吞了。但回执迟到时可能已经切到别的对话、或者又写了新草稿：那就不往输入框里塞，给个「找回」（审查 A-CHAT-001、#50 S2-01）
+      if (fromInput && gen === view.gen && !inputEl.value.trim() && !state.attachments.length) {
+        inputEl.value = typed; autoGrow();
+        if (sentAtt.length) { state.attachments = sentAtt; renderAttachments(); }
+        syncInterject();
+        toast(e.message || t("发送失败"), true);
+      } else if (fromInput) {
+        toastAct(t("没发出去：{msg}", { msg: e.message || t("发送失败") }), t("找回"), () => {
+          inputEl.value = inputEl.value.trim() ? inputEl.value.replace(/\s*$/, "\n\n") + typed : typed;
+          for (const a of sentAtt) if (!state.attachments.some((x) => x.path === a.path)) state.attachments.push(a);
+          renderAttachments(); autoGrow(); inputEl.focus();
+        });
+      } else toast(e.message || t("发送失败"), true);
+      if (e.status === 503 && gen === view.gen) openDrawer("settings");
+    } finally { if (done) done(); }
   }
+  let lastSendAt = 0;
 
   /** 插话：不打断，把输入框里的字递进正在跑的这一轮（claude 在当前这一步结束后就会看到） */
   function interjectNow() {
@@ -98,6 +116,7 @@
 
   // ── 补全浮层（/ 命令 与 @ 文件）───────────────────────────────────
   function hidePopup() {
+    dropReq("filepal");
     MO.hide(popupEl, "mo-out-fade", 120);
     state.popup.mode = null;
     state.popup.items = [];
@@ -181,9 +200,12 @@
 
   async function openFilePalette(filter) {
     const dir = state.fileDir || state.settings.workspace || "/sdcard";
+    const ok = latest("filepal");    // 慢的旧请求迟到不许盖掉新的、也不许把已收起的浮层重新打开（审查 A-CHAT-003）
     try {
       const r = await api(`/api/files?path=${encodeURIComponent(dir)}&q=${encodeURIComponent(filter || "")}`);
+      if (!ok()) return;
       state.fileDir = r.path;
+      state.fileParent = r.parent || null;
       const items = r.entries.map((e) => ({
         label: e.name + (e.dir ? "/" : ""),
         dir: e.dir,
@@ -192,30 +214,44 @@
       }));
       if (r.parent && r.parent !== r.path) items.unshift({ label: "..", dir: true, cat: r.path, raw: ".." });
       showPopup("file", items, t("引用文件 · {path}", { path: r.path }));
-    } catch { hidePopup(); }
+    } catch { if (ok()) hidePopup(); }
   }
+  /** 把光标前正在补全的那一截（/xx 或 @xx）换成 s，前后的草稿原样留着（审查 A-CHAT-004） */
+  function replaceToken(re, s) {
+    const v = inputEl.value, caret = inputEl.selectionStart ?? v.length;
+    const before = v.slice(0, caret), after = v.slice(caret);
+    const m = before.match(re);
+    const head = m ? before.slice(0, m.index + (m[1] || "").length) : before;
+    inputEl.value = head + s + after;
+    const pos = (head + s).length;
+    try { inputEl.setSelectionRange(pos, pos); } catch {}
+  }
+  const CMD_TOKEN = /(^|\s)\/[a-zA-Z0-9_-]*$/, AT_TOKEN = /()@[^\s@]*$/;
 
   function applyPopupChoice(i) {
     const it = state.popup.items[i];
     if (!it) return;
     if (state.popup.mode === "cmd") {
       if (it.manage) {
-        inputEl.value = ""; hidePopup(); autoGrow();
+        replaceToken(CMD_TOKEN, ""); hidePopup(); autoGrow();
         openPage("ext");
         setTimeout(() => { const sec = $("ext-cmd-sec"); if (sec) { sec.open = true; sec.scrollIntoView({ block: "start", behavior: "smooth" }); } }, 60);
         return;
       }
-      inputEl.value = "/" + it.raw + " ";
+      replaceToken(CMD_TOKEN, "/" + it.raw + " ");
       hidePopup(); autoGrow(); inputEl.focus();
       return;
     }
     if (state.popup.mode === "file") {
-      if (it.dir) { openFilePalette(""); return; }
       const base = state.fileDir || "";
+      // 点目录 / ..：真的进去（以前一直重新请求原目录，审查 A-CHAT-002），输入框里的筛选词清掉
+      if (it.dir) {
+        state.fileDir = it.raw === ".." ? (state.fileParent || base) : base.replace(/\/$/, "") + "/" + it.raw;
+        replaceToken(AT_TOKEN, "@"); openFilePalette(""); inputEl.focus();
+        return;
+      }
       const full = base.replace(/\/$/, "") + "/" + it.raw;
-      const v = inputEl.value;
-      const at = v.lastIndexOf("@");
-      inputEl.value = (at >= 0 ? v.slice(0, at) : v) + "@" + full + " ";
+      replaceToken(AT_TOKEN, "@" + full + " ");
       hidePopup(); autoGrow(); inputEl.focus();
     }
   }
@@ -234,7 +270,7 @@
     inputEl.value = before + glue + s + " " + after;
     const pos = (before + glue + s + " ").length;
     try { inputEl.setSelectionRange(pos, pos); } catch {}
-    autoGrow();
+    autoGrow(); syncInterject();      // 不经 input 事件：按钮的发送 / 停止要自己对一下（审查 #50 S2-09）
   }
 
   // ── 草稿找回（上游 2.1.288：Ctrl+C 清掉的输入，空输入框按 ↑ 找回）──
@@ -275,13 +311,14 @@
   });
 
   inputEl.addEventListener("keydown", (e) => {
+    // 一项都没匹配上时也要能 Esc 关掉（审查 #48 03-F04）
+    if (e.key === "Escape" && !popupEl.classList.contains("hidden")) { e.preventDefault(); hidePopup(); return; }
     if (!popupEl.classList.contains("hidden") && state.popup.items.length) {
       if (e.key === "ArrowDown") { e.preventDefault(); state.popup.sel = (state.popup.sel + 1) % state.popup.items.length; renderPopup(); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); state.popup.sel = (state.popup.sel - 1 + state.popup.items.length) % state.popup.items.length; renderPopup(); return; }
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !e.isComposing)) {
         e.preventDefault(); applyPopupChoice(state.popup.sel); return;
       }
-      if (e.key === "Escape") { hidePopup(); return; }
     }
     if (e.key === "ArrowUp" && !inputEl.value && draftStash) { e.preventDefault(); draftRestore(); return; }
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (enterSends() || e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
@@ -314,7 +351,8 @@
   });
 
   // 有字就发（忙时自动排队）；没字且正在生成 = 停止
-  sendEl.addEventListener("click", () => (hasDraft() || !isBusy() ? send() : abort()));
+  // 刚发出的那一下之后紧跟的第二下（双击、手抖）不算「停止」：不然会把刚发的这一轮杀掉（审查 v0.5.3 F1）
+  sendEl.addEventListener("click", () => (hasDraft() || !isBusy() ? send() : Date.now() - lastSendAt < 1500 ? null : abort()));
   interjectEl.addEventListener("click", interjectNow);
 
   // ── 递东西进来：上传 ──────────────────────────────────────────────

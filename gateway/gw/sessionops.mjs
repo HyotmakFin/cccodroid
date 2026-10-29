@@ -35,7 +35,9 @@ function forkUserText(ev) {
 }
 
 // ── 分叉（续）/ 回退 / 回收站 / 导出导入 ───────────────────────────────
-export function locateUserTurn(id, userText, after) {
+// 界面给了这条消息的 uuid（从历史读出来的都有）就按 uuid 认；原文 + 后面还有几条只是兜底：
+// 只读了中间一段时界面数不全后面的条数，同样的话问过两次就可能认到另一轮（审查 #49 P1-2）
+export function locateUserTurn(id, userText, after, uuid = "") {
   const found = findSessionFile(id);
   if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
   const lines = fs.readFileSync(found.file, "utf8").split("\n");
@@ -46,6 +48,10 @@ export function locateUserTurn(id, userText, after) {
     const t = forkUserText(ev);
     if (t != null) users.push({ i, t: forkNorm(t), uuid: ev.uuid || null });
   });
+  if (uuid) {
+    const j = users.findIndex((u) => u.uuid === uuid);
+    if (j >= 0) return { ok: true, found, lines, users, best: j };
+  }
   const want = forkNorm(userText), head = want.slice(0, 80);
   const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
   let best = -1;
@@ -58,8 +64,8 @@ export function locateUserTurn(id, userText, after) {
   return { ok: true, found, lines, users, best };
 }
 
-export function forkSession(id, userText, after, { before = false } = {}) {
-  const loc = locateUserTurn(id, userText, after);
+export function forkSession(id, userText, after, { before = false, uuid = "" } = {}) {
+  const loc = locateUserTurn(id, userText, after, uuid);
   if (!loc.ok) return loc;
   const { found, lines, users } = loc;
   const best = before ? loc.best - 1 : loc.best;      // 回退：只留这条之前的
@@ -94,9 +100,9 @@ export function forkSession(id, userText, after, { before = false } = {}) {
 const EDITS_DIR = path.join(TRASH_DIR, ".edits");
 const UNDO = new Map();   // 会话号 → 最近一次删消息的 { backup, size, mtime }：撤销前核对文件没再变过
 const CHAIN_TYPES = new Set(["user", "assistant", "system", "progress", "attachment"]);
-export function deleteMessage(id, userText, after, which) {
+export function deleteMessage(id, userText, after, which, uuid = "") {
   if (runOfSession(id)) return { ok: false, status: 409, message: tz("这个会话正在生成中，等它答完再删。") };
-  const loc = locateUserTurn(id, userText, after);
+  const loc = locateUserTurn(id, userText, after, uuid);
   if (!loc.ok) return loc;
   const { found, lines, users, best } = loc;
   const from = users[best].i, to = best + 1 < users.length ? users[best + 1].i : lines.length;
@@ -340,7 +346,10 @@ export function zipRead(buf, max = 512 * 1024 * 1024) {
   let e = buf.length - 22;
   let total = 0;
   const tooBig = () => new Error(tz("压缩包解开后太大（超过 {n} MB），没有导入", { n: Math.round(max / 1048576) }));
-  while (e >= 0 && buf.readUInt32LE(e) !== 0x06054b50) e--;
+  // 目录尾记录只可能在最后 22+65535 字节里（注释最长 64KB）：不是 zip 时别从尾扫到头（审查 v0.5.3 B2）
+  const floor = Math.max(0, buf.length - 22 - 65535);
+  while (e >= floor && buf.readUInt32LE(e) !== 0x06054b50) e--;
+  if (e < floor) e = -1;
   if (e < 0) throw new Error(tz("不是 zip 文件"));
   const n = buf.readUInt16LE(e + 10);
   let p = buf.readUInt32LE(e + 16);

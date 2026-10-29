@@ -95,6 +95,8 @@ function termInfo(t) {
 
 function termNew({ cols, rows, login, cwd: want } = {}) {
   for (const [id, t] of TERMS) if (!t.alive) TERMS.delete(id);   // 已退出的不占名额
+  // 满了先清掉已退出的（留着只是给用户看最后的输出）
+  if (TERMS.size >= TERM_MAX) for (const [k, x] of TERMS) if (!x.alive && TERMS.size >= TERM_MAX) TERMS.delete(k);
   if (TERMS.size >= TERM_MAX) return { error: `too many terminals (${TERM_MAX})` };
   const pc = ptyCommand();
   if (!pc) return { error: "no pty helper (ptyhost / python3)" };
@@ -130,14 +132,17 @@ function termNew({ cols, rows, login, cwd: want } = {}) {
   child.stderr.on("data", (d) => out(d.toString()));     // 只有 ptyhost 自己的报错走这里
   child.stdin.on("error", () => {});
   child.stdio[3]?.on("error", () => {});
-  child.on("error", (e) => out(`\r\n[${e.message}]\r\n`));
-  child.on("exit", (code, sig) => {
+  const ended = (code) => {
+    if (!t.alive) return;
     out(t.dec.end());
     t.alive = false;
-    t.code = code ?? (sig ? 128 : null);
+    t.code = code;
     for (const r of t.subs) { sseSend(r, "exit", { code: t.code }); try { r.end(); } catch {} }
     t.subs.clear();
-  });
+  };
+  // 起不来（ENOENT/EACCES）时只有 error 和 close、没有 exit：这里也得收尾，不然占着名额永远「活着」（审查 v0.5.3 B4）
+  child.on("error", (e) => { out(`\r\n[${e.message}]\r\n`); if (child.pid == null) ended(127); });
+  child.on("exit", (code, sig) => ended(code ?? (sig ? 128 : null)));
   TERMS.set(id, t);
   log(`[term] ${id} 打开 ${cols}x${rows} via ${path.basename(pc[0])}`);
   return { ok: true, term: termInfo(t) };

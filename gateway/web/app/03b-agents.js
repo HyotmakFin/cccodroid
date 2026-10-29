@@ -73,6 +73,10 @@
       for (const id of r.ids || []) { const x = AG.agents.get(id); if (x) agTouch(agCardOf(x)); }
     }
   }
+  /** 这一轮被停了：还标着在跑的代理都收成「已停止」，卡片别一直转圈计时（审查 #48 UI07-01） */
+  function agStopAll(at) {
+    for (const a of AG.agents.values()) if (a.status === "running") { a.status = "stopped"; a.endAt = at || Date.now(); a.now = ""; agTouch(agCardOf(a)); }
+  }
   const agTouchMsg = (m) => { for (const id of [m.from, m.to]) { const a = AG.agents.get(id); if (a) agTouch(agCardOf(a)); } };
 
   /** 子代理的一步（正在跑时的 tool_use，parent = 它那张 Agent 卡）：只记步数和最近一步，不建 DOM */

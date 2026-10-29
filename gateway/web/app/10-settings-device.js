@@ -357,7 +357,7 @@
       l.className = "tiny";
       l.style.cssText = "display:flex;gap:6px;align-items:center";
       l.innerHTML = `<input type="checkbox" style="width:auto;margin:0"${tl.enabled ? " checked" : ""}${st.on ? "" : " disabled"}><span>${esc(devName(tl.name))}</span>`;
-      l.firstChild.addEventListener("change", (e) => post("/api/app/dev_set", { tool: tl.name, enabled: e.target.checked }).then(devRender).catch(() => {}));
+      l.firstChild.addEventListener("change", (e) => devSet({ tool: tl.name, enabled: e.target.checked }));
       box.appendChild(l);
     }
     const a = st.a11y || {};
@@ -374,15 +374,19 @@
       : "";
     if (st.message) toast(st.message, true);
   }
+  // 网关转发失败也回 200（{ ok:false, message }，没有工具清单）：不能拿它去重画，否则清单清空、无障碍状态乱报（审查 D-R01）
+  const devSet = (body) => post("/api/app/dev_set", body)
+    .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return loadDev(); } devRender(st); })
+    .catch((e2) => { toast(e2.message, true); loadDev(); });   // 没存上：重读一遍，开关回到真实状态（审查 D-05）
   async function loadDev() {
     let st;
     try { st = await api("/api/app/dev_status"); } catch { return; }
     if (!st.ok) return;
     devRender(st);
   }
-  $("dev-on").addEventListener("change", (e) => post("/api/app/dev_set", { on: e.target.checked }).then(devRender).catch(() => {}));
-  $("dev-a11y").addEventListener("change", (e) => post("/api/app/dev_set", { a11y: e.target.value }).then(devRender).catch((e2) => toast(e2.message, true)));
-  $("dev-idle").addEventListener("change", (e) => post("/api/app/dev_set", { idle: Number(e.target.value) || 10 }).then(devRender).catch(() => {}));
+  $("dev-on").addEventListener("change", (e) => devSet({ on: e.target.checked }));
+  $("dev-a11y").addEventListener("change", (e) => devSet({ a11y: e.target.value }));
+  $("dev-idle").addEventListener("change", (e) => devSet({ idle: Number(e.target.value) || 10 }));
   $("dev-a11y-sys").addEventListener("click", () => post("/api/app/a11y_settings").catch(() => {}));
 
   // 打开更新页时自动查一次：正在查、正在下/装，或 20 秒内刚查过就只刷新显示
@@ -408,7 +412,7 @@
     else if (r.ok === false) toast(r.message, true);
     followUpd(); loadUpd();
   });
-  $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch(() => {}));
+  $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch((e2) => { toast(e2.message, true); loadUpd(); }));
   $("upd-channel").addEventListener("change", (e) => {
     // 固定版本要先挑一版：开选单，下拉框先退回原样，挑完 loadUpd 会刷新成「固定 x.y.z」
     if (e.target.value === "pinned") { e.target.value = (lastUpd && lastUpd.channel) || "stable"; openClaudeVersions(); return; }
@@ -438,8 +442,8 @@
   function memOut(cls, text) { const o = $("mem-result"); o.className = "prov-state " + cls; o.textContent = text; }
   const GB = (b) => (b / 1073741824).toFixed(1) + "G";
   async function saveMem(patch) {
-    const g = { ...((state.settings && state.settings.memGuard) || {}), ...patch };
-    const r = await api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memGuard: g }) });
+    // 只送改了的那一项（网关按字段合并）：带上整份旧快照的话，先关开关、紧接着存白名单，后一个请求会把开关又开回去（审查 S2-04）
+    const r = await api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memGuard: patch }) });
     if (r && r.settings) state.settings.memGuard = r.settings.memGuard;
     fillMem();
     return r;

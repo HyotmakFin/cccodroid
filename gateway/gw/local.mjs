@@ -170,6 +170,8 @@ function llamaStart(m, note) {
         Object.assign(LL, { state: "error", err: tz("llama-server 意外退出（rc={code}）", { code }) + (why ? "：" + why.trim().slice(0, 200) : "") });
         if (LL.run && !LL.run.ended) runEmit(LL.run, { type: "note", key: "crash", text: LL.err });
       }
+      // 加载中被网关自己停掉（停服务、换模型）：不是「没起来」，别把状态改成出错（审查 v0.5.3 B8）
+      if (!ours) { if (!done) { done = true; reject(new Error(tz("已停止"))); } return; }
       const why = tail.split("\n").filter((l) => /error|failed|out of memory|unable/i.test(l)).pop() || "";
       fail(tz("端侧模型没起来") + (why ? "：" + why.trim().slice(0, 200) : `（rc=${code}）`));
     });

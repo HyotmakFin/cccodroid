@@ -125,11 +125,11 @@
   document.documentElement.dir = (byCode[lang] && byCode[lang].dir) || "ltr";
 
   // 只加载要用的词典（当前语言 + 英文兜底）。document.write 出来的脚本会在 app.js 之前同步执行完；
-  // 词典文件缺失（404）不要紧 —— t() 自动回退，界面照常。最后一个小脚本在词典就位后翻译静态标记。
+  // 词典文件缺失（404）不要紧 —— t() 自动回退，界面照常。最后的 i18n-apply.js 在词典就位后翻译静态标记（不能写成内联脚本：CSP 不放行）。
   if (lang !== SRC) {
     const need = [lang]; if (lang !== FALLBACK && byCode[FALLBACK]) need.push(FALLBACK);
     document.write(need.map((c) => `<script src="/lang-${encodeURIComponent(c)}.js"><\/script>`).join("") +
-      `<script>try{I18N.apply(document)}catch(e){console.error("i18n apply 失败",e)}<\/script>`);
+      `<script src="/i18n-apply.js"><\/script>`);
   }
 
   // ── 设置页的语言下拉框（index.html 的 #set-lang）──

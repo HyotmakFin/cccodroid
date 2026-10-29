@@ -26,6 +26,11 @@
   const srv = { run: null, queue: [], runs: [], queueAll: [], max: 3, connected: false };
   const runViews = new Map();     // runId → { av, startedAt }
   const TOOL_CARDS = new Map();   // tool_use id → 卡片（结果可能在另一页、另一个气泡里）
+  /** 历史页被裁掉：页里的卡片（含收着的子代理步骤）从索引里放掉，不然整页 DOM 还被这里拽着（审查 #49 P3-7） */
+  function dropCards(root) {
+    for (const [k, c] of TOOL_CARDS) { const el = c.el || c.host; if (el && root.contains(el)) TOOL_CARDS.delete(k); }
+    for (const [k, c] of AG.cards) if (c.el && root.contains(c.el)) AG.cards.delete(k);
+  }
   const PENDING_RESULTS = new Map();
 
   function mkMsg(role, label, parent) {
@@ -196,11 +201,21 @@
           frozen.appendChild(c);
           fz = idx;
         }
+        // 整块重画会新建 <pre> / 表格：正横着看长行的，横向位置别每来一个字就归零（审查 #48 06-04）
+        const sl = keepX();
         tail.innerHTML = renderMd(vis.slice(fz)); enhanceMd(tail);   // 光标不跟在每段正文后面：整条回复只留一个，见 AssistantView 的 liveTail
+        sl();
       } else {
+        const sl = keepX();
         setHtml(tail, renderMd(vis.slice(fz)));
+        sl();
       }
       scrollDown();
+    }
+    function keepX() {
+      const xs = [...tail.querySelectorAll("pre, .tbl-wrap")].map((x) => x.scrollLeft);
+      if (!xs.some(Boolean)) return () => {};
+      return () => tail.querySelectorAll("pre, .tbl-wrap").forEach((x, i) => { if (xs[i]) x.scrollLeft = xs[i]; });
     }
     function tick() {
       timer = 0;
@@ -217,7 +232,8 @@
     return {
       kind: "text",
       append(t) { text += t; if (busReplay) shown = text.length; kick(); },
-      set(t) { text = t; if (live) { shown = Math.min(shown, text.length); kick(); } else paint(true); },
+      // 整段正文（没有逐字增量的厂商）重放时同样直接整段显示，不再从头吐一遍（审查 #48 06-06 / F8）
+      set(t) { text = t; if (live) { shown = busReplay ? text.length : Math.min(shown, text.length); kick(); } else paint(true); },
       finish() { if (!live) return; if (shown >= text.length) paint(true); else { ending = true; kick(); } },
       /** 从末尾删掉 n 个字（流断了、那半截不算数）；冻结的段落可能也在里面，整块重画 */
       drop(n) { text = text.slice(0, Math.max(0, text.length - n)); shown = Math.min(shown, text.length); frozen.innerHTML = ""; fz = 0; paint(!live); return text.length; },
@@ -302,9 +318,9 @@
     const c = { lazy: true, id, name, input, live, calls, isAgent: name === "Agent" || name === "Task",
                 state: live ? "run" : "ok", summary: summarizeTool(name, input), onChange: null };
     for (const k of ["result", "subText", "subProgress", "subDone", "stop", "finish", "subLazy"]) {
-      c[k] = (...a) => { calls.push([k, a]); if (k === "result") c.state = a[0] ? "ok" : "err"; };
+      c[k] = (...a) => { calls.push([k, a]); if (k === "result") c.state = a[0] ? "ok" : "err"; if (k === "stop" && c.state === "run") c.state = "err"; };
     }
-    c.sub = (sid, sn, si) => { const n = LazyCard(sid, sn, si, live); calls.push(["sub", [sid, sn, si, n]]); if (sid) TOOL_CARDS.set(sid, n); return n; };
+    c.sub = (sid, sn, si) => { const n = LazyCard(sid, sn, si, live); n.host = c.host; calls.push(["sub", [sid, sn, si, n]]); if (sid) TOOL_CARDS.set(sid, n); return n; };
     return c;
   }
   const SUB_SHOW = 50;
@@ -339,7 +355,7 @@
       box.className = "tool-sub";
       box.innerHTML = `<button class="ts-head" type="button"><span class="chev">▶</span><span class="ts-label"></span><span class="tool-arg ts-now"></span></button><div class="ts-list"></div>`;
       card.insertBefore(box, bodyEl);
-      sub = { box, list: box.lastChild, label: box.querySelector(".ts-label"), now: box.querySelector(".ts-now"), n: 0, textEl: null, text: null, lazy: null, queue: [] };
+      sub = { box, list: box.lastChild, label: box.querySelector(".ts-label"), now: box.querySelector(".ts-now"), n: 0, textEl: null, text: null, lazy: null, queue: [], kids: [] };
       box.firstChild.addEventListener("click", (e) => {
         e.stopPropagation();
         if (box.classList.contains("open")) box.classList.remove("open");
@@ -399,7 +415,8 @@
         st.textContent = ok ? t("完成") : t("失败");
         if (live && !busReplay) { MO.play(st, "mo-tick", 1400); if (ok) MO.play(card, "mo-ok", 1400); }
         // 后台子代理：工具结果只是「已启动」，真正跑完靠 sub_done
-        if (isAgent && ok && /^Async agent launched/.test(result.text) && !(sub && sub.done)) { st.className = "tool-state run"; st.textContent = t("后台运行"); }
+        // 状态也记成在跑：不然步骤组的摘要按「完成」算（审查 #48 UI07-03）
+        if (isAgent && ok && /^Async agent launched/.test(result.text) && !(sub && sub.done)) { api.state = "run"; st.className = "tool-state run"; st.textContent = t("后台运行"); }
         if (built) { built = false; build(); }
         if (!ok && live) { card.classList.add("open"); build(); }
         // 工具产出的图片（渲染结果、截图）直接露出来，不用点开
@@ -415,7 +432,11 @@
         }
         api.onChange && api.onChange();
       },
-      stop() { if (!result) { api.state = "err"; st.className = "tool-state err"; st.textContent = t("中断"); api.onChange && api.onChange(); } },
+      // 停了这一轮：后台子代理（结果只是「已启动」）和它过程里还在跑的步骤也一起收成「中断」，别一直转圈计时（审查 #48 UI07-01）
+      stop() {
+        if (!result || api.state === "run") { api.state = "err"; st.className = "tool-state err"; st.textContent = t("中断"); if (sub) sub.now.textContent = ""; api.onChange && api.onChange(); }
+        if (sub) { for (const c of sub.queue) c.stop(); for (const k of sub.kids) k.stop(); }
+      },
       finish() { if (!result && !live) { st.textContent = "—"; } },
       isAgent,
       // 子代理的一步：嵌套工具卡（注册进 TOOL_CARDS，结果和权限卡照常按 id 找到它）
@@ -426,11 +447,13 @@
         s.now.textContent = sname + (sum ? " " + sum : "");
         if (!s.box.classList.contains("open")) {          // 收着：只记数据
           const c = LazyCard(sid, sname, sinput, live);
+          c.host = card;                                  // 没有 DOM：记下挂在哪张真卡下面，裁剪历史页时据此一并放掉
           s.queue.push(c);
           if (sid) TOOL_CARDS.set(sid, c);
           return c;
         }
         const b = ToolBlock(s.list, sid, sname, sinput, live);
+        s.kids.push(b);
         if (s.textEl) s.list.appendChild(s.textEl);       // 汇报总在最后
         return b;
       },
@@ -455,16 +478,19 @@
         }
         st.className = "tool-state " + (ok ? "ok" : "err");
         st.textContent = ok ? t("完成") : status === "failed" ? t("失败") : t("已停止");
+        api.state = ok ? "ok" : "err";
+        api.onChange && api.onChange();      // 步骤组的摘要跟着变（审查 #48 UI07-03）
       },
       // 历史里的子代理：点开「过程」时才去取
-      subLazy(load) {
+      // mk(工具调用 id) → 取那个代理过程的函数：过程里又派了孙代理的，孙代理的卡也要能点开取它自己的（审查 #48 UI07-02）
+      subLazy(load, mk) {
         const s = subArea();
         s.lazy = async () => {
           s.now.textContent = t("加载中…");
           try {
             const items = await load();
             for (const m of items) {
-              if (m.role === "tool_use") api.sub(m.id, m.name, m.input);
+              if (m.role === "tool_use") { const k = api.sub(m.id, m.name, m.input); if (mk && (m.name === "Agent" || m.name === "Task") && k && k.subLazy) k.subLazy(mk(m.id), mk); }
               else if (m.role === "tool_result") toolResult(m.id, m.ok, m.text);
               else if (m.role === "assistant") api.subText(m.text);
             }
@@ -491,7 +517,10 @@
     const head = el.firstChild, body = el.lastChild, members = [], inner = [];
     // 收起整组时，组里展开着的步骤、子代理过程、思考也一起收回去 —— 不然下次点开还是一大片摊着（群友 10-27）
     head.addEventListener("click", () => {
-      if (!el.classList.toggle("open")) {
+      // 失败、待确认时样式（:has）已经把组摊开了，组本身却没有 open：按眼前看到的来，第一下就收（审查 #48 UI07-05）
+      const showing = el.classList.contains("open") || body.getClientRects().length > 0;
+      el.classList.toggle("open", !showing);
+      if (showing) {
         body.querySelectorAll(".tool.open, .tool-sub.open").forEach((x) => x.classList.remove("open"));
         body.querySelectorAll("details[open]").forEach((d) => { d.open = false; });
       }

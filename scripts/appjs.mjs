@@ -33,6 +33,13 @@ if (lineArg) {
 const out = opt("--out");
 if (out) { fs.writeFileSync(out, all); process.exit(0); }
 
+// 各段共用一个作用域：顶层同名函数后一个会静默盖掉前一个（0.5.4 前权限卡 diffHtml、loadScript 都栽在这）
+const seen = new Map(), dups = [];
+parts.forEach((p, i) => texts[i].split("\n").forEach((l, j) => {
+  const m = /^  (?:async )?function\s+([A-Za-z0-9_$]+)\s*\(/.exec(l); if (!m) return;
+  if (seen.has(m[1])) dups.push(`${m[1]}: ${seen.get(m[1])} 与 ${p}:${j + 1}`); else seen.set(m[1], `${p}:${j + 1}`);
+}));
+if (dups.length) { console.error("✗ 顶层函数重名（后一个会盖掉前一个）：\n  " + dups.join("\n  ")); process.exit(1); }
 const r = spawnSync(process.execPath, ["--check", "-"], { input: all, encoding: "utf8" });
 let at = 1;
 for (let i = 0; i < parts.length; i++) {

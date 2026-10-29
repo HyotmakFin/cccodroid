@@ -2,8 +2,9 @@
   function fmtTok(n) {
     n = Number(n) || 0;
     if (n < 1000) return String(n);
-    if (n < 1000000) return (n / 1000).toFixed(n < 10000 ? 1 : 0) + "k";
-    return (n / 1048576).toFixed(2) + "M";
+    // k 和 M 都按 1000 进：以前 M 按 1048576，999999 显示 1000k、1000000 反倒显示 0.95M（审查 v0.5.3 F5）
+    if (n < 999500) return (n / 1000).toFixed(n < 9950 ? 1 : 0) + "k";
+    return (n / 1e6).toFixed(2) + "M";
   }
   /** 刻度以【自动压缩窗口】为准；没设才退回模型窗口 */
   function updateCtx(used, total) {
@@ -58,6 +59,8 @@
     view.title = "";
     paintTitle();
     view.goal = null;
+    view.histOk = false;
+    view.liveAt = 0;
     const hid = stripHidden()[view.sessionId] || {};
     view.goalHide = hid.g || 0;
     view.tasks = null;
@@ -69,7 +72,7 @@
     welKeep = wel || null;
     histEl.innerHTML = "";
     liveEl.innerHTML = "";
-    for (const rv of runViews.values()) rv.timer?.stop();
+    for (const rv of runViews.values()) { rv.timer?.stop(); rv.av?.remove(); }   // av.remove 连阶段提示的每秒定时器一起停（审查 #49 P3-7）
     runViews.clear();
     TOOL_CARDS.clear();
     PENDING_RESULTS.clear();
@@ -78,6 +81,7 @@
     syncWindow();
     statEl.textContent = "";
     pickViewRun();                     // 换了会话：「本会话在不在跑」要重新算
+    renderQueue();                     // 排队条也换成这个会话的：不然看着是 A 的，点清除却删 B 的（审查 #51 第2项）
     paintProjChip();
     syncInterject();
     saveUiState();
@@ -101,7 +105,8 @@
   // 用户点会话标题（侧栏 / 对话列表 / 项目）：点的就是眼前这个、又不是跳搜索命中，就只收起整页和侧栏，现场原样（#37）；
   // 正看着中间某一段（窗口式）时照旧重开，回到最新
   function goSession(id, jumpQ) {
-    if (id && id === view.sessionId && !jumpQ && view.next == null && !view.loading) { closePage(); closeDrawer(); return; }
+    // 首屏历史没读成功（断网）时再点同一个会话要重读，不能当「现场原样」（审查 #48 S08-01）
+    if (id && id === view.sessionId && !jumpQ && view.next == null && !view.loading && view.histOk) { closePage(); closeDrawer(); return; }
     // 切回别的会话：上次离开时不在底部，就落回那时视口顶部那一段
     closeDrawer(); openSession(id, jumpQ, id && !jumpQ && id !== view.sessionId ? lastReadOf(id) : null);
   }
@@ -148,13 +153,13 @@
     while (ps.length > MAX_PAGES) {
       if (side === "top") {
         const p = ps[0], h0 = chatEl.scrollHeight;
-        p.remove();
+        dropCards(p); p.remove();
         chatEl.scrollTop -= h0 - chatEl.scrollHeight;
         view.cursor = Number(p.dataset.to);
         olderEl.classList.remove("hidden");
       } else {
         const p = ps[ps.length - 1];
-        p.remove();
+        dropCards(p); p.remove();
         view.next = Number(p.dataset.from);
         syncWindow();
       }
@@ -198,8 +203,10 @@
     const aObj = anchor && typeof anchor === "object" ? anchor : null;
     if (anchor) { q.set("anchor", aObj ? aObj.uuid : anchor); if (aObj && aObj.off > 0) q.set("off", String(aObj.off)); }
     if (initial) loadMarks();
-    else if (resume != null) q.set("after", String(resume));
+    // 重连续不上（resume=false）时接着原来那一段读：以前 initial 分支吃掉了 after，读回的是最新一页（审查 #48 S08-02 / #49 P2-5）
+    if (resume != null) q.set("after", String(resume));
     else if (!initial) q.set("before", String(before));
+    const sent = Date.now();
     const ex = fwd ? windowExclude() : liveExclude();
     if (ex) q.set("exclude", String(ex));
     let r;
@@ -217,6 +224,7 @@
       if (e.status === 404 && initial) {
         // 记着的会话已经不在了（删掉了 / 清过数据）：当新会话处理，回到欢迎页，别挂一条让人摸不着头脑的提示
         view.sessionId = null;
+        view.title = ""; paintTitle(); renderSessions();   // 标题、侧栏高亮也别还挂着那个会话（审查 #48 S08-04）
         saveUiState();
         if (!liveEl.childElementCount) showWelcome();
       } else toast(t("读取历史失败：{msg}", { msg: e.message }), true);
@@ -224,11 +232,14 @@
     }
     if (gen !== view.gen) return;
     view.loading = false;
+    if (initial) view.histOk = true;
     view.cursor = r.cursor;
     if (initial) view.next = fwd && r.next < r.size ? r.next : null;
     view.title = r.title || "";
-    if (initial && "goal" in r) { view.goal = r.goal || null; renderRunStrip(); }
-    if (initial && "tasks" in r) { view.tasks = r.tasks || null; renderRunStrip(); }
+    // 请求在途时事件流已经送来更新的目标 / 清单：历史里的是旧快照，不许盖回去（审查 #50 S2-07）
+    const fresh = view.liveAt < sent;
+    if (initial && fresh && "goal" in r) { view.goal = r.goal || null; renderRunStrip(); }
+    if (initial && fresh && "tasks" in r) { view.tasks = r.tasks || null; renderRunStrip(); }
     const page = renderItems(r.items || []);
     page.dataset.from = r.cursor;
     page.dataset.to = fwd ? r.next : initial ? r.size : before;
@@ -240,7 +251,7 @@
       syncWindow();
       if (r.contextTokens != null) updateCtx(r.contextTokens, state.ctxTotal);
       paintTitle();
-      setStatus(t("就绪"), "ok");
+      calmStatus(t("就绪"));
       if (anchor) return landOnChapter(page, gen, aObj);
       if (fwd) { stick = false; chatEl.scrollTop = 0; }   // 重连时接着原来那一段
       else { scrollDown(true); if (!seenSessions.has(id)) MO.play(histEl, "mo-in-rise", 1400); }
@@ -441,6 +452,8 @@
 
   function connectBus(resume) {
     if (es) { try { es.close(); } catch {} }
+    // 换视图要整轮重放：旧视图的游标作废，免得重拨时又带着它续传，新视图缺东西（审查 #50 S2-05）
+    if (!resume) lastEventId = "";
     const url = "/api/events" + (resume && lastEventId ? "?since=" + encodeURIComponent(lastEventId) : "");
     es = new EventSource(url);
     es.onmessage = (m) => {
@@ -509,10 +522,10 @@
     switch (ev.type) {
       case "hello": return onHello(ev);
       case "tasks":
-        if (view.sessionId && ev.sessionId === view.sessionId) { view.tasks = ev.tasks || null; renderRunStrip(); }
+        if (view.sessionId && ev.sessionId === view.sessionId) { view.tasks = ev.tasks || null; view.liveAt = Date.now(); renderRunStrip(); }
         break;
       case "goal":
-        if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; renderRunStrip(); }
+        if (view.sessionId && ev.sessionId === view.sessionId) { view.goal = ev.goal || null; view.liveAt = Date.now(); renderRunStrip(); }
         return;
       case "state": return applyState(ev);
       case "archive": return loadSessions();   // 建档 / 归入杂项：标题、档号、分组跟着变
@@ -566,7 +579,7 @@
         rv.timer = RunTimer(ev.startedAt);
         rv.timer.attach(rv.av);
         rv.av.phase({ phase: "connect" });
-        scrollDown(true);
+        scrollDown();     // 不强制：用户正往上翻着看就别拽回底部（审查 #48 06-01）
         return;
       }
       case "init": {
@@ -630,7 +643,7 @@
     }
     if (ev.uiTag) uiTag = ev.uiTag;
     applyState(ev);
-    if (ev.resume) { setStatus(t("已连接"), "ok"); return; }
+    if (ev.resume) { calmStatus(t("已连接")); return; }
     busReplay = true;
 
     // 续不上（首次连接 / 网关重启过 / 断太久）：本视图从头来 —— 历史重新取，
@@ -657,11 +670,23 @@
     if (sid) loadOlder(true);
     else if (!(ev.run && keepRuns.has(ev.run.id))) showWelcome();
     renderInterrupted(ev.interrupted);   // resetView 清掉了 liveEl，重挂一次
-    setStatus(t("已连接"), "ok");
+    calmStatus(t("已连接"));
+  }
+  /** 「已连接」「就绪」这类平静的状态：这个会话正在生成时不许盖掉「生成中」（审查 #51 第4项） */
+  function calmStatus(text) {
+    if (isBusy()) setStatus(t("生成中…"), "live"); else setStatus(text, "ok");
   }
 
   function onRunEnd(ev) {
-    if (view.goalClearAfter && view.goalClearAfter === ev.runId) { view.goalClearAfter = null; setTimeout(() => send("/goal clear"), 300); }
+    if (view.goalClearAfter && view.goalClearAfter === ev.runId) {
+      view.goalClearAfter = null;
+      // 发给放弃目标的那个会话：300ms 里切到别的会话的话，不能用当时的视图去发（审查 #49 P2-15）
+      const sid = ev.sessionId || view.sessionId, gen = view.gen;
+      setTimeout(() => {
+        if (view.gen === gen) return send("/goal clear");
+        if (sid) api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "/goal clear", sessionId: sid, cid: newCid(), mode: "auto" }) }).catch((e) => toast(e.message, true));
+      }, 300);
+    }
     const rv = runViews.get(ev.runId);
     if (!rv) { if (belongs(ev)) loadSessions(); return; }
     const av = rv.av;
@@ -681,14 +706,15 @@
       if (ev.localCommand === "autocompact") loadModels();
     } else {
       av.finish(ev.aborted);
-      if (ev.aborted) av.note(t("已中断"));
+      if (ev.aborted) { av.note(t("已中断")); agStopAll(ev.at); }
       const bits = [];
       if (ev.durationMs) bits.push((ev.durationMs / 1000).toFixed(1) + "s");
       if (ev.usage?.output_tokens) bits.push("↓" + ev.usage.output_tokens + " tok");
       if (ev.costUsd) bits.push("$" + ev.costUsd.toFixed(4));
       statEl.textContent = bits.join(" · ");
     }
-    if (ev.failed) setStatus(t("失败"), "err");
+    // 普通一轮出错网关给的是 isError（启动失败才是 failed），两个都要认（审查 #51 第3项）
+    if (ev.failed || ev.isError) setStatus(t("失败"), "err");
     else if (ev.aborted) setStatus(t("已中断"), "warn");
     else setStatus(t("就绪"), "ok");
     scrollDown();
@@ -702,8 +728,8 @@
     srv.queueAll = s.queue || [];
     if (s.maxParallel) srv.max = s.maxParallel;
     pickViewRun();
+    if (srv.run?.permMode) setPermChip(srv.run.permMode);   // 这一轮实际在用的模式，以网关为准（安全通告 GHSA-2w6p）
     const busy = isBusy();
-    sendEl.classList.toggle("busy", busy && !hasDraft());
     syncPlaceholder();
     syncInterject();
     renderQueue();
@@ -770,9 +796,12 @@
 
   /** 插话键只在「正在跑 + 输入框里有字」时露头 */
   function syncInterject() {
-    const has = hasDraft();
+    const has = hasDraft(), stop = isBusy() && !has;
     interjectEl.classList.toggle("hidden", !(isBusy() && has));
-    sendEl.classList.toggle("busy", isBusy() && !has);
+    sendEl.classList.toggle("busy", stop);
+    // 读屏要跟着变：生成中空输入框时这个键是「停止」（审查 #49 P2-14）
+    const lab = stop ? t("停止") : t("发送");
+    if (sendEl.getAttribute("aria-label") !== lab) { sendEl.setAttribute("aria-label", lab); sendEl.title = lab; }
   }
 
   function renderQueue() {

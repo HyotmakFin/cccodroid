@@ -60,9 +60,10 @@ export async function routeBus(req, res, u, p) {
     const lastId = String(req.headers["last-event-id"] || u.searchParams.get("since") || "");
     const m = lastId.match(/^([0-9a-z]+)\.(\d+)$/);
     const since = m && m[1] === BOOT ? Number(m[2]) : -1;
+    // 先把攒着的增量发出去再判断续不续得上：反过来的话 flush 可能正好把 since 的下一条挤出环，hello 却说续得上（审查 #50 S2-06）
+    for (const r of RUNS.values()) flushPend(r);
     const first = BUS.ring[0];
     const resume = since >= 0 && since <= BUS.seq && (since === BUS.seq || (first && first.seq <= since + 1));
-    for (const r of RUNS.values()) flushPend(r);
     let out = "retry: 1500\n\n";
     out += `data: ${JSON.stringify({ type: "hello", boot: BOOT, resume, uiTag: uiTag(), ...snapshot() })}\n\n`;
     if (resume) {

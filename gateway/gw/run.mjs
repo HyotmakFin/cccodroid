@@ -9,7 +9,7 @@ import { tasksCheck } from "./goal.mjs";
 import { setLastInit } from "./caps.mjs";
 import { RUNS, SESSIONS, rememberSession, runFlag, runList } from "./runs.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
-import { INTERRUPTED, QUEUE, RUN_LANE, RUN_SESSIONS, abortRun, endRun, idleArm, idleDisarm, laneOfItem, publishState, runEmit, saveRunMark, setInterrupted, setPermMode } from "./queue.mjs";
+import { INTERRUPTED, QUEUE, RUN_LANE, RUN_SESSIONS, abortRun, endRun, holdLane, idleArm, idleDisarm, laneOfItem, publishState, runEmit, saveRunMark, setInterrupted, setPermMode } from "./queue.mjs";
 import { handleLocalCommand } from "./modelcmd.mjs";
 import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
@@ -34,17 +34,21 @@ function cwdOf(item, sessionId) {
 
 // ── 跑一轮 ────────────────────────────────────────────────────────────
 // 和 HTTP 请求完全脱钩：前端断了也接着跑，结果照样落进 transcript、照样广播。
-export async function startRun(item) {
-  // 这一轮用哪家：定时任务指定的 → 新会话首条带来的选择（pin）→ 这个会话钉的 → 项目默认 → 全局生效的。
-  // 整轮都按它（地址、密钥、模型名规则）
+// 这一轮用哪家：定时任务指定的 → 新会话首条带来的选择（pin）→ 这个会话钉的 → 项目默认 → 全局生效的。
+// 整轮都按它（地址、密钥、模型名规则）。/api/chat 入口查 Key 也用它，两边才不会各认一家（审查 #49 P2-4）
+export function pickProvider(item) {
   const sid0 = item.sessionId || (item.follow && RUN_SESSIONS.get(item.follow)) || null;
   const pdef0 = projectDefaults(item.projectId ? projectById(item.projectId) : projectOfDir(cwdOf(item, sid0)));
   const rec0 = sessModel(sid0);
-  const P = (item.provider && providerById(item.provider))
+  return { sid0, pdef0, P: (item.provider && providerById(item.provider))
     || (item.pin && item.pin.provider && providerById(item.pin.provider))
     || (rec0 && rec0.model != null ? sessProvider(sid0) : null)
     || (pdef0.provider && providerById(pdef0.provider))
-    || sessProvider(sid0);
+    || sessProvider(sid0) };
+}
+
+export async function startRun(item) {
+  const { sid0, pdef0, P } = pickProvider(item);
   const KEY = keyOf(P);
   const run = {
     id: item.id,
@@ -195,6 +199,8 @@ export async function startRun(item) {
   log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
   const t0 = Date.now();
 
+  // 上面拉模型清单、问设备工具、读建档提示都要等：这期间点了停止（还没有进程可杀）就别再起了（安全通告 GHSA-g35m）
+  if (run.aborted) { log("⏹ 起进程前已停止"); return endRun(run, { durationMs: 0 }); }
   const [cmd0, args0] = claudeCmd(argv);
   const child = spawn(cmd0, args0, {
     cwd,
@@ -263,6 +269,8 @@ export async function startRun(item) {
     }
     if (!writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: resp } })) return false;
     run.perms.delete(id);
+    // 「拒绝并停止」也是停止：这一轮后面排着的别自动发（审查 #49 P2-3）
+    if (resp.interrupt) holdLane(run);
     log(`${resp.behavior === "allow" ? "✓ 允许" : "✗ 拒绝"} ${p.tool}${a.always && resp.updatedPermissions ? "（始终）" : ""}${a.interrupt ? "（并停止）" : ""}`);
     emit({ type: "perm_resolved", id, behavior: resp.behavior, always: !!resp.updatedPermissions, interrupt: !!a.interrupt });
     if (a.mode && PERM_MODES.includes(a.mode)) setPermMode(a.mode);

@@ -1,11 +1,15 @@
   // ── 会话管理 ──────────────────────────────────────────────────────
+  /** 拉会话列表；成功返回 true。删完紧接着刷新时，删之前发出的那次慢请求迟到也不许把删掉的又画回来（审查 #48 S08-03） */
   async function loadSessions() {
+    const ok = latest("sessions");
     try {
       const r = await api("/api/sessions");
+      if (!ok()) return true;
       state.sessions = r.sessions || [];
       if (sess.q.trim()) resessSearch(); else renderSessions();
       lineageDirty();
-    } catch {}
+      return true;
+    } catch (e) { return e; }
   }
 
   // 会话页三种视图：普通列表 / 多选（导出、批量删除）/ 回收站
@@ -65,6 +69,7 @@
     if (sess.mode === "trash") return renderTrash(box);
     const q = sess.q.trim();
     if (!q && !state.sessions.length) {
+      sess.visible = [];
       box.innerHTML = '<div class="tiny">' + t("还没有历史会话。") + '</div>';
       return;
     }
@@ -108,7 +113,9 @@
     };
     if (q) {
       // 标题先在本地筛，内容命中等网关回来再补上
-      const list = (sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))).filter((h) => { const s = state.sessions.find((x) => x.id === h.id); return !s || keep(s); });
+      // 命中的会话不在本地这 150 条里时，拿命中结果自带的字段去筛，别绕过当前的置顶 / 项目筛选（审查 B-05）
+      const list = (sess.hits || state.sessions.filter((s) => s.title.toLowerCase().includes(q.toLowerCase()))).filter((h) => keep(state.sessions.find((x) => x.id === h.id) || h));
+      sess.visible = list.map((x) => x.id); renderSessBar();
       box.innerHTML = (sess.hits ? "" : `<div class="tiny">${t("正在搜索对话内容…")}</div>`)
         + (list.length ? list.map(item).join("") : sess.hits ? `<div class="tiny">${t("没有找到包含「{q}」的会话。", { q: esc(q) })}</div>` : "");
       return;
@@ -116,6 +123,7 @@
     // 分组：置顶在最前，其余按时间；每组标题可点击折叠，收起时仍露出当前会话
     const groups = [];
     const shown = state.sessions.filter(keep);
+    sess.visible = shown.map((x) => x.id); renderSessBar();    // 「全选」只选眼前这些（筛选 / 搜索之外的不算，审查 B-01）
     const pins = shown.filter((s) => s.pinned);
     if (pins.length) groups.push({ key: "pin", label: t("置顶"), list: pins });
     // 杂项（测试、试模型这类用完即弃的）收在最后一组，组名右边可一键全移进回收站
@@ -172,7 +180,8 @@
     $("btn-sess-trash").textContent = sess.mode === "trash" ? t("返回会话") : t("回收站");
     $("btn-sess-select").classList.toggle("hidden", sess.mode === "trash");
     if (sess.mode === "select") {
-      const n = sess.sel.size, all = state.sessions.length && n === state.sessions.length;
+      const vis = sess.visible || state.sessions.map((x) => x.id);
+      const n = sess.sel.size, all = vis.length && vis.every((id) => sess.sel.has(id));
       bar.innerHTML = `<button class="btn ghost sm" data-b="all">${all ? t("全不选") : t("全选")}</button>
         <span class="tiny">${t("已选 {n} 个", { n })}</span>
         <button class="btn sm" data-b="export" ${n ? "" : "disabled"}>${t("导出所选")}</button>
@@ -263,8 +272,9 @@
     if (act === "cancel") return $("btn-sess-select").click();
     if (act === "back") return $("btn-sess-trash").click();
     if (act === "all") {
-      if (sess.sel.size === state.sessions.length) sess.sel.clear();
-      else state.sessions.forEach((s) => sess.sel.add(s.id));
+      const vis = sess.visible || state.sessions.map((x) => x.id);
+      if (vis.length && vis.every((id) => sess.sel.has(id))) sess.sel.clear();
+      else { sess.sel.clear(); vis.forEach((id) => sess.sel.add(id)); }
       return renderSessions();
     }
     if (act === "export") {
@@ -286,6 +296,8 @@
     if (act === "trash") {
       if (!confirm(t("把选中的 {n} 个会话移进回收站？{d} 天内可以恢复。", { n: sess.sel.size, d: sess.keepDays }))) return;
       const r = await post("/api/sessions/trash", { ids: [...sess.sel] }).catch((err) => ({ done: [], failed: [], err }));
+      // 请求本身失败：什么都没删，别说「已移进回收站」，也别清掉选择（审查 B-02）
+      if (r.err) return toast(t("删除失败：{msg}", { msg: r.err.message }), true);
       if (r.done.includes(view.sessionId)) newConversation();
       toast(r.failed.length ? t("{n} 个已删除，{m} 个正在生成没删", { n: r.done.length, m: r.failed.length }) : t("已移进回收站"), !!r.failed.length);
       sess.mode = "list"; sess.sel.clear(); loadSessions();

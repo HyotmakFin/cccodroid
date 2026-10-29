@@ -27,21 +27,25 @@
   }
 
   async function openFiles(path) {
-    MO.cancel(filesEl); filesEl.classList.remove("hidden");
+    MO.cancel(filesEl); filesEl.classList.remove("hidden"); window.CCLayout && CCLayout.raise("files");   // 已开着被盖住：提上来（审查 UI05-001）
     await fsLoad(path || state.fs.path || state.settings.workspace || "/sdcard");
   }
 
   async function fsLoad(p, { keepSel = false } = {}) {
+    const ok = latest("fs");    // 先点的目录响应慢、后到：别把人带回旧目录（审查 C-004 / #49 P3-1）
     try {
       const r = await api(`/api/files?path=${encodeURIComponent(p)}` +
         (state.fs.hidden ? "&hidden=1" : ""));
+      if (!ok()) return;
+      // 读不了（没权限、不存在）网关回 200 带 error：不能当成空目录（审查 C-003）
+      if (r.error) throw new Error(r.error);
       Object.assign(state.fs, {
         path: r.path, parent: r.parent, entries: r.entries || [], roots: r.roots || [],
       });
       if (!keepSel) state.fs.sel = null;
       $("fs-search").value = state.fs.q = "";
       renderFs();
-    } catch (e) { toast(t("打开目录失败：{msg}", { msg: e.message }), true); }
+    } catch (e) { if (ok()) toast(t("打开目录失败：{msg}", { msg: e.message }), true); }
   }
 
   function fsVisible() {
@@ -57,7 +61,7 @@
     const list = fsVisible();
     $("fs-count").textContent = t("{n} 项 · {path}", { n: list.length, path: state.fs.path || "" });
     $("fs-list").innerHTML = list.length ? list.map((e, i) => `
-      <div class="item fs-item ${state.fs.sel === e.name ? "active" : ""}" data-i="${i}">
+      <div class="item fs-item ${state.fs.sel === e.name ? "active" : ""}" data-i="${i}" tabindex="0" role="button">
         <div class="fs-row">
           <span class="fs-ico">${kindIcon(e.kind)}</span>
           <span class="it-title">${esc(e.name)}${e.dir ? "/" : ""}</span>
@@ -82,6 +86,8 @@
     $("fs-list").querySelectorAll(".fs-item").forEach((el) => {
       const e = list[Number(el.dataset.i)];
       el.addEventListener("click", () => (e.dir ? fsLoad(state.fs.path.replace(/\/$/, "") + "/" + e.name) : fsSelect(e)));
+      // 键盘也能用：Tab 到条目，回车 / 空格同点击（审查 #49 P2-11）
+      el.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); el.click(); } });
       if (!e.dir) el.addEventListener("dblclick", () => { insertFile(e); });
       el.addEventListener("contextmenu", (ev) => { ev.preventDefault(); fsRename(e); });   // 长按 = 重命名
     });
@@ -118,9 +124,10 @@
     } else if (e.kind === "text" && e.size < 262144) {
       box.innerHTML = `<div class="fs-prev-head"><span class="mono">${esc(e.name)}</span><span class="tiny">${t("读取中…")}</span></div>`;
       try {
-        const txt = await fetch(fileUrl(full)).then((r) => r.text());
+        // 403 / 404 时回来的是一段 JSON 错误，别当正文显示（审查 C-009）
+        const txt = await fetch(fileUrl(full)).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); });
         body = `<pre class="fs-pre">${esc(txt.slice(0, 12000))}${txt.length > 12000 ? "\n" + t("…（已截断）") : ""}</pre>`;
-      } catch { body = '<div class="tiny">' + t("读取失败") + '</div>'; }
+      } catch (err) { body = '<div class="tiny">' + t("读取失败") + (err && err.message ? "：" + esc(err.message) : "") + '</div>'; }
       if (seq !== fsPrevSeq) return;
     } else {
       body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;

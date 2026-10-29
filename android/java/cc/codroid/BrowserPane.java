@@ -145,9 +145,9 @@ public class BrowserPane extends LinearLayout {
             }
             @SuppressWarnings("deprecation")
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) { return route(url); }
-            @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.i(TAG, "start " + url); pickStop(); shown(url); }
+            @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.i(TAG, "start " + logUrl(url)); pickStop(); shown(url); }
             @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
-                if (r.isForMainFrame()) Log.w(TAG, "error " + e.getErrorCode() + " " + e.getDescription() + " " + r.getUrl());
+                if (r.isForMainFrame()) Log.w(TAG, "error " + e.getErrorCode() + " " + e.getDescription() + " " + logUrl(String.valueOf(r.getUrl())));
             }
             @Override public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
                 Log.w(TAG, "renderer gone crash=" + d.didCrash());
@@ -155,7 +155,7 @@ public class BrowserPane extends LinearLayout {
                 return true;
             }
             @Override public void onPageFinished(WebView v, String url) {
-                Log.i(TAG, "finish " + url);
+                Log.i(TAG, "finish " + logUrl(url));
                 if (devtools) injectDevtools();
                 shown(url);
                 act.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST, url).apply();
@@ -261,12 +261,21 @@ public class BrowserPane extends LinearLayout {
         go(u);
     }
 
+    /** 日志里只记到路径：查询串和锚点常带口令 / 授权码，诊断包里用不着（审查 #49 待确认-7） */
+    static String logUrl(String u) {
+        if (u == null) return "null";
+        int i = u.length();
+        for (char c : new char[] { '?', '#' }) { int j = u.indexOf(c); if (j >= 0 && j < i) i = j; }
+        return i < u.length() ? u.substring(0, i) + "?…" : u;
+    }
+
     /** 地址栏输入 → 网址：带协议的原样；像主机名/IP:端口的补 http(s)；其余当搜索词 */
     private void go(String in) {
         String u = in == null ? "" : in.trim();
-        Log.i(TAG, "go '" + u + "'");
+        Log.i(TAG, "go '" + logUrl(u) + "'");
         if (u.length() == 0) return;
-        if (!u.matches("(?i)^[a-z][a-z0-9+.-]*:.*")) {
+        // 「localhost:3000」「example.com:8080」冒号后是端口，不是协议（审查 #49 P3-2）
+        if (!u.matches("(?i)^[a-z][a-z0-9+.-]*:.*") || u.matches("^[^/:\\s]+:\\d+(/.*)?$")) {
             if (u.matches("^(localhost|127\\.0\\.0\\.1|\\d{1,3}(\\.\\d{1,3}){3}|\\[[0-9a-fA-F:]+\\])(:\\d+)?(/.*)?$")) u = "http://" + u;
             else if (!u.contains(" ") && u.matches("^[^/]+\\.[a-zA-Z]{2,}(:\\d+)?(/.*)?$")) u = "https://" + u;
             else u = "https://www.bing.com/search?q=" + Uri.encode(u);

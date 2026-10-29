@@ -489,7 +489,7 @@
           </div>
           <div class="srow">
             <div class="sl"><b data-i18n>正文字号</b><p data-i18n>对话和输入框里的字</p></div>
-            <div class="sc"><span class="seg" id="seg-fs"><button data-fs="s" data-i18n>小</button><button data-fs="m" data-i18n>中</button><button data-fs="l" data-i18n>大</button></span></div>
+            <div class="sc"><span class="seg" id="seg-fs"><button data-fs="s" data-i18n>小</button><button data-fs="m" data-i18n>中</button><button data-fs="l" data-i18n>大</button><button data-fs="xl" data-i18n>特大</button></span></div>
           </div>
           <div class="srow">
             <div class="sl"><b data-i18n>界面动效</b><p data-i18n>侧栏、菜单、整页的进出和完成提示；跟随系统时，系统开了「减少动态效果」就不放</p></div>
@@ -945,7 +945,7 @@
 <!-- ── 大屏：右侧工作区的标签与分隔条（layout.js 管）── -->
 <div id="ws-tabs"></div>
 <div id="ws-split" title="拖动调整宽度，双击复原" data-i18n-attr="title"></div>
-<div id="toast" class="hidden"></div>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
 <div id="dropzone" class="hidden"><div data-i18n>松手即附加</div></div>
 
 <!-- 顺序要紧：语言注册表 → i18n（定义 I18N.t，按需插入当前语言的词典并翻译静态标记）→ layout（大屏分档）→ app.js -->

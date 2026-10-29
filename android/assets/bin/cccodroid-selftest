@@ -17,9 +17,15 @@ has() { [ ! -f "$PREFIX/libexec/devkit/modules.json" ] || [ -f "$PREFIX/libexec/
 skip() { echo "SKIP $1 :: 「$2」模块没装"; }
 echo "== 环境"; echo "PREFIX=$PREFIX TMPDIR=$TMPDIR"; echo "PATH=$PATH"; echo "LD_PRELOAD=${LD_PRELOAD:-（无）}"
 echo "== 工作区"
-if has build; then t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf 'int main(){return 0;}' > .st.c && cc .st.c -o .st && ./.st && rm -f .st .st.c && echo ok"
-else t "工作区可执行" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && printf '#!/system/bin/sh\necho ok\n' > .st.sh && chmod +x .st.sh && ./.st.sh && rm -f .st.sh"; fi
-t "工作区符号链接" "cd \"${CCAPP_WORKSPACE:-$HOME}\" && ln -sf /system .st-ln && rm .st-ln && echo ok"
+# 在工作区里另开一个独占的子目录试：用固定文件名会覆盖、删掉用户恰好同名的文件（审查 #49 P2-17）
+WD=$(mktemp -d "${CCAPP_WORKSPACE:-$HOME}/.cccodroid-selftest.XXXXXX") || WD=
+if [ -z "$WD" ]; then NF=$((NF+1)); echo "FAIL 工作区可写 :: 建不了临时目录"
+else
+if has build; then t "工作区可执行" "cd \"$WD\" && printf 'int main(){return 0;}' > st.c && cc st.c -o st && ./st && echo ok"
+else t "工作区可执行" "cd \"$WD\" && printf '#!/system/bin/sh\necho ok\n' > st.sh && chmod +x st.sh && ./st.sh"; fi
+t "工作区符号链接" "cd \"$WD\" && ln -s /system st-ln && echo ok"
+rm -rf "$WD"
+fi
 echo "== 基础路径"
 for p in /bin/sh /bin/bash /usr/bin/env /usr/bin/python3 /tmp /etc/resolv.conf /etc/ssl/certs; do [ -e $p ] && echo "有 $p" || echo "无 $p"; done
 echo "== shebang"

@@ -52,7 +52,9 @@
       return Math.round(rtl() ? innerWidth - f.x : f.x + f.w);
     }
     const w = saved > 0 ? saved : land ? 240 : 286;     // 默认照设计稿；手机横屏窄一点
-    return Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, innerWidth - MIN_CHAT, w)));
+    // 右边开着窗格时也要给它留出最窄宽度：先把侧栏拖到 560 再开终端，对话会被挤成一百来像素（审查 #48 UI05-005 / #49 P2-16）
+    const rp = tier >= 2 && recent.some(isOpen) ? MIN_PANE : 0;
+    return Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, innerWidth - MIN_CHAT - rp, w)));
   }
 
   // 浮层侧栏（竖屏 / 窄屏，盖在对话上面的那种）宽度：拖过就用拖的，没拖过按窗口给大一点（约 62%），右边总留一条能点着关掉
@@ -106,7 +108,8 @@
     const dock = docked();
     if (!dock && wasDocked && hooks.closeDrawer) hooks.closeDrawer(true);
     root.classList.toggle("dock-l", dock);
-    if (dock && !wasDocked && isOpen("drawer") === false && hooks.openDrawer) hooks.openDrawer();
+    // 抽屉正在收（退场动画里）也算没开：不然收完把侧栏藏了，常驻位却还空着一条（审查 #48 NAV-01）
+    if (dock && !wasDocked && (isOpen("drawer") === false || $("drawer")._moShut) && hooks.openDrawer) hooks.openDrawer();
     if (dock && !wasDocked && ready && hooks.dockIn) hooks.dockIn();   // 启动时那次不放
     root.style.setProperty("--lw", leftWidth() + "px");
     const gf = fv.length && dock && !(parseFloat(localStorage.getItem(fk(LS_LW))) > 0) ? (rtl() ? fv[fv.length - 1] : fv[0]) : null;
@@ -128,6 +131,9 @@
     root.style.setProperty("--rw", (right ? rightWidth() : 0) + "px");
     const top = open[open.length - 1];
     for (const id of PANES) { const el = $(id); if (el) el.classList.toggle("ws-top", right && id === top); }
+    // 终端被盖住：它的文本视图跟着让位（审查 UI05-002），键盘焦点也交出来，不然按键打进看不见的终端（UI05-001）
+    root.classList.toggle("term-under", right && top !== "term");
+    if (right && top !== "term" && $("term") && $("term").contains(document.activeElement)) document.activeElement.blur();
     renderTabs(right ? open : [], top);
     placeBrowser();
 

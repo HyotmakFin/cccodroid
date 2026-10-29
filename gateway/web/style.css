@@ -15,6 +15,7 @@
   --tool-bg:#232220; --tool-line:#34332f; --tool-sep:#2e2d2a; --cmd-bg:#25232a;
   --err-bg:#311d1a; --err-line:#6b3229; --err-fg:#f3b1a6; --active-bg:#2c221d;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.5);
+  --accent-btn:var(--accent);   /* 字压在强调色上的按钮 / 选中块用这个底；默认外观另给深一档（见下） */
   --on-accent:#fff;   /* 强调色底上的字（逐月深色的强调色是白，字得是黑） */
   --mono:"CC Mono",ui-monospace,"Droid Sans Mono","Noto Sans Mono CJK SC",monospace;
   color-scheme:dark;
@@ -26,6 +27,8 @@
   /* 内置面板（文件、终端、查看器、git、浏览器）的按钮没有自己的上边距，要给状态栏留点余裕 */
   --safe-tp:calc(var(--safe-t) + 4px);
 }
+/* 默认外观的强调色上压白字只有 3.1（深色）/ 3.9（浅色），够不上 4.5：按钮底单独深一档，到 4.9。强调色在链接、光标、进度条上不变（审查 #49 P3-6） */
+html[data-skin="native"]{--accent-btn:#b4553a}
 /* 浅色外观（theme.js 设 html[data-theme]）；没列出的变量沿用上面 */
 html[data-theme="light"]{
   --bg:#faf9f5; --bg2:#f3f1ea; --bg3:#ebe8df; --bg4:#e3dfd4; --line:#e0dcd0;
@@ -147,6 +150,10 @@ html[data-skin="zhuyue"] #ctxbar:not(.warn):not(.danger) #ctxfill{background:lin
 .bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:18px 0 8px;line-height:1.35;font-weight:650;color:var(--strong)}
 .bubble h1{font-size:19px} .bubble h2{font-size:17.5px} .bubble h3{font-size:16px} .bubble h4{font-size:15px}
 .bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child{margin-top:0}
+/* 流式时正文切成「冻结的段 + 尾巴」几块：块与块之间别吃掉段距、标题上距，和重开历史时一个样（审查 #48 06-05） */
+.bubble .txt > div:first-child > div > p:last-child{margin-bottom:10px}
+.bubble .txt > div:first-child > div:not(:first-child) > :is(h1,h2,h3):first-child,
+.bubble .txt > div:first-child:not(:empty) + div > :is(h1,h2,h3):first-child{margin-top:18px}
 .bubble ul,.bubble ol{margin:6px 0;padding-inline-start:21px}
 .bubble li{margin:3px 0}
 .bubble a{color:var(--tool);text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:2px}
@@ -366,7 +373,7 @@ td{color:var(--fg2)}
 #perm-bar .mono{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
 #perm-bar .pb-more{font-size:11.5px;color:var(--fg3);padding:0 10px;display:flex;gap:8px;align-items:center}
 #perm-bar button,.perm-acts button{background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 11px;font-size:12.5px;flex:0 0 auto}
-#perm-bar button.primary,.perm-acts button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+#perm-bar button.primary,.perm-acts button.primary{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 #perm-bar .pb-x{background:none;border:none;color:var(--fg3);padding:2px 6px}
 .perm{border:1px solid var(--warn);border-radius:10px;margin:-2px 0 10px;background:var(--bg2);overflow:hidden}
 .perm.busy{opacity:.6;pointer-events:none}
@@ -517,7 +524,7 @@ html.dock-l .side-recent{margin:0 -12px;padding:0 12px 8px}
 .side-acct:hover,.side-acct.on{color:var(--fg)}
 .side-acct.on .acct-av{box-shadow:0 0 0 2px var(--accent)}
 .side-acct>svg{width:18px;height:18px;flex:none}
-.acct-av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:14px}
+.acct-av{width:30px;height:30px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent-btn);color:var(--on-accent);font-weight:600;font-size:14px}
 .acct-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
 .acct-txt b{font-weight:500;font-size:14px;color:var(--fg)}
 .acct-txt small{font-size:11.5px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -555,7 +562,7 @@ html.has-right #pages{inset-inline-end:var(--rw)}
 }
 
 .btn{
-  width:100%;margin-top:8px;background:var(--accent);color:var(--on-accent);border:0;
+  width:100%;margin-top:8px;background:var(--accent-btn);color:var(--on-accent);border:0;
   border-radius:9px;padding:10px;font:inherit;font-weight:600;font-size:14px;
 }
 .btn:active{opacity:.85}
@@ -643,7 +650,7 @@ a.weblink{overflow-wrap:anywhere}
 .mp-x{background:none;border:0;color:var(--fg3);font-size:16px;padding:6px 10px}
 .mp-lbl{font-size:11.5px;color:var(--fg3);margin:8px 4px 4px}
 .mp-eff{display:flex;flex-wrap:wrap;gap:6px;padding:0 2px}
-.mp-eff .cur{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.mp-eff .cur{background:var(--accent-btn);color:var(--on-accent);border-color:var(--accent-btn)}
 .mp-q{margin:2px 0 6px}
 .mp-list{overflow-y:auto;overscroll-behavior:contain;min-height:120px;flex:1}
 .mp-sec{font-size:11px;color:var(--fg3);margin:8px 6px 2px}
@@ -717,6 +724,8 @@ a.weblink{overflow-wrap:anywhere}
   background:var(--bg4);border:1px solid var(--line);color:var(--fg2);
   font-size:10px;line-height:1;display:grid;place-items:center;padding:0;
 }
+/* 看着 18px，手指按得到的范围往外扩到约 34px（审查 #49 P3-5） */
+.att-x::after{content:"";position:absolute;inset:-8px}
 
 /* 拖放提示 */
 #dropzone{
@@ -939,7 +948,7 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
   font:500 13px ui-monospace,monospace;touch-action:manipulation;
 }
 .tk:active{background:var(--bg4)}
-.tk.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.tk.on{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 #term-text-pre{
   flex:1;min-height:0;margin:0;overflow:auto;-webkit-overflow-scrolling:touch;
   background:var(--code-bg);border:1px solid var(--line);border-radius:9px;padding:9px;
@@ -968,9 +977,11 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 }
 .vw-head{display:flex;align-items:center;gap:6px;margin-bottom:7px;min-width:0}
 .vw-title{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
-#vw-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+/* 长文件名 / 长分支名：一行省略，别把右边的按钮挤出去（审查 #49 待确认-6） */
+:is(#vw-name,#git-name){font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+:is(#vw-info,#git-info){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #vw-info{margin:0;font-size:10.5px}
-.vw-acts{display:flex;gap:5px;flex:0 0 auto;overflow-x:auto;max-width:62vw}
+.vw-acts{display:flex;gap:5px;flex:0 1 auto;min-width:0;overflow-x:auto;max-width:62%}   /* 按窗格宽算：宽屏停靠在右边时 62vw 比窗格还宽 */
 .vw-acts .btn{width:auto;margin:0;flex:0 0 auto;white-space:nowrap}
 .ico-share{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;vertical-align:-3px;margin-right:4px}
 .vw-ico{padding-left:9px;padding-right:9px}
@@ -1061,6 +1072,7 @@ html.has-right #files,html.has-right #viewer,html.has-right #git,html.has-right 
 }
 html.has-right #files.ws-top,html.has-right #viewer.ws-top,html.has-right #git.ws-top,html.has-right #term.ws-top{z-index:71}
 html.has-right #term-textview{z-index:73}
+html.term-under #term-textview{display:none}
 html.has-right #files{padding:var(--safe-tp) 12px calc(var(--safe-b) + 8px)}
 html.has-right #popup{inset-inline-end:calc(var(--rw) + 22px)}
 html.ws-multi #files,html.ws-multi #viewer,html.ws-multi #git,html.ws-multi #term,html.ws-multi #term-textview{padding-top:calc(var(--safe-tp) + 38px)}
@@ -1202,6 +1214,10 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .gdiff .no{flex:0 0 auto;width:3.4em;text-align:right;padding-inline-end:6px;color:var(--fg3);user-select:none;opacity:.8}
 .gdiff .tx{flex:1;min-width:0;white-space:pre-wrap;word-break:break-all;padding:0 6px}
 .gdiff.nowrap .tx{white-space:pre;word-break:normal}
+/* 不换行时整块能横着滑到行尾；行底色铺满最长那行（审查 #49 P3-4） */
+.gdiff.nowrap{overflow-x:auto}
+.gdiff.nowrap .ln{width:max-content;min-width:100%}
+.gdiff.nowrap .tx{flex:1 0 auto}
 .gdiff .add{background:color-mix(in srgb,var(--ok) 16%,transparent)}
 .gdiff .del{background:color-mix(in srgb,var(--err) 16%,transparent)}
 .gdiff .hunk{color:var(--tool);background:var(--bg2)}
@@ -1358,7 +1374,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .vw-cellbar:empty{display:none}
 .vw-tabs{display:flex;gap:4px;overflow-x:auto;flex:0 0 auto;padding-bottom:2px}
 .vw-tab{flex:0 0 auto;border:1px solid var(--line);background:var(--bg2);color:var(--fg2);border-radius:7px;padding:4px 10px;font-size:12.5px}
-.vw-tab.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.vw-tab.on{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 
 /* 端侧小模型卡 */
 .local-facts{display:flex;flex-direction:column;gap:2px;margin-top:8px}
@@ -1396,7 +1412,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .rw-note{color:var(--fg3);font-size:12px}
 .rw-acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .rw-acts button{padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);font-size:14px}
-.rw-acts button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.rw-acts button.primary{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 /* 更新说明：更新后第一次打开时主窗口正中的卡片；内容长时卡片内部滚动 */
 #whatsnew,#notice-pop{position:fixed;inset:0;z-index:210;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
 .wn-card{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);width:100%;max-width:560px;max-height:min(80vh,100%);display:flex;flex-direction:column;box-shadow:0 12px 40px var(--shadow);overflow:hidden}
@@ -1448,7 +1464,7 @@ mark.jump-hit{background:#f5c54266;color:inherit;border-radius:2px}
 .cm-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cm-k{color:var(--fg2);font-size:14px}
 .cm-num{border:1px solid var(--line);background:var(--bg3);color:var(--fg);font:inherit;font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.5px;padding:4px 12px;border-radius:9px;cursor:pointer}
-.cm-num:active{background:var(--accent);color:var(--on-accent)}
+.cm-num:active{background:var(--accent-btn);color:var(--on-accent)}
 .cm-qr{display:block;width:100%;max-width:260px;margin:10px 0 4px;border-radius:12px}
 .cm-qr.hidden{display:none}
 .cm-box p{margin:8px 0;font-size:14px;line-height:1.6}
@@ -1577,6 +1593,7 @@ html[data-skin="qiusuo"] #sub-title:is(.warn,.live){
 /* 块：标题行 + 内容（接口卡、Shizuku、设备工具、内存管家、更新、核对…） */
 .sblock{padding:6px 0 14px;border-bottom:1px solid var(--line)}
 .sblock > .srow.head{border-bottom:0;padding-bottom:8px}
+.sblock > .srow.head > .sc,#set-ov .sblock > .srow.head > .sc{flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end}   /* 法语窄屏两个按钮并排多出一点：放不下就折行 */
 .sblock > .srow.sub{padding:10px 0;border-bottom:0;border-top:1px dashed var(--line)}
 .sblock > .srow.sub .sl p{font-size:13px;color:var(--fg2)}
 .sblock > .row-actions,.sblock > .sinline{margin-top:10px}
@@ -1601,11 +1618,12 @@ input[type=checkbox].sw:disabled{opacity:.45;cursor:default}
 /* 窄屏 */
 #tab-settings.set-list .set-wrap,#tab-settings.set-one .set-wrap{display:block}
 #tab-settings.set-list .set-main{display:none}
+#tab-settings.set-list .set-main:has(.mo-ghost){display:block}   /* 返回分类列表时内容页的替身还在里面播退场（审查 SET-02-03） */
 #tab-settings.set-list .set-cats{position:static;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:4px;gap:0}
 #tab-settings.set-list .set-cats button{padding:13px 14px;font-size:15px;color:var(--fg);border-radius:10px}
 #tab-settings.set-list .set-cats button:not(:last-child){box-shadow:0 1px 0 var(--line)}
 #tab-settings.set-list .set-cats .chev{display:block}
-#tab-settings.set-one .set-cats{display:none}
+#tab-settings.set-one .set-cats:not(.mo-ghost){display:none}
 #tab-settings.set-one .set-cat .set-h{display:none}
 #tab-settings.set-one .set-cat{padding:2px 14px}
 
@@ -1835,7 +1853,7 @@ html[data-theme="light"]{--panel:#fff}
 /* 按钮（整页、设置里）：描边按钮为主，主操作填色；sm 更紧 */
 :is(#pages,#set-ov) .btn{width:auto;margin:0;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:6px 12px;font-size:14px;font-weight:400;white-space:nowrap}
 :is(#pages,#set-ov) .btn:hover{border-color:var(--accent-dim)}
-:is(#pages,#set-ov) .btn:not(.ghost):not(.danger){background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+:is(#pages,#set-ov) .btn:not(.ghost):not(.danger){background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 :is(#pages,#set-ov) .btn.danger{color:var(--err);border-color:var(--err-line);background:var(--bg)}
 :is(#pages,#set-ov) .btn.sm{padding:4px 10px;font-size:13px;border-radius:8px}
 :is(#pages,#set-ov) select{border:1px solid var(--line);border-radius:10px;background-color:var(--panel)}
@@ -2234,7 +2252,7 @@ body{line-height:var(--phi)}
 .sb-x svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 /* 带「搜索」键的：键收在框内右侧，文字按钮、强调色 */
 .sb-go{padding-inline-end:4px;margin:var(--g2) 0}
-.sb-btn{flex:none;height:32px;padding:0 var(--g3);border:0;border-radius:var(--g2);background:var(--accent);color:var(--on-accent);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.sb-btn{flex:none;height:32px;padding:0 var(--g3);border:0;border-radius:var(--g2);background:var(--accent-btn);color:var(--on-accent);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 .sb-btn:active{filter:brightness(.92)}
 /* 文件浏览器的过滤框：和旁边控件同高，不要下边距 */
 .fs-tools .fs-sb{flex:1;min-width:0;height:36px;margin:0}
@@ -2380,7 +2398,7 @@ textarea.pj-field{min-height:89px;resize:vertical;line-height:1.618}
 #t-until:has(> .hidden + .hidden){display:none}
 .pj-days{display:flex;gap:var(--g1);margin-bottom:var(--g2);flex-wrap:wrap}
 .pj-days button{width:38px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--fg2);font:inherit;font-size:14px;cursor:pointer}
-.pj-days button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.pj-days button.on{background:var(--accent-btn);border-color:var(--accent-btn);color:var(--on-accent)}
 .pj-col{display:flex;align-items:center;gap:6px;border:0;background:none;color:var(--fg2);font:inherit;font-size:14px;font-weight:600;padding:var(--g2) 0;margin-top:var(--g2);cursor:pointer}
 .pj-col svg.ei{width:16px;height:16px;transition:transform .15s}
 .pj-col[aria-expanded="true"] svg.ei{transform:rotate(90deg)}
@@ -2494,6 +2512,7 @@ html[data-uifont="system"]{--font-ui:sans-serif;--font-sans:sans-serif;--mono:"C
 html[data-readfont="sans"]{--font-read:var(--font-ui)}
 html[data-fs="s"]{--fs-chat:13.5px}
 html[data-fs="l"]{--fs-chat:16px}
+html[data-fs="xl"]{--fs-chat:18px}
 body{font-family:var(--font-ui)}
 button,input,select,textarea,optgroup{font-family:inherit}
 /* 正文字号只管对话和输入框（同网页版的 Transcript text size），界面控件不跟着变 */
@@ -2897,16 +2916,23 @@ html[dir="rtl"] .lmap .lm-card,html[dir="rtl"] .lmap .lm-now{direction:rtl}
    由脚本按弹簧算出来写进 <style id="mo-kf">，时长是 --mo-snap / --mo-pop / --mo-soft；这里只管谁在什么时候用哪个。
    进场弹、退场干脆（.17s 缓入）。html[data-motion="off"] 时一条都不生效，保持原来的样子 */
 @keyframes mo-fade-in{from{opacity:0}}
-@keyframes mo-fade-out{to{opacity:0}}
+/* 退场从进场停下的地方起步：MO.leave 把当时的 transform / opacity 记进这两个变量（不往下继承，免得子元素拿到父元素的值） */
+@property --mo-from{syntax:"*";inherits:false}
+@property --mo-op{syntax:"*";inherits:false}
+@keyframes mo-fade-out{from{opacity:var(--mo-op,1)}to{opacity:0}}
 @keyframes mo-slide-out{to{transform:translateX(-100%)}}
 @keyframes mo-slide-out-r{to{transform:translateX(100%)}}
-@keyframes mo-push-out{to{transform:translateX(100%)}}
-@keyframes mo-push-out-r{to{transform:translateX(-100%)}}
+@keyframes mo-push-out{from{transform:var(--mo-from,none)}to{transform:translateX(100%)}}
+@keyframes mo-push-out-r{from{transform:var(--mo-from,none)}to{transform:translateX(-100%)}}
 @keyframes mo-ring{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
 @keyframes mo-sweep{0%{transform:scaleX(0);opacity:1}40%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
 @keyframes mo-dim{from{opacity:1}}
 /* 侧栏：遮罩淡入、面板弹出、条目错开跟上；收起时滑回去（常驻左栏不放） */
 html[data-motion="on"]:not(.dock-l) .drawer-panel{animation:mo-drawer var(--mo-snap) linear}
+/* 关了动效（或跟随系统「减少动态效果」）：动效系统之前就有的几处老动画、顶栏折叠的过渡也一起关（审查 #48 A10-01） */
+html[data-motion="off"] :is(.drawer-panel,.sheet-panel,#set-ov,.pj-ov,.msg,#popup,.pop-menu,#toast,.mp-panel,.qcard,.msg.hit-flash .bubble,.ch-sep.hit-flash,.bm-hit){animation:none}
+html[data-motion="off"] :is(.wl-mark path,.wl-mark circle){animation:none;stroke-dashoffset:0;opacity:1}   /* 「减少动态效果」的待确认-4：首屏标识的描线也直接画好 */
+html[data-motion="off"] :is(#tb-tools,#tb-tools *,#btn-more path){transition:none!important}
 html[data-motion="on"]:not(.dock-l)[dir="rtl"] .drawer-panel{animation-name:mo-drawer-r}
 html[data-motion="on"] #drawer.mo-enter{animation:mo-fade-in calc(.2s * var(--mo-x,1)) ease-out}
 html[data-motion="on"] #drawer.mo-items .mo-st{animation:mo-item var(--mo-soft) linear both;animation-delay:calc((70ms + var(--i,0) * 45ms) * var(--mo-x,1))}
@@ -2927,6 +2953,11 @@ html[data-motion="on"] .mo-in-rise{animation:mo-rise var(--mo-soft) linear}
 html[data-motion="on"] .mo-in-pane{animation:mo-pane var(--mo-soft) linear}
 html[data-motion="on"] .mo-in-pane-back,html[data-motion="on"][dir="rtl"] .mo-in-pane{animation:mo-pane-r var(--mo-soft) linear}
 html[data-motion="on"][dir="rtl"] .mo-in-pane-back{animation-name:mo-pane}
+/* 垫底替身上面的新内容（MO.ghost 的 top）：右边和下面铺一片底色，盖住替身露在新内容外面的部分；被滚动容器裁着，不会盖到标题栏。
+   以前设置窄屏进二级时，分类列表的替身从新那一类的四周、下方透出来，字叠在一起（四个外观都有） */
+.mo-lift::before{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:100vmax 100vmax 0 100vmax var(--bg);z-index:-1;pointer-events:none}
+[dir="rtl"] .mo-lift::before{box-shadow:-100vmax 100vmax 0 100vmax var(--bg)}
+/* 阴影往右下偏（从右往左读的界面往左下）：盖住新内容右边和下面（替身从那儿透出来），左边留着看旧的一屏往左退暗；阴影只画在框外，卡片自己的底色不受影响 */
 html[data-motion] .mo-out-push{animation:mo-push-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important;pointer-events:none}
 html[data-motion][dir="rtl"] .mo-out-push{animation-name:mo-push-out-r!important}
 html[data-motion] .mo-out-fade{animation:mo-fade-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important;pointer-events:none}
@@ -3133,9 +3164,12 @@ html[data-motion="on"] .tool.mo-flash::after{content:"";position:absolute;inset:
 #tb-pins{display:flex;align-items:center;gap:inherit;flex:none}
 #tb-pins:empty{display:none}
 #topbar .tb-off{display:none !important}
-.tb-row{align-items:flex-start}
+/* 列表占满整行、「恢复默认」挪到下面靠右：窄屏俄语时三段选择放不进左栏，被裁掉一截（审查 #49 待确认-6，溢出探针 ru@360） */
+.tb-row{align-items:flex-start;flex-wrap:wrap;row-gap:8px}
+.tb-row>.sl{flex-basis:100%}
+.tb-row>.sc{margin-inline-start:auto}
 .tb-list{margin-top:8px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
-.tb-item{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 2px;border-bottom:1px solid var(--line);background:var(--panel);position:relative}
+.tb-item{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:5px 8px 5px 2px;border-bottom:1px solid var(--line);background:var(--panel);position:relative}
 .tb-item:last-child{border-bottom:0}
 .tb-item.tb-g1{box-shadow:inset 0 2px 0 var(--line)}
 .tb-item[data-g="off"] .tb-ico,.tb-item[data-g="off"] .tb-nm{opacity:.5}
@@ -3144,8 +3178,8 @@ html[data-motion="on"] .tool.mo-flash::after{content:"";position:absolute;inset:
 .tb-grip{flex:none;width:30px;height:34px;display:grid;place-items:center;color:var(--fg3);cursor:grab;touch-action:none}
 .tb-grip svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round}
 .tb-ico svg{width:18px;height:18px;fill:none;stroke:var(--fg2);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
-.tb-item .tb-nm{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tb-item .tb-seg{flex:none}
+.tb-item .tb-nm{flex:1 1 6em;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-item .tb-seg{flex:none;margin-inline-start:auto}
 
 /* ── 强调色色块与消息按钮开关（0.4.20） ── */
 .ac-sw{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;max-width:360px}

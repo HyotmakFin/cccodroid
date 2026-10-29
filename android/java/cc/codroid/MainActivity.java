@@ -392,8 +392,11 @@ public class MainActivity extends Activity {
     }
 
     /** 从「已完成」通知点进来：切到那个会话（界面正显示它就不动）。页面可能还在启动，等 __cc 就绪 */
+    private String pendingSid;
     private void openSession(String sid) {
         if (web == null || sid == null || !sid.matches("[0-9A-Za-z-]{8,64}")) return;
+        // 冷启动时页面还在 about:blank / 等网关：这里塞进去的轮询会被真正的导航冲掉。先记着，网关页面落地再发（审查 #49 待确认-2）
+        if (!isOwnGateway(web.getUrl())) { pendingSid = sid; return; }
         web.evaluateJavascript("(function f(n){var c=window.__cc;if(c&&c.view){setTimeout(function(){try{if(c.view.sessionId!==\"" + sid
             + "\")c.openSession(\"" + sid + "\")}" + caught("openSession") + "},n?800:0)}else if(n<50)setTimeout(function(){f(n+1)},200)})(0)", null);
     }
@@ -960,6 +963,8 @@ public class MainActivity extends Activity {
     private void buildSetupUi(boolean quick) {
         boolean dark = uiDark();
         int accent = BrowserPane.pal(this, dark, "accent");
+        // 换整棵视图树（装/更新/卸工具包）前先把浏览器窗格关掉：不然 pane 还指着旧树里的那个，再开网页一片空白（审查 #50 R1）
+        if (pane != null) closePane(true);
         root = new FrameLayout(this);
         root.setBackgroundColor(BrowserPane.pal(this, dark, "bg"));
         LinearLayout col = new LinearLayout(this);
@@ -1167,6 +1172,7 @@ public class MainActivity extends Activity {
                 if (isOwnGateway(url)) v.clearHistory();
                 pushInsets();
                 if (handoff != null && isOwnGateway(url)) ui.postDelayed(MainActivity.this::dropHandoff, 180);
+                if (pendingSid != null && isOwnGateway(url)) { String sid = pendingSid; pendingSid = null; openSession(sid); }
             }
         });
         web.addJavascriptInterface(new Object() {
