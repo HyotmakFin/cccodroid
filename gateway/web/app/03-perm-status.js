@@ -659,6 +659,7 @@
         if (!blocks.length && live) { any = false; if (!dots) { bubble.insertAdjacentHTML("afterbegin", DOTS); dots = bubble.firstChild; } phPlace(); }
       },
       tool(id, name, input) {
+        noteWrote(name, input);            // 回复里只写文件名也能点（见 01-core.js 的 WROTE）
         if (live) { pendTools.add(id); cardTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
         let g = last;
         if (!inGroup()) {

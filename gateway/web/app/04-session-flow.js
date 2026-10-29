@@ -49,6 +49,7 @@
     state.pendingModel = null;               // 新会话面板里暂存的选择只属于那个新会话
     refreshSessModel();                      // 模型标签换成这个会话自己的（打开、启动、重连都经过这里）
     view.gen++;
+    WROTE.clear();                           // 写过的文件只认本会话的
     view.cursor = null;
     view.next = null;
     view.loading = false;

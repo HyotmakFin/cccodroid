@@ -601,6 +601,20 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   // 本机绝对路径：回复里出现就变成可点的链接，点了在应用内查看器打开（目录则开文件面板）。
   // 只认这几个根，免得把 "/api/file" 这类接口名、"1/2" 这类分数当成路径。可带 ":行号" 尾巴（file.js:12）。
   const PATH_RE = /(^|[\s(（:：,，、;'"`“])((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[\w.\-+@%~=\u4e00-\u9fff]+)+\/?)(:\d+(?::\d+)?)?/g;
+  // 本会话写过 / 改过的文件（Write、Edit…）：回复里只写了文件名或相对路径时也能点。模型常偷懒不写全路径，
+  // 网关会提醒它（gw/pathnote.mjs），这里兜底。键是文件名和各级尾部路径；同名不同路径的记 null，不猜
+  const WROTE = new Map();
+  function noteWrote(name, input) {
+    const p = input && (input.file_path || input.notebook_path);
+    if (!/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(name) || !/^\//.test(p || "")) return;
+    const parts = p.split("/").filter(Boolean);
+    for (let i = parts.length - 1; i >= Math.max(1, parts.length - 4); i--) {
+      const k = parts.slice(i).join("/");
+      WROTE.set(k, WROTE.has(k) && WROTE.get(k) !== p ? null : p);
+    }
+  }
+  const wroteOf = (s) => (WROTE.size && !mdImg && WROTE.get(String(s).replace(/^\.\//, ""))) || null;
+  const WROTE_RE = /(^|[\s(（:：,，、;*“])((?:\.\/)?[\w.\-\u4e00-\u9fff]+(?:\/[\w.\-\u4e00-\u9fff]+)*\.[A-Za-z0-9]{1,8})(?=$|[\s)）:：,，、;*”。！？!?&]|\.(?:\s|$))/g;
   const pathLink = (p, line, label) =>
     `<a class="fpath" data-path="${p}" href="#" title="${t("在查看器中打开")}">${label || p + (line || "")}</a>`;
   // 行内公式：$…$、\(…\)、行内的 $$…$$。先于转义从原文里抠出来（换成 \u0001N\u0001），代码片段里的不认。
@@ -640,7 +654,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
         mdImg ? hold(`<img class="md-img" src="${esc(mdImg(u.replace(/&amp;/g, "&")))}" alt="${alt}" loading="lazy">`) : all)
       .replace(/`([^`\n]+)`/g, (_, c) => {
         const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
-        return hold(m ? `<code>${pathLink(m[1], m[2], c)}</code>` : `<code>${c}</code>`);
+        const w = !m && wroteOf(c);
+        return hold(m ? `<code>${pathLink(m[1], m[2], c)}</code>` : w ? `<code>${pathLink(w, "", c)}</code>` : `<code>${c}</code>`);
       })
       .replace(/\[([^\]]+)\]\((\/[^)\s]+)\)/g, (_, l, p) => hold(pathLink(p.replace(/:\d+(?::\d+)?$/, ""), "", l)))
       .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, l, u) => hold(`<a class="weblink" href="${u}" target="_blank" rel="noopener">${l}</a>`))
@@ -655,6 +670,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
         const tail = line ? "" : (p.match(/[.]+$/) || [""])[0];     // 句末的点不算路径
         return pre + hold(pathLink(p.slice(0, p.length - tail.length), line)) + tail;
       })
+      .replace(WROTE_RE, (all, pre, p) => { const w = wroteOf(p); return w ? pre + hold(pathLink(w, "", p)) : all; })
       .replace(/\*\*\*([^*\n]+)\*\*\*/g, "<strong><em>$1</em></strong>")
       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")

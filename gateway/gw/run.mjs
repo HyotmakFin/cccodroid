@@ -13,13 +13,14 @@ import { INTERRUPTED, QUEUE, RUN_LANE, RUN_SESSIONS, abortRun, endRun, holdLane,
 import { handleLocalCommand } from "./modelcmd.mjs";
 import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
-import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
+import { TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
 import { SUBAGENT_HINT, agentBook, takeAgentNote, onShared, privateAgentsBase } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
+import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -176,7 +177,7 @@ export async function startRun(item) {
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
   // 建档（脉络）：常驻规则 + 这一轮该不该先建档（见 archive.mjs）
   const arch = P.local ? null : await archiveHint(run.sessionId).catch(() => null);
-  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : PREVIEW_HINT, arch?.rule, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : previewHint(cwd), arch?.rule, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // 子代理（连孙代理）统一的联络规矩：用 agentId 发消息、summary 写事由、长内容落文件只发路径（见 agents.mjs）
   if (!P.local && !message.trim().startsWith("/")) argv.push("--append-subagent-system-prompt", SUBAGENT_HINT);
@@ -226,13 +227,16 @@ export async function startRun(item) {
     const notes = [extra, takeAgentNote(run.cwd, run.sessionId)].filter(Boolean);
     return notes.length || imgs.length ? [{ type: "text", text: msg }, ...imgs, ...notes.map((n) => ({ type: "text", text: `<system-reminder>\n${n}\n</system-reminder>` }))] : msg;
   };
-  writeUser(withNotes(message, arch?.note, imgs0));
+  // 上一轮只写了文件名没写全路径：这一轮的消息带上提醒（见 pathnote.mjs）。命令那轮不带（带了也包不进去，提醒会白白丢掉）
+  const pathNote = isCmd || P.local ? "" : takePathNote(run.sessionId);
+  writeUser(withNotes(message, [arch?.note, pathNote].filter(Boolean).join("\n\n"), imgs0));
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
   run.bgList = [];             // 后台任务明细：{ id, type, desc }（shell / 子代理 / monitor / 工作流），界面列出来、可单独停
   run.replays = 0;
   run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
+  run.paths = pathWatch();      // 本轮写过的文件、回复里有没有写全路径（收尾时核对，见 pathnote.mjs）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
     try { writeUser(withNotes(item.message, null, inlineImagesSync(item.message, P))); } catch { return false; }
@@ -390,6 +394,7 @@ export async function startRun(item) {
       let n = 0;
       for (const c of ev.message.content) if (c && c.type === "tool_use" && c.id && !run.usageTools.has(c.id)) { run.usageTools.add(c.id); n++; }
       if (n) usageAdd({ tl: n }, run.sessionId);
+      run.paths.feed(ev);
     }
     if (ev.type === "control_cancel_request") {           // claude 自己撤回了（比如被中断）
       if (run.perms.delete(ev.request_id)) { emit({ type: "perm_resolved", id: ev.request_id, behavior: "cancel" }); publishState(); }
@@ -462,6 +467,7 @@ export async function startRun(item) {
       noteTokens(run.provider, lastResult.usage);
       billAfterRun(run.provider);
       if (!isCmd && !lastResult.is_error && run.sessionId) idleArm(run.sessionId, flags);
+      if (!isCmd && !P.local && !lastResult.is_error) settlePathNote(run.sessionId, run.paths);
       return endRun(run, {
         durationMs: ms,
         // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报

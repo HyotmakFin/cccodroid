@@ -12,7 +12,6 @@ import { publish } from "./bus.mjs";
 /** 给 claude 的工具说明。两种布局装的东西不一样，各说各的，别把没有的命令告诉它 */
 // 第三方模型的清单提醒（见 providerEnv 里的 CLAUDE_CODE_ENABLE_TODO_TOOLS）；Claude 型号自己会用，不用提醒
 // 查看器能直接预览 HTML：告诉 Claude 静态网页写好给路径就行，别动不动起 http.server（还得用户自己找端口）
-export const PREVIEW_HINT = "In this app, file paths you mention in a reply are tappable and open in a file viewer, where .html files render as a live preview (relative CSS, JS and images load, and it reloads when the file changes). For a static web page or browser game, write the file and give the user its full path instead of starting a local web server; start a server only when the page needs a backend.";
 export const TASKS_HINT = "When a request has 3 or more distinct steps, track them with the TaskCreate and TaskUpdate tools: create the tasks first, mark each in_progress when you start it and completed when it is done. The user sees this list as a live progress panel.";
 /** 报一次「正在写工具参数」的字数（节流用） */
 function toolEmit(flags, sse) {
