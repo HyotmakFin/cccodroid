@@ -543,6 +543,76 @@ function unzip(buf) {
   return out;
 }
 
+// ── fetch 的上游压缩包 ───────────────────────────────────────────────
+// "usr/glibc/opt/d2/": { url, sha256, why, extract: { format?, strip?, include?, exec? } }
+//   format  tar.gz / tar.xz / tar.bz2 / tar / zip，不写就按 url 的后缀认
+//   strip   去掉开头几层目录（上游包通常裹一层 d2-v0.9.0/）
+//   include 只取这些路径（去层之后的相对路径；写目录就连带下面全部）
+//   exec    补执行位的文件（zip 不带权限位时用）
+// 规矩：sha256 核对的是下载下来的压缩包；解出的路径不许越出落地目录，软链也不许指出去；
+// 硬链接改成实打实的文件；setuid/setgid 位一律去掉。
+const ARCHIVE_EXT = [["tar.gz", /\.(tar\.gz|tgz)$/], ["tar.xz", /\.(tar\.xz|txz)$/], ["tar.bz2", /\.(tar\.bz2|tbz2?)$/], ["tar", /\.tar$/], ["zip", /\.zip$/]];
+const relOk = (s) => typeof s === "string" && s && !s.startsWith("/") && !s.split("/").includes("..");
+function archiveFormat(f, p) {
+  const x = f.extract;
+  if (!x || typeof x !== "object" || Array.isArray(x)) throw new Error("fetch 的 extract 要写成对象（可以是 {}）: " + p);
+  for (const k of Object.keys(x)) if (!["format", "strip", "include", "exec"].includes(k)) throw new Error(`fetch 的 extract 不认 ${k}: ` + p);
+  if (x.strip !== undefined && !(Number.isInteger(x.strip) && x.strip >= 0 && x.strip <= 5)) throw new Error("extract.strip 是 0–5 的整数: " + p);
+  for (const k of ["include", "exec"]) if (x[k] !== undefined && !(Array.isArray(x[k]) && x[k].length && x[k].every(relOk))) throw new Error(`extract.${k} 要写成相对路径的数组（不许绝对路径、不许 ..）: ` + p);
+  const fmt = x.format || (ARCHIVE_EXT.find(([, re]) => re.test(new URL(f.url).pathname)) || [])[0];
+  if (!ARCHIVE_EXT.some(([n]) => n === fmt)) throw new Error("认不出压缩格式，写 extract.format（tar.gz / tar.xz / tar.bz2 / tar / zip）: " + p);
+  return fmt;
+}
+
+/** 解开上游压缩包 → [{ rel, type: "0"|"2"|"5", mode, data?, link? }]（rel 已去层、已按 include 过滤、已查越界） */
+async function archiveEntries(buf, f, p) {
+  const x = f.extract, fmt = archiveFormat(f, p), strip = x.strip || 0;
+  const want = (r) => !x.include || x.include.some((i) => r === i.replace(/\/$/, "") || r.startsWith(i.replace(/\/$/, "") + "/"));
+  const cut = (name) => {
+    const parts = name.replace(/^\.\//, "").split("/").filter((s) => s && s !== ".");
+    if (parts.includes("..")) throw new Error(`${p}：包里有带 .. 的路径 ${name}`);
+    return parts.length > strip ? parts.slice(strip).join("/") : null;
+  };
+  let raw;
+  if (fmt === "zip") raw = unzip(buf).map((e) => ({ name: e.name, type: "0", mode: e.exec ? 0o755 : 0o644, data: e.data }));
+  else {
+    const tar = fmt === "tar.gz" ? zlib.gunzipSync(buf, { maxOutputLength: 2 ** 31 }) : fmt === "tar.xz" ? await unxz(buf)
+      : fmt === "tar.bz2" ? execFileSync("bzip2", ["-dc"], { input: buf, maxBuffer: 2 ** 31 }) : buf;
+    raw = [...readTar(tar)];
+  }
+  const out = [], files = new Map();
+  for (const e of raw) {
+    if (e.name.startsWith("/")) throw new Error(`${p}：包里有绝对路径 ${e.name}`);
+    const r = cut(e.name);
+    if (!r || !want(r)) continue;
+    const mode = (e.mode || 0o644) & 0o755;              // 去掉 setuid/setgid 和组、其他人的写权限
+    if (e.type === "5") { out.push({ rel: r, type: "5", mode: mode | 0o700 }); continue; }
+    if (e.type === "2") {
+      // 软链：只许相对、只许指向落地目录里面
+      const to = path.posix.normalize(path.posix.join(path.posix.dirname(r), e.link));
+      if (e.link.startsWith("/") || to === ".." || to.startsWith("../")) throw new Error(`${p}：软链 ${r} → ${e.link} 指出了落地目录`);
+      out.push({ rel: r, type: "2", link: e.link }); continue;
+    }
+    if (e.type === "1") {
+      const t = cut(e.link || "");
+      if (!t || !files.has(t)) throw new Error(`${p}：硬链接 ${r} 指向的 ${e.link} 没取进来（include 漏了？）`);
+      const src = files.get(t);
+      out.push({ rel: r, type: "0", mode: src.mode, data: src.data }); files.set(r, src); continue;
+    }
+    if (e.type !== "0" && e.type !== "7") continue;              // 设备文件、FIFO 之类不要
+    const ent = { rel: r, type: "0", mode, data: e.data };
+    out.push(ent); files.set(r, ent);
+  }
+  for (const ex of x.exec || []) {
+    const ent = files.get(ex.replace(/\/$/, ""));
+    if (!ent) throw new Error(`${p}：extract.exec 里的 ${ex} 不在解出来的文件里`);
+    ent.mode |= 0o755;
+  }
+  for (const i of x.include || []) if (!out.some((e) => e.rel === i.replace(/\/$/, "") || e.rel.startsWith(i.replace(/\/$/, "") + "/"))) throw new Error(`${p}：extract.include 的 ${i} 在包里没找到`);
+  if (!out.some((e) => e.type === "0")) throw new Error(`${p}：解出来一个文件都没有（strip 太多？）`);
+  return out;
+}
+
 // ── 主流程 ───────────────────────────────────────────────────────────
 // 组件：底座仓库之外还可以用别的仓库（如 termux-x11），只在打组件时加载，不影响工具包本身的闭包
 // 组件定义两个来源：devkit.json 的 components（预置组件，如 chromium），或 --recipe 指向的外部配方目录
@@ -581,6 +651,12 @@ function loadRecipe(dir) {
     if (!/^[0-9a-f]{64}$/.test(f.sha256 || "")) throw new Error("fetch 的 sha256 要写全: " + p);
     if (!f.why) throw new Error("fetch 要写 why: " + p);
     if (f.mode !== undefined && !/^[0-7]{3,4}$/.test(String(f.mode))) throw new Error("fetch 的 mode 是八进制三位/四位: " + p);
+    // 压缩包：键是落地目录（以 / 结尾），解包后按 strip / include 取一部分放进去
+    if ((f.extract !== undefined) !== p.endsWith("/")) throw new Error("fetch 解压包的键要以 / 结尾（落地目录），且要写 extract: " + p);
+    if (f.extract !== undefined) {
+      if (f.mode !== undefined) throw new Error("fetch 解压包不收 mode（权限取包里的，补执行位用 extract.exec）: " + p);
+      archiveFormat(f, p);
+    }
   }
   // pip（Termux 仓库没有的纯 Python 依赖）：只收 PyPI 官方文件服务器上的 *-none-any.whl，钉 sha256
   if (r.pip !== undefined) {
@@ -958,6 +1034,33 @@ if (cmd === "build" || cmd === "component") {
     if (f.link) { tw.add({ name: p, type: "2", mode: 0o777, mtime: 0, link: f.link }); continue; }
     const ep = /\/ensurepip\/_bundled\/pip-([^-]+)-/.exec(p);
     if (ep && ensurepipVer && ep[1] !== ensurepipVer) throw new Error(`${p}: python 的 ensurepip 要 pip ${ensurepipVer}，这里给的是 ${ep[1]}（python 升级了：到 PyPI 换成 pip-${ensurepipVer}-py3-none-any.whl，填新的 url 与 sha256）`);
+    if (f.extract) {
+      // 上游压缩包：缓存按哈希起名（不同包常同名，如 linux-arm64.tar.gz），解开后逐个放进落地目录
+      const file = decodeURIComponent(new URL(f.url).pathname.split("/").pop());
+      const dest = path.join(CACHE, `fetch-${f.sha256.slice(0, 16)}-${file}`);
+      let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
+      if (!b || sha256(b) !== f.sha256) {
+        b = fetchUrl(f.url);
+        if (sha256(b) !== f.sha256) throw new Error(`${p}: 哈希不符`);
+        fs.writeFileSync(dest, b);
+      }
+      const root = p.replace(/\/$/, "");
+      const mkdirs = (name) => { const parts = name.split("/"); for (let i = 2; i < parts.length; i++) { const d = parts.slice(0, i).join("/"); if (!seenDirs.has(d)) { seenDirs.add(d); tw.add({ name: d + "/", type: "5", mode: 0o755, mtime: 0 }); } } };
+      let n = 0, bytes = 0;
+      for (const e of await archiveEntries(b, f, p)) {
+        const name = root + "/" + e.rel;
+        if (manifest.has(name.slice(4))) throw new Error(`${p}：解出的 ${name} 和 Termux 包的文件撞了`);
+        mkdirs(name);
+        if (e.type === "5") { if (!seenDirs.has(name)) { seenDirs.add(name); tw.add({ name: name + "/", type: "5", mode: e.mode, mtime: 0 }); } continue; }
+        if (e.type === "2") { tw.add({ name, type: "2", mode: 0o777, mtime: 0, link: e.link }); continue; }
+        tw.add({ name, type: "0", mode: e.mode, mtime: 0, data: e.data });
+        n++; bytes += e.data.length;
+      }
+      lock.push({ name: file, version: f.version || COMP?.version || "-", source: f.source || "upstream", homepage: f.url, recipe: "-", file: f.url, sha256: f.sha256, size: b.length, why: f.why, extracted: { into: p, files: n, bytes } });
+      fetchedBytes += bytes;
+      console.log(`  fetch 解包 ${file} → ${p}：${n} 个文件 ${mb(bytes)}`);
+      continue;
+    }
     const dest = path.join(CACHE, path.basename(p));
     let b = fs.existsSync(dest) ? fs.readFileSync(dest) : null;
     if (!b || sha256(b) !== f.sha256) {

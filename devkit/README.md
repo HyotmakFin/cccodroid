@@ -90,6 +90,10 @@ node devkit.mjs component --recipe <配方目录> --target <10字符包名> --ba
 - `mode` 给权限（默认 644）——要装可执行文件就得写 `"755"`。
 - `link` 不下载，只做一条软链，**只能写同目录的文件名**（不许绝对路径、不许带 `/`）；上游库的 SONAME 是 `libX.so.1`、而文件叫 `libX.so` 时用它补上。
 - 配方里的 fetch 条目 devkit 自己也校验一遍（`usr/` 下、https、sha256 写全、写 why、mode 是八进制），不全指望配方仓库的检查。
+- **上游压缩包**：键写落地目录（以 `/` 结尾）并加 `extract: { format?, strip?, include?, exec? }`，下载、核对压缩包的 sha256 后解开放进去。
+  支持 tar.gz / tar.xz / tar.bz2 / tar / zip（bz2 用系统的 `bzip2`）。带 `..`、绝对路径的条目和指出落地目录的软链直接失败；
+  硬链接改成文件，setuid/setgid 和组、其他人的写位去掉；`include` 写了却找不到、解出来没有文件、和组件自己的 Termux 包撞路径，都失败。
+  缓存文件名带哈希前缀（`fetch-<sha256 前 16 位>-<文件名>`），不同上游的同名包不会互相顶掉。写法见市场仓库 `docs/recipe.md`。
 - `source` / `version` / `why` 只记账（进锁文件，便于查出处）；fetch 的体积也算进 `installed`。
 - 配方的发布版本是 `<上游版本>-r<revision>`；配方顶层写了 `version` 就用它当上游版本（fetch 型组件的版本来自上游构件），修订号照样接在后面。
 
