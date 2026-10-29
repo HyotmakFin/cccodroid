@@ -52,6 +52,22 @@ export function fileKind(name, isDir) {
 export const mimeOf = (f) => MIME[path.extname(f).toLowerCase()] || "application/octet-stream";
 
 /** 二进制安全的体读取（readBody 走 utf8，会把图片读坏） */
+/** 读 fetch 的响应体，超过 max 字节就断开报错：厂商端点出问题、或配置指到奇怪的地址时，别一口气读进几百 MB（审查 v0.5.7 L5） */
+export async function fetchText(r, max = 8 * 1024 * 1024) {
+  const len = Number(r.headers.get("content-length") || 0);
+  if (len > max) { try { await r.body?.cancel(); } catch {} throw new Error(`response too large (${len} bytes)`); }
+  if (!r.body) return "";
+  const parts = [];
+  let n = 0;
+  for await (const c of r.body) {
+    n += c.length;
+    if (n > max) { try { await r.body.cancel(); } catch {} throw new Error(`response too large (> ${max} bytes)`); }
+    parts.push(c);
+  }
+  return Buffer.concat(parts).toString("utf8");
+}
+export const fetchJsonCapped = async (r, max) => JSON.parse(await fetchText(r, max));
+
 export function readBodyBuf(req, max = 64 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = []; let n = 0;

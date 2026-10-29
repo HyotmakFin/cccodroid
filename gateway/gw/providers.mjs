@@ -5,7 +5,7 @@ import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
 import { SETTINGS, saveSettings } from "./settings.mjs";
 import { dropModelCache, normalizeModels } from "./models.mjs";
 import { RUNS } from "./runs.mjs";
-import { NEXT, readBody, sendJson } from "./http.mjs";
+import { NEXT, fetchText, readBody, sendJson } from "./http.mjs";
 
 // ── 厂商配置（不写死任何一家）─────────────────────────────────────────
 // 端点 / 认证风格 / 模型清单来源 全部来自 ccapp-providers.json。
@@ -405,7 +405,7 @@ async function testProvider(id) {
         body: JSON.stringify({ model: v.defaultModel || "x", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
       });
     }
-    const text = await r.text();
+    const text = await fetchText(r);
     if (r.ok) {
       let n = 0; try { n = normalizeModels(JSON.parse(text)).length; } catch {}
       return { ok: true, message: n ? tz("密钥有效（{how}，{n} 个模型）", { how, n }) : tz("密钥有效（{how}）", { how }) };
@@ -446,7 +446,7 @@ function billKind(v) {
 
 async function fetchJson(url, headers) {
   const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
-  const text = await r.text();
+  const text = await fetchText(r);
   let j = null; try { j = JSON.parse(text); } catch {}
   if (!r.ok) throw new Error(`HTTP ${r.status}：${(j && (j.error?.message || j.message || j.msg)) || text.slice(0, 120)}`);
   return j;

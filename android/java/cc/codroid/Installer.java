@@ -134,9 +134,12 @@ final class Installer {
         HttpURLConnection c = open(url);
         try {
             if (code(c, url) != 200) throw new IOException("HTTP " + c.getResponseCode() + " " + url);
-            try (InputStream in = c.getInputStream()) { return readAllBytes(in); }
+            // 只用来拿发布清单、锁文件、校验和这类小东西：读超过 32 MB 就是地址指错了或者对面出了问题，不往内存里塞（审查 v0.5.7 L10）
+            if (c.getContentLengthLong() > SMALL_MAX) throw new IOException(Tr.t("响应太大，不像清单文件：") + url);
+            try (InputStream in = c.getInputStream()) { return readAllBytes(in, SMALL_MAX); }
         } finally { c.disconnect(); }
     }
+    static final long SMALL_MAX = 32L << 20;
 
     // ── 分段并行下载 ──
     // 单个连接常被限速（实测 dl.cccodroid.net 单线 2.7 MB/s，4 路并行 14 MB/s）：文件够大、服务器认 Range 时，
@@ -308,10 +311,13 @@ final class Installer {
         } catch (java.security.NoSuchAlgorithmException e) { throw new IOException(e); }
     }
 
-    private static byte[] readAllBytes(InputStream in) throws IOException {
+    private static byte[] readAllBytes(InputStream in, long max) throws IOException {
         java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
         byte[] buf = new byte[8192];
-        for (int r; (r = in.read(buf)) > 0; ) b.write(buf, 0, r);
+        for (int r; (r = in.read(buf)) > 0; ) {
+            if (b.size() + (long) r > max) throw new IOException(Tr.t("响应太大，不像清单文件"));
+            b.write(buf, 0, r);
+        }
         return b.toByteArray();
     }
 
@@ -393,7 +399,7 @@ final class Installer {
             untar(s, dir, "usr/");
             byte[] sink = new byte[1 << 16];
             while (s.read(sink) > 0) { }            // tar 末尾的填充块也算进校验和
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {     // 畸形包抛的运行时异常也要清掉半成品（审查 v0.5.7 L9）
             deleteTree(dir);
             throw new IOException(Tr.t("解包失败，旧工具包未改动：") + e.getMessage(), e);
         } finally { s.close(); }
@@ -853,9 +859,10 @@ final class Installer {
             if (!readFully(in, h)) break;
             if (allZero(h)) break;
             long size = octal(h, 124, 12);
+            if (size < 0) throw new IOException(Tr.t("tar 损坏：头记录大小不对"));
             char type = (char) (h[156] == 0 ? '0' : h[156]);
-            int mode = (int) octal(h, 100, 8);
-            long mtime = octal(h, 136, 12);
+            int mode = (int) Math.max(0, octal(h, 100, 8));
+            long mtime = Math.max(0, octal(h, 136, 12));
             if (type == 'L' || type == 'K' || type == 'x' || type == 'g') {
                 byte[] body = readBody(in, size);
                 if (type == 'L') longName = cstr(body, 0, body.length);
@@ -863,8 +870,10 @@ final class Installer {
                 else if (type == 'x') {
                     String pax = new String(body, StandardCharsets.UTF_8);
                     for (int i = 0; i < pax.length(); ) {
-                        int sp = pax.indexOf(' ', i);
-                        int len = Integer.parseInt(pax.substring(i, sp));
+                        int sp = pax.indexOf(' ', i), len;
+                        // 每条是「长度 空格 键=值 换行」：长度读不出、不往前走、越过结尾都算坏包，抛 IOException 走清理
+                        try { len = Integer.parseInt(pax.substring(i, sp)); } catch (RuntimeException e) { throw new IOException(Tr.t("tar 损坏：pax 记录格式不对")); }
+                        if (len <= sp - i + 1 || i + len > pax.length()) throw new IOException(Tr.t("tar 损坏：pax 记录格式不对"));
                         String kv = pax.substring(sp + 1, i + len - 1);
                         int eq = kv.indexOf('=');
                         if (kv.startsWith("path=")) longName = kv.substring(eq + 1);
@@ -942,7 +951,10 @@ final class Installer {
         }
         return true;
     }
+    // 长名 / pax 记录读进内存：大小先夹住。负数、超大的直接当坏包（以前 (int) 截断成负数抛的是
+    // NegativeArraySizeException，不是 IOException，躲过了解包失败时的清理，审查 v0.5.7 L9）
     private static byte[] readBody(InputStream in, long size) throws IOException {
+        if (size < 0 || size > 1 << 20) throw new IOException(Tr.t("tar 损坏：头记录大小不对"));
         byte[] b = new byte[(int) size];
         readFully(in, b);
         pad(in, size);
@@ -972,6 +984,7 @@ final class Installer {
         for (int i = off; i < off + len; i++) {
             int c = b[i];
             if (c == 0 || c == ' ') { if (v != 0) break; else continue; }
+            if (c < '0' || c > '7') return -1;           // 不是八进制数字（或 GNU 的 base-256 大文件编码）：交给调用处当坏包
             v = v * 8 + (c - '0');
         }
         return v;

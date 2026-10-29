@@ -130,6 +130,21 @@ async function glibcRepoIndex() {
 /** 一个目录里所有 ELF 的「能提供的库名」（文件名 + SONAME） */
 function libNamesIn(dir) { try { return fs.readdirSync(dir); } catch { return []; } }
 
+// 解开之前先按包里登记的大小算总量：几十 KB 的压缩包能解出几十 GB，把存储写满（审查 v0.5.7 L4）
+const UNPACK_MAX = 2 * 1024 * 1024 * 1024;
+async function unpackedSize(sp, zip) {
+  if (zip) {
+    const r = await runP(path.join(PREFIX, "bin", "unzip"), ["-Zt", sp]);
+    const m = /(\d+) bytes uncompressed/.exec(r.out);
+    return m ? Number(m[1]) : null;
+  }
+  const r = await runP(path.join(PREFIX, "bin", "tar"), ["-tvf", sp], { maxBuffer: 64 << 20 });
+  if (r.code) return null;
+  let n = 0;
+  for (const l of r.out.split("\n")) { const v = Number(l.trim().split(/\s+/)[2]); if (Number.isFinite(v)) n += v; }
+  return n;
+}
+
 /** 分析：解开（压缩包）或拷进（单个文件）暂存区，逐个看 ELF，列出程序、缺的库、能补的库 */
 async function customAnalyze(src) {
   if (!PREFIX) return { ok: false, message: "only available in cccodroid" };
@@ -144,10 +159,16 @@ async function customAnalyze(src) {
   fs.mkdirSync(x, { recursive: true });
   const base = path.basename(sp), warnings = [];
   const fail = (m) => { fs.rmSync(dir, { recursive: true, force: true }); return { ok: false, message: m }; };
-  if (/\.(tar\.(gz|xz|bz2|zst)|tgz|txz|tbz2?|tar)$/i.test(base)) {
+  const isTar = /\.(tar\.(gz|xz|bz2|zst)|tgz|txz|tbz2?|tar)$/i.test(base), isZip = /\.zip$/i.test(base);
+  if (isTar || isZip) {
+    const n = await unpackedSize(sp, isZip);
+    if (n == null) return fail(tz("读不出压缩包的目录，可能已损坏"));
+    if (n > UNPACK_MAX) return fail(tz("解开后有 {n} MB，超过 {max} MB 的上限", { n: Math.round(n / 1048576), max: UNPACK_MAX >> 20 }));
+  }
+  if (isTar) {
     const r = await runP(path.join(PREFIX, "bin", "tar"), ["-xf", sp, "-C", x, "--no-same-owner"]);
     if (r.code) return fail(tz("解压失败：{msg}", { msg: r.err.trim().split("\n").slice(-2).join(" ") }));
-  } else if (/\.zip$/i.test(base)) {
+  } else if (isZip) {
     const r = await runP(path.join(PREFIX, "bin", "unzip"), ["-q", "-o", sp, "-d", x]);
     if (r.code > 1) return fail(tz("解压失败：{msg}", { msg: r.err.trim().split("\n").slice(-2).join(" ") }));
   } else if (/\.(deb|rpm|apk|appimage)$/i.test(base)) {

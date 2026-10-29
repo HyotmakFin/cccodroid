@@ -190,6 +190,24 @@ export function rewindFiles(sid, userUuid, dryRun) {
  *  这里按会话记录里的快照逐个核对 files（试算给的清单），不对的自己从备份拷回去 / 删掉。
  *  目标状态：这条消息的快照里有 → 用它的备份（备份名为 null 表示那时文件不存在）；
  *  没有（之后才第一次改到）→ 用之后最早一份快照里的备份，那就是第一次改之前的样子。 */
+// 回退补救要写的地方：会话记录（可以是导入进来的）决定写哪、写什么，所以应用私有目录里只许写工作区——
+// 不然一个构造的会话能把备份写进 ~/.bashrc、~/.claude/settings.json 这类文件，下次启动就跑起来（审查 v0.5.7 L6）。
+// 工作区以外的项目目录（/sdcard 上的）照常，回退本来就要能改它们。按真实路径判，软链绕不过去
+function realOf(p) {
+  let cur = path.resolve(p), rest = "";
+  for (;;) {
+    try { return path.join(fs.realpathSync(cur), rest); } catch {}
+    const up = path.dirname(cur);
+    if (up === cur) return path.resolve(p);
+    rest = path.join(path.basename(cur), rest); cur = up;
+  }
+}
+const inside = (p, root) => p === root || p.startsWith(root + path.sep);
+export function rewindTargetOk(want) {
+  if (typeof want !== "string" || !path.isAbsolute(want)) return false;
+  const r = realOf(want), priv = realOf(path.dirname(CFG.home)), ws = realOf(CFG.workspace);
+  return !inside(r, priv) || (inside(r, ws) && r !== ws);
+}
 export function rewindFixup(sessionFile, sid, uuid, files) {
   const snaps = [];   // [{ id, backups }]，同一条消息的快照更新合并进去
   try {
@@ -217,6 +235,9 @@ export function rewindFixup(sessionFile, sid, uuid, files) {
       for (const [k, b] of Object.entries(snaps[i].backups)) if (absOf(k, b) === want) { entry = b; break; }
     }
     if (entry === undefined) continue;                 // 快照里查不到：不碰
+    if (!rewindTargetOk(want)) { failed++; log(`回退补救跳过 ${want}：在应用私有目录里、又不在工作区`); continue; }
+    // 备份文件名只许是 file-history 目录里的一个文件，不许带路径跳出去
+    if (entry.backupFileName && (typeof entry.backupFileName !== "string" || entry.backupFileName !== path.basename(entry.backupFileName) || entry.backupFileName.startsWith("."))) { failed++; continue; }
     try {
       if (!entry.backupFileName) {                     // 那时还不存在
         if (fs.existsSync(want)) { fs.unlinkSync(want); fixed++; }

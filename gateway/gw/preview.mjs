@@ -69,6 +69,8 @@ async function previewGrant(p) {
   return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime };
 }
 function previewServe(req, res) {
+  // 网址里带着能力令牌：页面里点外链时别把它当 Referer 带出去（审查 v0.5.7 L2）。setHeader 先放，下面各处 writeHead 都会带上
+  res.setHeader("referrer-policy", "no-referrer");
   const fail = (code, msg) => { res.writeHead(code, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }); res.end(msg); };
   if (req.method !== "GET" && req.method !== "HEAD") return fail(405, "read only");
   const host = String(req.headers.host || "").toLowerCase();

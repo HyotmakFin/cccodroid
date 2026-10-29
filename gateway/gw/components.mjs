@@ -377,7 +377,8 @@ function compRemoveFiles(id, rec) {
   }
   // 由深到浅删掉变空的目录（工具包自己的目录不空，自然删不掉）
   for (const d of [...dirs].sort((a, b) => b.length - a.length)) { try { fs.rmdirSync(path.join(PREFIX, d)); } catch {} }
-  if (rec.skill) fs.rmSync(path.join(SKILLS_DIR, rec.skill), { recursive: true, force: true });
+  const sk = rec.skill && skillDst(rec.skill);
+  if (sk) fs.rmSync(sk, { recursive: true, force: true });
 }
 
 async function compInstall(id) {
@@ -413,10 +414,19 @@ async function compInstall(id) {
 }
 
 /** 把组件带的 skill 目录拷进 ~/.claude/skills。skill 路径相对 files/（以 usr/ 开头），PREFIX 已经是 files/usr */
+// 技能目录名来自组件包里 SKILL.md 的 name：先过和手动导入一样的白名单，再确认拼出来的路径就在技能目录下一层，
+// 不然 ".."、带斜杠的名字能把下面的 rmSync 引到技能目录外面去（审查 v0.5.7 M1：索引签名之外再加一道）
+export const skillDst = (name) => {
+  if (typeof name !== "string" || !SKILL_NAME_RE.test(name)) return null;
+  const dst = path.join(SKILLS_DIR, name);
+  return path.dirname(dst) === path.resolve(SKILLS_DIR) ? dst : null;
+};
+const SKILL_NAME_RE = /^(?!\.+$)[A-Za-z0-9._-]{1,64}$/;
 function compInstallSkill(id, rel, rec) {
   const src = path.join(PREFIX, rel.replace(/^usr\//, ""));
   const name = (skillMeta(src) || {}).name || id;
-  const dst = path.join(SKILLS_DIR, name);
+  const dst = skillDst(name);
+  if (!dst) { log(`[comp] ${id} 技能名不合法，没装：${String(name).slice(0, 80)}`); return; }
   try {
     fs.rmSync(dst, { recursive: true, force: true });
     fs.mkdirSync(dst, { recursive: true });

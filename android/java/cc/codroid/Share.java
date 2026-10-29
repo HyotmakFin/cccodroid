@@ -76,14 +76,21 @@ public final class Share extends ContentProvider {
     }
 
     /** 不在允许目录里的文件（工作区、/sdcard 上的）：拷一份到 exports/shared 再分享，别的应用拿到的是这一份的只读授权 */
+    /** 不往外分享的：本应用的令牌与厂商密钥配置（审查 10-29 第六份 低7），Claude 登录凭据、SSH/GPG 目录、私钥与证书库（v0.5.7 独立审查 L7） */
+    static boolean secret(File f) {
+        String nm = f.getName(), p = f.getPath();
+        return nm.equals(".gateway-token") || nm.matches("ccapp-(providers|config|seed).*\\.json") || nm.equals("ccapp-key") || nm.equals("llama-api-key")
+            || nm.equals(".credentials.json") || nm.matches("id_(rsa|dsa|ecdsa|ed25519)(_sk)?") || nm.matches("(?i).*\\.(pem|key|p12|pfx|jks|keystore)")
+            || nm.equals(".netrc") || nm.equals(".git-credentials")
+            || p.matches(".*/\\.(ssh|gnupg|aws)/.*");
+    }
+
     static File shareable(Context c, File f) throws Exception {
         if (!f.isFile()) throw new FileNotFoundException(Tr.t("文件不存在：") + f);
+        // 凭据不往外给：按真实路径判（软链指过去的也拦），而且放在最前面——以前能直接给 URI 的文件先返回了，查不到这里
+        if (secret(f.getCanonicalFile())) throw new IOException(Tr.t("这是凭据或私钥文件，不分享"));
         if (uriFor(c, f) != null) return f;
         if (f.length() > 512L << 20) throw new IOException(Tr.t("文件超过 512 MB，不分享"));
-        // 本应用自己的凭据不往外给：网关令牌、厂商密钥配置（审查 10-29 第六份 低7）
-        String nm = f.getName();
-        if (nm.equals(".gateway-token") || nm.matches("ccapp-(providers|config|seed).*\\.json") || nm.equals("ccapp-key") || nm.equals("llama-api-key"))
-            throw new IOException(Tr.t("这是 cccodroid 自己的凭据文件，不分享"));
         File dir = new File(new Env(c).home, "exports/shared");
         dir.mkdirs();
         // 拷出来的副本放一天就清：以前分享过什么就永远留一份

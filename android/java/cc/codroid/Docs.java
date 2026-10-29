@@ -221,7 +221,23 @@ public final class Docs extends DocumentsProvider {
 
     @Override
     public ParcelFileDescriptor openDocument(String docId, String mode, CancellationSignal signal) throws FileNotFoundException {
-        return ParcelFileDescriptor.open(fileOf(docId), ParcelFileDescriptor.parseMode(mode));
+        ParcelFileDescriptor pfd = ParcelFileDescriptor.open(fileOf(docId), ParcelFileDescriptor.parseMode(mode));
+        // fileOf 查过真实路径，但查完到打开之间文件可能被换成指向作用域外的软链（审查 v0.5.7 L8）：
+        // 打开以后按 fd 反查它实际是哪个文件，不在作用域里就关掉不给。根目录也按 fd 取，两边写法一致
+        try {
+            String real = android.system.Os.readlink("/proc/self/fd/" + pfd.getFd()), base = realHome();
+            if (real.equals(base) || real.startsWith(base + "/")) return pfd;
+        } catch (Exception e) { /* 落到下面：查不了也不给 */ }
+        try { pfd.close(); } catch (java.io.IOException ignored) {}
+        throw new FileNotFoundException("越界：" + docId);
+    }
+
+    private String realHomeCache;
+    private String realHome() throws Exception {
+        if (realHomeCache != null) return realHomeCache;
+        try (ParcelFileDescriptor d = ParcelFileDescriptor.open(home, ParcelFileDescriptor.MODE_READ_ONLY)) {
+            return realHomeCache = android.system.Os.readlink("/proc/self/fd/" + d.getFd());
+        }
     }
 
     @Override

@@ -78,8 +78,14 @@ jobs:
           TARGET_SDK=36 sh scripts/build.sh && mv dist/cccodroid.apk dist/cccodroid-36.apk
           sh scripts/build.sh
           rm -f "$RUNNER_TEMP/key.json"
-          # 证书指纹：正式钥匙应当是 README 里写的那一个
-          "$BT/apksigner" verify --print-certs dist/cccodroid.apk | grep -i "SHA-256"
+          # 证书指纹：正式包必须是 README 里写的那一张（B7:03…8F:E0），对不上就别出包——
+          # 钥匙被意外换掉时不会静默发出别的证书签的「正式包」（审查 v0.5.7 L12）。测试包只打出来看
+          EXPECT=b70361595dd3d8d704dd210ed596fc577014ce2272884fb6980bf69623338fe0
+          for a in dist/cccodroid.apk dist/cccodroid-36.apk; do
+            got=$("$BT/apksigner" verify --print-certs "$a" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+            echo "$a  $got"
+            if [ "$SIGNED" = release ] && [ "$got" != "$EXPECT" ]; then echo "::error::$a 的签名证书不是正式钥匙（$got）"; exit 1; fi
+          done
           echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2

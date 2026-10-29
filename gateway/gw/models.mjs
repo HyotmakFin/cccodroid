@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
 import { PROVIDER, keyOf, providerBrief, providerById } from "./providers.mjs";
-import { NEXT, sendJson } from "./http.mjs";
+import { NEXT, fetchJsonCapped, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
 import { effectiveModel } from "./sessmodel.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";
@@ -137,7 +137,7 @@ async function loadCatalog() {
     try {
       const r = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(9000) });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const j = await r.json();
+      const j = await fetchJsonCapped(r, 32 << 20);   // models.dev 全量目录，几 MB
       CAT = buildCatalog(j); CAT_AT = Date.now(); CAT_FAIL_AT = 0;
       log(`[catalog] models.dev 已载入：${CAT.byProv.size} 家 / ${CAT.byId.size} 个型号`);
       return CAT;
@@ -217,7 +217,7 @@ async function fetchModelsOf(p, force) {
       }
       const r = await fetch(p.modelsUrl, { headers, signal: AbortSignal.timeout(15000) });
       if (r.ok) {
-        const list = withCatalog(mergeKnown(normalizeModels(await r.json()), p.fallbackModels), p);
+        const list = withCatalog(mergeKnown(normalizeModels(await fetchJsonCapped(r)), p.fallbackModels), p);
         if (list.length) {
           log(`[${p.id}] 模型清单：${list.map((m) => m.id).join(", ")}`);
           return keep(list);

@@ -21,6 +21,7 @@
 #define NR_tgkill 131
 #define NR_getpid 172
 #define NR_gettid 178
+#define NR_write 64
 
 struct k_sigaction {
     void (*handler)(int, siginfo_t *, void *);
@@ -58,5 +59,9 @@ __attribute__((constructor)) static void install(void) {
     struct k_sigaction sa = { 0 };
     sa.handler = on_sigsys;
     sa.flags = SA_SIGINFO | SA_NODEFER;   /* 不设 SA_RESTORER：arm64 内核会用 vDSO 里的 sigreturn */
-    raw4(NR_rt_sigaction, SIGSYS, (long)&sa, 0, 8);
+    /* 装不上就说一声：不然 claude 在第一个被拦的系统调用上被 SIGSYS 打死，日志里只有一个信号号，看不出原因（审查 v0.5.7 L11） */
+    if (raw4(NR_rt_sigaction, SIGSYS, (long)&sa, 0, 8) != 0) {
+        static const char msg[] = "seccomp-enosys: rt_sigaction(SIGSYS) failed; blocked syscalls will kill this process\n";
+        raw4(NR_write, 2, (long)msg, sizeof msg - 1, 0);
+    }
 }
