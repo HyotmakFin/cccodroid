@@ -183,7 +183,11 @@
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-skin"] });
 
   function usRender() {
-    if (!us.raw) return;
+    // 还没读回来：月份标签说明在等/失败了，翻月和保存分享先灰掉，别看着能点、点了没反应（审查 F-009）
+    const idle = !us.raw;
+    for (const b of [$("us-prev"), $("us-next"), ...$("us-actions").querySelectorAll("button")]) b.disabled = idle;
+    $("us-off").disabled = idle;
+    if (idle) { $("us-mlabel").textContent = us.err ? t("读取失败") : t("加载中…"); return; }
     const now = new Date(), d0 = usDay0(now), w0 = usWeek0(now), m0 = usMonth0(now.getFullYear(), now.getMonth());
     const tile = (label, cur, prev, prevLabel) => `<div class="us-tile"><div class="us-n">${usNum(cur.m)}</div><div class="us-l">${esc(label)}</div>
       <div class="us-sub">${esc(t("{p}：{n}", { p: prevLabel, n: usNum(prev.m) }))}</div></div>`;
@@ -231,13 +235,16 @@
     // 没读成过：说读取失败、给重试，别把 0 当成真数字（审查 F-006）
     if (!us.raw && us.err) kpi.push(`<div class="tile big"><span class="k">${esc(t("用量读取失败：{msg}", { msg: us.err }))}</span><button class="btn sm ghost" id="us-retry">${esc(t("重试"))}</button></div>`);
     else {
+    // 读成过、这次刷新失败：数照旧摆着，但要说明是上次的，并给重试（审查 F-006 复测）
+    if (us.err) kpi.push(`<div class="tile big"><span class="k">${esc(t("刷新失败，显示的是上次读到的数：{msg}", { msg: us.err }))}</span><button class="btn sm ghost" id="us-retry">${esc(t("重试"))}</button></div>`);
     kpi.push(`<div class="tile"><span class="k">${esc(t("今天"))}</span><span class="n num">${usTok(today.i + today.o)}</span><span class="k">${esc(t("tokens · {n} 轮对话", { n: usNum(today.t) }))}</span></div>`);
     kpi.push(`<div class="tile"><span class="k">${esc(t("本月"))}</span><span class="n num">${usTok(month.i + month.o)}</span><span class="k">${esc(t("tokens · {n} 个会话", { n: usNum(month.s.size) }))}</span></div>`);
     kpi.push(`<div class="tile"><span class="k">${esc(t("缓存命中"))}</span><span class="n num">${month.c && month.i ? Math.round((month.c / month.i) * 100) + "%" : "—"}</span><span class="k">${esc(t("本月 · 越高越省"))}</span></div>`);
     }
     $("us-kpis").innerHTML = kpi.join("");
+    $("us-csv").disabled = !us.raw;
     const rt = $("us-retry"); if (rt) rt.onclick = () => { rt.disabled = true; loadUsage(); };
-    setPageSub("usage", q ? t("本周额度 {p}%", { p: Math.round(q.used) }) : t("今天 {n} tokens", { n: usTok(today.i + today.o) }));
+    setPageSub("usage", q ? t("本周额度 {p}%", { p: Math.round(q.used) }) : !us.raw && us.err ? t("读取失败") : t("今天 {n} tokens", { n: usTok(today.i + today.o) }));
     // 每天用量：最近 14 天，单序列（不要图例），今天那根用强调色
     const days = Array.from({ length: 14 }, (_, i) => { const d = usAddDays(d0, i - 13), x = us.days.get(usDayKey(d)); return { d, v: x ? x.i + x.o : 0, t: x ? x.t : 0 }; });
     const box = $("us-daily");
@@ -316,7 +323,7 @@
       if (!$("us-field").classList.contains("hidden")) usRender();
       // 第一次打开：把装这个版本之前的历史会话补算进来
       if (!us.raw.imported && !us.raw.importing && !us.busy) usImport(true);
-    } catch (e) { us.err = e.message || "?"; $("us-result").textContent = "✗ " + e.message; usPaint(); }
+    } catch (e) { us.err = e.message || "?"; $("us-result").textContent = "✗ " + e.message; usPaint(); if (!$("us-field").classList.contains("hidden")) usRender(); }
   }
   async function usImport(auto) {
     us.busy = true;
@@ -388,7 +395,7 @@
     api("/api/energy?view=day").then((d) => { usDash.energy = d; usPaint(); }).catch(() => {});
     // 快速切 小时 / 日 / 周：慢的那次迟到不许盖掉现在这一档（数据形状也不一样，会报类型错误）（审查 F-005）
     const ok = latest("energy"), v = en.view;
-    try { const d = await api("/api/energy?view=" + v); if (!ok() || en.view !== v) return; en.data = d; en.sel = -1; enRender(); if (d.sys) enSys(d.sys); }
+    try { const d = await api("/api/energy?view=" + v); if (!ok() || en.view !== v) return; d.view = v; en.data = d; en.sel = -1; enRender(); if (d.sys) enSys(d.sys); }
     catch (e) { if (ok()) $("en-cap").textContent = "✗ " + e.message; }
   }
   $("en-seg").addEventListener("click", (e) => {

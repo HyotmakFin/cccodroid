@@ -2327,3 +2327,12 @@
 2327	Touche à des clés ou identifiants : {w}
 2328	Action sensible
 2329	La vérification des signatures des composants est désactivée (un fichier allow-unsigned se trouve dans le dossier privé). Supprimez-le une fois le débogage terminé
+2330	Le message précédent n'a pas encore atteint la passerelle : celui-ci n'a pas été envoyé. Réessayez dans un instant
+2331	Choisissez une date de fin
+2332	Échec de l'actualisation ; chiffres du dernier chargement affichés : {msg}
+2333	Échec de l'actualisation ; liste du dernier chargement affichée : {msg}
+2334	Échec de l'actualisation ; contenu du dernier chargement affiché : {msg}
+2335	Un message identique plus bas n'est pas encore confirmé comme enregistré. Ajoutez le signet une fois ce tour terminé (ou rouvrez cette conversation)
+2336	La liste des modèles se charge encore ; patientez avant d'enregistrer
+2337	Dans la corbeille ; touchez pour restaurer
+2338	Ce message apparaît plusieurs fois dans la conversation : impossible de savoir de quel tour il s'agit. Rouvrez la conversation et réessayez.

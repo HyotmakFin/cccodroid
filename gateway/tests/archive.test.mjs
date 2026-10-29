@@ -1,4 +1,5 @@
 // 建档（gw/archive-core.mjs + archive.mjs + archive/cc-archive.mjs）：题名校验、章节、交档、提醒、命令行
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

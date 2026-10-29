@@ -32,6 +32,7 @@
   });
 
   async function gitLoad() {
+    dropReq("gitbody");   // 换仓库 / 重读：上一个仓库在途的历史、对比读取一并作废（审查 #52 C-007）
     $("git-body").innerHTML = `<div class="vw-empty">${t("读取中…")}</div>`;
     // 先开 A 仓库再开 B：A 的状态迟到不许盖上来，不然显示的是 A、撤销提交却作用于 B（审查 #49 P2-2）
     const ok = latest("git"), dir = GIT.dir;

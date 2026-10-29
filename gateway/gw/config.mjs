@@ -3,6 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
+// 测试绕过 scripts/test.mjs 直接跑（node --test / node xx.test.mjs）时环境里是真 home：
+// 一导入网关模块就会读写真的会话、运行标记、定时任务。没有 CCAPP_TEST 一律不让起（#49 P2-18）
+if ((process.env.NODE_TEST_CONTEXT || /\.test\.mjs$/.test(process.argv[1] || "")) && process.env.CCAPP_TEST !== "1")
+  throw new Error("测试请用 node scripts/test.mjs 跑（它会建临时 home 和工作区）；直接跑会动真数据");
+
 // 网关目录（gw/ 的上一级）：web/、bin/、TAG 等都相对它找
 export const HERE = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // ── 路径与配置 ────────────────────────────────────────────────────────

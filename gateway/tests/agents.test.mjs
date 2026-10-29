@@ -1,5 +1,6 @@
 // 子代理联络簿（gw/agents.mjs）。样本是真机抓的事件流（10-28，DeepSeek flash）：
 //   stream-agents-nested  主会话后台派 alpha，alpha 再派孙代理 beta；beta 按名字给 alpha 发消息（失败，实测 Agent 没有名字参数）、给 main 发消息（送达）
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

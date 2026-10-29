@@ -102,11 +102,11 @@
     connectBus(false);
   }
 
-  // 用户点会话标题（侧栏 / 对话列表 / 项目）：点的就是眼前这个、又不是跳搜索命中，就只收起整页和侧栏，现场原样（#37）；
-  // 正看着中间某一段（窗口式）时照旧重开，回到最新
+  // 用户点会话标题（侧栏 / 对话列表 / 项目）：点的就是眼前这个、又不是跳搜索命中，就只收起整页和侧栏，现场原样（#37）。
+  // 正看着中间某一段（窗口式）、或者还在读，也一样留着——要回最新有右下角那个按钮；以前这两种会重开（#52 复测 #37）
   function goSession(id, jumpQ) {
-    // 首屏历史没读成功（断网）时再点同一个会话要重读，不能当「现场原样」（审查 #48 S08-01）
-    if (id && id === view.sessionId && !jumpQ && view.next == null && !view.loading && view.histOk) { closePage(); closeDrawer(); return; }
+    // 首屏历史没读成功（断网）、也不在读时再点同一个会话要重读，不能当「现场原样」（审查 #48 S08-01）
+    if (id && id === view.sessionId && !jumpQ && (view.histOk || view.loading)) { closePage(); closeDrawer(); return; }
     // 切回别的会话：上次离开时不在底部，就落回那时视口顶部那一段
     closeDrawer(); openSession(id, jumpQ, id && !jumpQ && id !== view.sessionId ? lastReadOf(id) : null);
   }
@@ -536,8 +536,9 @@
         view.runIds.add(ev.runId);
         view.lastRunId = ev.runId;
         if (runViews.has(ev.runId)) return;
-        if (ev.auto !== "idle") renderUser(ev.text, liveEl);
+        if (ev.auto !== "idle") { renderUser(ev.text, liveEl); tagRun(liveEl.lastElementChild, ev.runId); }
         const av = AssistantView(liveEl, true);
+        tagRun(av.msgEl, ev.runId);
         if (ev.text.trim().startsWith("/")) av.msgEl.classList.add("sys");
         if (ev.auto === "idle") av.note(t("会话闲置快一小时，提示缓存快过期了，先自动压缩上下文，下一条消息就不用把整段历史重算一遍。不需要可以在设置里关掉。"), true);
         const timer = RunTimer(ev.startedAt);
@@ -554,8 +555,8 @@
         if (ev.cid) view.cids.add(ev.cid);
         rv.av.finish();
         if (rv.av.empty) rv.av.remove();
-        renderUser(ev.text, liveEl);
-        rv.av = AssistantView(liveEl, true);
+        renderUser(ev.text, liveEl); tagRun(liveEl.lastElementChild, ev.runId);
+        rv.av = AssistantView(liveEl, true); tagRun(rv.av.msgEl, ev.runId);
         rv.avDone = false;
         if (rv.idle) { rv.idle = false; rv.timer = RunTimer(Date.now()); }   // 空闲时发来的消息：算新的一轮
         rv.timer?.attach(rv.av);          // 计时算整轮的，跟着最新的气泡走
@@ -575,7 +576,7 @@
         const rv = runViews.get(ev.runId);
         if (!rv || !rv.idle) return;
         rv.idle = false;
-        if (rv.avDone) { rv.av = AssistantView(liveEl, true); rv.avDone = false; }
+        if (rv.avDone) { rv.av = AssistantView(liveEl, true); tagRun(rv.av.msgEl, ev.runId); rv.avDone = false; }
         rv.timer = RunTimer(ev.startedAt);
         rv.timer.attach(rv.av);
         rv.av.phase({ phase: "connect" });
@@ -677,13 +678,16 @@
     if (isBusy()) setStatus(t("生成中…"), "live"); else setStatus(text, "ok");
   }
 
+  // 这一轮画出来的消息记下 run 号；收尾时标上存没存稳（加书签时数「后面同样的话」要用，审查 #52 S2-02）
+  function tagRun(el, runId) { if (el && el.classList.contains("msg")) el.dataset.run = runId; }
   function onRunEnd(ev) {
-    if (view.goalClearAfter && view.goalClearAfter === ev.runId) {
+    for (const m of chatEl.querySelectorAll(`.msg[data-run="${CSS.escape(ev.runId)}"]`)) m.dataset.done = ev.failed || ev.aborted ? "bad" : "ok";
+    if (view.goalClearAfter && view.goalClearAfter.runId === ev.runId) {
+      const sid = view.goalClearAfter.sid || ev.sessionId;
       view.goalClearAfter = null;
-      // 发给放弃目标的那个会话：300ms 里切到别的会话的话，不能用当时的视图去发（审查 #49 P2-15）
-      const sid = ev.sessionId || view.sessionId, gen = view.gen;
+      // 发给放弃目标的那个会话：点放弃之后、收尾前后切到别的会话，都不能用当时的视图去发（审查 #49 / #52 P2-15）
       setTimeout(() => {
-        if (view.gen === gen) return send("/goal clear");
+        if (sid && view.sessionId === sid) return send("/goal clear");
         if (sid) api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "/goal clear", sessionId: sid, cid: newCid(), mode: "auto" }) }).catch((e) => toast(e.message, true));
       }, 300);
     }

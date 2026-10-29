@@ -24,12 +24,15 @@
     if (act === "menu" || act === "tree") {
       // 手机上的缩进树：按节点类型给动作（审查 B-03）。定时任务那一串不是会话，列出它跑出来的各次；回收站里的给「恢复」
       const id = arg || sel, node = LIN.model && LIN.model.sessions.find((x) => x.id === id);
-      if (node && node.task) return popMenu(el, [{ head: node.title }, ...[...node.task.runs].reverse().slice(0, 20).map((r) => ({ label: new Date(r.ts).toLocaleString(), icon: SM.chat, fn: () => openSession(r.id) }))]);
+      if (node && node.task) return popMenu(el, [{ head: node.title }, ...[...node.task.runs].reverse().slice(0, 20).map((r) => r.trashed
+        // 已回收的那次打不开，点它就是恢复（审查 #52 B-03）
+        ? { label: new Date(r.ts).toLocaleString() + " · " + t("已回收，点此恢复"), icon: SM.trash, fn: () => linAct("restore", null, el, r.id) }
+        : { label: new Date(r.ts).toLocaleString(), icon: SM.chat, fn: () => openSession(r.id) })]);
       if (node && node.trashed) return popMenu(el, [{ head: node.title }, { label: t("恢复"), icon: SM.trash, fn: () => linAct("restore", null, el, id) }]);
       return lineageMenu(id, el);
     }
     // 网关回 200 也可能一个都没恢复（failed 里写着原因）：照实说（审查 B-04）
-    if (act === "restore") return post("/api/trash/restore", { ids: [sel] }).then((r) => {
+    if (act === "restore") return post("/api/trash/restore", { ids: [arg || sel] }).then((r) => {
       if (r && r.failed && r.failed.length) return toast(t("恢复失败：{msg}", { msg: r.failed[0].error === "exists" ? t("同名会话已存在") : r.failed[0].error }), true);
       toast(t("已恢复")); loadSessions(); loadLineage();
     }, (e) => toast(e.message, true));
@@ -127,7 +130,7 @@
         const key = "task:" + (n.sched.id || n.sched.name);
         let tk = tasks.get(key);
         if (!tk) { tk = { id: key, short: "", band: n.band.key, title: n.sched.name, task: { runs: [] }, misc: false }; tasks.set(key, tk); sessions.push(tk); }
-        tk.task.runs.push({ id: n.id, ts: n.firstTs });
+        tk.task.runs.push({ id: n.id, ts: n.firstTs, trashed: !!n.trashed });
         continue;
       }
       const chs = n.chapters, p = prim[n.id];

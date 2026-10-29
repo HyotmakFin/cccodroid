@@ -1,4 +1,5 @@
 // 分段并行下载（gw/pget.mjs）：本机起一个 HTTP 服务，模拟认 / 不认 Range、连接中途断、被打断后续传
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

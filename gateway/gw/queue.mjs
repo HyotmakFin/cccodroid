@@ -183,6 +183,7 @@ export function abortRun(run) {
 
 /** 把这个会话排着的消息全挂起：点停止、权限卡上「拒绝并停止」都走这里 */
 export function holdLane(run) {
+  run.laneHeld = true;   // 已写进 stdin、还没被吃的插话，结束退回队首时也要挂起（#52 P2-3）
   for (const q of QUEUE) if (sameLane(q, run)) { q.held = true; q.intr = false; }
 }
 

@@ -4,6 +4,7 @@
 //   stream-cut-in-text     第一次请求的流在正文中途被掐断，claude 补一句「接着说」重新请求（群友报的「回答输出两遍」）
 //   stream-cut-in-thinking 流断在思考阶段，claude 走 api_retry 重来
 // 断言照前端的画法拼出最后看到的正文 / 思考，和 claude 确认进对话的内容（assistant 事件）逐字一致
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -90,4 +91,19 @@ test("工具参数大块到达（官方接口）：参数写完时补报最后�
   const last = out.filter((e) => e.type === "phase" && e.phase === "tool").pop();
   assert.equal(last.chars, '{"command": '.length + big.length);
   clearTimeout(flags.toolTimer);
+});
+
+test("工具卡先到、content_block_stop 后到：不再补报「正在写参数」，工具跑着时那行字不回来", async () => {
+  const se = (event) => ({ type: "stream_event", event });
+  const flags = {}, out = [];
+  const feed = (ev) => translate(ev, { sse: (e) => out.push(e), flags, onInit() {}, onResult() {}, onReplay() {}, provider: {} });
+  feed(se({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t9", name: "Bash", input: {} } }));
+  feed(se({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '{"command": ' } }));
+  feed(se({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '"sleep 120"}' } }));   // 节流窗口里：挂着计时器
+  feed({ type: "assistant", message: { content: [{ type: "tool_use", id: "t9", name: "Bash", input: { command: "sleep 120" } }] } });
+  const n = out.length;
+  feed(se({ type: "content_block_stop", index: 0 }));
+  await new Promise((r) => setTimeout(r, 500));
+  assert.deepEqual(out.slice(n).filter((e) => e.type === "phase"), []);
+  assert.equal(out.find((e) => e.type === "phase").id, "t9", "阶段事件带工具 id，前端据此认卡");
 });

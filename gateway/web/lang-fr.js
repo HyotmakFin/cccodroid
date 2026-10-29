@@ -2330,4 +2330,13 @@ window.I18N_DICT["fr"] = {
   "碰到了密钥或登录凭据：{w}": "Touche à des clés ou identifiants : {w}",
   "敏感操作": "Action sensible",
   "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "La vérification des signatures des composants est désactivée (un fichier allow-unsigned se trouve dans le dossier privé). Supprimez-le une fois le débogage terminé",
+  "上一条还没送到网关，这条先没发，稍后再试": "Le message précédent n'a pas encore atteint la passerelle : celui-ci n'a pas été envoyé. Réessayez dans un instant",
+  "到期日要填一个日期": "Choisissez une date de fin",
+  "刷新失败，显示的是上次读到的数：{msg}": "Échec de l'actualisation ; chiffres du dernier chargement affichés : {msg}",
+  "刷新失败，显示的是上次读到的清单：{msg}": "Échec de l'actualisation ; liste du dernier chargement affichée : {msg}",
+  "刷新失败，显示的是上次读到的：{msg}": "Échec de l'actualisation ; contenu du dernier chargement affiché : {msg}",
+  "后面有一条同样的话还没确认存下，等那一轮答完（或重新打开这个会话）再加书签": "Un message identique plus bas n'est pas encore confirmé comme enregistré. Ajoutez le signet une fois ce tour terminé (ou rouvrez cette conversation)",
+  "型号清单还在加载，稍等再保存": "La liste des modèles se charge encore ; patientez avant d'enregistrer",
+  "已回收，点此恢复": "Dans la corbeille ; touchez pour restaurer",
+  "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "Ce message apparaît plusieurs fois dans la conversation : impossible de savoir de quel tour il s'agit. Rouvrez la conversation et réessayez.",
 };

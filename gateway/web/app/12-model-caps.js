@@ -67,16 +67,18 @@
     state.pendingModel = null;
   }
   // 只改这个会话；patch 为 null 表示回到跟随全局默认
+  let pickSeq = 0;
   async function pickSessModel(patch) {
     if (!view.sessionId) {
       state.pendingModel = patch ? { ...(state.pendingModel || {}), ...patch } : null;
       return refreshSessModel();
     }
-    const sid = view.sessionId;
+    const sid = view.sessionId, gen = view.gen, seq = ++pickSeq;
     const r = await api("/api/session-model", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(patch ? { id: sid, ...patch } : { id: sid, reset: true }) });
     // 回执慢、人已经切到别的会话：A 的结果不许写进 B 的标签（审查 D-01）。抛出去让调用方别接着重画
-    if (view.sessionId !== sid) { const e = new Error(""); e.stale = true; throw e; }
+    // 切走又切回来（A→B→A）、或者之后又选过一次：旧回执也不算（审查 #52 D-01）
+    if (view.sessionId !== sid || view.gen !== gen || seq !== pickSeq) { const e = new Error(""); e.stale = true; throw e; }
     smSeq++;                               // 在途的旧查询作废，以这次回执为准
     state.sessModel = r.rec || null;
     state.sessEff = r.provider ? r : null;
@@ -94,6 +96,7 @@
   modelEl.setAttribute("role", "button");
   modelEl.tabIndex = 0;
   modelEl.addEventListener("click", (e) => { e.stopPropagation(); openModelPicker(); });
+  modelEl.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openModelPicker(); } });   // 审查 #52 P2-11
 
   async function openModelPicker() {
     if ($("model-pick")) return;
@@ -275,6 +278,9 @@
             return `<option value="${esc(m.id)}"${img}>${esc(m.id)}${nm} · ${ctx}</option>`;
           }).join("")
         : (dfltOpt ? "" : '<option value="">' + t("（该厂商不提供模型清单）") + '</option>')));
+      // 没单独指定（current=null）的非原生厂商：实际跑的是它的默认型号，没有默认就是清单第一个（和网关同一套），
+      // 下拉框和下面的说明都按它画，别停在随便哪一项上（审查 #52 D-03）
+      const curId = r.current || (!r.nativeModels && (MODELS.some((m) => m.id === r.defaultModel) ? r.defaultModel : MODELS[0]?.id)) || null;
       if (r.current) {
         sel.value = r.current;
         // 当前模型不在厂商 /models 的清单里（比如 DeepSeek 的 deepseek-flash 是兼容端点认的别名）：
@@ -284,14 +290,15 @@
           sel.value = r.current;
         }
       } else if (r.nativeModels) sel.value = "";
+      else if (curId) sel.value = curId;
       $("model-count").textContent = t("{n} 个", { n: MODELS.length });
       renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
 
       // 用量条：总刻度用厂商给的真实窗口，但设了压缩窗口就改以它为满刻度
       // 接口没回窗口时（登录态 / 老缓存），用清单里这个模型自己的值兜底
-      if (!r.contextWindow) r.contextWindow = (MODELS.find((m) => m.id === r.current) || {}).context_window || 0;
+      if (!r.contextWindow) r.contextWindow = (MODELS.find((m) => m.id === curId) || {}).context_window || 0;
       loadCtxModel(r);
-      const cur = MODELS.find((m) => m.id === r.current);
+      const cur = MODELS.find((m) => m.id === curId);
       if (cur) {
         const k = (v) => (v ? Math.round(v / 1024) + "k" : "—");
         // 纯文字：厂商 /models 返回的内容不可信（审查 v0.5.5 Web-M1），不经 innerHTML
@@ -307,7 +314,7 @@
       } else if (!MODELS.length) {
         $("model-info").innerHTML =
                     t("该厂商由 claude 自己决定模型，没有可切换的清单。要指定就改 <code>ccapp-providers.json</code> 的 <code>defaultModel</code>。");
-      }
+      } else $("model-info").textContent = "";    // 上一家的能力说明别留着（审查 #52 D-03）
       acPaint((cur && cur.context_window) || state.ctxTotal, r.autoCompactWindow);
       return true;
     } catch (e) {
@@ -546,7 +553,7 @@
 
   // ── 能力面板 ──────────────────────────────────────────────────────
   function cacheCapsFromInit(ev) {
-    state.caps = state.caps || {};
+    state.caps = state.caps || {}; state.capsErr = "";
     state.caps.tools = ev.tools || state.caps.tools || [];
     state.caps.skills = ev.skills || state.caps.skills || [];
     state.caps.agents = ev.agents || state.caps.agents || [];
@@ -563,7 +570,9 @@
     } catch (e) {
       // 一次都没拿到过：说清楚读取失败、给重试，别只剩空标题（审查 F-008）
       state.capsErr = e.message || "?";
-      if (!state.caps) { renderCaps(); $("cap-tiles").innerHTML = `<div class="tile big"><span class="k">${esc(t("能力清单读取失败：{msg}", { msg: state.capsErr }))}</span><button class="btn sm ghost" id="caps-retry">${esc(t("重试"))}</button></div>`; $("caps-retry").onclick = () => loadCaps(); }
+      if (!state.caps) { renderCaps(); $("cap-tiles").innerHTML = `<div class="tile big"><span class="k">${esc(t("能力清单读取失败：{msg}", { msg: state.capsErr }))}</span><button class="btn sm ghost" id="caps-retry">${esc(t("重试"))}</button></div>`; }
+      // 读成过、这次刷新失败：旧清单照摆，顶上标明是上次的并给重试（审查 F-008 复测）
+      else renderCaps();
     }
   }
 
@@ -603,7 +612,8 @@
     // 计数格：图标 + 大号数字 + 名字；点了跳到那一节
     const icoOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .icobox`)?.innerHTML || "";
     const nameOf = (k) => document.querySelector(`#tab-caps [data-sec="${k}"] .sec-h h3`)?.textContent || k;
-    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="tile" data-sec="${k}"><span class="icobox">${icoOf(k)}</span><span class="n num">${N[k]}</span><span class="k">${esc(nameOf(k))}</span></button>`).join("");
+    $("cap-tiles").innerHTML = Object.keys(N).map((k) => `<button class="tile" data-sec="${k}"><span class="icobox">${icoOf(k)}</span><span class="n num">${N[k]}</span><span class="k">${esc(nameOf(k))}</span></button>`).join("")
+      + (state.capsErr ? `<div class="tile big"><span class="k">${esc(t("刷新失败，显示的是上次读到的清单：{msg}", { msg: state.capsErr }))}</span><button class="btn sm ghost" id="caps-retry">${esc(t("重试"))}</button></div>` : "");
     // 斜杠命令：卡片（命令 + 说明），点一下插进输入框
     $("caps-cmds").innerHTML = cmds.length
       ? cmds.map((x) => { const n = "/" + (x.name || x); return `<button class="cmd-card" data-cmd="${esc(n)}"><span class="mono">${esc(n)}</span><span>${esc(x.desc ? t(x.desc) : "")}</span></button>`; }).join("")
@@ -634,6 +644,7 @@
   $("caps-q").addEventListener("input", filterCaps);
   $("caps-rules").addEventListener("click", () => openSettings("claude"));
   $("cap-tiles").addEventListener("click", (e) => {
+    const rt = e.target.closest("#caps-retry"); if (rt) { rt.disabled = true; return loadCaps(); }
     const b = e.target.closest("[data-sec]"), x = b && document.querySelector(`#tab-caps > [data-sec="${b.dataset.sec}"]`); if (!x) return;
     const body = $("page-body");
     body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - 12, behavior: "smooth" });

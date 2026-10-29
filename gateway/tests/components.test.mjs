@@ -1,5 +1,6 @@
 // 组件索引（gw/components.mjs 的 compIndex）：磁盘缓存、先出旧列表后台再拉、换镜像与一天后回主地址。
 // 本机起一个服务当四个地址（官方 / 社区 × 主地址 / 镜像）；索引不签名，靠组件目录里的 allow-unsigned 放行
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

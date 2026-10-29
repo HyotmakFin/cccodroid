@@ -1,4 +1,5 @@
 // 会话导入（gw/sessionops.mjs）：不是 zip 的文件快速拒绝，不从尾逐字节扫到头
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zipRead } from "../gw/sessionops.mjs";

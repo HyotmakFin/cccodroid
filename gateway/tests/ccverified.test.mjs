@@ -1,5 +1,6 @@
 // Claude Code 真机验证记录（gw/ccverified.mjs）：验签、落盘给 Java 读、只往新的换、按语言给原因
 // 用一把测试钥匙签名（CCAPP_TEST_PUBKEY 只在 CCAPP_TEST=1 时生效），本机起服务当发布地址
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

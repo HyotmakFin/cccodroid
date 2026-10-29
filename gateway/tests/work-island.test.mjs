@@ -1,4 +1,5 @@
 // 工作岛核心：状态映射、换轮不误报、中止、确认、节流、中英文
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createWorkIsland } from "../gw/work-island-core.mjs";

@@ -69,6 +69,27 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   // kind "modal"：弹层，开它先关掉所有浮层；点外面不管（各自的遮罩自己处理）
   // 返回键 / Esc 关最上面那个；打开整页、设置、侧栏时全关；布局补发的假 resize 只重摆，innerWidth 真变才关（keep 的不关）
   // cover：开着时让原生浏览器窗格让位（它是原生视图，总盖在网页上面）
+  /** 看得见、能聚焦的控件（模态的初始焦点和 Tab 循环用） */
+  const focusables = (root) => [...root.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")]
+    .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== "hidden");
+  /** 焦点挪进模态：已经在里面就不动；里面没有可聚焦的就聚焦容器本身（审查 #52 P2-12） */
+  function focusInto(root, prefer) {
+    if (!root.isConnected || root.contains(document.activeElement)) return;
+    // 不挑输入框：手机上程序聚焦输入框会直接弹出键盘
+    const el = (prefer && prefer.getClientRects().length ? prefer : null) || focusables(root).find((x) => !x.matches("input, textarea, select"));
+    if (el) return el.focus({ preventScroll: true });
+    if (!root.hasAttribute("tabindex")) root.tabIndex = -1;
+    root.focus({ preventScroll: true });
+  }
+  /** Tab 不许跑出模态：首尾循环；焦点在外面时拉回第一个 */
+  function trapTab(root, e) {
+    const fs = focusables(root);
+    if (!fs.length) { e.preventDefault(); return; }
+    const a = document.activeElement;
+    if (!root.contains(a)) { e.preventDefault(); fs[e.shiftKey ? fs.length - 1 : 0].focus(); }
+    else if (e.shiftKey && a === fs[0]) { e.preventDefault(); fs[fs.length - 1].focus(); }
+    else if (!e.shiftKey && a === fs[fs.length - 1]) { e.preventDefault(); fs[0].focus(); }
+  }
   const OV = (() => {
     let stack = [];   // { el, kind, anchor, onClose, place, keep, cover, w0 }
     let covered = false;
@@ -85,6 +106,9 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       // 淡出再移走（MO 在下面定义，调用时早已就绪）；淡出途中又被打开（重新进栈）就不删
       MO.outRemove(it.el, () => !!find(it.el));
       try { it.onClose && it.onClose(); } catch (e) { console.error(e); }
+      // 弹层关了：焦点还给打开它的那个控件（还在、看得见的话）
+      if (it.kind === "modal" && it.from && (it.el.contains(document.activeElement) || document.activeElement === document.body)
+          && it.from.isConnected && it.from.getClientRects().length) try { it.from.focus({ preventScroll: true }); } catch {}
     }
     function close(el) { const it = el && find(el); if (it) drop(it); else if (el) el.remove(); sync(); }
     function closeAll(kind) { for (const it of live().slice().reverse()) if (!kind || it.kind === kind) drop(it); sync(); }
@@ -93,8 +117,10 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       closeAll(kind === "modal" ? null : "menu");
       if (!el.isConnected) document.body.appendChild(el);
       const again = !!find(el);
-      stack.push({ el, kind, anchor: o.anchor || null, onClose: o.onClose, place: o.place, keep: !!o.keep, cover: !!o.cover, w0: innerWidth });
+      const from = document.activeElement;
+      stack.push({ el, kind, anchor: o.anchor || null, onClose: o.onClose, place: o.place, keep: !!o.keep, cover: !!o.cover, w0: innerWidth, from });
       sync();
+      if (kind === "modal" && !again) requestAnimationFrame(() => { if (find(el) && top() === el) focusInto(el); });
       if (!again) MO.enterOv(el, o.anchor);
       return el;
     }
@@ -111,7 +137,10 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
       }
       sync();
     }, true);
-    addEventListener("keydown", (e) => { if (e.key === "Escape" && top()) { e.stopPropagation(); back(); } }, true);
+    addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && top()) { e.stopPropagation(); back(); }
+      else if (e.key === "Tab") { const s = live(), it = s[s.length - 1]; if (it && it.kind === "modal") trapTab(it.el, e); }
+    }, true);
     addEventListener("resize", () => {
       for (const it of live().slice()) {
         if (innerWidth !== it.w0 && !it.keep) drop(it);
@@ -483,8 +512,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   chatEl.addEventListener("touchend", touchOff, { passive: true });
   chatEl.addEventListener("touchcancel", touchOff, { passive: true });
   // 滚轮 / 触控板也算「手在动」：小步往上滚时，随后的 scroll 判断要按 4px 算，不然又被 40px 的宽限判回贴底（审查 #48 06-02）
-  let wheelAt = 0;
-  chatEl.addEventListener("wheel", (e) => { wheelAt = Date.now(); if (e.deltaY < 0) stick = false; }, { passive: true });
+  let wheelAt = 0, wheelUpAt = 0;
+  chatEl.addEventListener("wheel", (e) => { wheelAt = Date.now(); if (e.deltaY < 0) { stick = false; wheelUpAt = wheelAt; } }, { passive: true });
   // 对话区只挂一个 scroll 监听，事件里不读排版，攒到下一帧统一处理：跟底判断、翻到顶加载更早的、↓ 圆钮
   const chatScrollHooks = [];
   let chatScrollRaf = 0;
@@ -495,7 +524,8 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     chatScrollRaf = requestAnimationFrame(() => {
       chatScrollRaf = 0;
       // 不是我们自己滚的；手指操作期间要真到底（4px）才恢复跟随，否则往上拖的前 40px 会被判回「贴底」又拽下去
-      if (chatEl.scrollTop !== progTop) stick = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < (byHand ? 4 : 40);
+      // 刚往上滚过滚轮（哪怕只 1–3px）：这是要离开底部，不许按「离底不到 4px」判回贴底（审查 #52 06-02）
+      if (chatEl.scrollTop !== progTop) stick = Date.now() - wheelUpAt < 500 ? false : chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < (byHand ? 4 : 40);
       for (const f of chatScrollHooks) f();
     });
   }, { passive: true });

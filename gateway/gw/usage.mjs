@@ -323,7 +323,8 @@ export function privCall(req, timeoutMs = 20000) {
 // ── 路由：/api/ledger /api/usage /api/usage/ /api/energy /api/energy/system ──
 export async function routeUsage(req, res, u, p) {
   if (req.method === "GET" && p === "/api/ledger") {
-    return sendJson(res, 200, { items: readLedger(Number(u.searchParams.get("n")) || 100) });
+    try { return sendJson(res, 200, { items: readLedger(Number(u.searchParams.get("n")) || 100) }); }
+    catch (e) { return sendJson(res, 500, { message: e.code || e.message }); }
   }
   // ── 官方账户登录：就是在跑 `claude auth login`，网关只当终端用 ──
   // OAuth 全程由 claude 自己完成，令牌由它写进它自己的 ~/.claude/.credentials.json；

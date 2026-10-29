@@ -37,9 +37,12 @@
       // 没读成功过：说读取失败、给重试，别显示「还没有项目」让人以为全丢了（审查 E07 / #49 P2-9）
       (!PJ.loaded && PJ.err ? `<div class="panel">${emptyRow(t("项目列表读取失败：{msg}", { msg: PJ.err }))}<div class="row"><button class="btn sm" data-a="pj-retry">${esc(t("重试"))}</button></div></div>` :
       !PJ.loaded ? `<div class="muted">${esc(t("加载中…"))}</div>` :
-      PJ.list.length ? `<div class="pj-grid">${PJ.list.map(card).join("")}</div>`
-        : `<div class="panel">${emptyRow(t("还没有项目。新建一个，或者把已有的目录收进来。"))}</div>`);
+      // 读成过、这次刷新失败：旧列表照摆，顶上标明并给重试（#49 P2-9 复测）
+      (PJ.err ? staleRow(PJ.err, "pj-retry") : "") +
+      (PJ.list.length ? `<div class="pj-grid">${PJ.list.map(card).join("")}</div>`
+        : `<div class="panel">${emptyRow(t("还没有项目。新建一个，或者把已有的目录收进来。"))}</div>`));
   }
+  const staleRow = (msg, act) => `<div class="panel">${emptyRow(t("刷新失败，显示的是上次读到的：{msg}", { msg }))}<div class="row"><button class="btn sm" data-a="${act}">${esc(t("重试"))}</button></div></div>`;
   async function renderProject(box) {
     const id = PJ.cur;
     let d = PJ.detail && PJ.detail.project && PJ.detail.project.id === id ? PJ.detail : null;
@@ -175,13 +178,21 @@
     o.addEventListener("click", (e) => {
       if ((e.target === o && !narrow) || e.target.closest("[data-close]")) return OV.close(o);
       const rc = e.target.closest(".pj-rc");
-      if (rc && !rc.classList.contains("on")) { rc.parentNode.querySelectorAll(":scope > .pj-rc").forEach((x) => x.classList.toggle("on", x === rc)); rc.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
+      if (rc && !rc.classList.contains("on")) { rc.parentNode.querySelectorAll(":scope > .pj-rc").forEach((x) => { x.classList.toggle("on", x === rc); x.setAttribute("aria-checked", String(x === rc)); }); rc.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
       const sb = e.target.closest(".pj-seg button");
       if (sb) { [...sb.parentNode.children].forEach((b) => b.classList.toggle("on", b === sb)); sb.parentNode.dispatchEvent(new Event("pick", { bubbles: true })); }
     });
+    // 单选卡片：Enter / 空格选中，方向键在同组里挪（审查 #52 P2-11）
+    o.addEventListener("keydown", (e) => {
+      const rc = e.target.closest && e.target.closest(".pj-rc"); if (!rc) return;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); rc.click(); return; }
+      const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]; if (!d) return;
+      const all = [...rc.parentNode.querySelectorAll(":scope > .pj-rc")], nx = all[(all.indexOf(rc) + d + all.length) % all.length];
+      e.preventDefault(); nx.focus(); nx.click();
+    });
     return o;
   }
-  const rcards = (name, opts, on) => `<div class="pj-rcs" data-name="${name}">${opts.map(([k, l, d]) => `<div class="pj-rc${k === on ? " on" : ""}" data-v="${k}" role="radio" tabindex="0"><span class="pj-dot"></span><div>${esc(l)}${d ? `<small>${d}</small>` : ""}</div></div>`).join("")}</div>`;
+  const rcards = (name, opts, on) => `<div class="pj-rcs" data-name="${name}" role="radiogroup">${opts.map(([k, l, d]) => `<div class="pj-rc${k === on ? " on" : ""}" data-v="${k}" role="radio" aria-checked="${k === on}" tabindex="0"><span class="pj-dot"></span><div>${esc(l)}${d ? `<small>${d}</small>` : ""}</div></div>`).join("")}</div>`;
   const segOf = (name, opts, on) => `<span class="seg pj-seg" data-name="${name}">${opts.map(([k, l]) => `<button type="button" data-v="${k}" class="${k === on ? "on" : ""}">${esc(l)}</button>`).join("")}</span>`;
   const picked = (o, name) => { const el = o.querySelector(`[data-name="${name}"] > .on`); return el ? el.dataset.v : ""; };
   const frow = (label, inner, hint) => `<div class="pj-frow"><label>${esc(label)}</label>${inner}${hint ? `<div class="pj-hint">${hint}</div>` : ""}</div>`;
@@ -205,8 +216,14 @@
       o.querySelector("#np-dir").classList.toggle("hidden", m !== "dir");
       o.querySelector("#np-url").classList.toggle("hidden", m !== "git");
       o.querySelector("#np-where").textContent = ws + "/" + slugName(name.value);   // 和网关建目录用同一套规则（审查 E13）
+      // 已有同名目录时网关会加 -2、-3：停手一会儿问网关实际落在哪，迟到的回执不认
+      clearTimeout(whereT); const q = ++whereSeq, v = name.value;
+      whereT = setTimeout(async () => {
+        try { const r = await api("/api/projects/where?name=" + encodeURIComponent(v)); if (q === whereSeq && o.isConnected) o.querySelector("#np-where").textContent = r.path; } catch {}
+      }, 250);
     };
-    o.addEventListener("pick", sync); name.addEventListener("input", sync);
+    let whereT = 0, whereSeq = 0;
+    o.addEventListener("pick", sync); name.addEventListener("input", sync); sync();
     name.select();
     o.querySelector("#np-ok").addEventListener("click", async (e) => {
       const b = e.currentTarget, mode = picked(o, "mode");
@@ -290,7 +307,7 @@
     };
     const b = D.budget || {}, daily = b.daily || 0, today = b.today || 0, m = b.month || {};
     const pct = daily ? Math.min(100, today / daily * 100) : 0;
-    box.innerHTML = pageHead(esc(t("定时任务")), `<button class="btn sm pj-primary" data-a="new">${pi("plus")}${esc(t("新建"))}</button>`) + missed +
+    box.innerHTML = pageHead(esc(t("定时任务")), `<button class="btn sm pj-primary" data-a="new">${pi("plus")}${esc(t("新建"))}</button>`) + missed + (SC.err ? staleRow(SC.err, "sc-retry") : "") +
       `<div class="sc-note">${esc(t("到点在本机跑一次 Claude，在指定目录里；跑完按设置通知你，结果存成一个对话。没人在旁边：要问你的操作一律当拒绝。错过的不会偷偷补跑，按每个任务的设置来。"))}</div>` +
       (tasks.length ? `<div class="seg-scroll">${segOf("flt", [["all", t("全部")], ["on", t("开着的")], ["off", t("关着的")]], SC.flt)}</div>` : "") +
       `<div class="panel">${list.length ? list.map(row).join("") : emptyRow(tasks.length ? t("没有") : t("还没有定时任务。比如每天早上让它看一眼 CI。"))}</div>
@@ -333,7 +350,7 @@
       [t("错过"), esc({ ask: t("下次打开问我"), run: t("开机后立刻补跑一次"), skip: t("跳过") }[x.missed] || "")],
       [t("通知"), esc({ all: t("每次都通知"), fail: t("只在失败时"), found: t("只在有发现时（回复不是「{q}」）", { q: x.quiet || "—" }), none: t("不通知") }[x.notify] || "")],
       [t("结果存成对话"), esc(yes(x.saveSession !== false))],
-      [t("有效期"), esc(x.freq && x.freq.kind === "once" ? t("跑完自动关") : x.until && x.until.kind === "date" ? t("到 {d} 为止", { d: x.until.date }) : x.until && x.until.kind === "count" ? t("跑满 {n} 次就关（已跑 {m} 次）", { n: x.until.count, m: x.runsDone || 0 }) : t("一直有效"))],
+      [t("有效期"), esc(x.freq && x.freq.kind === "once" ? t("跑完自动关") : x.until && x.until.kind === "date" && x.until.date ? t("到 {d} 为止", { d: x.until.date }) : x.until && x.until.kind === "count" ? t("跑满 {n} 次就关（已跑 {m} 次）", { n: +x.until.count || 1, m: x.runsDone || 0 }) : t("一直有效"))],
     ];
     const runs = (d.runs || []).filter((r) => SC.rflt === "all" || r.st !== "ok");
     box.innerHTML = pageHead(esc(x.name), `<button class="btn sm ghost" data-a="edit">${pi("edit")}${esc(t("编辑"))}</button>${kebabBtn("tmenu")}`, true) +
@@ -351,7 +368,7 @@
     const a = e.target.closest("[data-a]")?.dataset.a;
     if (a === "back") { SC.cur = null; SC.detail = null; renderSched(); $("page-body").scrollTop = 0; return; }
     if (a === "new") return taskDlg(null);
-    if (a === "sc-retry") { SC.err = ""; return renderSched(); }
+    if (a === "sc-retry") { SC.err = ""; if (!SC.data) return renderSched(); renderSched(); return loadSched(); }
     if (a === "bgset") return openPage("settings", "run");
     if (a === "budget") {
       const D = SC.data || {}, cur = (D.budget && D.budget.daily) || 0;
@@ -515,7 +532,9 @@
       const btn = e.currentTarget;    // await 之后 currentTarget 就成 null 了：保存失败时按钮恢复不了（审查 E01）
       const b = collect();
       if (b.until.kind === "count" && !(b.until.count >= 1)) return toast(t("次数至少填 1"), true);   // 审查 E10
+      if (b.until.kind === "date" && !b.until.date) return toast(t("到期日要填一个日期"), true);
       if (!b.name || !b.prompt) return toast(t("名称和要做的事都要填"), true);
+      if (q("#t-model").disabled) return toast(t("型号清单还在加载，稍等再保存"), true);
       if (b.freq.kind === "weekly" && !b.freq.days.length) return toast(t("每周至少挑一天"), true);
       if (b.notify === "found" && !b.quiet) return toast(t("「只在有发现时」要填没发现时它回的那句话"), true);
       btn.disabled = true;
@@ -531,9 +550,15 @@
     let fmN = 0;
     const fillModels = async (keep) => {
       // 快速连换接口：慢的那家清单迟到不许盖掉现在这家的（审查 E04）
-      const n = ++fmN, pid = q("#t-prov") ? q("#t-prov").value : "", ms = await provModelsOf(pid), msel = q("#t-model");
-      if (!msel || n !== fmN) return;
+      const n = ++fmN, pid = q("#t-prov") ? q("#t-prov").value : "", msel = q("#t-model");
+      if (!msel) return;
+      // 清单回来之前型号框锁住、旧型号先清掉：否则这时点保存会存成「新接口 + 旧型号」（审查 #52 E04）
       const cur = keep ? msel.value : "";
+      if (!keep) msel.innerHTML = `<option value="" selected>${esc(t("跟随项目 / 全局"))}</option>`;
+      msel.disabled = true;
+      const ms = await provModelsOf(pid);
+      if (n !== fmN || !msel.isConnected) return;
+      msel.disabled = false;
       msel.innerHTML = [["", t("跟随项目 / 全局")], ...ms.map((m) => [m.id, prettyModel(m.id)]), ...(cur && !ms.some((m) => m.id === cur) ? [[cur, prettyModel(cur)]] : [])]
         .map(([a, b]) => `<option value="${esc(a)}"${a === cur ? " selected" : ""}>${esc(b)}</option>`).join("");
     };

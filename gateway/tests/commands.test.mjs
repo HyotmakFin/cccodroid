@@ -1,4 +1,5 @@
 // 常用指令（gw/commands.mjs）：frontmatter 拆合、名字校验
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseCmd, formatCmd, CMD_NAME_RE } from "../gw/commands.mjs";

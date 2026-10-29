@@ -15,7 +15,8 @@
     closeDrawer();
     loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadReconcile(false); loadFonts(); renderTbList(); renderAccent(); renderMsgActs();
     // 焦点进模态：不然键盘 / 读屏还停在被盖住的背景上（审查 P2-12）
-    requestAnimationFrame(() => { if (setOpen && !$("set-ov").contains(document.activeElement)) ($("set-cats").querySelector("button.on:not(.hidden)") || $("set-x")).focus({ preventScroll: true }); });
+    // 窄屏的分类列表没有选中项、关闭键也藏着：落到第一个看得见的控件（审查 #52 P2-12）
+    requestAnimationFrame(() => { if (setOpen) focusInto($("set-ov"), $("set-cats").querySelector("button.on:not(.hidden)")); });
   }
   function closeSettings() {
     if (!setOpen) return;
@@ -31,17 +32,12 @@
   }
   // Esc 关设置（窄屏先回分类列表）；菜单、弹层开着时 OV 在捕获阶段先接走了（审查 P2-12）
   addEventListener("keydown", (e) => { if (e.key === "Escape" && setOpen && !e.defaultPrevented) { e.preventDefault(); setBack(); } });
-  // Tab 别跑出模态
-  $("set-ov").addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    const fs = [...$("set-ov").querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")].filter((x) => !x.disabled && x.getClientRects().length);
-    if (!fs.length) return;
-    if (e.shiftKey && document.activeElement === fs[0]) { e.preventDefault(); fs[fs.length - 1].focus(); }
-    else if (!e.shiftKey && document.activeElement === fs[fs.length - 1]) { e.preventDefault(); fs[0].focus(); }
-  });
+  // Tab 别跑出模态：挂在 window 上，焦点还在背景时也接得到（审查 #52 P2-12）；上面另开了 OV 弹层时归 OV 管
+  addEventListener("keydown", (e) => { if (e.key === "Tab" && setOpen && !OV.top()) trapTab($("set-ov"), e); }, true);
   // 开关、下拉框没有关联标题，读屏只念「复选框」：挂到同一行的粗体标题上（审查 P2-13）
   document.querySelectorAll("#tab-settings .srow").forEach((row, i) => {
-    const b = row.querySelector(".sl > b"); if (!b) return;
+    // 子行只有说明没有粗体标题（保活、开机自启、通知）：挂到那段说明上（审查 #52 P2-13）
+    const b = row.querySelector(".sl > b") || row.querySelector(".sl > p"); if (!b) return;
     if (!b.id) b.id = "srow-t" + i;
     row.querySelectorAll(".sc input, .sc select, .sc textarea").forEach((c) => { if (!c.getAttribute("aria-label") && !c.getAttribute("aria-labelledby") && !(c.id && document.querySelector(`label[for="${c.id}"]`))) c.setAttribute("aria-labelledby", b.id); });
   });

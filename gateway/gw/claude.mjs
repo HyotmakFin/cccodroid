@@ -433,7 +433,7 @@ export function readLedger(n = 100) {
   try {
     return fs.readFileSync(f, "utf8").trim().split("\n").reverse().slice(0, n)
       .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-  } catch { return []; }
+  } catch (e) { if (e.code === "ENOENT") return []; throw e; }   // 还没记过账才是空；读不了要报错，别装成「没有记录」（审查 #52 D-07）
 }
 
 /** p：这一轮用的那家（缺省 = 全局生效的）。密钥文件按家分开 —— 几家同时在跑时，

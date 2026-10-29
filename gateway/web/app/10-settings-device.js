@@ -377,14 +377,19 @@
     if (st.message) toast(st.message, true);
   }
   // 网关转发失败也回 200（{ ok:false, message }，没有工具清单）：不能拿它去重画，否则清单清空、无障碍状态乱报（审查 D-R01）
+  // 没存上：重读一遍，开关回到真实状态（审查 D-05）；连重读也失败（网关断了）就退回上次画过的那份，别把没存上的值留在开关上（审查 #52 D-05）
+  let lastDev = null;
+  const devBack = () => loadDev().then((ok) => { if (!ok && lastDev) devRender(lastDev); });
   const devSet = (body) => post("/api/app/dev_set", body)
-    .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return loadDev(); } devRender(st); })
-    .catch((e2) => { toast(e2.message, true); loadDev(); });   // 没存上：重读一遍，开关回到真实状态（审查 D-05）
+    .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return devBack(); } lastDev = st; devRender(st); })
+    .catch((e2) => { toast(e2.message, true); devBack(); });
   async function loadDev() {
     let st;
-    try { st = await api("/api/app/dev_status"); } catch { return; }
-    if (!st.ok) return;
+    try { st = await api("/api/app/dev_status"); } catch { return false; }
+    if (!st.ok) return false;
+    lastDev = st;
     devRender(st);
+    return true;
   }
   $("dev-on").addEventListener("change", (e) => devSet({ on: e.target.checked }));
   $("dev-a11y").addEventListener("change", (e) => devSet({ a11y: e.target.value }));
@@ -414,11 +419,14 @@
     else if (r.ok === false) toast(r.message, true);
     followUpd(); loadUpd();
   });
-  $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked }).then(loadUpd).catch((e2) => { toast(e2.message, true); loadUpd(); }));
+  // 存不上（网关回 ok:false 或断了）：开关先退回上次读到的值，再重读（审查 #52 D-05）
+  const updBack = (msg) => { toast(msg || t("保存失败"), true); if (lastUpd && lastUpd.items) { $("upd-auto").checked = !!lastUpd.auto; $("upd-channel").value = lastUpd.channel === "pinned" ? "pinned" : lastUpd.channel || "stable"; } loadUpd(); };
+  $("upd-auto").addEventListener("change", (e) => post("/api/app/upd_set", { auto: e.target.checked })
+    .then((r) => (r && r.ok === false ? updBack(r.message) : loadUpd())).catch((e2) => updBack(e2.message)));
   $("upd-channel").addEventListener("change", (e) => {
     // 固定版本要先挑一版：开选单，下拉框先退回原样，挑完 loadUpd 会刷新成「固定 x.y.z」
     if (e.target.value === "pinned") { e.target.value = (lastUpd && lastUpd.channel) || "stable"; openClaudeVersions(); return; }
-    followUpd(); post("/api/app/upd_set", { channel: e.target.value }).then(loadUpd).catch(() => {});
+    followUpd(); post("/api/app/upd_set", { channel: e.target.value }).then((r) => (r && r.ok === false ? updBack(r.message) : loadUpd())).catch((e2) => updBack(e2.message));
   });
   $("priv-ka").addEventListener("change", async (e) => {
     const on = e.target.checked;
@@ -443,9 +451,15 @@
   }
   function memOut(cls, text) { const o = $("mem-result"); o.className = "prov-state " + cls; o.textContent = text; }
   const GB = (b) => (b / 1073741824).toFixed(1) + "G";
+  let memSeq = 0;
   async function saveMem(patch) {
+    const n = ++memSeq;
     // 只送改了的那一项（网关按字段合并）：带上整份旧快照的话，先关开关、紧接着存白名单，后一个请求会把开关又开回去（审查 S2-04）
-    const r = await api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memGuard: patch }) });
+    let r;
+    try { r = await api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memGuard: patch }) }); }
+    catch (e) { if (n !== memSeq) e.stale = true; throw e; }
+    // 连着存了两次、回执倒着到：只认最后一次的，旧的那份别把界面退回去（审查 #52 S2-04）
+    if (n !== memSeq) return r;
     if (r && r.settings) state.settings.memGuard = r.settings.memGuard;
     fillMem();
     return r;
@@ -456,7 +470,7 @@
       e.target.checked = false; return;
     }
     try { await saveMem({ enabled: on }); memOut("ok", on ? t("✓ 已开启") : t("✓ 已关闭")); }
-    catch (e2) { e.target.checked = !on; memOut("err", "✗ " + e2.message); }
+    catch (e2) { if (!e2.stale) e.target.checked = !on; memOut("err", "✗ " + e2.message); }
   });
   $("mem-actions").addEventListener("click", async (e) => {
     const act = e.target.dataset && e.target.dataset.act;
@@ -519,7 +533,7 @@
         const h = ((b[k] || 0) / max) * (enBot - enTop);
         if (h > 0) s += `<rect class="bar ${cls}${dim}" x="${x.toFixed(1)}" y="${(enBot - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h, 0.8).toFixed(1)}" rx="1.5"/>`;
       }
-      if (i % labelEvery === 0) s += `<text x="${(i * slot + slot / 2).toFixed(1)}" y="${enH - 4}" text-anchor="middle">${esc(enLabel(b, en.view))}</text>`;
+      if (i % labelEvery === 0) s += `<text x="${(i * slot + slot / 2).toFixed(1)}" y="${enH - 4}" text-anchor="middle">${esc(enLabel(b, en.data.view))}</text>`;
       s += `<rect class="hit" data-i="${i}" x="${(i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${enH}"/>`;
     });
     return s;
@@ -561,7 +575,7 @@
     if (!d) return;
     const pick = en.sel >= 0 ? [d.bars[en.sel]] : d.bars;
     const tot = pick.reduce((a, b) => { for (const k of ["c", "f", "s", "d"]) a[k] += b[k] || 0; return a; }, { c: 0, f: 0, s: 0, d: 0 });
-    const head = en.sel >= 0 ? enLabel(d.bars[en.sel], en.view, true) : t({ hour: tk("近 24 小时"), day: tk("近 14 天"), week: tk("近 12 周") }[en.view]);
+    const head = en.sel >= 0 ? enLabel(d.bars[en.sel], d.view, true) : t({ hour: tk("近 24 小时"), day: tk("近 14 天"), week: tk("近 12 周") }[d.view]);
     const parts = [t("本应用 CPU {d}", { d: fmtDur(tot.c * 1000) })];
     if (d.native) parts.push(t("前台 {d}", { d: fmtDur(tot.f * 1000) }), t("亮屏 {d}", { d: fmtDur(tot.s * 1000) }), t("整机掉电 {p}", { p: enPct(tot.d) }));
     $("en-cap").textContent = head + " · " + parts.join(" · ");
@@ -569,10 +583,11 @@
   function enRender() {
     const d = en.data, box = $("en-charts");
     if (!d) return;
-    const every = { hour: 6, day: 2, week: 3 }[en.view];
+    // 一律按数据自己那一档解释：切档请求还在路上时，图上还是旧档的柱子（审查 #52 F-005）
+    const every = { hour: 6, day: 2, week: 3 }[d.view];
     const empty = !d.bars.some((b) => b.c || b.s);
     let h = "";
-    if (en.view === "hour") h += enChart(t("电量"), enDot("chg", t("充电")), enLevels(d.levels, d.now));
+    if (d.view === "hour") h += enChart(t("电量"), enDot("chg", t("充电")), enLevels(d.levels, d.now));
     else if (d.native) h += enChart(t("整机掉电"), "", enBars(d.bars, [["d", ""]], enPct, every));
     h += enChart(t("本应用 CPU 时间"), "", enBars(d.bars, [["c", ""]], (v) => fmtDur(v * 1000), every));
     if (d.native) h += enChart(t("亮屏时间"), enDot("s", t("亮屏")) + enDot("f", t("本应用在前台")), enBars(d.bars, [["s", "s"], ["f", "f"]], (v) => fmtDur(v * 1000), every));

@@ -318,6 +318,9 @@ function clean(b, old = {}) {
   if ("limitCost" in b) t.limitCost = Math.max(0, Math.min(100, +b.limitCost || 0));
   if ("limitMin" in b) t.limitMin = Math.max(1, Math.min(600, +b.limitMin || 15));
   if ("retry" in b) t.retry = Math.max(0, Math.min(3, +b.retry || 0));
+  // 直接调接口也不收 0 次 / 没日期：不然 clean 后 count 成 undefined，详情显示「跑满 undefined 次」（审查 E10）
+  if (b.until?.kind === "count" && !(Number.isInteger(+b.until.count) && +b.until.count >= 1)) throw new Error(tz("次数至少填 1"));
+  if (b.until?.kind === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(b.until.date || "")) throw new Error(tz("到期日要填一个日期"));
   if (b.until && ["ever", "date", "count"].includes(b.until.kind)) t.until = { kind: b.until.kind, date: /^\d{4}-\d{2}-\d{2}$/.test(b.until.date || "") ? b.until.date : undefined, count: +b.until.count || undefined };
   return t;
 }

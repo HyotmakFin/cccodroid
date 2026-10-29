@@ -1,4 +1,5 @@
 // 文件接口（gw/files.mjs）：核完路径、收请求体期间被换成软链，保存不能顺着软链写到别处（审查 v0.5.4 B-L1）
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

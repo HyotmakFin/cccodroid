@@ -12,7 +12,7 @@
 // model：{ now, bands: [{ key, name }], sessions: [会话] }，会话：
 //   { id, short, band, title, ghost, from, to, running, trashed, misc, parent, at, kind, missingParent,
 //     extra: [{ id, ts }], reads: [{ id, ts, early }], ch: [{ at, t, ghost }], open: { t, ghost }, meta: { size },
-//     task: { runs: [{ id, ts }] } }   ← 定时任务：一条虚线串点，每个点是它生出的一个会话
+//     task: { runs: [{ id, ts, trashed }] } }   ← 定时任务：一条虚线串点，每个点是它生出的一个会话
 //
 // 手势（规划书 §11.5，一页只有一个会自由滚的东西）：
 //   单指拖自由平移 + 惯性 + 边缘阻尼弹回；日期轴只跟横移、带名只跟竖移；双指只缩放时间轴（锚两指中点）；
@@ -236,7 +236,7 @@
       const s = st.BY[id]; if (!s) return "";
       if (s.task) {
         return `<div class="lm-cardbox"><h3>${esc(s.title)}</h3><div class="meta"><span>${esc(t("定时任务"))}</span><span>${esc(t("{n} 次", { n: s.task.runs.length }))}</span></div>
-          <ol>${[...s.task.runs].reverse().map((r) => `<li data-act="open" data-arg="${esc(r.id)}"><i>${esc(r.id.slice(0, 4))}</i><span>${esc(md(r.ts) + " " + hm(r.ts))}</span></li>`).join("")}</ol></div>`;
+          <ol>${[...s.task.runs].reverse().map((r) => `<li data-act="${r.trashed ? "restore" : "open"}" data-arg="${esc(r.id)}"><i>${esc(r.id.slice(0, 4))}</i><span>${esc(md(r.ts) + " " + hm(r.ts))}${r.trashed ? " · " + esc(t("已回收，点此恢复")) : ""}</span></li>`).join("")}</ol></div>`;
       }
       const cuts = [s.from, ...s.ch.map((c) => c.at), s.to];
       const chs = [...s.ch, s.open].map((c, i) => ({ n: i + 1, t: c.t, ghost: c.ghost, from: cuts[i], to: cuts[i + 1], open: i === s.ch.length }));

@@ -36,13 +36,15 @@
     }
     if (text.startsWith("/rename ")) {
       if (!view.sessionId) return toast(t("当前还没有会话"), true);
+      const rgen = view.gen;
       try {
         await api(`/api/session/${encodeURIComponent(view.sessionId)}/rename`, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ title: text.slice(8).trim() }),
         });
         // 等回执期间又写了新草稿：别把它清掉（审查 #50 S2-01）
-        if (fromInput && inputEl.value.trim() === typed) { inputEl.value = ""; autoGrow(); }
+        // 切过会话的话，输入框里同样的字是那边新写的，也不清（审查 #52 S2-01）
+        if (fromInput && rgen === view.gen && inputEl.value.trim() === typed) { inputEl.value = ""; autoGrow(); }
         toast(t("已重命名")); loadSessions();
       } catch (e) { toast(e.message, true); }
       return;
@@ -61,7 +63,12 @@
     let done;
     if (!view.sessionId) view.firstSend = new Promise((ok) => (done = ok));
     try {
-      if (prior) { await Promise.race([prior, new Promise((ok) => setTimeout(ok, 15000))]); if (gen !== view.gen) throw Object.assign(new Error(t("会话已切换，这条没发")), { moved: true }); }
+      if (prior) {
+        const r0 = await Promise.race([prior, new Promise((ok) => setTimeout(() => ok("timeout"), 15000))]);
+        if (gen !== view.gen) throw Object.assign(new Error(t("会话已切换，这条没发")), { moved: true });
+        // 等满 15 秒前一条还没拿到 run 号：硬发出去就是另起一个会话，宁可明说没发（审查 #52 #51:1）
+        if (r0 === "timeout" && !view.sessionId && !view.lastRunId) throw new Error(t("上一条还没送到网关，这条先没发，稍后再试"));
+      }
       const r = await api("/api/chat", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -190,6 +197,7 @@
   }
 
   function openCmdPalette(filter) {
+    dropReq("filepal");   // 在途的 @ 文件请求作废：整段换成 /xx 时它迟到会把命令面板盖成文件面板（审查 #52 A-CHAT-003）
     const caps = state.caps;
     // 常用指令（自己存的 commands/*.md）排在最前；说明是用户自己写的，不过翻译。没在筛选时顶上放一个「管理常用指令…」
     const all = (caps?.slashCommands || []).filter((c) => !filter || c.name.includes(filter));

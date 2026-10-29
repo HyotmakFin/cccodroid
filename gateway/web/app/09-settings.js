@@ -149,9 +149,11 @@
       <div id="login-flow"></div>
       <div class="tiny">${esc(pHint(p))}</div>`;
     let st;
-    // 查询期间换了卡：迟到的失败别去碰已经不在的节点（审查 D-06）
-    try { st = await api("/api/login/status"); } catch (e) { const el = $("login-state"); if (el && state.provView === p.id) el.textContent = t("查询失败：{msg}", { msg: e.message }); return; }
-    if (state.provView !== p.id) return;      // 查询期间用户换了卡
+    // 查询期间换了卡：迟到的失败别去碰已经不在的节点（审查 D-06）。换走又换回同一家时卡片是重画过的，
+    // 只比接口 id 会让旧回执盖到新卡上：认这一次画出来的节点（审查 #52 D-06）
+    const mine = box.querySelector("#login-state"), live = () => mine.isConnected && state.provView === p.id;
+    try { st = await api("/api/login/status"); } catch (e) { if (live()) mine.textContent = t("查询失败：{msg}", { msg: e.message }); return; }
+    if (!live()) return;
     paintLoginState(st, p);
     if (st.pending) watchLogin(p);
   }
@@ -250,11 +252,13 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
   async function startLogin(p, method) {
-    $("login-state").className = "prov-state";
-    $("login-state").textContent = t("正在启动登录…");
+    const mine = $("login-state"), live = () => mine.isConnected && state.provView === p.id;   // 同 renderLoginCard（审查 #52 D-06）
+    mine.className = "prov-state";
+    mine.textContent = t("正在启动登录…");
     let r;
     try { r = await post("/api/login/start", { method }); } catch (e) { return toast(e.message, true); }
-    if (!r.ok) { $("login-state").textContent = "✗ " + (r.message || t("启动失败")); return; }
+    if (!r.ok) { if (live()) mine.textContent = "✗ " + (r.message || t("启动失败")); return; }
+    if (!live()) { openExternal(r.url); return watchLogin(p); }
     openExternal(r.url);
         $("login-flow").innerHTML = `<div class="tiny">${t("已在浏览器打开授权页。授权后浏览器会跳回本机，登录自动完成。")}
         ${t("没自动打开？")}<a href="${esc(r.url)}" target="_blank" rel="noopener">${t("点这里打开")}</a></div>
@@ -605,8 +609,8 @@
 
   function renderKeyCard(box, p) {
     box.innerHTML = `<div class="sub">${esc(pLabel(p))}</div>
-      ${p.endpoints.length > 1 ? `<div class="tiny" style="margin:0 0 4px">${t("线路")}</div>
-        <select id="pc-endpoint">${p.endpoints.map((e) =>
+      ${p.endpoints.length > 1 ? `<div class="tiny" id="pc-endpoint-l" style="margin:0 0 4px">${t("线路")}</div>
+        <select id="pc-endpoint" aria-labelledby="pc-endpoint-l">${p.endpoints.map((e) =>
           `<option value="${esc(e.id)}" ${e.id === p.endpoint ? "selected" : ""}>${esc(pLabel(e))}</option>`).join("")}</select>` : ""}
       <input id="pc-key" type="password" autocomplete="off"
         placeholder="${p.hasKey ? t("已保存（…{tail}），留空则不改", { tail: esc(p.keyTail) }) : t("粘贴 API Key")}">

@@ -51,16 +51,18 @@ export function locateUserTurn(id, userText, after, uuid = "") {
   if (uuid) {
     const j = users.findIndex((u) => u.uuid === uuid);
     if (j >= 0) return { ok: true, found, lines, users, best: j };
+    // 给了 uuid 却对不上：记录变过（压缩、别处改过），按原文猜可能认错轮，宁可让人刷新（#52 P1-2）
+    return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
   }
   const want = forkNorm(userText), head = want.slice(0, 80);
   const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
-  let best = -1;
-  users.forEach((u, j) => {
-    if (!same(u.t)) return;
-    const d = Math.abs(users.length - 1 - j - (Number(after) || 0));
-    if (best < 0 || d < Math.abs(users.length - 1 - best - (Number(after) || 0))) best = j;
-  });
-  if (best < 0) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
+  // 没 uuid 的只会是这次刚发、还在尾巴上的消息，界面数「后面还有几条」是准的：
+  // 只有一条同文就是它；好几条同文时必须恰好对上条数，对不上就拒绝，不挑「最接近的」去猜（#52 P1-2）
+  const cand = users.map((u, j) => (same(u.t) ? j : -1)).filter((j) => j >= 0);
+  const exact = cand.filter((j) => users.length - 1 - j === (Number(after) || 0));
+  const best = cand.length === 1 ? cand[0] : exact.length === 1 ? exact[0] : -1;
+  if (!cand.length) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
+  if (best < 0) return { ok: false, status: 409, message: tz("这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。") };
   return { ok: true, found, lines, users, best };
 }
 

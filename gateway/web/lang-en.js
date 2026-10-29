@@ -2364,5 +2364,14 @@ window.I18N_DICT.en = {
   "要把文件分享到别的应用": "Wants to share a file to another app",
   "碰到了密钥或登录凭据：{w}": "Touches keys or sign-in credentials: {w}",
   "敏感操作": "Sensitive action",
-  "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "Component signature checks are off (an allow-unsigned switch file is in the private directory). Delete it once you're done debugging"
+  "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "Component signature checks are off (an allow-unsigned switch file is in the private directory). Delete it once you're done debugging",
+  "上一条还没送到网关，这条先没发，稍后再试": "The previous message hasn't reached the gateway yet, so this one wasn't sent. Try again in a moment",
+  "到期日要填一个日期": "Pick an end date",
+  "刷新失败，显示的是上次读到的数：{msg}": "Refresh failed; showing the last numbers loaded: {msg}",
+  "刷新失败，显示的是上次读到的清单：{msg}": "Refresh failed; showing the last list loaded: {msg}",
+  "刷新失败，显示的是上次读到的：{msg}": "Refresh failed; showing what was last loaded: {msg}",
+  "后面有一条同样的话还没确认存下，等那一轮答完（或重新打开这个会话）再加书签": "An identical message further down hasn't been confirmed as saved yet. Add the bookmark after that turn finishes (or reopen this conversation)",
+  "型号清单还在加载，稍等再保存": "The model list is still loading; wait a moment before saving",
+  "已回收，点此恢复": "In the trash; tap to restore",
+  "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "This message appears several times in the conversation, so it's unclear which turn you mean. Reopen the conversation and try again."
 };

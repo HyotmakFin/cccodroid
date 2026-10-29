@@ -506,13 +506,13 @@
   function pjOfSession(id) { const s = (state.sessions || []).find((x) => x.id === id); return s ? pjOfCwd(s.cwd) : null; }
   async function loadProjects() {
     try { const r = await api("/api/projects"); PJ.list = r.projects || []; PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; PJ.err = ""; }
-    catch (e) { PJ.err = e.message || "?"; if (curPage === "projects" && !PJ.cur) renderProjects(); return; }
+    catch (e) { PJ.err = e.message || "?"; if (curPage === "projects" && !PJ.cur) renderProjects(); return; }   // 有缓存也重画：顶上要标出刷新失败（#49 P2-9）
     paintProjChip();
     if (curPage === "projects") renderProjects();
     if (curPage === "sessions") renderSessions();
   }
   async function loadSched() {
-    try { SC.data = await api("/api/sched"); SC.err = ""; } catch (e) { SC.err = e.message || "?"; if (curPage === "sched" && !SC.cur && !SC.data) renderSched(); return; }
+    try { SC.data = await api("/api/sched"); SC.err = ""; } catch (e) { SC.err = e.message || "?"; if (curPage === "sched" && !SC.cur) renderSched(); return; }
     if (curPage === "sched") renderSched();
     if (curPage === "projects" && PJ.cur) renderProjects();
     if (curPage === "sessions") renderSessions();

@@ -1,4 +1,5 @@
 // 导入字体（gw/fonts.mjs）：认格式看文件头、字体名从 name 表读。样本用界面自带的字体（woff / woff2）和手搓的 sfnt
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

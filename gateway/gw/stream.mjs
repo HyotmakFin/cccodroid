@@ -17,7 +17,10 @@ export const TASKS_HINT = "When a request has 3 or more distinct steps, track th
 /** 报一次「正在写工具参数」的字数（节流用） */
 function toolEmit(flags, sse) {
   flags.toolTimer = null; flags.toolAt = Date.now();
-  sse({ type: "phase", phase: "tool", name: flags.toolName || "", chars: flags.toolChars });
+  // 工具卡已经发出去（参数写完、工具在跑）就别再报：claude 有时先给整条 assistant、后给 content_block_stop，
+  // 补报会把「正在写 Bash 的参数」又挂回去，命令跑多久它就跟着计多久
+  if (flags.toolId && flags.toolsOut?.has(flags.toolId)) return;
+  sse({ type: "phase", phase: "tool", name: flags.toolName || "", id: flags.toolId || "", chars: flags.toolChars });
 }
 
 export function toolsHint() {
@@ -165,8 +168,9 @@ export function translate(ev, { sse, onInit, onResult, onReplay, flags, provider
           const k = e.content_block?.type;
           if (k === "thinking" || k === "redacted_thinking") sse({ type: "phase", phase: "think" });
           else if (k === "tool_use" || k === "server_tool_use") {
-            flags.toolName = e.content_block.name || ""; flags.toolChars = 0; flags.toolAt = Date.now();
-            sse({ type: "phase", phase: "tool", name: flags.toolName, chars: 0 });
+            flags.toolName = e.content_block.name || ""; flags.toolId = e.content_block.id || ""; flags.toolChars = 0; flags.toolAt = Date.now();
+            if (flags.toolTimer) { clearTimeout(flags.toolTimer); flags.toolTimer = null; }
+            sse({ type: "phase", phase: "tool", name: flags.toolName, id: flags.toolId, chars: 0 });
           } else if (k === "text") sse({ type: "phase", phase: "text" });
         } else if (e?.type === "content_block_delta" && e.delta?.type === "input_json_delta") {
           flags.toolChars = (flags.toolChars || 0) + String(e.delta.partial_json || "").length;
@@ -215,6 +219,10 @@ export function translate(ev, { sse, onInit, onResult, onReplay, flags, provider
           // 同理：思考也逐字发过了。以前这里无条件再发整段，思考块里每段都重复两遍
           if (!flags || !flags.gotThinkDelta) sse({ type: "thinking", text: c.thinking });
         } else if (c.type === "tool_use") {
+          if (flags) {
+            (flags.toolsOut ||= new Set()).add(c.id);
+            if (flags.toolId === c.id && flags.toolTimer) { clearTimeout(flags.toolTimer); flags.toolTimer = null; }
+          }
           sse({ type: "tool_use", id: c.id, name: c.name, input: c.input });
         }
       }

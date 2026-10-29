@@ -194,15 +194,17 @@
       const vis = text.slice(0, shown);
       if (fz > vis.length) { frozen.innerHTML = ""; fz = 0; }
       if (!final) {
+        // 整块重画会新建 <pre> / 表格：正横着看长行的，横向位置别每来一个字就归零（审查 #48 06-04）。
+        // 先记下来再冻结：冻进 frozen 的那几块也要接着原来的位置（审查 #52 06-04）
+        const sl = keepX();
         const idx = safeSplit(vis, fz);
         if (idx > fz) {
           const c = document.createElement("div");
           setHtml(c, renderMd(vis.slice(fz, idx)));
           frozen.appendChild(c);
           fz = idx;
+          sl.into = c;
         }
-        // 整块重画会新建 <pre> / 表格：正横着看长行的，横向位置别每来一个字就归零（审查 #48 06-04）
-        const sl = keepX();
         tail.innerHTML = renderMd(vis.slice(fz)); enhanceMd(tail);   // 光标不跟在每段正文后面：整条回复只留一个，见 AssistantView 的 liveTail
         sl();
       } else {
@@ -212,10 +214,12 @@
       }
       scrollDown();
     }
+    // 记下 tail 里各个代码块 / 表格的横向位置，重画后按顺序还回去；sl.into = 这次新冻结的那块（排在 tail 前面）
     function keepX() {
-      const xs = [...tail.querySelectorAll("pre, .tbl-wrap")].map((x) => x.scrollLeft);
+      const SEL = "pre, .tbl-wrap", xs = [...tail.querySelectorAll(SEL)].map((x) => x.scrollLeft);
       if (!xs.some(Boolean)) return () => {};
-      return () => tail.querySelectorAll("pre, .tbl-wrap").forEach((x, i) => { if (xs[i]) x.scrollLeft = xs[i]; });
+      const sl = () => [...(sl.into ? sl.into.querySelectorAll(SEL) : []), ...tail.querySelectorAll(SEL)].forEach((x, i) => { if (xs[i]) x.scrollLeft = xs[i]; });
+      return sl;
     }
     function tick() {
       timer = 0;
@@ -376,9 +380,12 @@
           const box = document.createElement("div"), more = document.createElement("button");
           more.type = "button"; more.className = "ts-older"; more.textContent = t("更早的 {n} 步", { n: cut });
           box.appendChild(more); s.list.prepend(box);
-          more.addEventListener("click", (e) => { e.stopPropagation(); more.remove(); for (const c of q.slice(0, cut)) realize(c, box); });
+          const older = q.slice(0, cut);
+          (s.older = s.older || []).push(older);              // 还没建的更早步骤：停止时也要收
+          more.addEventListener("click", (e) => { e.stopPropagation(); more.remove(); s.older = s.older.filter((x) => x !== older); for (const c of older) s.kids.push(realize(c, box)); });
         }
-        for (const c of q.slice(cut)) realize(c, s.list);
+        // 建出来的卡记进 kids：停止时要连它们一起收成「中断」（审查 #52 UI07-01）
+        for (const c of q.slice(cut)) s.kids.push(realize(c, s.list));
       }
       if (s.text != null) paintSubText();
       if (s.lazy) { const f = s.lazy; s.lazy = null; f(); }
@@ -435,7 +442,7 @@
       // 停了这一轮：后台子代理（结果只是「已启动」）和它过程里还在跑的步骤也一起收成「中断」，别一直转圈计时（审查 #48 UI07-01）
       stop() {
         if (!result || api.state === "run") { api.state = "err"; st.className = "tool-state err"; st.textContent = t("中断"); if (sub) sub.now.textContent = ""; api.onChange && api.onChange(); }
-        if (sub) { for (const c of sub.queue) c.stop(); for (const k of sub.kids) k.stop(); }
+        if (sub) { for (const c of sub.queue) c.stop(); for (const c of (sub.older || []).flat()) c.stop(); for (const k of sub.kids) k.stop(); }
       },
       finish() { if (!result && !live) { st.textContent = "—"; } },
       isAgent,

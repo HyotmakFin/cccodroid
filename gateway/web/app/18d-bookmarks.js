@@ -68,11 +68,19 @@
     const src = user ? userTextOf.get(msg) || "" : tg.box._src ? tg.box._src() : "";
     // 没有 uuid 时网关从尾部按开头认领：同样的话后面又出现过几次，就跳过几次，免得认成后一条（审查 #50 S2-02）
     const head = src.trim().slice(0, 200);
-    let nth = 0;
+    let nth = 0, unsure = false;
     if (!uuid && head) for (const m of chatEl.querySelectorAll(user ? ".msg.user" : ".msg.bot")) {
       if (m === msg || !(msg.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
-      for (const b of markBoxes(m)) { const t2 = user ? userTextOf.get(m) || "" : b._src ? b._src() : ""; if (t2.trim().startsWith(head)) nth++; }
+      for (const b of markBoxes(m)) {
+        const t2 = user ? userTextOf.get(m) || "" : b._src ? b._src() : "";
+        if (!t2.trim().startsWith(head)) continue;
+        // 后面那条同样的话还在跑、或者那一轮失败 / 被停了：说不准它进没进会话记录，数错了就认到别的消息上。
+        // 宁可这次不加（审查 #52 S2-02）
+        if (m.dataset.run && m.dataset.done !== "ok") unsure = true;
+        nth++;
+      }
     }
+    if (unsure) return toast(t("后面有一条同样的话还没确认存下，等那一轮答完（或重新打开这个会话）再加书签"), true);
     try {
       const r = await post("/api/bookmarks", {
         session: sid, uuid, hint: Number(msg.closest(".page")?.dataset.from) || 0, para: tg.para,

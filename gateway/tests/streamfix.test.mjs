@@ -1,4 +1,5 @@
 // 流式补尾（gw/streamfix.mjs）：上游说完没收尾时补 message_delta/message_stop；块还开着就不补
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";

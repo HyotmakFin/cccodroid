@@ -130,6 +130,12 @@ export function moveSession(sid, projectId) {
 }
 
 // ── 路由：/api/projects ──
+function freeDir(name) {
+  let base = path.join(CFG.workspace, slugName(name)), n = 2;
+  while (fs.existsSync(base)) base = path.join(CFG.workspace, slugName(name) + "-" + n++);
+  return base;
+}
+
 export async function routeProjects(req, res, u, p) {
   if (!p.startsWith("/api/projects") && !/^\/api\/sessions\/[^/]+\/move$/.test(p)) return NEXT;
   const body = async () => { try { return JSON.parse((await readBody(req)) || "{}"); } catch { return {}; } };
@@ -145,6 +151,11 @@ export async function routeProjects(req, res, u, p) {
     return sendJson(res, 200, { projects: listProjects(), colors: PROJ_COLORS, workspace: CFG.workspace });
   }
 
+  // 新建弹窗预览实际会落到哪：重名时和下面建目录一样加 -2、-3（审查 E13）
+  if (p === "/api/projects/where" && req.method === "GET") {
+    return sendJson(res, 200, { path: freeDir(String(u.searchParams.get("name") || "").trim().slice(0, 60)) });
+  }
+
   if (p === "/api/projects" && req.method === "POST") {
     const b = await body();
     const name = String(b.name || "").trim().slice(0, 60);
@@ -154,9 +165,7 @@ export async function routeProjects(req, res, u, p) {
       dir = real(String(b.path || ""));
       if (!isDir(dir)) return sendJson(res, 400, { error: tz("目录不存在：{d}", { d: dir }) });
     } else {
-      let base = path.join(CFG.workspace, slugName(name)), n = 2;
-      while (fs.existsSync(base)) base = path.join(CFG.workspace, slugName(name) + "-" + n++);
-      dir = base;
+      dir = freeDir(name);
       if (b.mode === "git") {
         const url = String(b.url || "").trim();
         if (!/^(https?:\/\/|git@|ssh:\/\/)/.test(url)) return sendJson(res, 400, { error: tz("仓库地址要以 https:// 或 git@ 开头") });
@@ -220,7 +229,11 @@ export async function routeProjects(req, res, u, p) {
   // 指令 = 项目目录里的 CLAUDE.md
   if (sub === "/instr") {
     const f = path.join(proj.path, "CLAUDE.md");
-    if (req.method === "GET") { let text = ""; try { text = fs.readFileSync(f, "utf8"); } catch {} return sendJson(res, 200, { text, exists: fs.existsSync(f) }); }
+    if (req.method === "GET") {
+      // 只有「文件不存在」才算空：没权限、读错了要报出来，前端据此只读，免得一保存把原文盖掉（审查 #52 E06）
+      try { return sendJson(res, 200, { text: fs.readFileSync(f, "utf8"), exists: true }); }
+      catch (e) { return e.code === "ENOENT" ? sendJson(res, 200, { text: "", exists: false }) : sendJson(res, 500, { message: e.code || e.message }); }
+    }
     if (req.method === "PUT") {
       const b = await body();
       const text = String(b.text || "");

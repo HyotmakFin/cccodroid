@@ -1,3 +1,4 @@
+import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

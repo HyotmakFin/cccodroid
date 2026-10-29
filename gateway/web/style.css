@@ -126,6 +126,8 @@ html[data-skin="zhuyue"] #ctxbar:not(.warn):not(.danger) #ctxfill{background:lin
 #chat{flex:1;overflow-y:auto;padding:14px 12px 8px;-webkit-overflow-scrolling:touch}
 .msg{max-width:900px;margin:0 auto 16px;animation:fade .18s ease}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* 历史页是重建出来的旧消息，不播入场淡入（#36 复测）；新发的消息在 #live 里照常 */
+#hist>.page .msg{animation:none}
 
 .who{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--fg3);margin-bottom:6px;font-weight:600;letter-spacing:.4px}
 .who .dot{width:6px;height:6px;border-radius:50%;background:var(--fg3)}
@@ -712,6 +714,8 @@ a.weblink{overflow-wrap:anywhere}
 #attach-strip{
   display:flex;gap:7px;max-width:900px;margin:0 auto 6px;
   overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px 1px;
+  /* 删除键扩大的命中区伸出卡片外 13px：滚动容器会把伸出去的部分裁掉，所以顶上和末端留够（审查 #52 P3-5） */
+  padding-block-start:14px;padding-inline-end:14px;
 }
 #attach-strip.hidden{display:none !important}
 .att{
@@ -2066,6 +2070,10 @@ button.tile:hover{border-color:var(--accent-dim)}
 #set-ov .sc #set-parallel{width:64px;margin-inline-start:8px}
 #set-ov .srow > .sl{flex:1 1 auto;min-width:0}
 #set-ov .srow > .sc{flex:none;max-width:60%}
+/* 分段按钮在右格里放不下（俄语「字号」四段约 330px）：按钮里的字折行，整组不冲出设置栏。
+   不能让整行 wrap——说明那行不换行，wrap 后会把整页撑出横向滚动（见上面 set-one 那条） */
+#set-ov .srow > .sc > .seg{max-width:100%;min-width:0}
+#set-ov .srow > .sc > .seg > button{white-space:normal;min-width:0;line-height:1.25}
 #set-ov .srow.stack > .sc{max-width:none}
 #tab-settings,#tab-settings .set-wrap{min-width:0}
 #set-ov .set-sheet{overflow:hidden}
@@ -2607,7 +2615,9 @@ html.wel.wel-setup #hist{margin-top:0}
 html.wel.wel-setup #wl-below{flex:none;margin-bottom:auto;padding-top:var(--g2)}
 /* 头像：设了图片就铺满圆，不写字母 */
 .acct-av.img{background:center/cover no-repeat var(--bg3);color:transparent}
-.prof-row{display:flex;align-items:center;gap:var(--g2)}
+.prof-row{display:flex;align-items:center;gap:var(--g2);flex-wrap:wrap;justify-content:flex-end}
+/* 「还原」不许被头像和昵称挤成一字一行（俄语 768 宽，审查 #52 V-03）：放不下就整个换到下一行 */
+#prof-reset{flex:none;max-width:100%}
 .prof-av{width:40px;height:40px;font-size:17px;border:0;cursor:pointer;padding:0;position:relative}
 .prof-av:hover{box-shadow:0 0 0 2px var(--accent-dim)}
 #prof-name{width:12em;max-width:40vw}
@@ -2936,6 +2946,7 @@ html[dir="rtl"] .lmap .lm-card,html[dir="rtl"] .lmap .lm-now{direction:rtl}
 html[data-motion="on"]:not(.dock-l) .drawer-panel{animation:mo-drawer var(--mo-snap) linear}
 /* 关了动效（或跟随系统「减少动态效果」）：动效系统之前就有的几处老动画、顶栏折叠的过渡也一起关（审查 #48 A10-01） */
 html[data-motion="off"] :is(.drawer-panel,.sheet-panel,#set-ov,.pj-ov,.msg,#popup,.pop-menu,#toast,.mp-panel,.qcard,.msg.hit-flash .bubble,.ch-sep.hit-flash,.bm-hit){animation:none}
+html[data-motion="off"] #sheet.pop .sheet-panel{animation:none}   /* 宽屏浮卡那条老规则带 id，上面一条压不住（审查 #52 A10-01） */
 html[data-motion="off"] :is(.wl-mark path,.wl-mark circle){animation:none;stroke-dashoffset:0;opacity:1}   /* 「减少动态效果」的待确认-4：首屏标识的描线也直接画好 */
 html[data-motion="off"] :is(#tb-tools,#tb-tools *,#btn-more path){transition:none!important}
 html[data-motion="on"]:not(.dock-l)[dir="rtl"] .drawer-panel{animation-name:mo-drawer-r}

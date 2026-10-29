@@ -2327,3 +2327,12 @@
 2327	Accede a claves o credenciales: {w}
 2328	Acción sensible
 2329	La comprobación de firmas de componentes está desactivada (hay un archivo allow-unsigned en el directorio privado). Bórralo cuando termines de depurar
+2330	El mensaje anterior aún no ha llegado a la pasarela, así que este no se envió. Vuelve a intentarlo en un momento
+2331	Elige una fecha de fin
+2332	No se pudo actualizar; se muestran las últimas cifras cargadas: {msg}
+2333	No se pudo actualizar; se muestra la última lista cargada: {msg}
+2334	No se pudo actualizar; se muestra lo último cargado: {msg}
+2335	Un mensaje idéntico más abajo aún no se ha confirmado como guardado. Añade el marcador cuando termine ese turno (o vuelve a abrir esta conversación)
+2336	La lista de modelos aún se está cargando; espera un momento antes de guardar
+2337	En la papelera; toca para restaurar
+2338	Este mensaje aparece varias veces en la conversación, así que no se sabe a qué turno te refieres. Vuelve a abrir la conversación e inténtalo de nuevo.

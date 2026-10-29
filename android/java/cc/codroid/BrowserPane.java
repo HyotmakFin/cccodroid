@@ -279,10 +279,10 @@ public class BrowserPane extends LinearLayout {
         String u = in == null ? "" : in.trim();
         Log.i(TAG, "go '" + logUrl(u) + "'");
         if (u.length() == 0) return;
-        // 「localhost:3000」「example.com:8080」冒号后是端口，不是协议（审查 #49 P3-2）
-        if (!u.matches("(?i)^[a-z][a-z0-9+.-]*:.*") || u.matches("^[^/:\\s]+:\\d+(/.*)?$")) {
-            if (u.matches("^(localhost|127\\.0\\.0\\.1|\\d{1,3}(\\.\\d{1,3}){3}|\\[[0-9a-fA-F:]+\\])(:\\d+)?(/.*)?$")) u = "http://" + u;
-            else if (!u.contains(" ") && u.matches("^[^/]+\\.[a-zA-Z]{2,}(:\\d+)?(/.*)?$")) u = "https://" + u;
+        // 「localhost:3000」「example.com:8080」冒号后是端口，不是协议；端口后直接跟 ?、# 也算（审查 #49 P3-2）
+        if (!u.matches("(?i)^[a-z][a-z0-9+.-]*:.*") || u.matches("^[^/:\\s]+:\\d+([/?#].*)?$")) {
+            if (u.matches("^(localhost|127\\.0\\.0\\.1|\\d{1,3}(\\.\\d{1,3}){3}|\\[[0-9a-fA-F:]+\\])(:\\d+)?([/?#].*)?$")) u = "http://" + u;
+            else if (!u.contains(" ") && u.matches("^[^/]+\\.[a-zA-Z]{2,}(:\\d+)?([/?#].*)?$")) u = "https://" + u;
             else u = "https://www.bing.com/search?q=" + Uri.encode(u);
         }
         if (route(u)) return;

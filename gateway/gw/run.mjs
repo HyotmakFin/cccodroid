@@ -441,7 +441,7 @@ export async function startRun(item) {
     run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
     if (run.pendingInject.length) {
       log(`插话 ${run.pendingInject.length} 条没来得及送达，退回队首`);
-      QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!run.aborted })));
+      QUEUE.unshift(...run.pendingInject.map((it) => ({ ...it, injected: false, held: !!(run.aborted || run.laneHeld) })));
       run.pendingInject = [];
     }
     const ms = Date.now() - t0;

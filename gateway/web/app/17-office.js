@@ -101,7 +101,7 @@
       box.querySelectorAll("td.sel").forEach((x) => x.classList.remove("sel"));
       td.classList.add("sel");
       const X = window.XLSX, ws = wb.Sheets[VW.sheets[VW.sheetI]];
-      const addr = X.utils.encode_cell({ r: Number(td.parentNode.dataset.r), c: Number(td.dataset.c) });
+      const addr = td.dataset.a || X.utils.encode_cell({ r: Number(td.parentNode.dataset.r), c: Number(td.dataset.c) });
       const cell = ws[addr];
       const val = sheetText(cell);
       box.querySelector(".vw-cellbar").textContent = `${addr}  ${val}${cell && cell.f ? `   =${cell.f}` : ""}`;
@@ -133,7 +133,10 @@
     // 合并单元格：左上角那格带 rowspan/colspan，被盖住的格子不画
     // 只处理落在显示窗口里的部分：畸形文件可以写一个盖住 A1:XFD1048576 的合并，或者成千上万个互相重叠的大合并，
     // 全量展开会把界面卡死。合并裁到窗口内，累计展开的格数不超过窗口格数的两倍，超了后面的合并按普通格子画
-    const W = c1 - rg.s.c + 1, cov = new Uint8Array((r1 - rg.s.r + 1) * W), span = new Map();
+    const cols = ws["!cols"] || [], rows = ws["!rows"] || [];
+    const hid = (c) => cols[c] && cols[c].hidden;    // 隐藏的列和行一样不画，别当普通格子露出来
+    const hidR = (r) => rows[r] && rows[r].hidden;
+    const W = c1 - rg.s.c + 1, cov = new Uint8Array((r1 - rg.s.r + 1) * W), span = new Map(), src = new Map();
     const covered = (r, c) => cov[(r - rg.s.r) * W + c - rg.s.c] === 1;
     let budget = 2 * cov.length, n = 0;
     for (const m of ws["!merges"] || []) {
@@ -143,12 +146,17 @@
       if (span.has(k0) || covered(m.s.r, m.s.c)) continue;      // 和前面的合并撞了左上角，别叠出错位的表
       const area = (er - m.s.r + 1) * (ec - m.s.c + 1);
       if ((budget -= area) < 0) break;
-      span.set(k0, [er - m.s.r + 1, ec - m.s.c + 1]);
       for (let r = m.s.r; r <= er; r++) cov.fill(1, (r - rg.s.r) * W + m.s.c - rg.s.c, (r - rg.s.r) * W + ec - rg.s.c + 1);
-      cov[(m.s.r - rg.s.r) * W + m.s.c - rg.s.c] = 2;     // 左上角自己要画
+      // 跨度只数没隐藏的行列；左上角那行 / 列被隐藏时，由第一个看得见的格子来画，内容仍取左上角（审查 #52 C-006）
+      let ar = -1, ac = -1, nr = 0, nc = 0;
+      for (let r = m.s.r; r <= er; r++) if (!hidR(r)) { if (ar < 0) ar = r; nr++; }
+      for (let c = m.s.c; c <= ec; c++) if (!hid(c)) { if (ac < 0) ac = c; nc++; }
+      if (!nr || !nc) continue;                         // 整块都藏起来了：盖住就行
+      const ka = ar + "," + ac;
+      span.set(ka, [nr, nc]);
+      if (ka !== k0) src.set(ka, m.s);
+      cov[(ar - rg.s.r) * W + ac - rg.s.c] = 2;          // 锚点自己要画
     }
-    const cols = ws["!cols"] || [], rows = ws["!rows"] || [];
-    const hid = (c) => cols[c] && cols[c].hidden;    // 隐藏的列和行一样不画，别当普通格子露出来
     let h = `<table class="vw-grid"><colgroup><col class="rh">`;
     for (let c = rg.s.c; c <= c1; c++) {
       if (hid(c)) continue;
@@ -159,16 +167,16 @@
     for (let c = rg.s.c; c <= c1; c++) if (!hid(c)) h += `<th>${X.utils.encode_col(c)}</th>`;
     h += `</tr></thead><tbody>`;
     for (let r = rg.s.r; r <= r1; r++) {
-      if (rows[r] && rows[r].hidden) continue;
+      if (hidR(r)) continue;
       h += `<tr data-r="${r}"><th>${r + 1}</th>`;
       for (let c = rg.s.c; c <= c1; c++) {
         const k = r + "," + c;
         if (covered(r, c) || hid(c)) continue;
-        const cell = ws[X.utils.encode_cell({ r, c })];
+        const cell = ws[X.utils.encode_cell(src.get(k) || { r, c })];
         const sp = span.get(k);
         const txt = sheetText(cell);
         const num = cell && (cell.t === "n" || cell.t === "d");
-        h += `<td data-c="${c}"${sp ? ` rowspan="${sp[0]}" colspan="${sp[1]}"` : ""}${num ? ` class="n"` : cell && cell.t === "e" ? ` class="err"` : ""}>${esc(txt)}</td>`;
+        h += `<td data-c="${c}"${src.has(k) ? ` data-a="${X.utils.encode_cell(src.get(k))}"` : ""}${sp ? ` rowspan="${sp[0]}" colspan="${sp[1]}"` : ""}${num ? ` class="n"` : cell && cell.t === "e" ? ` class="err"` : ""}>${esc(txt)}</td>`;
       }
       h += `</tr>`;
     }

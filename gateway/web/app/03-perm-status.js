@@ -326,7 +326,7 @@
     if (b.classList.contains("rs-goal-stop")) {
       // 目标进行中那一轮会一直跑下去，排队的 /goal clear 轮不到：先停这一轮，收尾后再发（见 onRunEnd）
       if (srv.run && !srv.run.idle && isBusy()) {
-        view.goalClearAfter = srv.run.id;
+        view.goalClearAfter = { runId: srv.run.id, sid: view.sessionId };   // 点的时候就记下是哪个会话（审查 #52 P2-15）
         b.disabled = true;
         api("/api/abort", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: srv.run.id }) }).catch(() => {});
       } else send("/goal clear");
@@ -580,7 +580,7 @@
     // 进行到哪一步：三个点后面（还没出任何内容时）或末尾光标旁边的一行小字。
     // 连接中 / 已连上等待输出 / 重试 / 思考中 / 正在写工具参数；正文开始、工具开跑、答完就收起
     let ph = null, phEv = null, phT0 = 0, phIv = 0;
-    const pendTools = new Set();
+    const pendTools = new Set(), cardTools = new Set();
     const phText = () => {
       const ms = Date.now() - phT0, sec = ms >= 3000 ? " · " + fmtDur(ms) : "";
       switch (phEv.phase) {
@@ -611,6 +611,7 @@
       if (!live || ended) return;
       const k = ev && ev.phase;
       if (!k || k === "text") return phClear();
+      if (k === "tool" && ev.id && cardTools.has(ev.id)) return;   // 这个工具的卡已经出来了（在跑）：迟到的「正在写参数」不认
       const changed = !phEv || phEv.phase !== k || k === "retry" || (k === "tool" && phEv.name !== ev.name);
       if (changed) phT0 = Date.now();
       phEv = ev;
@@ -658,7 +659,7 @@
         if (!blocks.length && live) { any = false; if (!dots) { bubble.insertAdjacentHTML("afterbegin", DOTS); dots = bubble.firstChild; } phPlace(); }
       },
       tool(id, name, input) {
-        if (live) { pendTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
+        if (live) { pendTools.add(id); cardTools.add(id); phClear(); }     // 工具卡出来了，参数写完，接下来是工具在跑
         let g = last;
         if (!inGroup()) {
           const prev = last && last.kind === "think" ? last : null;      // 紧挨着的那段思考也收进来
