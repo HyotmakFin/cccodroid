@@ -1,6 +1,7 @@
 # 在 GitHub 上构建 APK：每个 PR、每次推到 main 都出一个包（在这次运行的 Artifacts 里下载）。
-# 有仓库 secret CCCODROID_RELEASE_KEY（钥匙 JSON 的 base64）时用正式钥匙签，能直接覆盖安装正式版；
-# 别人仓库来的 PR 拿不到 secret，就用临时生成的测试钥匙签 —— 能装，但要先卸载正式版（数据会丢），建议装在测试机上。
+# 推到 main 时用正式钥匙签，能直接覆盖安装正式版。钥匙 CCCODROID_RELEASE_KEY（钥匙 JSON 的 base64）只放在
+# environment「apk-release」里，那个环境只放行 main 分支：任何 PR（包括本仓库分支开的、改了这份工作流的）都拿不到它，
+# 只能用临时生成的测试钥匙签 —— 能装，但要先卸载正式版（数据会丢），建议装在测试机上。
 name: apk
 
 on:
@@ -29,6 +30,8 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-24.04
+    # 只有 main 上的运行进正式钥匙所在的环境；其余（PR、别的分支手动跑）不进，拿不到钥匙
+    environment: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'apk-release' || '' }}
     env:
       BUILD_TOOLS: "35.0.0"
       PLATFORM: "android-35"
