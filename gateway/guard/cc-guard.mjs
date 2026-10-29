@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // cc-guard.mjs —— 敏感操作再确认（PreToolUse 钩子）。网关起 claude 时经 --settings 挂上，权限模式是什么都会跑：
-// 碰到密钥 / 凭据文件、或要读屏、点按、读剪贴板、往外分享文件时回 permissionDecision:"ask"。
+// 碰到密钥 / 凭据文件、要改管着提示词和安全机制的文件、或要读屏、点按、读剪贴板、往外分享文件时回 permissionDecision:"ask"。
 // 「全部放行」下 claude 也会因此停下来问（实测 2.1.3xx：hook 的 ask 照样发 can_use_tool，decision_reason_type=hook），
 // 网关认出 reason 里的 cccodroid-guard 前缀，出一张「敏感操作」卡片，不按全部放行自动允许。
 //
@@ -27,6 +27,18 @@ const SECRETS = [
   [/(?:^|[\/\s"'=~@<>:])\.env(?:\.(?!example\b|sample\b|template\b|dist\b)[\w-]+)?(?=$|[\s"'\/;|&)<>])/, ".env secrets"],
 ];
 
+// 管着提示词和安全机制的文件：改了能让下一轮的 Claude 换一套规矩，或者伪造「它之前说过的话」（见 gw/integrity.mjs）。
+// 只拦写（写文件的工具、命令里提到）；读不拦。CLAUDE.md 不在里面：记项目约定是它的正经用途，天天要改
+const PROMPT = [
+  [/\.claude\/settings(?:\.local)?\.json\b/, "Claude Code settings and hooks"],
+  [/\.claude\/output-styles\//, "output style"],
+  [/\.claude\/projects\/[^\s"']*\.jsonl\b/, "conversation history"],
+  [/ccapp-session-seals\.json\b/, "conversation integrity seals"],
+  [/ccapp-settings\.json\b/, "app settings"],
+  [/cc-guard\.mjs\b/, "this safety check"],
+];
+const WRITERS = new Set(["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]);
+
 // 设备工具（mcp 服务器名叫 device）：会读到别的应用内容、替用户操作别的应用、把文件交出去的
 const DEVICE = {
   screen_read: "device:screen", screenshot: "device:screen", screen_tap: "device:screen",
@@ -48,6 +60,13 @@ export function judge(tool, inp) {
     for (const [re, what] of SECRETS) {
       const hit = re.exec(s);
       if (hit) return { cat: "secret:" + what, what: what + ": " + hit[0].replace(/^[\s"'=~@<>:\/]+/, "").slice(0, 80) };
+    }
+  }
+  if (WRITERS.has(tool)) for (const s of strings(tool, inp)) {
+    if (typeof s !== "string" || !s) continue;
+    for (const [re, what] of PROMPT) {
+      const hit = re.exec(s);
+      if (hit) return { cat: "prompt:" + what, what: what + ": " + hit[0].slice(0, 80) };
     }
   }
   return null;

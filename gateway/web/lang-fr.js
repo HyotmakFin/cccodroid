@@ -2341,4 +2341,5 @@ window.I18N_DICT["fr"] = {
   "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "Ce message apparaît plusieurs fois dans la conversation : impossible de savoir de quel tour il s'agit. Rouvrez la conversation et réessayez.",
   "图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的中转站认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。": "Envoyer les images dans le message (compatibilité) : à cocher seulement si le modèle ne voit pas les images jointes et invente. Certains relais perdent les images relues par l'outil Read ; activé, chaque image jointe est aussi envoyée directement dans le message.",
   "建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。": "Conseil : fixez une limite de dépense quotidienne et une alerte de solde dans la console du fournisseur. Si vous pensez que la clé a fuité, révoquez-la là-bas et créez-en une nouvelle.",
+  "要改管着提示词或安全检查的文件：{w}": "Veut modifier un fichier qui contrôle les instructions ou les vérifications de sécurité de Claude : {w}",
 };

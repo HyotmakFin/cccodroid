@@ -41,3 +41,22 @@ test("日常操作：不问", () => {
   ];
   for (const [tool, inp] of miss) assert.equal(judge(tool, inp), null, `${tool} ${JSON.stringify(inp)}`);
 });
+
+test("改提示词、钩子、会话记录：写要问，读不问；CLAUDE.md 照常", () => {
+  const hit = [
+    ["Write", { file_path: "/x/home/.claude/settings.json" }],
+    ["Edit", { file_path: "/proj/.claude/settings.local.json" }],
+    ["Write", { file_path: "/x/home/.claude/output-styles/free.md" }],
+    ["Edit", { file_path: "/x/home/.claude/projects/-ws/abc.jsonl" }],
+    ["Bash", { command: "sed -i 's/I cannot/Sure/' ~/.claude/projects/-ws/abc.jsonl" }],
+    ["Bash", { command: "echo {} > ~/ccapp-session-seals.json" }],
+    ["Bash", { command: "rm /x/gateway/guard/cc-guard.mjs" }],
+  ];
+  for (const [tool, inp] of hit) assert.match(judge(tool, inp)?.cat || "", /^prompt:/, `${tool} ${JSON.stringify(inp)}`);
+  for (const [tool, inp] of [
+    ["Read", { file_path: "/x/home/.claude/settings.json" }],
+    ["Grep", { pattern: "x", path: "/x/home/.claude/projects/-ws/abc.jsonl" }],
+    ["Edit", { file_path: "/proj/CLAUDE.md" }],
+    ["Write", { file_path: "/proj/docs/settings.json" }],
+  ]) assert.equal(judge(tool, inp), null, `${tool} ${JSON.stringify(inp)}`);
+});

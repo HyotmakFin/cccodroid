@@ -87,6 +87,7 @@
     if (c === "device:share") return t("要把文件分享到别的应用");
     // what 是「英文类别: 命中的那段路径」，界面只显示路径那段
     const w = String(g.what || ""), k = w.indexOf(": ");
+    if (c.startsWith("prompt:")) return t("要改管着提示词或安全检查的文件：{w}", { w: k > 0 ? w.slice(k + 2) : w });
     return t("碰到了密钥或登录凭据：{w}", { w: k > 0 ? w.slice(k + 2) : w });
   }
 

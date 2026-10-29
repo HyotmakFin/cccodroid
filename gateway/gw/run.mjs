@@ -21,6 +21,7 @@ import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
 import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote.mjs";
+import { SPOOF_NOTE, checkSession, integrityHint, integrityNote, neutralizeMarkers, sealSession } from "./integrity.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -177,10 +178,10 @@ export async function startRun(item) {
     : `You are ${model}, a small open model running locally on the user's Android device through llama.cpp (not Claude). Reply in the user's language; keep answers short.`;
   // 建档（脉络）：常驻规则 + 这一轮该不该先建档（见 archive.mjs）
   const arch = P.local ? null : await archiveHint(run.sessionId).catch(() => null);
-  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : previewHint(cwd), arch?.rule, SETTINGS.appendSystemPrompt].filter(Boolean).join("\n\n");
+  const appendPrompt = [P.local ? localHint : toolsHint(), !P.nativeModels && !P.local ? TASKS_HINT : "", P.local ? "" : previewHint(cwd), P.local ? "" : integrityHint(), arch?.rule].filter(Boolean).join("\n\n");
   if (appendPrompt) argv.push("--append-system-prompt", appendPrompt);
   // 子代理（连孙代理）统一的联络规矩：用 agentId 发消息、summary 写事由、长内容落文件只发路径（见 agents.mjs）
-  if (!P.local && !message.trim().startsWith("/")) argv.push("--append-subagent-system-prompt", SUBAGENT_HINT);
+  if (!P.local && !message.trim().startsWith("/")) argv.push("--append-subagent-system-prompt", SUBAGENT_HINT + "\n\n" + integrityHint());
   // claude 没有 --output-style 参数（传了直接 unknown option，整条消息失败）；它是 settings 里的 outputStyle。
   // 密钥读取器也在这里（见 settingsArgs）
   argv.push(...settingsArgs(P));
@@ -205,6 +206,11 @@ export async function startRun(item) {
   // 接口勾了「图片随消息发」：消息里提到的图片再各带一份 image 块（太大的先缩，要等，所以放在起进程前）
   let imgs0 = [];
   if (!isCmd && wantsInline(P)) { const env = claudeEnv({ model, provider: P }); imgs0 = await inlineImages(message, P, { tmpDir: env.TMPDIR, env }); }
+  // 会话封签（见 integrity.mjs）：上一轮之后记录在应用外被改过、或是导入的，这一轮告诉模型别把那段历史当成自己说过的。
+  // 起进程前核对：claude --resume 一起来就可能往文件里写
+  const sfile = () => run.sessionId ? findSessionFile(String(run.sessionId))?.file : null;
+  const integ = checkSession(run.sessionId, sfile());
+  const integNote = isCmd || P.local ? "" : integrityNote(integ);
   // 上面拉模型清单、问设备工具、读建档提示都要等：这期间点了停止（还没有进程可杀）就别再起了（安全通告 GHSA-g35m）
   if (run.aborted) { log("⏹ 起进程前已停止"); return endRun(run, { durationMs: 0 }); }
   const [cmd0, args0] = claudeCmd(argv);
@@ -222,14 +228,16 @@ export async function startRun(item) {
   // 该建档时，提醒作为本轮消息的第二段跟进去：读用户消息的地方只认第一段、或跳过 <…> 开头的段，历史 / 搜索 / 分叉比对都看不见它。斜杠命令不带（包成两段 claude 就不认它是命令了）
   // 子代理汇总也是这样跟着用户的消息进去（见 takeAgentNote），不单独叫醒主会话
   // 图片块（见 inlineimg.mjs）排在用户原话后面、提醒前面
-  const withNotes = (msg, extra, imgs = []) => {
+  // 用户原话里冒充系统的标签（<system-reminder> 之类）先换成全角，只有网关自己加的提醒是真标签（见 integrity.mjs）
+  const withNotes = (msg0, extra, imgs = []) => {
+    const msg = neutralizeMarkers(msg0);
     if (P.local || msg.trim().startsWith("/")) return msg;
-    const notes = [extra, takeAgentNote(run.cwd, run.sessionId)].filter(Boolean);
+    const notes = [msg !== msg0 ? SPOOF_NOTE : "", extra, takeAgentNote(run.cwd, run.sessionId)].filter(Boolean);
     return notes.length || imgs.length ? [{ type: "text", text: msg }, ...imgs, ...notes.map((n) => ({ type: "text", text: `<system-reminder>\n${n}\n</system-reminder>` }))] : msg;
   };
   // 上一轮只写了文件名没写全路径：这一轮的消息带上提醒（见 pathnote.mjs）。命令那轮不带（带了也包不进去，提醒会白白丢掉）
   const pathNote = isCmd || P.local ? "" : takePathNote(run.sessionId);
-  writeUser(withNotes(message, [arch?.note, pathNote].filter(Boolean).join("\n\n"), imgs0));
+  writeUser(withNotes(message, [integNote, arch?.note, pathNote].filter(Boolean).join("\n\n"), imgs0));
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
@@ -447,6 +455,8 @@ export async function startRun(item) {
   const finish = (code) => {
     if (buf.trim()) feed(buf.trim());
     buf = "";
+    // claude 已经退出，这时的记录就是下一轮的基准；提醒这一轮已经交出去（正常答完）才清掉标记
+    try { sealSession(run.sessionId, sfile(), { clear: !!integNote && !run.aborted && !!lastResult && !lastResult.is_error }); } catch (e) { log(`[封签] ${e.message}`); }
     run.inputOpen = false;
     run.perms.clear();                // 卡片随 run_end 一起作废（前端按 run_end 收起）
     if (run.pendingInject.length) {

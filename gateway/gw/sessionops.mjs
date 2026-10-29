@@ -8,6 +8,7 @@ import { NAMES, PEEK_CACHE, PINS, findSessionFile, peekSession, saveNames, saveP
 import { claudeCmd, claudeEnv, killTree } from "./claude.mjs";
 import { LAST_SESSION, forgetSession, runOfSession } from "./runs.mjs";
 import { forgetChild, recordPrimary } from "./lineage-store.mjs";
+import { checkSession, neutralizeMarkers, resealAfterEdit, sealSession } from "./integrity.mjs";
 
 // ── 会话管理：回收站 / 导出 / 导入 ─────────────────────────────────────
 // 回收站放在 claude 的 projects 目录之外（它看不见，--resume 也就找不回来），同一文件系统，挪进挪出都是 rename。
@@ -55,7 +56,7 @@ export function locateUserTurn(id, userText, after, uuid = "") {
     // 给了 uuid 却对不上：记录变过（压缩、别处改过），按原文猜可能认错轮，宁可让人刷新（#52 P1-2）
     return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
   }
-  const want = forkNorm(userText), head = want.slice(0, 80);
+  const want = forkNorm(neutralizeMarkers(userText)), head = want.slice(0, 80);
   const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
   // 没 uuid 的只会是这次刚发、还在尾巴上的消息，界面数「后面还有几条」是准的：
   // 只有一条同文就是它；好几条同文时必须恰好对上条数，对不上就拒绝，不挑「最接近的」去猜（#52 P1-2）
@@ -85,7 +86,9 @@ export function forkSession(id, userText, after, { before = false, uuid = "" } =
     catch { out.push(line); }
   }
   const dir = path.dirname(found.file);
+  const dirty = checkSession(id, found.file);          // 原会话不干净（导入的、在别处改过的），分出来的也带着标记
   fs.writeFileSync(path.join(dir, nid + ".jsonl"), out.join("\n") + "\n");
+  sealSession(nid, path.join(dir, nid + ".jsonl"), { flag: dirty || undefined });
   // 同名目录里是子代理记录、超长工具结果：一起抄过去，引用它们的路径照旧有效
   const side = path.join(dir, id);
   try { if (fs.statSync(side).isDirectory()) fs.cpSync(side, path.join(dir, nid), { recursive: true }); } catch {}
@@ -132,9 +135,11 @@ export function deleteMessage(id, userText, after, which, uuid = "") {
   fs.mkdirSync(bdir, { recursive: true });
   const backup = id + "." + Date.now() + ".jsonl";
   fs.copyFileSync(found.file, path.join(bdir, backup));
+  const dirty = checkSession(id, found.file);          // 改之前先核对，改完重新封签：网关自己改的不算外部改动，原本不干净的也不洗白
   const tmp = found.file + ".tmp-del";
   fs.writeFileSync(tmp, out.join("\n") + "\n");
   fs.renameSync(tmp, found.file);
+  resealAfterEdit(id, found.file, dirty);
   PEEK_CACHE.delete(found.file);
   const st = fs.statSync(found.file);
   UNDO.set(id, { backup, size: st.size, mtime: st.mtimeMs });
@@ -150,7 +155,9 @@ export function undoDelete(id, backup) {
   if (!found || !fs.existsSync(src)) return { ok: false, status: 404, message: tz("备份已经不在了。") };
   const st = fs.statSync(found.file);
   if (st.size !== u.size || st.mtimeMs !== u.mtime) return { ok: false, status: 409, message: tz("删除之后会话又有了新内容，没法撤销。") };
+  const dirty = checkSession(id, found.file);
   fs.copyFileSync(src, found.file);
+  resealAfterEdit(id, found.file, dirty);
   PEEK_CACHE.delete(found.file);
   UNDO.delete(id);
   log(`撤销删消息 ${id.slice(0, 8)}`);
@@ -160,6 +167,8 @@ export function undoDelete(id, backup) {
 /** 把 Claude 改过的文件退回到某条用户消息之前（claude 的文件检查点，只覆盖 Edit / Write / NotebookEdit，命令改的不算）。
  *  每轮一个进程也没关系：检查点记在会话记录里，--resume 起来就能用（2026-10-19 实测）。dryRun 只算会动哪些文件。 */
 export function rewindFiles(sid, userUuid, dryRun) {
+  // 这里也 --resume 起了 claude：它要是往记录里写了什么，是我们起的，不算外部改动（见 integrity.mjs）
+  const sf = findSessionFile(sid)?.file, dirty = checkSession(sid, sf);
   return new Promise((resolve) => {
     const [cmd0, args0] = claudeCmd(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--resume", sid]);
     const child = spawn(cmd0, args0, { cwd: fs.existsSync(CFG.workspace) ? CFG.workspace : CFG.home, env: claudeEnv(), stdio: ["pipe", "pipe", "pipe"], detached: true });
@@ -180,7 +189,7 @@ export function rewindFiles(sid, userUuid, dryRun) {
     });
     child.stderr.on("data", (d) => { err += d; });
     child.stdin.on("error", () => {});
-    child.on("close", () => { exited = true; finish({ ok: false, error: err.trim().slice(-300) || "claude exited" }); });
+    child.on("close", () => { exited = true; if (sf) resealAfterEdit(sid, sf, dirty); finish({ ok: false, error: err.trim().slice(-300) || "claude exited" }); });
     child.stdin.write(JSON.stringify({ type: "control_request", request_id: "rw-" + Date.now(), request: { subtype: "rewind_files", user_message_id: userUuid, dry_run: !!dryRun } }) + "\n");
   });
 }
@@ -332,7 +341,7 @@ export function realWorkspace() { try { return fs.realpathSync(CFG.workspace); }
 function projectSlug(cwd) { return String(cwd).replace(/[^A-Za-z0-9]/g, "-"); }
 
 // 极简 zip（只 deflate / store，够会话包用）。不引第三方包：网关是单文件分发的
-function zipBuild(entries) {
+export function zipBuild(entries) {
   const locals = [], centrals = [];
   let off = 0;
   const dosTime = (d) => ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xffff;
@@ -464,6 +473,7 @@ export function importSessions(buf) {
     });
     fs.writeFileSync(path.join(dir, id + ".jsonl"), lines.join("\n"));
     if (s.mtime) try { fs.utimesSync(path.join(dir, id + ".jsonl"), new Date(), new Date(s.mtime)); } catch {}
+    sealSession(id, path.join(dir, id + ".jsonl"), { flag: "imported" });   // 包里的历史谁都能写：第一次接着聊时提醒模型（见 integrity.mjs）
     const pre = `sessions/${id}/`;
     for (const f of files) {
       if (!f.name.startsWith(pre)) continue;

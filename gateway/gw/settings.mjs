@@ -19,7 +19,6 @@ export const SETTINGS = {
   addDirs: [],
   outputStyle: null,
   effort: null,
-  appendSystemPrompt: null,
   allowedTools: null,
   disallowedTools: null,
   // 自动压缩窗口（token）。留空 = 交给 claude 自己按模型窗口决定；填了就用你的值。
@@ -62,6 +61,9 @@ function loadSettings() {
   // 旧版面板存的是小写 explanatory / 不存在的 concise —— claude 只认 Explanatory、Learning 和自定义的
   if (SETTINGS.outputStyle === "explanatory") SETTINGS.outputStyle = "Explanatory";
   if (SETTINGS.outputStyle === "concise") SETTINGS.outputStyle = null;
+  // 以前有个界面上没有入口、只能经接口写的 appendSystemPrompt，每轮接在系统提示后面：
+  // 应用自己不留「改系统提示词」的口子（要给项目定规矩用 CLAUDE.md，那是 Claude Code 自己的机制），旧值清掉
+  if ("appendSystemPrompt" in SETTINGS) { delete SETTINGS.appendSystemPrompt; setImmediate(saveSettings); }
 }
 
 /** claude 认的输出风格：内置两种 + ~/.claude/output-styles 与工作区 .claude/output-styles 里的 .md（名字取 frontmatter 的 name） */
@@ -140,7 +142,7 @@ export async function routeSettings(req, res, u, p) {
     if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, maxParallel: maxParallel(), maxParallelCap: MAX_PARALLEL_CAP, workspace: CFG.workspace, outputStyles: outputStyles() });
     if (req.method === "POST") {
       const b = JSON.parse((await readBody(req)) || "{}");
-      for (const k of ["model", "outputStyle", "effort", "appendSystemPrompt"]) {
+      for (const k of ["model", "outputStyle", "effort"]) {
         // 只收字符串：塞个对象进来会落盘，之后每一轮都在 .trim() / spawn 那里抛错，重启也好不了（审查 10-29 低7）
         if (k in b) { if (b[k] != null && typeof b[k] !== "string") return sendJson(res, 400, { error: `${k} must be a string` }); SETTINGS[k] = b[k] || null; }
       }
