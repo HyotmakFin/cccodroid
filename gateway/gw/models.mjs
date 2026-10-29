@@ -27,7 +27,7 @@ export function normalizeModels(j) {
         .filter((k) => caps.effort[k] && caps.effort[k].supported);
       if (lv.length) effort = { supported_levels: lv, default_level: "high" };
     }
-    // 只认已知的输入类型：这串会显示在界面上，厂商 / 中转站返回什么都不能原样透传（审查 v0.5.5 Web-M1）
+    // 只认已知的输入类型：这串会显示在界面上，厂商 / 第三方接口返回什么都不能原样透传（审查 v0.5.5 Web-M1）
     let mods = Array.isArray(m.input_modalities) ? m.input_modalities.filter((x) => ["text", "image", "audio", "video", "pdf", "document", "file"].includes(x)) : null;
     if (!mods || !mods.length) {
       const img = caps.image_input && caps.image_input.supported;
