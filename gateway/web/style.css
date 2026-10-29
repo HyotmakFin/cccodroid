@@ -2701,7 +2701,7 @@ html[data-skin="goucheng"]{
   --err-bg:#3a1a17; --err-line:#7a2a24; --err-fg:#ffaaa0; --active-bg:#3a1f1b;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.55);
   --panel:#1f1d1a; --input-bg:#1f1d1a; --radius:0px;
-  --gc-ink:#f0e6d2; --gc-hard:rgba(240,230,210,.3); --gc-red:#f0473b; --gc-stripe:rgba(240,230,210,.07); --gc-wedge:rgba(240,71,59,.1);
+  --gc-ink:#f0e6d2; --gc-hard:rgba(240,230,210,.3); --gc-red:#f0473b;
 }
 html[data-skin="goucheng"][data-theme="light"]{
   --bg:#f3eee3; --bg2:#faf7ef; --bg3:#e9e2d2; --bg4:#ddd4c0; --line:#cdc2aa;
@@ -2715,7 +2715,7 @@ html[data-skin="goucheng"][data-theme="light"]{
   --err-bg:#f3d8c2; --err-line:#d9947f; --err-fg:#9c1c16; --active-bg:#f3d8c2;
   --shadow:rgba(26,26,26,.18); --scrim:rgba(26,26,26,.35);
   --panel:#faf7ef; --input-bg:#faf7ef; --radius:0px;
-  --gc-ink:#1a1a1a; --gc-hard:#1a1a1a; --gc-red:#c8211b; --gc-stripe:rgba(26,26,26,.07); --gc-wedge:rgba(200,33,27,.13);
+  --gc-ink:#1a1a1a; --gc-hard:#1a1a1a; --gc-red:#c8211b;
 }
 /* 顶栏：粗墨线收底，右端一块斜切红（纯装饰，不挡点击） */
 html[data-skin="goucheng"] #topbar{border-bottom:2px solid var(--gc-ink)}
@@ -2757,8 +2757,7 @@ html[data-skin="goucheng"] .seg button.on{background:var(--gc-red);color:var(--o
 html[data-skin="goucheng"] :is(.nav-item,.sr-item){border-radius:0}
 html[data-skin="goucheng"] :is(.nav-item.on,.sr-item.on){background:var(--active-bg);box-shadow:inset 3px 0 0 var(--gc-red)}
 html[data-skin="goucheng"][dir="rtl"] :is(.nav-item.on,.sr-item.on){box-shadow:inset -3px 0 0 var(--gc-red)}
-/* 首屏：右侧一大块斜切淡红 + -45° 细斜线底纹 + 问候下压一块斜切红（照原版欢迎页） */
-html[data-skin="goucheng"].wel #chat{background:linear-gradient(112deg,transparent 0 68%,var(--gc-wedge) 68%),repeating-linear-gradient(-45deg,transparent 0 11px,var(--gc-stripe) 11px 12px)}
+/* 首屏：只留问候下压的一块斜切红。原来的斜切淡红 + 细斜线底纹只铺在对话区、到输入框戛然而止，像半截贴纸，10-29 按用户意见去掉 */
 html[data-skin="goucheng"] .wl-mark{stroke:var(--gc-ink)}
 html[data-skin="goucheng"] .wl-mark circle{fill:var(--gc-red)}
 html[data-skin="goucheng"] .wl-greet{position:relative;padding-bottom:10px}
