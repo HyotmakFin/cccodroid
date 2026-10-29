@@ -57,7 +57,7 @@ test("接口设置：inlineImages 存得上、关掉就删、界面视图带出�
   await new Promise((ok) => srv.listen(0, "127.0.0.1", ok));
   const post = async (p, body) => (await fetch(`http://127.0.0.1:${srv.address().port}${p}`, { method: "POST", body: JSON.stringify(body) })).json();
   try {
-    const r = await post("/api/providers/save", { label: "兼容测", baseUrl: "https://relay.example.com", defaultModel: "m", inlineImages: true });
+    const r = await post("/api/providers/save", { label: "兼容测", baseUrl: "https://api.example.com", defaultModel: "m", inlineImages: true });
     assert.equal(r.provider.inlineImages, true);
     const r2 = await post("/api/providers/save", { id: r.id, inlineImages: false });
     assert.equal(r2.provider.inlineImages, false);

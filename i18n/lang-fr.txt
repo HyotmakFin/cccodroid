@@ -2336,6 +2336,6 @@
 2336	La liste des modèles se charge encore ; patientez avant d'enregistrer
 2337	Dans la corbeille ; touchez pour restaurer
 2338	Ce message apparaît plusieurs fois dans la conversation : impossible de savoir de quel tour il s'agit. Rouvrez la conversation et réessayez.
-2339	Envoyer les images dans le message (compatibilité) : à cocher seulement si le modèle ne voit pas les images jointes et invente. Certains relais perdent les images relues par l'outil Read ; activé, chaque image jointe est aussi envoyée directement dans le message.
+2339	Envoyer les images dans le message (compatibilité) : à cocher seulement si le modèle ne voit pas les images jointes et invente. Certains appels via des services tiers ne reconnaissent pas les images relues par l'outil Read ; activé, chaque image jointe est aussi envoyée directement dans le message.
 2340	Conseil : fixez une limite de dépense quotidienne et une alerte de solde dans la console du fournisseur. Si vous pensez que la clé a fuité, révoquez-la là-bas et créez-en une nouvelle.
 2341	Veut modifier un fichier qui contrôle les instructions ou les vérifications de sécurité de Claude : {w}

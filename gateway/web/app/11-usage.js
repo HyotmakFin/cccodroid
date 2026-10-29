@@ -445,7 +445,7 @@
       <input id="pc-key" type="password" autocomplete="off"
         placeholder="${p && p.hasKey ? t("已保存（…{tail}），留空则不改", { tail: esc(p.keyTail) }) : t("粘贴 API Key")}">
       <label class="tiny" style="display:flex;gap:6px;align-items:flex-start"><input id="cc-inline" type="checkbox" style="width:auto;margin:2px 0 0"${v.inlineImages ? " checked" : ""}>
-        <span>${t("图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的中转站认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。")}</span></label>
+        <span>${t("图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的第三方调用方式认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。")}</span></label>
       <div class="row-actions">
         <button class="btn sm" data-act="save">${p ? t("保存") : t("添加")}</button>
         ${p ? `<button class="btn sm ghost" data-act="test">${t("测试")}</button>

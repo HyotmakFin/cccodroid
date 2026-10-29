@@ -1,7 +1,7 @@
 // 图片随消息直接发（第三方兼容兜底，接口设置里勾了才做）
 //
 // 平常的路：附件只以 @路径 接在消息末尾，claude 用 Read 读回来，图在 tool_result 里。官方接口和多数厂商都认。
-// 有的中转站把 Anthropic 转成 OpenAI 时不映射 tool_result 里的 image：要么整块丢，要么把 base64 当文字塞给模型，
+// 有的第三方调用方式把 Anthropic 转成 OpenAI 时不映射 tool_result 里的 image：要么整块丢，要么把 base64 当文字塞给模型，
 // 模型就照着乱码编一张图出来。勾上之后，消息里提到的图片再各带一份 image 块跟在用户消息里（这个位置各家都认）。
 // 两条路并存：@路径 文字一字不动，模型照样能 Read、能拿路径改文件；只是多一份图。
 import fs from "node:fs";
@@ -10,7 +10,7 @@ import { execFile } from "node:child_process";
 import { log } from "./config.mjs";
 
 const MAX_IMAGES = 5;
-const MAX_RAW = 3.75 * 1024 * 1024;        // base64 后 5 MB 是官方单图上限，中转只会更紧
+const MAX_RAW = 3.75 * 1024 * 1024;        // base64 后 5 MB 是官方单图上限，第三方只会更紧
 const REF = /@(\/[^\s"'<>`]+?\.(?:png|jpe?g|gif|webp))(?=[\s"'<>`),.;，。；]|$)/gi;
 
 /** 按文件头认格式：扩展名和内容对不上时，按扩展名报 media_type 会被拒 */
