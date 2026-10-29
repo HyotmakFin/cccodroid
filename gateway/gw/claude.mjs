@@ -8,6 +8,16 @@ import { PROVIDER, keyOf } from "./providers.mjs";
 import { cachedModels } from "./models.mjs";
 import { fixedBaseUrl } from "./streamfix.mjs";
 import { archiveHooks } from "./archive-core.mjs";
+import { fileURLToPath } from "node:url";
+
+// 敏感操作再确认：PreToolUse 钩子（guard/cc-guard.mjs），碰密钥 / 读屏点按 / 往外分享时让 claude 停下来问，全部放行也一样
+const GUARD_CLI = fileURLToPath(new URL("../guard/cc-guard.mjs", import.meta.url));
+export function guardHooks() {
+  if (SETTINGS.guard === false || !fs.existsSync(GUARD_CLI)) return null;
+  const q = (x) => "'" + String(x).replace(/'/g, "'\\''") + "'";
+  return [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob|mcp__device__.*",
+    hooks: [{ type: "command", command: q(process.execPath) + " " + q(GUARD_CLI), timeout: 10 }] }];
+}
 import { NEXT, readBody, sendJson } from "./http.mjs";
 
 // ── 给 claude 造一个它认得的 shell ────────────────────────────────────
@@ -431,7 +441,10 @@ export function settingsArgs(p = PROVIDER) {
   const st = {};
   const safe = safeMode();
   if (SETTINGS.outputStyle && !safe) st.outputStyle = SETTINGS.outputStyle;
-  if (!p.local) st.hooks = archiveHooks();   // 压缩后提醒建档（只陈述事实，规则在系统提示里，见 archive.mjs）
+  if (!p.local) {
+    st.hooks = archiveHooks();   // 压缩后提醒建档（只陈述事实，规则在系统提示里，见 archive.mjs）
+    const g = guardHooks(); if (g) st.hooks.PreToolUse = g;
+  }
   const key = keyOf(p);
   const file = p.id === PROVIDER.id ? KEY_FILE : KEY_FILE + "-" + String(p.id).replace(/[^\w.-]/g, "_");
   if (key) {

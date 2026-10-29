@@ -259,6 +259,7 @@ export async function startRun(item) {
         ? { ...p.input, answers: Object.fromEntries(Object.entries(a.answers).map(([k, v]) => [String(k), String(v)])) }
         : p.input;
       resp = { behavior: "allow", updatedInput: input };
+      if (p.guard) (run.guardOk = run.guardOk || new Set()).add(p.guard.cat);   // 这一轮同类不再问
       // 「始终允许」：只认 claude 自己给的建议（规则 + 目录），前端不能塞任意规则；切模式另走 a.mode
       if (a.always) {
         const ups = (p.suggestions || []).filter((x) => x && (x.type === "addRules" || x.type === "addDirectories"));
@@ -287,6 +288,9 @@ export async function startRun(item) {
         interactive: !!r.requires_user_interaction, agentId: r.agent_id || null, at: Date.now(),
         runId: run.id, sessionId: run.sessionId || null,   // 并行时通知要知道是哪个会话的
       };
+      // 敏感操作再确认（guard/cc-guard.mjs 的 ask）：reason 形如 cccodroid-guard|类别|说明
+      const gm = r.decision_reason_type === "hook" && /^cccodroid-guard\|([^|]+)\|(.*)$/s.exec(String(r.decision_reason || ""));
+      if (gm) { p.guard = { cat: gm[1].slice(0, 80), what: gm[2].slice(0, 200) }; p.reason = null; }
       if (run.unattended) {
         log(`✗ 无人值守，自动拒绝 ${p.tool} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
         (run.denied = run.denied || []).push(p.tool);
@@ -294,8 +298,15 @@ export async function startRun(item) {
           message: "This is an unattended scheduled run: nobody can approve this action, so it is denied. Do not retry it; finish with what you can do and say what was blocked." } } });
         return;
       }
-      // 全部放行时 claude 不该再来问；来了（子代理没继承到模式之类）就直接放行，必须由人回答的（AskUserQuestion 等）照问
-      if (run.permMode === "bypassPermissions" && !p.interactive && !HUMAN_TOOLS.has(p.tool)) {
+      // 同一轮里这一类敏感操作已经点过允许（比如一连串读屏点按）：别每步都问
+      if (p.guard && run.guardOk?.has(p.guard.cat)) {
+        log(`✓ 敏感操作本轮已允许过，放行 ${p.tool} ${p.guard.what.slice(0, 60)}`);
+        writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: { behavior: "allow", updatedInput: p.input } } });
+        return;
+      }
+      // 全部放行时 claude 不该再来问；来了（子代理没继承到模式之类）就直接放行，必须由人回答的（AskUserQuestion 等）照问。
+      // 敏感操作再确认的卡片例外：那是专门为全部放行加的一道兜底
+      if (run.permMode === "bypassPermissions" && !p.interactive && !HUMAN_TOOLS.has(p.tool) && !p.guard) {
         log(`✓ 全部放行，自动允许 ${p.tool}${p.agentId ? "（子代理）" : ""} ${String(p.input.command || p.input.file_path || p.input.url || "").slice(0, 60)}`);
         writeCtl({ type: "control_response", response: { subtype: "success", request_id: id, response: { behavior: "allow", updatedInput: p.input } } });
         return;

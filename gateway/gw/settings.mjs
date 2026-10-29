@@ -14,6 +14,8 @@ export const SETTINGS = {
   model: null,
   // 和官方一致：逐项确认。前端的确认卡片接的是 stream-json 控制协议（见 startRun 里的 can_use_tool）
   permissionMode: "default",
+  // 敏感操作再确认：碰密钥 / 凭据、读屏点按、读剪贴板、往外分享文件时，哪怕全部放行也停下来问（guard/cc-guard.mjs）
+  guard: true,
   addDirs: [],
   outputStyle: null,
   effort: null,
@@ -159,6 +161,7 @@ export async function routeSettings(req, res, u, p) {
       }
 
       if ("staticCompat" in b) { SETTINGS.staticCompat = !!b.staticCompat; try { customRefresh(); } catch {} }   // 下一轮生效；自定义组件的入口立刻跟着改
+      if ("guard" in b) SETTINGS.guard = !!b.guard;
       if ("idleCompaction" in b) { SETTINGS.idleCompaction = !!b.idleCompaction; if (!SETTINGS.idleCompaction) idleDisarmAll(); }
       if ("workIsland" in b) SETTINGS.workIsland = !!b.workIsland;
 

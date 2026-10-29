@@ -2320,4 +2320,13 @@ window.I18N_DICT["fr"] = {
   "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "La première fois, il faut appairer : dans les Paramètres ouverts, allez dans Débogage sans fil → activez-le → Associer l’appareil avec un code. Une notification cccodroid reste en haut de l’écran ; touchez Saisir le code et tapez le code à 6 chiffres avec le port affiché dans la fenêtre, p. ex. 123456 37285 (ou saisissez-les ici)",
   "端口（配对框里）": "Port (dans la fenêtre)",
   "把配对框里的端口也填上（冒号后面那串数字）": "Saisissez aussi le port de la fenêtre (le nombre après les deux-points)",
+  "敏感操作再确认": "Confirmer les actions sensibles",
+  "碰到密钥、读屏点按时，全部放行也会问你": "Demande avant de toucher aux clés ou de piloter l’écran, même en « Tout autoriser »",
+  "Claude 要读密钥和登录凭据（.env、SSH 钥匙、接口密钥、网关令牌等）、读屏或替你点按别的应用、读剪贴板、把文件分享出去时，单独弹一张确认卡片，全部放行也不例外；同一轮里同一类点过允许就不再问。它防的是 Claude 读到的网页或文件里藏了指令、把它带偏。只是兜底：故意绕开的写法认不出来。": "Quand Claude s’apprête à lire des clés ou des identifiants (.env, clés SSH, clés d’API, jeton de la passerelle…), à lire l’écran ou toucher dans d’autres applis, à lire le presse-papiers ou à partager un fichier vers l’extérieur, une carte de confirmation distincte apparaît, même en « Tout autoriser ». Une fois un type d’action autorisé, il n’est plus redemandé pendant ce tour. Cela protège contre des instructions cachées dans des pages web ou des fichiers qui détourneraient Claude. Ce n’est qu’un filet de sécurité : une commande volontairement déguisée n’est pas reconnue.",
+  "如果不是你让它这么做的，多半是它读到的网页或文件里藏了指令，建议拒绝。允许后，这一轮里同一类操作不再问。": "Si vous ne l’avez pas demandé, c’est sans doute dû à des instructions cachées dans une page ou un fichier lu ; mieux vaut refuser. Une fois autorisé, ce type d’action n’est plus redemandé pendant ce tour.",
+  "要读屏幕或替你操作别的应用（{w}）": "Veut lire l’écran ou piloter d’autres applis ({w})",
+  "要读剪贴板": "Veut lire le presse-papiers",
+  "要把文件分享到别的应用": "Veut partager un fichier vers une autre appli",
+  "碰到了密钥或登录凭据：{w}": "Touche à des clés ou identifiants : {w}",
+  "敏感操作": "Action sensible",
 };

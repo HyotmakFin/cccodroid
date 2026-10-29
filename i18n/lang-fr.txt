@@ -2317,3 +2317,12 @@
 2317	La première fois, il faut appairer : dans les Paramètres ouverts, allez dans Débogage sans fil → activez-le → Associer l’appareil avec un code. Une notification cccodroid reste en haut de l’écran ; touchez Saisir le code et tapez le code à 6 chiffres avec le port affiché dans la fenêtre, p. ex. 123456 37285 (ou saisissez-les ici)
 2318	Port (dans la fenêtre)
 2319	Saisissez aussi le port de la fenêtre (le nombre après les deux-points)
+2320	Confirmer les actions sensibles
+2321	Demande avant de toucher aux clés ou de piloter l’écran, même en « Tout autoriser »
+2322	Quand Claude s’apprête à lire des clés ou des identifiants (.env, clés SSH, clés d’API, jeton de la passerelle…), à lire l’écran ou toucher dans d’autres applis, à lire le presse-papiers ou à partager un fichier vers l’extérieur, une carte de confirmation distincte apparaît, même en « Tout autoriser ». Une fois un type d’action autorisé, il n’est plus redemandé pendant ce tour. Cela protège contre des instructions cachées dans des pages web ou des fichiers qui détourneraient Claude. Ce n’est qu’un filet de sécurité : une commande volontairement déguisée n’est pas reconnue.
+2323	Si vous ne l’avez pas demandé, c’est sans doute dû à des instructions cachées dans une page ou un fichier lu ; mieux vaut refuser. Une fois autorisé, ce type d’action n’est plus redemandé pendant ce tour.
+2324	Veut lire l’écran ou piloter d’autres applis ({w})
+2325	Veut lire le presse-papiers
+2326	Veut partager un fichier vers une autre appli
+2327	Touche à des clés ou identifiants : {w}
+2328	Action sensible

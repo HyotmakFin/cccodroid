@@ -2320,4 +2320,13 @@ window.I18N_DICT["es"] = {
   "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "La primera vez hay que vincular: en los Ajustes que se abrieron, ve a Depuración inalámbrica → actívala → Vincular dispositivo con código. Una notificación de cccodroid queda fija arriba; toca Introducir código y escribe el código de 6 dígitos junto con el puerto que muestra el cuadro, p. ej. 123456 37285 (o escríbelos aquí)",
   "端口（配对框里）": "Puerto (del cuadro)",
   "把配对框里的端口也填上（冒号后面那串数字）": "Escribe también el puerto del cuadro (el número tras los dos puntos)",
+  "敏感操作再确认": "Confirmar acciones sensibles",
+  "碰到密钥、读屏点按时，全部放行也会问你": "Pregunta antes de tocar claves o controlar la pantalla, incluso con «Permitir todo»",
+  "Claude 要读密钥和登录凭据（.env、SSH 钥匙、接口密钥、网关令牌等）、读屏或替你点按别的应用、读剪贴板、把文件分享出去时，单独弹一张确认卡片，全部放行也不例外；同一轮里同一类点过允许就不再问。它防的是 Claude 读到的网页或文件里藏了指令、把它带偏。只是兜底：故意绕开的写法认不出来。": "Cuando Claude va a leer claves o credenciales de acceso (.env, claves SSH, claves de API, el token de la pasarela, etc.), leer la pantalla o tocar en otras apps, leer el portapapeles o compartir un archivo hacia fuera, aparece una tarjeta de confirmación aparte, incluso con «Permitir todo». Tras permitir un tipo de acción, no se vuelve a preguntar en ese turno. Protege frente a instrucciones escondidas en páginas web o archivos que desvíen a Claude. Es solo una red de seguridad: los comandos disfrazados a propósito no se reconocen.",
+  "如果不是你让它这么做的，多半是它读到的网页或文件里藏了指令，建议拒绝。允许后，这一轮里同一类操作不再问。": "Si no lo has pedido tú, probablemente venga de instrucciones escondidas en una página o archivo que leyó; se recomienda denegar. Una vez permitido, no se vuelve a preguntar por ese tipo de acción en este turno.",
+  "要读屏幕或替你操作别的应用（{w}）": "Quiere leer la pantalla u operar otras apps ({w})",
+  "要读剪贴板": "Quiere leer el portapapeles",
+  "要把文件分享到别的应用": "Quiere compartir un archivo con otra app",
+  "碰到了密钥或登录凭据：{w}": "Accede a claves o credenciales: {w}",
+  "敏感操作": "Acción sensible",
 };

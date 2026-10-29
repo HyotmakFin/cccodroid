@@ -50,6 +50,9 @@
         h = `<div class="perm-path">${esc(i.file_path || "")}</div><pre class="perm-diff">${ls.slice(0, 30).map((l) => `<span class="add">+ ${esc(l)}</span>`).join("\n")}${ls.length > 30 ? "\n" + esc(t("…（共 {n} 行）", { n: ls.length })) : ""}</pre>`;
         break;
       }
+      case "Read": case "Glob": case "Grep":
+        h = `<div class="perm-path">${esc(i.file_path || i.path || "")}</div>` + (i.pattern ? `<pre class="perm-cmd">${esc(i.pattern)}</pre>` : "");
+        break;
       case "NotebookEdit":
         h = `<div class="perm-path">${esc(i.notebook_path || "")}</div><pre class="perm-cmd">${esc(String(i.new_source || "").slice(0, 3000))}</pre>`;
         break;
@@ -72,10 +75,25 @@
     }
     if (p.blockedPath && !["Edit", "Write", "MultiEdit"].includes(p.tool) && !String(i.command || "").includes(p.blockedPath)) h += `<div class="perm-sub">${t("涉及路径：{p}", { p: esc(p.blockedPath) })}</div>`;
     if (p.reason && typeof p.reason === "string") h += `<div class="perm-sub">${t("原因：{r}", { r: esc(p.reason) })}</div>`;
+    // 敏感操作再确认（网关的 guard 钩子）：说清楚碰到了什么、为什么要多问一句
+    if (p.guard) h = `<div class="perm-guard"><b>${esc(permGuardWhat(p.guard))}</b><p>${t("如果不是你让它这么做的，多半是它读到的网页或文件里藏了指令，建议拒绝。允许后，这一轮里同一类操作不再问。")}</p></div>` + h;
     return h;
   }
 
+  function permGuardWhat(g) {
+    const c = String(g.cat || "");
+    if (c === "device:screen") return t("要读屏幕或替你操作别的应用（{w}）", { w: g.what });
+    if (c === "device:clipboard") return t("要读剪贴板");
+    if (c === "device:share") return t("要把文件分享到别的应用");
+    // what 是「英文类别: 命中的那段路径」，界面只显示路径那段
+    const w = String(g.what || ""), k = w.indexOf(": ");
+    return t("碰到了密钥或登录凭据：{w}", { w: k > 0 ? w.slice(k + 2) : w });
+  }
+
   function permActions(p) {
+    if (p.guard) return `
+      <button class="pa-allow">${t("允许")}</button>
+      <button class="pa-more primary">${t("拒绝 ▾")}</button>`;
     if (p.tool === "ExitPlanMode") return `
       <button class="pa-allow primary" data-mode="default">${t("批准，逐项确认执行")}</button>
       <button class="pa-allow" data-mode="acceptEdits">${t("批准，自动接受编辑")}</button>
@@ -93,9 +111,9 @@
 
   function PermCard(p, runId) {
     const el = document.createElement("div");
-    el.className = "perm";
+    el.className = p.guard ? "perm guard" : "perm";
     el.dataset.id = p.id;
-    const kind = p.tool === "ExitPlanMode" ? t("计划待批准") : p.tool === "AskUserQuestion" ? t("Claude 想问你") : t("需要确认");
+    const kind = p.tool === "ExitPlanMode" ? t("计划待批准") : p.tool === "AskUserQuestion" ? t("Claude 想问你") : p.guard ? t("敏感操作") : t("需要确认");
     el.innerHTML = `
       <div class="perm-head"><span class="perm-kind">${uiI("pause")}${kind}</span><span class="perm-tool">${esc(p.tool)}</span>${p.agentId ? `<span class="perm-sub">${t("子代理")}</span>` : ""}</div>
       <div class="perm-body">${permPreview(p)}</div>

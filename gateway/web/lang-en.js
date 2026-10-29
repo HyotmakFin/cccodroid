@@ -2354,5 +2354,14 @@ window.I18N_DICT.en = {
   "码和端口一起填，如 {0}（端口在配对框里）": "Enter the code and port together, e.g. {0} (the port is in the pairing dialog)",
   "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "First time, you need to pair: in the Settings that opened, go to Wireless debugging → turn it on → Pair device with pairing code. A cccodroid notification stays at the top of the screen; tap Enter code and type the 6-digit code together with the port shown in the dialog, e.g. 123456 37285 (or enter them here)",
   "端口（配对框里）": "Port (from the dialog)",
-  "把配对框里的端口也填上（冒号后面那串数字）": "Also enter the port from the pairing dialog (the number after the colon)"
+  "把配对框里的端口也填上（冒号后面那串数字）": "Also enter the port from the pairing dialog (the number after the colon)",
+  "敏感操作再确认": "Confirm sensitive actions",
+  "碰到密钥、读屏点按时，全部放行也会问你": "Asks before touching keys or controlling the screen, even under Allow everything",
+  "Claude 要读密钥和登录凭据（.env、SSH 钥匙、接口密钥、网关令牌等）、读屏或替你点按别的应用、读剪贴板、把文件分享出去时，单独弹一张确认卡片，全部放行也不例外；同一轮里同一类点过允许就不再问。它防的是 Claude 读到的网页或文件里藏了指令、把它带偏。只是兜底：故意绕开的写法认不出来。": "When Claude is about to read keys or sign-in credentials (.env, SSH keys, API keys, the gateway token and so on), read the screen or tap in other apps, read the clipboard, or share a file out, a separate approval card appears, even under Allow everything. Once you allow a kind of action, it isn't asked again in the same turn. It guards against instructions hidden in web pages or files that lead Claude astray. It is only a safety net: deliberately disguised commands are not recognised.",
+  "如果不是你让它这么做的，多半是它读到的网页或文件里藏了指令，建议拒绝。允许后，这一轮里同一类操作不再问。": "If you didn't ask for this, it was probably prompted by instructions hidden in a web page or file it read; denying is recommended. Once allowed, the same kind of action isn't asked again this turn.",
+  "要读屏幕或替你操作别的应用（{w}）": "Wants to read the screen or operate other apps ({w})",
+  "要读剪贴板": "Wants to read the clipboard",
+  "要把文件分享到别的应用": "Wants to share a file to another app",
+  "碰到了密钥或登录凭据：{w}": "Touches keys or sign-in credentials: {w}",
+  "敏感操作": "Sensitive action"
 };

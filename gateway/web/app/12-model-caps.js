@@ -388,6 +388,7 @@
       if (pe && document.activeElement !== pe) { pe.max = state.settings.maxParallelCap || 16; pe.value = state.settings.maxParallel || 3; }
       $("set-static").checked = state.settings.staticCompat !== false;
       $("set-idlecompact").checked = state.settings.idleCompaction !== false;
+      $("set-guard").checked = state.settings.guard !== false;
       $("set-workisland").checked = state.settings.workIsland === true;
       loadExecMode();
     } catch {}
@@ -430,7 +431,7 @@
     const S = state.settings || {};
     const v = { model: ["set-model", S.model || ""], effort: ["set-effort", S.effort || ""], outputStyle: ["set-style", S.outputStyle || ""],
       maxParallel: ["set-parallel", S.maxParallel || 3] };
-    const c = { staticCompat: ["set-static", S.staticCompat !== false], idleCompaction: ["set-idlecompact", S.idleCompaction !== false],
+    const c = { staticCompat: ["set-static", S.staticCompat !== false], idleCompaction: ["set-idlecompact", S.idleCompaction !== false], guard: ["set-guard", S.guard !== false],
       workIsland: ["set-workisland", S.workIsland === true] };
     for (const k of Object.keys(patch || {})) {
       if (v[k] && $(v[k][0])) $(v[k][0]).value = v[k][1];
@@ -484,6 +485,7 @@
     loadExecMode();
   });
   $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
+  $("set-guard").addEventListener("change", (e) => saveSettings({ guard: e.target.checked }));
   $("set-workisland").addEventListener("change", (e) => saveSettings({ workIsland: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));

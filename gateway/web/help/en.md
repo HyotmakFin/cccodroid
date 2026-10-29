@@ -62,6 +62,12 @@ These choices are stored in the app's own data, so clearing the WebView cache wo
 | Deny unasked | Anything that would need approval is refused; for unattended runs |
 | Allow everything | Never asks; only when you trust the task completely |
 
+**What "Allow everything" really means.** Claude stops asking and edits any file or runs any command directly, including deleting things, going online and sending data out. The main risk is not Claude itself but what it reads: web pages, downloaded files, other people's repositories and issues can hide instructions aimed at the AI (prompt injection) that tell it to read your keys, change settings or upload something. In "Ask me" mode you see that step and can refuse; with "Allow everything" that check is gone. So:
+
+- Turn it on only for a clear task where you know which files it will touch, and switch back afterwards.
+- Leave it off when Claude is reading unfamiliar web pages, repositories or files of unknown origin.
+- "Confirm sensitive actions" (Settings → Claude behaviour, on by default) is a safety net: when Claude is about to read keys or sign-in credentials (.env, SSH keys, API keys, the gateway token and so on), read the screen or tap in other apps, read the clipboard, or share a file out, a red-bordered card asks you even under "Allow everything". If you see one and did not ask Claude to do that, deny it. It only recognises the obvious forms and can be sidestepped on purpose, so do not treat it as insurance for "Allow everything".
+
 - Approval cards appear under the tool that needs them, and a bar above the input box keeps them in view. Allow, always allow, or deny with an optional reason.
 - In the background you are notified when a turn ends or needs you. Notifications can only deny; to allow, come back and read the full command.
 - Keys stay in the app's private directory. Account sign-in is handled by Claude Code itself; the app never touches your credentials.
