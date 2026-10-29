@@ -34,6 +34,7 @@ rm -rf "$A/assets/app"; mkdir -p "$A/assets/app/web" "$A/assets/app/scripts" "$A
 cp "$SRC/server.mjs" "$A/assets/app/"
 mkdir -p "$A/assets/app/gw"; cp "$SRC/gw/"*.mjs "$A/assets/app/gw/"     # 网关的各功能模块
 mkdir -p "$A/assets/app/archive"; cp "$SRC/archive/"* "$A/assets/app/archive/"   # 建档规范与交档命令（脉络，见 gw/archive.mjs）
+mkdir -p "$A/assets/app/guard"; cp "$SRC/guard/"* "$A/assets/app/guard/"       # 敏感操作再确认的钩子（见 gw/claude.mjs guardHooks）
 for f in "$SRC/web/"*; do case "$f" in *.bak*) ;; *) cp -R "$f" "$A/assets/app/web/";; esac; done
 cp "$A/assets/scripts/"* "$A/assets/app/scripts/"
 cp "$A/assets/bin/"* "$A/assets/app/bin/"
@@ -68,7 +69,7 @@ $CC_ANDROID -O2 -shared -fPIC -nostdlib -fno-stack-protector -Wl,-z,noexecstack 
 $CC_ANDROID -DBIONIC -O2 -shared -fPIC -fno-stack-protector -Wl,-z,noexecstack -Wl,--hash-style=both \
   -o "$A/assets/app/lib/exec-shim-bionic.so" "$A/native/exec-shim.c" -ldl
 cp "$A/native/execpath.cjs" "$A/assets/app/lib/"
-TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/gw/"* "$A/assets/app/archive/"* "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
+TAG=$(cat "$A/assets/app/server.mjs" "$A/assets/app/gw/"* "$A/assets/app/archive/"* "$A/assets/app/guard/"* "$A/assets/app/TOOLS.md" $(find "$A/assets/app/web" -type f | sort) "$A/assets/app/scripts/"* "$A/assets/app/bin/"* "$A/assets/app/pre/"* "$A/assets/app/lib/"* | md5sum | cut -c1-12)
 echo "$TAG" > "$A/assets/app/TAG"
 echo "  tag $TAG"
 
