@@ -113,6 +113,8 @@ public final class Share extends ContentProvider {
         "(sk-[A-Za-z0-9_\\-]{4,}|sk-ant-[A-Za-z0-9_\\-]+|gh[pousr]_[A-Za-z0-9]{8,}|Bearer\\s+[A-Za-z0-9._\\-]{8,}|\"[A-Za-z0-9_\\-]*(?i:key|token|secret|passw(?:or)?d|pin|auth(?:orization)?)[A-Za-z0-9_\\-]*\"\\s*:\\s*\"[^\"]+\"|cc_t_\\d+=[^;\\s]+|X-CC-Token:?\\s*\\S+)");
     // 网址里带的口令参数（预览凭证 ?t=、外壳口令 ?k=、OAuth 回调 code= 之类）：日志里常有完整网址（审查 #49 待确认-7）
     private static final Pattern QSECRET = Pattern.compile("(?i)([?&#;](?:t|k|token|key|api_?key|code|state|access_token|refresh_token|id_token|auth|sig|signature|secret|password|pass|pwd)=)[^&#\\s'\"<>]+");
+    // 网址里的账号口令：http://user:pass@host（自定义接口地址可能这么写）
+    private static final Pattern USERINFO = Pattern.compile("(?i)(\\b[a-z][a-z0-9+.\\-]*://)[^/\\s@'\"<>]+@");
     private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}");
     // 网关日志里记着每条提问 / 插话的开头几十个字：那是用户的对话内容，诊断用不着，抹掉
     private static final Pattern ASK = Pattern.compile("(▶ (?:提问|命令) ).*?(  \\((?:续 [0-9a-f]{8}|新会话)\\))", Pattern.DOTALL);
@@ -120,6 +122,7 @@ public final class Share extends ContentProvider {
     static String scrub(String s) {
         s = INJ.matcher(ASK.matcher(s).replaceAll("$1«内容已抹去»$2")).replaceAll("$1«内容已抹去»");
         s = QSECRET.matcher(s).replaceAll("$1«已抹去»");
+        s = USERINFO.matcher(s).replaceAll("$1«已抹去»@");
         return EMAIL.matcher(SECRET.matcher(s).replaceAll("«已抹去»")).replaceAll("«邮箱»");
     }
 

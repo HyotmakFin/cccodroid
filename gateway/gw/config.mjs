@@ -57,9 +57,12 @@ export const LIVE = process.env.CCAPP_TEST !== "1";
 // ── 工具函数 ──────────────────────────────────────────────────────────
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TS = () => new Date().toISOString().slice(11, 19);
-const LOG_FILE = process.env.CCAPP_LOG || "/sdcard/DeepSeekHarness/claude-apk/gateway.log";
+// 默认落 home（私有目录），不落共享存储：脱离 App 单独跑网关时别让别的应用读到日志（审查 v0.5.4 B-L2）
+const LOG_FILE = process.env.CCAPP_LOG || path.join(CFG.home, "gateway.log");
+// 网址里的账号口令（http://user:pass@host）不进日志
+const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@");
 export const log = (...a) => {
-  const line = `[${TS()}] ${a.join(" ")}`;
+  const line = noCred(`[${TS()}] ${a.join(" ")}`);
   if (!LIVE) return;
   console.log(line);
   try { fs.appendFileSync(LOG_FILE, line + "\n"); } catch {}

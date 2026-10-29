@@ -2312,3 +2312,8 @@
 2312	Esta tarea ya se está ejecutando
 2313	(Este modelo no admite el protocolo de Anthropic en esta dirección: elige un modelo compatible o cambia a la dirección que la plataforma ofrece para Claude Code)
 2314	Muy grande
+2315	Para que otras apps no puedan suplantar el servicio de vinculación, escribe el código junto con el puerto: es el número tras los dos puntos en «Dirección IP y puerto» del cuadro, p. ej. {0}
+2316	Escribe el código y el puerto juntos, p. ej. {0} (el puerto está en el cuadro)
+2317	La primera vez hay que vincular: en los Ajustes que se abrieron, ve a Depuración inalámbrica → actívala → Vincular dispositivo con código. Una notificación de cccodroid queda fija arriba; toca Introducir código y escribe el código de 6 dígitos junto con el puerto que muestra el cuadro, p. ej. 123456 37285 (o escríbelos aquí)
+2318	Puerto (del cuadro)
+2319	Escribe también el puerto del cuadro (el número tras los dos puntos)

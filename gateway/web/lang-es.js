@@ -2315,4 +2315,9 @@ window.I18N_DICT["es"] = {
   "这个任务已经在跑了": "Esta tarea ya se está ejecutando",
   "（这个型号在这个地址上不支持 Anthropic 协议：换一个支持的型号，或换成平台给 Claude Code 用的那个地址）": "(Este modelo no admite el protocolo de Anthropic en esta dirección: elige un modelo compatible o cambia a la dirección que la plataforma ofrece para Claude Code)",
   "特大": "Muy grande",
+  "为防别的应用冒充配对服务，码要和端口一起填：端口是配对框里「IP 地址和端口」冒号后面那串数字，如 {0}": "Para que otras apps no puedan suplantar el servicio de vinculación, escribe el código junto con el puerto: es el número tras los dos puntos en «Dirección IP y puerto» del cuadro, p. ej. {0}",
+  "码和端口一起填，如 {0}（端口在配对框里）": "Escribe el código y el puerto juntos, p. ej. {0} (el puerto está en el cuadro)",
+  "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "La primera vez hay que vincular: en los Ajustes que se abrieron, ve a Depuración inalámbrica → actívala → Vincular dispositivo con código. Una notificación de cccodroid queda fija arriba; toca Introducir código y escribe el código de 6 dígitos junto con el puerto que muestra el cuadro, p. ej. 123456 37285 (o escríbelos aquí)",
+  "端口（配对框里）": "Puerto (del cuadro)",
+  "把配对框里的端口也填上（冒号后面那串数字）": "Escribe también el puerto del cuadro (el número tras los dos puntos)",
 };

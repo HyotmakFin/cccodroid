@@ -76,6 +76,13 @@ function safeWritePath(p) {
   return { file: path.join(dir, name), size: 0, mtime: 0, fresh: true };
 }
 
+/** 写文件但不跟最后一级软链（O_NOFOLLOW：是软链就报 ELOOP） */
+function writeNoFollow(file, buf) {
+  const c = fs.constants;
+  const fd = fs.openSync(file, c.O_WRONLY | c.O_CREAT | c.O_TRUNC | c.O_NOFOLLOW, 0o644);
+  try { fs.writeFileSync(fd, buf); } finally { fs.closeSync(fd); }
+}
+
 /** 供文件面板用的快捷入口 */
 export function fileRoots() {
   const out = [];
@@ -150,8 +157,13 @@ export async function routeFiles(req, res, u, p) {
       head["content-disposition"] =
         `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(r.file))}`;
     }
+    // 按已核过的真实路径打开、不跟软链：核完到打开之间被换成指向别处的软链也读不到（审查 v0.5.4 B-L1）
+    let fd;
+    try { fd = fs.openSync(r.file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW); } catch (e) { return sendJson(res, 404, { error: "not found", detail: e.code || e.message }); }
+    try { const fst = fs.fstatSync(fd); if (!fst.isFile()) { fs.closeSync(fd); return sendJson(res, 400, { error: "not a file" }); } head["content-length"] = fst.size; }
+    catch (e) { try { fs.closeSync(fd); } catch {} return sendJson(res, 500, { error: e.message }); }
     res.writeHead(200, head);
-    const st = fs.createReadStream(r.file);
+    const st = fs.createReadStream(null, { fd });
     st.on("error", () => { try { res.destroy(); } catch {} });
     st.pipe(res);
     return;
@@ -180,7 +192,10 @@ export async function routeFiles(req, res, u, p) {
     if (cur && base && Math.abs(cur.mtimeMs - base) > 1 && u.searchParams.get("force") !== "1") {
       return sendJson(res, 409, { error: "changed on disk", mtime: cur.mtimeMs, size: cur.size });
     }
-    try { fs.writeFileSync(r.file, buf); } catch (e) { return sendJson(res, 500, { error: e.message }); }
+    // 收请求体期间路径可能被换成软链（指向令牌、厂商配置）：重核一遍，结果得和开头一致；写时不跟软链（审查 v0.5.4 B-L1）
+    const r2 = safeWritePath(u.searchParams.get("path"));
+    if (r2.error || r2.file !== r.file) return sendJson(res, 409, { error: "path changed" });
+    try { writeNoFollow(r.file, buf); } catch (e) { return sendJson(res, e.code === "ELOOP" ? 403 : 500, { error: e.code === "ELOOP" ? "forbidden" : e.message }); }
     const st = fs.statSync(r.file);
     log(`[file] 保存 ${r.file} ${buf.length}B`);
     return sendJson(res, 200, { ok: true, path: r.file, size: st.size, mtime: st.mtimeMs });

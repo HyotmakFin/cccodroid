@@ -264,7 +264,7 @@ final class ShizukuSetup {
         pairPort = -1;
         pairSeen.clear();
         startPairDiscovery();
-        set("pairing", Tr.t("第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」直接输入（也可以填在这里）"));
+        set("pairing", Tr.t("第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）"));
         pairNote(Tr.t("在无线调试里点「使用配对码配对设备」，然后点下面的「填配对码」"), true);
         Intent i = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
         Bundle b = new Bundle();
@@ -275,8 +275,9 @@ final class ShizukuSetup {
     }
 
     /**
-     * 配对码：来自通知栏输入框或设置页。可以只填 6 位码；mDNS 找不到配对服务时（开着 VPN 常见）
-     * 再带上配对框里显示的端口，如 "123456 37285" 或 "123456 10.10.14.1:37285"。
+     * 配对码：来自通知栏输入框或设置页。码和配对框里显示的端口必须一起填，如 "123456 37285" 或 "123456 10.10.14.1:37285"。
+     * 不再按 mDNS 找到的端口自动发码：别的应用可以冒充唯一一个配对服务、拿到码后自己去配对（审查 v0.5.4 H1-1）。
+     * mDNS 现在只用来提示「配对框出现了」。
      */
     void onCode(String input) { onCode(input, null); }
 
@@ -306,20 +307,13 @@ final class ShizukuSetup {
             try {
                 set("pairing", Tr.t("配对中…"));
                 pairNote(Tr.t("配对中…"), false);
-                if (given > 0) pairPort = given;
-                if (pairDisc == null) startPairDiscovery();
-                for (int i = 0; i < 40 && pairPort <= 0; i++) Thread.sleep(250);
-                // 同时有好几个配对服务：可能有别的应用在冒充（审查 10-29 H1），码要发给哪个端口只能让用户照配对框定
-                if (given <= 0 && new HashSet<>(pairSeen.values()).size() > 1) {
-                    set("pairing", Tr.f("发现好几个配对服务，不知道是哪个：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}", code + " 37285"));
-                    pairNote(Tr.f("有好几个配对服务：码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
+                // 端口只认用户照配对框填的：只有一个配对服务也可能是冒充的，自动发码等于把码交出去
+                if (given <= 0) {
+                    set("pairing", Tr.f("为防别的应用冒充配对服务，码要和端口一起填：端口是配对框里「IP 地址和端口」冒号后面那串数字，如 {0}", code + " 37285"));
+                    pairNote(Tr.f("码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
                     return;
                 }
-                if (pairPort <= 0) {
-                    set("pairing", Tr.f("没找到配对服务（开着 VPN 时常这样）：把配对框里「IP 地址和端口」冒号后面的端口一起填上，如 {0}", code + " 37285"));
-                    pairNote(Tr.f("没找到配对服务：码和端口一起填，如 {0}（端口在配对框里）", code + " 37285"), true);
-                    return;
-                }
+                pairPort = given;
                 String out = adb(30, "pair", "127.0.0.1:" + pairPort, code);
                 if (!out.contains("Successfully paired")) {
                     set("pairing", Tr.f("配对没成功（{0}）。码可能过期了：重新点「使用配对码配对设备」，填新码", out.trim()));
@@ -562,7 +556,7 @@ final class ShizukuSetup {
             if (h == null || mine.isEmpty() || mine.contains(h.getHostAddress()) || pairPort <= 0) {
                 boolean fresh = pairPort != r.getPort();
                 pairPort = r.getPort();
-                if (fresh && "pairing".equals(phase)) pairNote(Tr.f("配对框出现了（端口 {0}）：点「填配对码」输入 6 位码", pairPort), true);
+                if (fresh && "pairing".equals(phase)) pairNote(Tr.t("配对框出现了：点「填配对码」，填 6 位码和配对框里的端口"), true);
             }
             log("配对服务 " + s.getServiceName() + " → " + (h == null ? "?" : h.getHostAddress()) + ":" + r.getPort());
         });
@@ -637,7 +631,7 @@ final class ShizukuSetup {
             .setTimeoutAfter(withInput ? 600_000 : 90_000);
         if (!withInput) { Bundle x = new Bundle(); x.putBoolean(EXTRA_PROGRESS, true); b.addExtras(x); }
         if (withInput) {
-            RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel(Tr.t("6 位配对码（必要时空格后加端口）")).build();
+            RemoteInput ri = new RemoteInput.Builder(Events.KEY_CODE).setLabel(Tr.t("6 位配对码 空格 端口")).build();
             int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
             PendingIntent pi = PendingIntent.getBroadcast(ctx, NOTE, new Intent(ctx, Events.class).setAction(Events.ACTION_PAIR), fl);
             b.addAction(new Notification.Action.Builder(null, Tr.t("填配对码"), pi).addRemoteInput(ri).build());

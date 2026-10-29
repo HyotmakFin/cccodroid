@@ -148,8 +148,10 @@
     const code = $("priv-code").value.replace(/\D/g, "");
     if (code.length !== 6) return toast(t("配对码是 6 位数字"), true);
     const port = $("priv-port").value.replace(/\D/g, "");
+    // 端口必填：只按自动发现的端口发码，别的应用冒充配对服务就能把码骗走（审查 v0.5.4 H1-1）
+    if (port.length < 4) return toast(t("把配对框里的端口也填上（冒号后面那串数字）"), true);
     $("priv-code").value = "";
-    await post("/api/app/shz_pair", { code: port ? code + " " + port : code }).catch((e2) => toast(e2.message, true));
+    await post("/api/app/shz_pair", { code: code + " " + port }).catch((e2) => toast(e2.message, true));
     setTimeout(loadPriv, 500);
   });
   $("priv-auto").addEventListener("change", (e) => post("/api/app/shz_autostart", { enable: e.target.checked }).catch(() => {}));

@@ -2312,3 +2312,8 @@
 2312	Cette tâche est déjà en cours
 2313	(Ce modèle ne prend pas en charge le protocole Anthropic à cette adresse : choisissez un modèle compatible, ou passez à l'adresse que la plateforme fournit pour Claude Code)
 2314	Très grand
+2315	Pour empêcher d’autres applis d’usurper le service d’appairage, saisissez le code avec le port : c’est le nombre après les deux-points dans « Adresse IP et port » de la fenêtre, p. ex. {0}
+2316	Saisissez le code et le port ensemble, p. ex. {0} (le port est dans la fenêtre)
+2317	La première fois, il faut appairer : dans les Paramètres ouverts, allez dans Débogage sans fil → activez-le → Associer l’appareil avec un code. Une notification cccodroid reste en haut de l’écran ; touchez Saisir le code et tapez le code à 6 chiffres avec le port affiché dans la fenêtre, p. ex. 123456 37285 (ou saisissez-les ici)
+2318	Port (dans la fenêtre)
+2319	Saisissez aussi le port de la fenêtre (le nombre après les deux-points)

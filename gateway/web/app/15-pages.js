@@ -95,7 +95,8 @@
     new MutationObserver((recs) => { if (raf || recs.every((m) => $(id) && $(id).contains(m.target))) return; raf = requestAnimationFrame(() => { raf = 0; if (curPage === name) paintSubnav(name); }); })
       .observe($("tab-" + name), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
   }
-  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (TOCS[curPage]) spyToc(curPage); pageAnchorSave(); }, { passive: true });
+  $("page-body").addEventListener("scroll", (e) => { if (e.target.scrollLeft) e.target.scrollLeft = 0;   // 页面不许横着挪（overflow-x:hidden 拦不住聚焦时的程序滚动）
+    if (SUBNAVS[curPage]) spySubnav(); else if (TOCS[curPage]) spyToc(curPage); pageAnchorSave(); }, { passive: true });
 
   // ── 换分屏 / 转屏后停在原处 ── 只记 scrollTop 不够：宽度一变整页重排，同样的像素落到别的内容上。
   // 滚动时记下顶上那一行是哪个元素、离顶多远；宽度变了按它对回去

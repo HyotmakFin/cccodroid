@@ -269,7 +269,12 @@
     // 只有计时变了：只改那一格的字（它不进读屏），别整条重写 —— 整条在 role=status 里，读屏会每秒念一遍（审查 #49 待确认-5）
     const key = html.replace(/<span class="rs-el"[^>]*>[^<]*<\/span>/, "");
     const elx = runStrip.querySelector(".rs-el"), elm = html.match(/<span class="rs-el"[^>]*>([^<]*)<\/span>/);
-    if (key === runStrip._key && elx && elm) { if (elx.textContent !== elm[1]) elx.innerHTML = elm[1]; }
+    if (key === runStrip._key && elx && elm) {
+      // 那一格是转义过的字：用惰性 template 还原成纯文本再写 textContent，不经 innerHTML（审查 v0.5.4 F-L3）
+      const tp = document.createElement("template"); tp.innerHTML = elm[1];
+      const txt = tp.content.textContent;
+      if (elx.textContent !== txt) elx.textContent = txt;
+    }
     else if (html !== runStrip._html) {
       runStrip._key = key;
       const tl = runStrip.querySelector(".rs-tlist"), bl = runStrip.querySelector(".rs-blist"), ty = tl ? tl.scrollTop : 0, by = bl ? bl.scrollTop : 0;

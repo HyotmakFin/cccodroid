@@ -50,16 +50,18 @@
 
     const cid = newCid();
     view.cids.add(cid);
+    lastSendAt = Date.now();   // 点下就记：run_start 可能比 POST 回执先到，等回执再记的话双击那一下会被当成「停止」（审查 v0.5.4 F1 残余）
     const sentAtt = fromInput ? state.attachments : [];
     if (fromInput) { inputEl.value = ""; autoGrow(); clearAttachments(); }
     syncInterject();
     const gen = view.gen;
     // 新会话第一条的回执还没到就又发：等它回来，拿到 run 号再带着 follow 发，不然两条各起一个会话（审查 #51 第1项）
+    // 最多等 15 秒：网关半死、回执一直不来时别让后面的消息无声排着（审查 v0.5.4 F-L1）
     const prior = !view.sessionId && !view.lastRunId ? view.firstSend : null;
     let done;
     if (!view.sessionId) view.firstSend = new Promise((ok) => (done = ok));
     try {
-      if (prior) { await prior; if (gen !== view.gen) throw Object.assign(new Error(t("会话已切换，这条没发")), { moved: true }); }
+      if (prior) { await Promise.race([prior, new Promise((ok) => setTimeout(ok, 15000))]); if (gen !== view.gen) throw Object.assign(new Error(t("会话已切换，这条没发")), { moved: true }); }
       const r = await api("/api/chat", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({

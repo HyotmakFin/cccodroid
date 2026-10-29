@@ -2349,5 +2349,10 @@ window.I18N_DICT.en = {
   "只跑一次的时间已过，任务已关": "The one-time run's scheduled time has passed, so the task was turned off",
   "这个任务已经在跑了": "This task is already running",
   "（这个型号在这个地址上不支持 Anthropic 协议：换一个支持的型号，或换成平台给 Claude Code 用的那个地址）": "(This model doesn't support the Anthropic protocol at this endpoint: pick a model that does, or switch to the endpoint the platform provides for Claude Code)",
-  "特大": "Extra large"
+  "特大": "Extra large",
+  "为防别的应用冒充配对服务，码要和端口一起填：端口是配对框里「IP 地址和端口」冒号后面那串数字，如 {0}": "To stop other apps from impersonating the pairing service, enter the code together with the port: the port is the number after the colon in “IP address & port” in the pairing dialog, e.g. {0}",
+  "码和端口一起填，如 {0}（端口在配对框里）": "Enter the code and port together, e.g. {0} (the port is in the pairing dialog)",
+  "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "First time, you need to pair: in the Settings that opened, go to Wireless debugging → turn it on → Pair device with pairing code. A cccodroid notification stays at the top of the screen; tap Enter code and type the 6-digit code together with the port shown in the dialog, e.g. 123456 37285 (or enter them here)",
+  "端口（配对框里）": "Port (from the dialog)",
+  "把配对框里的端口也填上（冒号后面那串数字）": "Also enter the port from the pairing dialog (the number after the colon)"
 };

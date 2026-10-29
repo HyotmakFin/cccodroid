@@ -2315,4 +2315,9 @@ window.I18N_DICT["fr"] = {
   "这个任务已经在跑了": "Cette tâche est déjà en cours",
   "（这个型号在这个地址上不支持 Anthropic 协议：换一个支持的型号，或换成平台给 Claude Code 用的那个地址）": "(Ce modèle ne prend pas en charge le protocole Anthropic à cette adresse : choisissez un modèle compatible, ou passez à l'adresse que la plateforme fournit pour Claude Code)",
   "特大": "Très grand",
+  "为防别的应用冒充配对服务，码要和端口一起填：端口是配对框里「IP 地址和端口」冒号后面那串数字，如 {0}": "Pour empêcher d’autres applis d’usurper le service d’appairage, saisissez le code avec le port : c’est le nombre après les deux-points dans « Adresse IP et port » de la fenêtre, p. ex. {0}",
+  "码和端口一起填，如 {0}（端口在配对框里）": "Saisissez le code et le port ensemble, p. ex. {0} (le port est dans la fenêtre)",
+  "第一次需要配对：在打开的设置里进「无线调试」→ 打开它 →「使用配对码配对设备」。屏幕顶部会一直悬着 cccodroid 的通知，点「填配对码」，把 6 位码和配对框里的端口一起填，如 123456 37285（也可以填在这里）": "La première fois, il faut appairer : dans les Paramètres ouverts, allez dans Débogage sans fil → activez-le → Associer l’appareil avec un code. Une notification cccodroid reste en haut de l’écran ; touchez Saisir le code et tapez le code à 6 chiffres avec le port affiché dans la fenêtre, p. ex. 123456 37285 (ou saisissez-les ici)",
+  "端口（配对框里）": "Port (dans la fenêtre)",
+  "把配对框里的端口也填上（冒号后面那串数字）": "Saisissez aussi le port de la fenêtre (le nombre après les deux-points)",
 };
