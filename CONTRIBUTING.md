@@ -73,6 +73,7 @@ Pull-request builds are signed with a throwaway test key, not the release key. Y
 - **Anything touching downloads**: read [docs/download-sources.md](docs/download-sources.md) first. The rule is trust first, download second; nothing fetched from a mirror may become the thing it is checked against.
 - **AI-assisted contributions are welcome**; this project was built that way. Test on a real device before submitting, and say in the PR how and on which device you tested.
 - Comments explain *why*, not *what*.
+- **No binaries, minified or obfuscated code.** Third-party code (`gateway/web/vendor/` and the like) must match the upstream release byte for byte; state its source, version and checksum in the PR. Every PR gets an automatic safety pre-check (`scripts/pr-guard.mjs`) that flags the places easiest to tamper with: CI and release scripts, dependencies, third-party code, invisible characters, long encoded strings. A "high" flag doesn't mean something is wrong, only that the maintainer will read those lines closely before merging.
 
 ### Compliance
 

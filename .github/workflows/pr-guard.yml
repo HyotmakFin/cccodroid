@@ -1,0 +1,70 @@
+# PR 安全初筛：把 PR 里最容易被投毒的地方指出来（CI / 发版脚本、依赖、第三方代码、二进制、看不见的字符、长编码串、
+# 下载即执行、读密钥……），在 PR 下面留一条报告；有「高」项时这个检查标红，提醒合并前逐行看。
+#
+# 为什么用 pull_request_target：它跑的是目标分支（main）上的这份工作流和 scripts/pr-guard.mjs，
+# PR 改不了扫它的规则。代价是它带着能写评论的令牌，所以这里**绝不执行 PR 里的任何代码**：
+# PR 的提交只用 git fetch 拿下来当数据 diff，不 checkout、不 npm install、不跑它的脚本。
+# 这个工作流也不碰任何仓库 secret。
+name: pr-guard
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # 目标分支的代码（含扫描脚本本身）
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: 取 PR 的提交（只当数据）
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: git fetch --no-tags "https://github.com/$REPO" "+refs/pull/$PR/head:refs/pr-head"
+
+      - name: 扫描
+        id: scan
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set +e
+          node scripts/pr-guard.mjs "$BASE" refs/pr-head --md "$RUNNER_TEMP/report.md" > /dev/null
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # 报告贴到 PR 下面；同一个 PR 只留一条，后续推送时原地更新
+      - name: 留报告
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pr-guard -->")))][0].id // empty')
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@"$RUNNER_TEMP/report.md" > /dev/null
+          else gh api "repos/$REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/report.md" > /dev/null; fi
+
+      - name: 有「高」项要逐行审
+        if: steps.scan.outputs.code != '0'
+        run: |
+          echo "::error::这个 PR 动到了高风险位置（见 PR 下的报告），合并前请维护者逐行看过"
+          exit 1
