@@ -80,7 +80,8 @@ const S = {
     for (const l of ["zh", "en"]) if (!fs.existsSync(wn(l)) || !fs.readFileSync(wn(l), "utf8").trim()) throw new Error(`缺更新说明 ${path.relative(ROOT, wn(l))}`);
     // 允许没提交的只有这次发版自己要提交的东西
     const allowed = (f) => f === "android/AndroidManifest.xml" || f.startsWith("android/assets/whatsnew/") || f.startsWith("gateway/web/changelog/");
-    const dirty = git("status", "--porcelain").split("\n").filter(Boolean).map((l) => l.slice(3)).filter((f) => !allowed(f));
+    // sh() 会 trim，第一行开头的空格没了，不能按固定 3 个字符切路径
+    const dirty = git("status", "--porcelain").split("\n").filter(Boolean).map((l) => l.replace(/^[ MADRCUT?!]{1,2} /, "")).filter((f) => !allowed(f));
     if (dirty.length) throw new Error("工作区还有别的没提交的改动，先提交或收起：\n  " + dirty.join("\n  "));
     for (const f of [`${F}/bldtools/cccodroid-release.json`, `${F}/bldtools/gh-token-cccodroid`]) if (!fs.existsSync(f)) throw new Error(`缺 ${f}`);
     run("node", [path.join(ROOT, "scripts/test.mjs")], { cwd: ROOT });      // 网关测试不过就不发
