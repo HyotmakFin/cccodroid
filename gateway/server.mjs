@@ -80,7 +80,7 @@ import { routeSessModel } from "./gw/sessmodel.mjs";
 import { routeLineage } from "./gw/lineage.mjs";
 import { routeBackfill } from "./gw/backfill.mjs";
 import { routeArchive } from "./gw/archive.mjs";
-import { COOKIE, SESSION, denyLog, denyReason, proof, tokenOk } from "./gw/access.mjs";
+import { COOKIE, SESSION, UI_HOST, cookieHostOk, denyLog, denyReason, proof, tokenOk } from "./gw/access.mjs";
 import { startWorkIsland, stopWorkIslandSync } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
@@ -119,7 +119,8 @@ const server = http.createServer(async (req, res) => {
     return res.end(r);
   }
   // 宿主 WebView 首次加载首页时带 ?t=令牌：种 Cookie，之后同源请求自动带上
-  if (req.method === "GET" && (p === "/" || p === "/index.html") && tokenOk(u.searchParams.get("t") || "")) {
+  // cccodroid 里只在界面专用地址上种（见 access.mjs 的 UI_HOST）；App 现在直接用 CookieManager 种，这条留给开发端
+  if (req.method === "GET" && (p === "/" || p === "/index.html") && cookieHostOk(req) && tokenOk(u.searchParams.get("t") || "")) {
     res.setHeader("Set-Cookie", `${COOKIE}=${SESSION}; Path=/; HttpOnly; SameSite=Strict`);
   }
 
@@ -155,6 +156,10 @@ try { fs.mkdirSync(CFG.home, { recursive: true }); } catch {}
 try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 startStreamFix();
 
+// 界面专用地址：同一个处理函数再听一份。听不上（被别的应用抢先占了）就不听，App 核身份时会发现不是真网关、不交凭据
+const uiServer = http.createServer((req, res) => server.emit("request", req, res));
+uiServer.on("error", (e) => log(`⚠️ 界面地址 ${UI_HOST}:${CFG.port} 监听失败：${e.code || e.message}`));
+uiServer.listen(CFG.port, UI_HOST);
 server.listen(CFG.port, "127.0.0.1", () => {
   log(`claude-apk 网关 v3 已启动  http://127.0.0.1:${CFG.port}`);
   log(`  运行时 ${CFG.runtime}`);

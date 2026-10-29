@@ -7,6 +7,9 @@ import java.util.Map;
 /** 目录布局与子进程环境。前缀固定为 /data/data/cc.codroid/files/usr —— devkit 按它等长改写过。 */
 final class Env {
     static final int PORT = 8791;
+    /** 界面和 App 访问网关用的地址。不用 127.0.0.1：Cookie 不按端口隔离，种在 127.0.0.1 上会被同机别的应用
+     *  在任意端口收走（GHSA-hwmm 第 1 项）。网关两个地址都听，终端里的工具照旧走 127.0.0.1 + 令牌头。见 gateway/gw/access.mjs 的 UI_HOST */
+    static final String HOST = "127.0.0.2";
 
     /** 网关访问令牌（server.mjs 首次启动时生成，0600，存在应用私有目录）。见 server.mjs「访问控制」 */
     private static volatile File tokenFile = new File("/data/data/cc.codroid/files/home/.gateway-token");
@@ -18,9 +21,15 @@ final class Env {
 
     /** 连本机网关：先核身份，再带上令牌头。网关没起来、没生成令牌、或端口上不是它时抛 IOException，调用方照"没就绪"处理即可 */
     static java.net.HttpURLConnection gateway(String path) throws java.io.IOException {
-        if (!proveGateway()) throw new java.io.IOException("127.0.0.1:" + PORT + " 上不是 cccodroid 的网关（还没起来，或被别的应用占了）");
-        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:" + PORT + path).openConnection();
-        c.setRequestProperty("X-CC-Token", token());
+        if (!proveGateway()) throw new java.io.IOException(HOST + ":" + PORT + " 上不是 cccodroid 的网关（还没起来，或被别的应用占了）");
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://" + HOST + ":" + PORT + path).openConnection();
+        // 不发令牌原文，按次签名（GHSA-hwmm 附录 B）：核身份到真正发请求之间网关要是换了人，对方拿到的签名只对这一个请求有效、只能用一次
+        try {
+            byte[] nb = new byte[16];
+            new java.security.SecureRandom().nextBytes(nb);
+            String ts = String.valueOf(System.currentTimeMillis()), n = hex(nb);
+            c.setRequestProperty("X-CC-Sig", ts + "." + n + "." + hmac(token(), "sig:" + ts + ":" + n + ":" + path));
+        } catch (Exception e) { throw new java.io.IOException(e); }
         return c;
     }
 
@@ -30,6 +39,9 @@ final class Env {
     /** 网关换了一个（启动号变了）时回调，参数是这次的 Cookie 值；MainActivity 拿去种进 WebView */
     static volatile java.util.function.Consumer<String> onBoot;
 
+    /** 忘掉上次核到的启动号：下一次核身份一定回调 onBoot（界面刚接上 onBoot 时用，不然后台服务先核过了，Cookie 就种不上） */
+    static void resetBoot() { boot = ""; provedAt = 0; }
+
     static boolean proveGateway() {
         if (System.currentTimeMillis() - provedAt < 3000) return true;    // 刚核过：别每个请求都多跑一趟
         String t = token();
@@ -38,7 +50,7 @@ final class Env {
             byte[] nb = new byte[16];
             new java.security.SecureRandom().nextBytes(nb);
             String n = hex(nb);
-            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://127.0.0.1:" + PORT + "/__proof?n=" + n).openConnection();
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://" + HOST + ":" + PORT + "/__proof?n=" + n).openConnection();
             c.setConnectTimeout(800); c.setReadTimeout(1500); c.setInstanceFollowRedirects(false); c.setUseCaches(false);
             try {
                 if (c.getResponseCode() != 200) return false;
@@ -65,7 +77,7 @@ final class Env {
     /** 端口上有没有人在听（不发任何东西） */
     static boolean portBusy() {
         try (java.net.Socket s = new java.net.Socket()) {
-            s.connect(new java.net.InetSocketAddress("127.0.0.1", PORT), 500);
+            s.connect(new java.net.InetSocketAddress(HOST, PORT), 500);
             return true;
         } catch (java.io.IOException e) { return false; }
     }
@@ -96,10 +108,9 @@ final class Env {
         return k != null && java.security.MessageDigest.isEqual(k.getBytes(), BRIDGE_KEY.getBytes());
     }
 
-    /** WebView 首次加载的地址：带 ?t= 让网关种 Cookie，带 k= 把原生桥口令交给界面 */
+    /** WebView 首次加载的地址：带 k= 把原生桥口令交给界面。Cookie 由 MainActivity 在核过身份后直接种（onBoot），地址里不再带令牌 */
     static String uiUrl() {
-        String t = token();
-        return "http://127.0.0.1:" + PORT + "/?" + (t.isEmpty() ? "" : "t=" + t + "&") + "k=" + BRIDGE_KEY;
+        return "http://" + HOST + ":" + PORT + "/?k=" + BRIDGE_KEY;
     }
 
     final File files, usr, home, app, log;

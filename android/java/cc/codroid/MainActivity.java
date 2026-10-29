@@ -1163,6 +1163,14 @@ public class MainActivity extends Activity {
                 openExternal(url);
                 return true;
             }
+            // 界面专用地址上别的端口一律不许请求（GHSA-hwmm 第 1 项）：会话 Cookie 种在 127.0.0.2 上，Cookie 不分端口，
+            // 回复里一张 <img src="http://127.0.0.2:端口/…">、预览里的一个请求，都会把它送给在那个端口监听的应用。
+            // 这里在原生层拦，不靠 CSP —— iframe 里的文档不归界面的 CSP 管
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest req) {
+                Uri u = req.getUrl();
+                if (isUiHost(u.getHost()) && !isOwnGateway(u.toString())) return blocked();
+                return null;
+            }
             @Override public void onPageFinished(WebView v, String url) {
                 if (bounceStage != 0) {   // 冻结脱困中：跳出去那一下落地了就马上跳回来；回到网关页面才算完
                     if (!isOwnGateway(url)) { if (bounceStage == 1) bounceBack(); return; }
@@ -1310,7 +1318,9 @@ public class MainActivity extends Activity {
         // 网关换了一个（重启、崩溃重拉）：它只认按新启动号派生的 Cookie，这里种上，界面的事件总线重连时就接上了（审查 S1）
         Env.onBoot = (v) -> ui.post(() -> {
             android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
-            cm.setCookie("http://127.0.0.1:" + Env.PORT, "cc_t_" + Env.PORT + "=" + v + "; Path=/; HttpOnly; SameSite=Strict");
+            cm.setCookie("http://" + Env.HOST + ":" + Env.PORT, "cc_t_" + Env.PORT + "=" + v + "; Path=/; HttpOnly; SameSite=Strict");
+            // 旧版种在 127.0.0.1 上的那份清掉：网关已经不认了，留着只会被别的端口收走
+            cm.setCookie("http://127.0.0.1:" + Env.PORT, "cc_t_" + Env.PORT + "=; Path=/; Max-Age=0");
             cm.flush();
         });
         loadUi();
@@ -1404,7 +1414,7 @@ public class MainActivity extends Activity {
         if (web == null || bounceStage != 0) return;
         bounceStage = 1;
         web.setVisibility(View.INVISIBLE);
-        web.loadUrl("http://127.0.0.2:9/");
+        web.loadUrl("http://127.0.0.3:9/");     // 必须跨站：界面自己在 127.0.0.2（Env.HOST），同站跳一次不管用
         ui.postDelayed(() -> { if (bounceStage == 1) bounceBack(); }, 1500);   // 落地回调没来
         ui.postDelayed(() -> { if (bounceStage != 0) { bounceStage = 0; web.setVisibility(View.VISIBLE); } }, 10000);
     }
@@ -1417,6 +1427,7 @@ public class MainActivity extends Activity {
      *  端口上没人在听就照旧打开（只会显示连不上，什么也漏不出去）；有人在听却证明不了自己，换成一页说明 */
     private void loadUi() {
         new Thread(() -> {
+            Env.resetBoot();       // 这一次核身份一定回调 onBoot，种好 Cookie 再加载（onBoot 的 post 排在下面 loadUrl 前面）
             boolean ok = Env.proveGateway() || !Env.portBusy();
             ui.post(() -> {
                 if (web == null) return;
@@ -1642,34 +1653,52 @@ public class MainActivity extends Activity {
     /** 网关自己的地址不许进浏览器 / 窗格：它们和界面共用 Cookie，预览页里的脚本能借这个桥拿到网关权限 */
     /** 浏览器认作回环 / 0.0.0.0 的 IPv4 写法：127.0.0.1、127.1、2130706433、0x7f000001、0177.0.0.1……（按 inet_aton 的规矩解析） */
     static boolean loopbackV4(String h) {
-        if (!h.matches("[0-9a-fx.]+")) return false;
+        long ip = ipv4(h);
+        return ip >= 0 && ((ip >>> 24) == 127 || ip == 0);
+    }
+    /** 是不是界面专用地址（Env.HOST = 127.0.0.2）：各种写法（2130706434、0x7f000002、127.2 …）浏览器都会规范成它，一并认 */
+    static boolean isUiHost(String h) {
+        if (h == null) return false;
+        h = h.toLowerCase(java.util.Locale.ROOT);
+        if (h.startsWith("[::ffff:")) {          // [::ffff:127.0.0.2] / [::ffff:7f00:2]
+            String t = h.substring(8, h.length() - (h.endsWith("]") ? 1 : 0));
+            if (t.equals("7f00:2")) return true;
+            h = t;
+        }
+        return ipv4(h) == 0x7f000002L;
+    }
+    static android.webkit.WebResourceResponse blocked() {
+        return new android.webkit.WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", null, new java.io.ByteArrayInputStream(new byte[0]));
+    }
+    /** 按 inet_aton 的规矩解析 IPv4 写法，不是 IPv4 返回 -1 */
+    static long ipv4(String h) {
+        if (h == null || !h.matches("[0-9a-fx.]+")) return -1;
         String[] p = h.split("\\.", -1);
-        if (p.length < 1 || p.length > 4) return false;
+        if (p.length < 1 || p.length > 4) return -1;
         long[] v = new long[p.length];
         try {
             for (int i = 0; i < p.length; i++) {
                 String x = p[i];
-                if (x.isEmpty()) return false;
+                if (x.isEmpty()) return -1;
                 if (x.startsWith("0x")) v[i] = x.length() == 2 ? 0 : Long.parseLong(x.substring(2), 16);
                 else if (x.length() > 1 && x.startsWith("0")) v[i] = Long.parseLong(x.substring(1), 8);
                 else v[i] = Long.parseLong(x);
             }
-        } catch (NumberFormatException e) { return false; }
+        } catch (NumberFormatException e) { return -1; }
         long ip = 0;
-        for (int i = 0; i < p.length - 1; i++) { if (v[i] > 255) return false; ip |= v[i] << (24 - 8 * i); }
+        for (int i = 0; i < p.length - 1; i++) { if (v[i] > 255) return -1; ip |= v[i] << (24 - 8 * i); }
         long last = v[p.length - 1];
-        if (last >= (1L << (8 * (5 - p.length)))) return false;
-        ip |= last;
-        return (ip >>> 24) == 127 || ip == 0;
+        if (last >= (1L << (8 * (5 - p.length)))) return -1;
+        return ip | last;
     }
 
-    /** 就是本应用的网关（http、127.0.0.1、本端口、不带用户名）：按网址解析判断，不按前缀——
+    /** 就是本应用的网关界面（http、Env.HOST、本端口、不带用户名）：按网址解析判断，不按前缀——
      *  前缀判断放得过 http://127.0.0.1:8791@evil.com/ 和 :87910（审查 10-29 中3） */
     static boolean isOwnGateway(String url) {
         if (url == null) return false;
         try {
             Uri u = Uri.parse(url.trim());
-            return "http".equalsIgnoreCase(u.getScheme()) && "127.0.0.1".equals(u.getHost()) && u.getPort() == Env.PORT && u.getUserInfo() == null;
+            return "http".equalsIgnoreCase(u.getScheme()) && Env.HOST.equals(u.getHost()) && u.getPort() == Env.PORT && u.getUserInfo() == null;
         } catch (Exception e) { return false; }
     }
 

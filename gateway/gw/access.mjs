@@ -29,7 +29,17 @@ export const TOKEN = (() => {
 // Cookie 不按端口隔离：同一个浏览器里开着两个网关（开发端 8790 + cccodroid 8791）时，同名 Cookie 会互相覆盖，
 // 所以名字里带上端口
 export const COOKIE = `cc_t_${CFG.port}`;
-const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`]);
+// ── 界面专用地址（GHSA-hwmm 第 1 项）──
+// Cookie 不按端口隔离：种在 127.0.0.1 上，内置浏览器打开同机别的应用起的 127.0.0.1:任意端口、或者回复里一张
+// <img src="http://127.0.0.1:端口/…">，Cookie 都会跟着送过去，对方拿到就能用原生客户端重放 /api/*。
+// cccodroid 的界面因此改走 127.0.0.2（同样是回环，网关两个地址都听），会话 Cookie 只认这个地址上来的请求；
+// App 那边把内置浏览器里这个地址的所有端口、界面里这个地址的其他端口全拦掉，Cookie 就送不到别人手里。
+// 开发端的外壳还是 127.0.0.1，照旧
+export const UI_HOST = "127.0.0.2";
+const UI_HOSTPORT = `${UI_HOST}:${CFG.port}`;
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`, UI_HOSTPORT]);
+/** 这个请求能不能凭 Cookie 认、能不能种 Cookie：cccodroid 里只有界面专用地址可以 */
+export const cookieHostOk = (req) => !PREFIX || String(req.headers.host || "").toLowerCase() === UI_HOSTPORT;
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
 
 function same(t, want) {
@@ -39,6 +49,23 @@ function same(t, want) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 export const tokenOk = (t) => same(t, TOKEN);
+
+// ── App 自己的请求按次签名（GHSA-hwmm 附录 B）──
+// 以前 App 核完身份（有 3 秒缓存）再另开一个连接带上令牌原文：中间这段时间网关要是换了人，令牌就交出去了。
+// 现在 App 不发令牌，发 X-CC-Sig: 时间戳.随机数.HMAC(令牌, sig:时间戳:随机数:路径)。冒牌的收到也只能原样转发这一个请求，
+// 随机数用过一次就作废，时间戳差一分钟以上也不认
+const SIG_SEEN = new Map();
+export function sigOk(v, pathAndQuery) {
+  const m = /^(\d{10,16})\.([0-9a-f]{32})\.([0-9a-f]{64})$/.exec(String(v || ""));
+  if (!m) return false;
+  const now = Date.now(), ts = Number(m[1]);
+  if (Math.abs(now - ts) > 60e3) return false;
+  if (!same(m[3], crypto.createHmac("sha256", TOKEN).update(`sig:${m[1]}:${m[2]}:${pathAndQuery}`).digest("hex"))) return false;
+  if (SIG_SEEN.has(m[2])) return false;
+  SIG_SEEN.set(m[2], now);
+  if (SIG_SEEN.size > 2000) for (const [k, t] of SIG_SEEN) if (now - t > 120e3 || SIG_SEEN.size > 2000) SIG_SEEN.delete(k); else break;
+  return true;
+}
 
 // ── 证明「我是真网关」（审查 S1）──
 // 安卓上 127.0.0.1 的端口全机共享：网关没起来（开机、崩溃后重拉的空档）时别的应用能先占住 8791。
@@ -67,11 +94,12 @@ export function denyReason(req, u) {
   if (origin !== undefined && !ALLOWED_ORIGINS.has(String(origin).toLowerCase())) return 403;
   if (!u.pathname.startsWith("/api/")) return null;          // 静态页面与资源不含秘密
   if (tokenOk(String(req.headers["x-cc-token"] || ""))) return null;
+  if (req.headers["x-cc-sig"] && sigOk(req.headers["x-cc-sig"], String(req.url || ""))) return null;   // 按请求行原样比，不经 URL 规范化
   // 凭 Cookie 的：浏览器标明是别的源发起的就不认。SameSite 不看端口，内置浏览器里开的本机页面（127.0.0.1:3000 之类）
   // 发的 <img> / no-cors 请求不带 Origin、却会带上 Cookie（审查 H7）。界面自己的请求是 same-origin；
   // 地址栏直接打开是 none；claude、curl 这类不发这个头
   const site = req.headers["sec-fetch-site"];
   if (site && site !== "same-origin" && site !== "none") return 403;
-  if (sessionOk(cookieToken(req))) return null;
+  if (cookieHostOk(req) && sessionOk(cookieToken(req))) return null;
   return 403;
 }

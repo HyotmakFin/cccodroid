@@ -145,6 +145,11 @@ public class BrowserPane extends LinearLayout {
             }
             @SuppressWarnings("deprecation")
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) { return route(url); }
+            // 界面专用地址（任何端口）和网关端口：子资源、iframe、XHR 也一律不许碰（GHSA-hwmm 第 1 项）。
+            // 这里和界面共用 CookieManager，专用地址上的会话 Cookie 不分端口，放过去就被那个端口上的应用收走了
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                return forbidden(r.getUrl().toString()) ? MainActivity.blocked() : null;
+            }
             @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.i(TAG, "start " + logUrl(url)); pickStop(); shown(url); }
             @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                 if (r.isForMainFrame()) Log.w(TAG, "error " + e.getErrorCode() + " " + e.getDescription() + " " + logUrl(String.valueOf(r.getUrl())));
@@ -288,8 +293,19 @@ public class BrowserPane extends LinearLayout {
     }
 
     /** http/https 留在这里；其余协议（intent:、mailto:、market:、tel: …）交给系统。返回 true = 已处理 */
+    /** 内置浏览器碰不得的地址：界面专用地址的任何端口、各种回环写法下的网关端口 */
+    static boolean forbidden(String url) {
+        if (url == null) return false;
+        try { if (MainActivity.isUiHost(Uri.parse(url.trim()).getHost())) return true; } catch (Exception e) { return true; }
+        return MainActivity.isGatewayUrl(url);
+    }
+
     private boolean route(String url) {
         if (url == null) return true;
+        if (forbidden(url)) {
+            Toast.makeText(act, Tr.t("这个地址是 cccodroid 自己用的，不能在内置浏览器里打开"), Toast.LENGTH_LONG).show();
+            return true;
+        }
         String l = url.toLowerCase(java.util.Locale.ROOT);
         if (l.startsWith("http://") || l.startsWith("https://") || l.startsWith("about:") || l.startsWith("data:") || l.startsWith("blob:")) return false;
         external(url);

@@ -4,11 +4,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { BOOT, COOKIE, SESSION, TOKEN, denyReason, proof, tokenOk } from "../gw/access.mjs";
+import { BOOT, COOKIE, SESSION, TOKEN, UI_HOST, cookieHostOk, denyReason, proof, sigOk, tokenOk } from "../gw/access.mjs";
 
 const req = (headers) => ({ headers });
 const url = (p) => new URL("http://127.0.0.1:8799" + p);
 const HOST = "127.0.0.1:8799";
+// cccodroid（测试里设了 CCAPP_PREFIX）的界面走专用地址，会话 Cookie 只在这里认
+const UIH = process.env.CCAPP_PREFIX ? UI_HOST + ":8799" : HOST;
 
 test("令牌：生成在 CCAPP_HOME 里，64 位十六进制、文件只有自己能读", () => {
   assert.match(TOKEN, /^[0-9a-f]{64}$/);
@@ -51,8 +53,8 @@ test("静态页不要令牌，/api/ 要", () => {
 
 test("/api/ 认请求头 X-CC-Token 或带端口的 Cookie", () => {
   assert.equal(denyReason(req({ host: HOST, "x-cc-token": TOKEN }), url("/api/state")), null);
-  assert.equal(denyReason(req({ host: HOST, cookie: `a=1; ${COOKIE}=${SESSION}` }), url("/api/state")), null);
-  assert.equal(denyReason(req({ host: HOST, cookie: `cc_t_8790=${SESSION}` }), url("/api/state")), 403);   // 别的端口的 Cookie
+  assert.equal(denyReason(req({ host: UIH, cookie: `a=1; ${COOKIE}=${SESSION}` }), url("/api/state")), null);
+  assert.equal(denyReason(req({ host: UIH, cookie: `cc_t_8790=${SESSION}` }), url("/api/state")), 403);   // 别的端口的 Cookie
   assert.equal(denyReason(req({ host: HOST, "x-cc-token": "x".repeat(64) }), url("/api/state")), 403);
 });
 
@@ -60,7 +62,7 @@ test("cccodroid 里 Cookie 是按这次启动派生的会话值，令牌本身�
   const mac = (x) => crypto.createHmac("sha256", TOKEN).update(x).digest("hex");
   if (process.env.CCAPP_PREFIX) {
     assert.equal(SESSION, mac("cookie:" + BOOT));
-    assert.equal(denyReason(req({ host: HOST, cookie: `${COOKIE}=${TOKEN}` }), url("/api/state")), 403);
+    assert.equal(denyReason(req({ host: UIH, cookie: `${COOKIE}=${TOKEN}` }), url("/api/state")), 403);
   } else assert.equal(SESSION, TOKEN);
 });
 
@@ -70,4 +72,30 @@ test("证明：回启动号和 HMAC，随机数不合格式就不答", () => {
   assert.equal(boot, BOOT);
   assert.equal(m, crypto.createHmac("sha256", TOKEN).update(`proof:${n}:${BOOT}`).digest("hex"));
   for (const bad of ["", "abc", "g".repeat(32), "a".repeat(129), null]) assert.equal(proof(bad), null);
+});
+
+test("界面专用地址（GHSA-hwmm 1）：cccodroid 里 Cookie 只在 127.0.0.2 上认，127.0.0.1 / localhost 上来的不认", () => {
+  assert.equal(denyReason(req({ host: UI_HOST + ":8799" }), url("/")), null);           // 这个地址本身放行
+  assert.equal(denyReason(req({ host: UI_HOST + ":1234" }), url("/")), 421);
+  if (!process.env.CCAPP_PREFIX) return;
+  const ck = `${COOKIE}=${SESSION}`;
+  assert.equal(denyReason(req({ host: HOST, cookie: ck }), url("/api/state")), 403);
+  assert.equal(denyReason(req({ host: "localhost:8799", cookie: ck }), url("/api/state")), 403);
+  assert.equal(denyReason(req({ host: UI_HOST + ":8799", cookie: ck }), url("/api/state")), null);
+  assert.equal(cookieHostOk(req({ host: HOST })), false);
+  assert.equal(cookieHostOk(req({ host: UI_HOST + ":8799" })), true);
+  // 令牌头不受地址限制（终端里的工具、claude 都走 127.0.0.1）
+  assert.equal(denyReason(req({ host: HOST, "x-cc-token": TOKEN }), url("/api/state")), null);
+});
+
+test("按次签名（GHSA-hwmm 附录 B）：对的放行一次，重放、改路径、过期、格式不对都不认", () => {
+  const sig = (p, ts = Date.now(), n = crypto.randomBytes(16).toString("hex")) =>
+    `${ts}.${n}.${crypto.createHmac("sha256", TOKEN).update(`sig:${ts}:${n}:${p}`).digest("hex")}`;
+  const a = sig("/api/status");
+  assert.equal(denyReason(({ url: "/api/status", headers: { host: HOST, "x-cc-sig": a } }), url("/api/status")), null);
+  assert.equal(denyReason(({ url: "/api/status", headers: { host: HOST, "x-cc-sig": a } }), url("/api/status")), 403);          // 同一个随机数第二次
+  assert.equal(sigOk(sig("/api/status"), "/api/file?path=/x"), false);                               // 签的是别的路径
+  assert.equal(sigOk(sig("/api/file?path=%2Fa"), "/api/file?path=%2Fa"), true);
+  assert.equal(sigOk(sig("/api/status", Date.now() - 120e3), "/api/status"), false);                // 过期
+  for (const bad of ["", "x", "1.2.3", sig("/api/status").replace(/.$/, "g")]) assert.equal(sigOk(bad, "/api/status"), false);
 });
