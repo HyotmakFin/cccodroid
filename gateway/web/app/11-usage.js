@@ -453,7 +453,8 @@
       </div>
       <div class="prov-state" id="pc-result"></div>
             <div class="tiny">${t("要求对端讲 <b>Anthropic Messages</b> 协议（各家文档里写“Claude Code 接入”的那个地址）。")}
-        ${t("地址末尾不要带 <code>/v1</code>，claude 会自己补 <code>/v1/messages</code>。")}</div>`;
+        ${t("地址末尾不要带 <code>/v1</code>，claude 会自己补 <code>/v1/messages</code>。")}
+        <br>${t("建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。")}</div>`;
     box.onclick = async (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act) return;

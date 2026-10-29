@@ -34,6 +34,31 @@ What the app's permissions are for, and what Claude can reach because of them, i
 
 Not in scope: anything that already requires running arbitrary code as the app (Claude itself can run commands; that's the point of the app), problems in Claude Code itself (report those to [Anthropic](https://www.anthropic.com/responsible-disclosure-policy)), and issues that need a rooted or already-compromised phone.
 
+## What protects you, and when it stops
+
+cccodroid has no server. It doesn't relay, store or see your conversations or keys; everything runs on your phone. So what can be protected depends on the state of the phone.
+
+**Ordinary phone, Shizuku only granted to apps you trust.** All of the following hold:
+
+- Other apps can't use the gateway: every request needs the per-install token, and the Host, Origin and signature checks keep web pages and squatters out.
+- Claude Code, the toolkit, modules and components are only installed after their hashes or signatures check out.
+- App data (keys, sessions, settings) sits in the app's private storage and is excluded from Android backup.
+
+**One thing to know even then: Claude is you.** Claude and every command it runs act as the app itself, so they can read anything the app can, including your API key file. That's what makes Claude useful here, and it means a prompt injection (instructions hidden in a web page or file that Claude reads) can in the worst case reach everything in the app's data. Some sensitive actions ask you again first even when everything is allowed: touching key and credential files, reading the screen or tapping for you, reading the clipboard, and sharing files out of the app. That check is a backstop, not a wall; a command written in a roundabout way can slip past it. Read what Claude is about to run when it touches things you care about.
+
+**You've granted Shizuku to an app you don't trust.** Shizuku gives shell-level access. A malicious app with it can turn on accessibility to read your screen, read shared storage and install apps. cccodroid's checks don't help against that; only grant Shizuku to apps you trust.
+
+**The phone is rooted, or someone has root on it.** Assume anything on the phone can be read, including your keys. cccodroid doesn't try to detect root or hide from it; that only gives a false sense of safety. What still protects you is outside the phone:
+
+- In your provider's console, set a daily spending limit and a balance alert.
+- If you think a key has leaked, revoke it there and create a new one. Each built-in provider in the app links to its key page.
+
+**Things we considered and chose not to do.**
+
+- *Encrypting keys with Android Keystore.* Claude has to receive the key in plain text to call the API, and anything that can ask the app to decrypt it, Claude included, runs as the same app. It would only stop someone who copies files off a rooted phone without touching running processes, at the cost of re-entering keys after every reinstall. Backup is already off.
+- *Confirming risky actions on a second device.* That needs a server to hold the trusted devices, which this app deliberately doesn't have; a code generator stored on the same phone gives no extra protection.
+- *Root or tamper detection.* It can always be bypassed.
+
 Testing tip: use a spare install or a separate test gateway, never the data you actually use. Some of these bugs delete things.
 
 ---
@@ -71,5 +96,30 @@ cccodroid 在手机上跑 Claude Code，界面由一个监听 `127.0.0.1` 的本
 应用的各项权限拿来干什么、Claude 因此碰得到什么，见 [docs/permissions.zh-CN.md](docs/permissions.zh-CN.md)。
 
 不算的：本来就要以应用身份执行任意代码才能做到的事（Claude 本身就能跑命令，这正是这个应用的用途）；Claude Code 本身的问题（请报告给 [Anthropic](https://www.anthropic.com/responsible-disclosure-policy)）；需要 root 或者手机已经被攻破才能成立的问题。
+
+## 什么情况下哪些防线还成立
+
+cccodroid 没有服务端，不中转、不保存，也看不到你的对话和密钥，所有东西都在你自己手机上。所以能保护到什么程度，取决于这台手机处在什么状态。
+
+**手机没 root，Shizuku 只授权给了信得过的应用。** 下面这些都成立：
+
+- 别的应用用不了网关：每个请求都要这次安装生成的令牌，Host、Origin 和按次签名的检查把网页和抢占端口的程序挡在外面。
+- Claude Code、工具包、模块和组件都要先对上哈希或签名才装。
+- 密钥、会话、设置都在应用私有目录里，也不进安卓的备份。
+
+**即便如此也要知道：Claude 就是你。** Claude 和它跑的每条命令都是以这个应用的身份在动，应用能读的它都能读，包括存 API 密钥的那个文件。Claude 在这里有用正是因为这一点，代价是：要是它读的网页或文件里藏了指令（提示注入），最坏能碰到应用里的所有数据。有几类操作即使开了全部放行也会再问你一次：碰密钥和凭据文件、读屏或替你点按、读剪贴板、把文件分享出去。这是兜底，不是城墙，命令写得绕一点就认不出来。它要动你在意的东西时，看一眼它准备跑什么。
+
+**给来路不明的应用开了 Shizuku 授权。** Shizuku 给的是 shell 级别的权限，恶意应用拿到它能打开无障碍读你的屏幕、读共享存储、装应用。这时候 cccodroid 自己的检查帮不上忙，Shizuku 只授权给信得过的应用。
+
+**手机 root 了，或者别人拿到了 root。** 默认手机上的东西都可能被读走，密钥也一样。cccodroid 不做 root 检测，也不躲着 root：那只会让人以为安全。这时还管用的都在手机外面：
+
+- 去模型厂商的控制台设个单日消费上限和余额提醒。
+- 怀疑密钥漏了，就在那里作废、重新建一个。应用里内置的每家厂商都有链接直达它的密钥页。
+
+**考虑过、决定不做的：**
+
+- **用安卓 Keystore 加密密钥。** Claude 调接口必须拿到明文密钥，而能让应用解密的东西（包括 Claude 自己）都是同一个应用身份。它只拦得住「root 之后只拷文件、不碰正在跑的进程」的人，代价是每次重装都要重填密钥。备份本来就关了。
+- **高风险操作要第二台设备确认。** 这需要一个服务端来记住哪些设备可信，而这个应用有意不设服务端；验证码生成器放在同一台手机上，等于没加。
+- **root 检测、防篡改检测。** 总能被绕过。
 
 测试时请用一台测试机或单独的测试网关，别用你真正在用的数据。有些问题一触发就会删东西。

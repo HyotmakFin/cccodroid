@@ -2340,4 +2340,5 @@ window.I18N_DICT["es"] = {
   "已回收，点此恢复": "En la papelera; toca para restaurar",
   "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "Este mensaje aparece varias veces en la conversación, así que no se sabe a qué turno te refieres. Vuelve a abrir la conversación e inténtalo de nuevo.",
   "图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的中转站认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。": "Enviar las imágenes dentro del mensaje (compatibilidad): márcalo solo si el modelo no ve las imágenes adjuntas y se inventa el contenido. Algunos relés pierden las imágenes leídas con Read; al activarlo, cada imagen adjunta se envía también directamente en el mensaje.",
+  "建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。": "Consejo: fija un límite de gasto diario y un aviso de saldo en la consola del proveedor. Si crees que la clave se ha filtrado, revócala allí y crea una nueva.",
 };

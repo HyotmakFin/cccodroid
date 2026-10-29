@@ -2337,3 +2337,4 @@
 2337	En la papelera; toca para restaurar
 2338	Este mensaje aparece varias veces en la conversación, así que no se sabe a qué turno te refieres. Vuelve a abrir la conversación e inténtalo de nuevo.
 2339	Enviar las imágenes dentro del mensaje (compatibilidad): márcalo solo si el modelo no ve las imágenes adjuntas y se inventa el contenido. Algunos relés pierden las imágenes leídas con Read; al activarlo, cada imagen adjunta se envía también directamente en el mensaje.
+2340	Consejo: fija un límite de gasto diario y un aviso de saldo en la consola del proveedor. Si crees que la clave se ha filtrado, revócala allí y crea una nueva.
