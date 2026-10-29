@@ -132,6 +132,9 @@ public class GatewayService extends Service {
         super.onDestroy();
     }
 
+    /** 端口被别的应用占着时回调（MainActivity 把界面换成说明页） */
+    static volatile Runnable onSquat;
+
     /** 守护循环：网关退出就重拉；连续快速崩溃时退避，别把电池耗光 */
     private void supervise() {
         long backoff = 1000;
@@ -139,12 +142,19 @@ public class GatewayService extends Service {
             if (paused) { update(Tr.t("正在更新开发工具包…")); sleep(1000); continue; }
             if (!env.devkitReady()) { update(Tr.t("工具链未安装")); sleep(3000); continue; }
             if (alive()) { update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT); sleep(5000); continue; }
-            if (squatted()) { update(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT)); sleep(10000); continue; }
+            if (squatted()) {
+                update(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT));
+                Env.resetBoot();
+                Runnable cb = onSquat;
+                if (cb != null) cb.run();
+                sleep(10000); continue;      // 照旧每 10 秒再看一次，占用的走了就起网关
+            }
             long t0 = System.currentTimeMillis();
             try {
                 spawnGateway();
                 update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT);
                 int rc = proc.waitFor();
+                Env.resetBoot();             // 网关没了：上一次核身份的缓存作废，别在 3 秒内把签名请求交给接手端口的人
                 Log.w(TAG, "网关退出 rc=" + rc);
             } catch (Exception e) {
                 Log.e(TAG, "网关启动失败", e);

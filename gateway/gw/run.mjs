@@ -15,7 +15,7 @@ import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
 import { PREVIEW_HINT, TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
-import { SUBAGENT_HINT, agentBook, takeAgentNote } from "./agents.mjs";
+import { SUBAGENT_HINT, agentBook, takeAgentNote, onShared, privateAgentsBase } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
@@ -193,6 +193,7 @@ export async function startRun(item) {
   if (process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED)) dirs.add(process.env.CCAPP_SHARED);
   for (const d of SETTINGS.addDirs || []) if (fs.existsSync(d)) dirs.add(d);
   for (const d of item.addDirs || []) if (typeof d === "string" && fs.existsSync(d)) dirs.add(d);
+  if (!P.local && onShared(cwd)) { const b = privateAgentsBase(cwd); try { fs.mkdirSync(b, { recursive: true }); dirs.add(b); } catch {} }
   for (const d of dirs) argv.push("--add-dir", d);
 
   const isCmd = message.trim().startsWith("/");

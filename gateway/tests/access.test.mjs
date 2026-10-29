@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { BOOT, COOKIE, SESSION, TOKEN, UI_HOST, cookieHostOk, denyReason, proof, sigOk, tokenOk } from "../gw/access.mjs";
+import { BOOT, COOKIE, SESSION, TOKEN, UI_HOST, cookieHostOk, denyReason, proof, sigOk, staticMac, tokenOk } from "../gw/access.mjs";
 
 const req = (headers) => ({ headers });
 const url = (p) => new URL("http://127.0.0.1:8799" + p);
@@ -98,4 +98,14 @@ test("按次签名（GHSA-hwmm 附录 B）：对的放行一次，重放、改�
   assert.equal(sigOk(sig("/api/file?path=%2Fa"), "/api/file?path=%2Fa"), true);
   assert.equal(sigOk(sig("/api/status", Date.now() - 120e3), "/api/status"), false);                // 过期
   for (const bad of ["", "x", "1.2.3", sig("/api/status").replace(/.$/, "g")]) assert.equal(sigOk(bad, "/api/status"), false);
+});
+
+test("界面资源 HMAC（staticMac）：绑随机数、请求行、内容；随机数格式不对不给", () => {
+  const n = "0123456789abcdef0123456789abcdef", body = Buffer.from("<html>");
+  const want = crypto.createHmac("sha256", TOKEN).update(`static:${n}:/?k=1:${crypto.createHash("sha256").update(body).digest("hex")}`).digest("hex");
+  assert.equal(staticMac(n, "/?k=1", body), want);
+  assert.notEqual(staticMac(n, "/app.js", body), want);
+  assert.notEqual(staticMac(n, "/?k=1", Buffer.from("<html>x")), want);
+  assert.equal(staticMac("xyz", "/", body), null);
+  assert.equal(staticMac(undefined, "/", body), null);
 });

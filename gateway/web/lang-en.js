@@ -2363,5 +2363,6 @@ window.I18N_DICT.en = {
   "要读剪贴板": "Wants to read the clipboard",
   "要把文件分享到别的应用": "Wants to share a file to another app",
   "碰到了密钥或登录凭据：{w}": "Touches keys or sign-in credentials: {w}",
-  "敏感操作": "Sensitive action"
+  "敏感操作": "Sensitive action",
+  "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "Component signature checks are off (an allow-unsigned switch file is in the private directory). Delete it once you're done debugging"
 };

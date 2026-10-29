@@ -54,16 +54,18 @@ const getprop = (k) => spawnSync("/system/bin/getprop", [k], { encoding: "utf8" 
 const device = { model: getprop("ro.product.model"), maker: getprop("ro.product.manufacturer"), android: getprop("ro.build.version.release"),
   sdk: +getprop("ro.build.version.sdk") || 0, kernel: os.release(), targetSdk: +process.env.CCAPP_TARGET_SDK || 0, exec: process.env.CCAPP_EXEC || "" };
 
+// 端口只认数字（审查 10-29 第六份 低2）：带 @ 之类会把令牌头送到别的主机
+const PORT = /^\d{1,5}$/.test(process.env.CCAPP_PORT || "") ? process.env.CCAPP_PORT : "8791";
 // App / 工具包版本：问本机网关（终端里有它的令牌文件）
 async function appInfo() {
   try {
     const tok = fs.readFileSync(process.env.CCAPP_TOKEN_FILE, "utf8").trim();
-    const r = await fetch(`http://127.0.0.1:${process.env.CCAPP_PORT}/api/app/upd_status`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(8000) });
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/app/upd_status`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(8000) });
     const j = await r.json(), it = (id) => (j.items || []).find((x) => x.id === id)?.current || "";
     // stable / latest 现在是哪一版
     let channel = "";
     if (/^(stable|latest)$/.test(WANT)) try {
-      const v = await (await fetch(`http://127.0.0.1:${process.env.CCAPP_PORT}/api/claude/versions`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(30000) })).json();
+      const v = await (await fetch(`http://127.0.0.1:${PORT}/api/claude/versions`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(30000) })).json();
       channel = v[WANT] || "";
     } catch {}
     return { app: it("app"), devkit: it("devkit"), current: it("claude"), channel };

@@ -41,8 +41,9 @@ static long raw4(long n, long a, long b, long c, long d) {
 
 static void on_sigsys(int sig, siginfo_t *si, void *ctx) {
     (void)sig;
-    if (si->si_code != SYS_SECCOMP_CODE) {
-        /* 不是 seccomp 引起的（比如别人 kill -SYS）：恢复默认行为再给自己补发一次。
+    /* si_errno 是过滤器的 RET_DATA：安卓那层是 0；非零是程序自己的沙箱在拒绝，照默认处理（终止），别降级成 ENOSYS（审查 10-29 第六份 中2） */
+    if (si->si_code != SYS_SECCOMP_CODE || si->si_errno != 0) {
+        /* 不是安卓 seccomp 引起的（比如别人 kill -SYS）：恢复默认行为再给自己补发一次。
          * 光恢复默认就返回会把这个信号吞掉 —— 外来信号不像 seccomp 陷阱那样会"重新触发"。
          * SA_NODEFER 下处理函数里 SIGSYS 没被屏蔽，补发的这一次立刻按默认处理（终止 + core）。 */
         struct k_sigaction dfl = { 0 };

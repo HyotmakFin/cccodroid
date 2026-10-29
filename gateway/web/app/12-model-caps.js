@@ -2,6 +2,8 @@
   // 标签写「模型 · 思考强度」；点它从底部弹面板：上面一排思考强度，下面搜索 + 最近用过 + 全部模型。
   // 不占输入区的地方。OpenRouter 这类几十上百个模型的，靠搜索框过滤。
   const RECENT_KEY = "cc.recentModels";
+  // 存坏了（手改、截断）别让整个型号弹层画不出来（审查 v0.5.5 W-L5）
+  const recentIds = () => { try { const a = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); return Array.isArray(a) ? a.filter((x) => typeof x === "string") : []; } catch { return []; } };
   function prettyModel(name) {
     const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)-(\d+)/i.exec(name || "");
     return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2] + "." + m[3] : name || "";
@@ -211,7 +213,7 @@
       if (!kw) {
         if (info.nativeModels) html += row("", info.defaultModel ? t("（默认：{model}）", { model: info.defaultModel }) : t("（默认，由 claude 决定）"));
         // 当前在用的那个总排在「最近用过」头一个：不然清单一长，打开弹层根本看不到现在用的是哪个
-        const rec = [...new Set([cur(), ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")])].filter((id) => id && ML.some((md) => md.id === id));
+        const rec = [...new Set([cur(), ...recentIds()])].filter((id) => id && ML.some((md) => md.id === id));
         if (rec.length) html += `<div class="mp-sec">${t("最近用过")}</div>` + rec.map((id) => row(id, meta(ML.find((md) => md.id === id)))).join("") + `<div class="mp-sec">${t("全部 {n} 个", { n: ML.length })}</div>`;
       }
       html += all.slice(0, 300).map((md) => row(md.id, meta(md))).join("");
@@ -226,7 +228,7 @@
       const id = b.dataset.id, to = browse, switching = to !== curProv();
       // 会话聊到一半换家：之前的对话要整段交给新模型重读，先说清楚
       if (switching && view.sessionId && !confirm(switchWarn(to))) return;
-      if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((x) => x !== id)].slice(0, 6)));
+      if (id) localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...recentIds().filter((x) => x !== id)].slice(0, 6)));
       close();
       if (!switching && id === cur() && own() && own().model != null) return;   // 跟随默认时点同一个也算「单独选」：钉住，默认再改它也不变
       try { await pickSessModel(switching ? { provider: to, model: id } : { model: id }); } catch (er) { return er.stale || toast(er.message, true); }
@@ -292,7 +294,8 @@
       const cur = MODELS.find((m) => m.id === r.current);
       if (cur) {
         const k = (v) => (v ? Math.round(v / 1024) + "k" : "—");
-        $("model-info").innerHTML =
+        // 纯文字：厂商 /models 返回的内容不可信（审查 v0.5.5 Web-M1），不经 innerHTML
+        $("model-info").textContent =
                     t("上下文 {n} · 输出上限 {out} · 输入 {mods}", { n: k(cur.context_window), out: k(cur.max_output_tokens), mods: (cur.input_modalities || []).join(" / ") }) +
           t("｜这是默认值；单个会话在输入栏下面的模型标签里另选");
         const ac = $("set-autocompact");

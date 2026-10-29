@@ -318,7 +318,14 @@ public class BrowserPane extends LinearLayout {
             Intent i = url.startsWith("intent:") ? Intent.parseUri(url, Intent.URI_INTENT_SCHEME) : new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             i.addCategory(Intent.CATEGORY_BROWSABLE);
             i.setComponent(null); i.setSelector(null);       // intent: 链接不许点名拉起任意组件
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // 网页里的 intent: 只当成「打开这个地址」：动作一律 VIEW、不带附加数据、不带授权标志，
+            // 不许指向本机文件 / content:（审查 10-29 第六份 低2：以前 action 和 extras 由网页随便填）
+            i.setAction(Intent.ACTION_VIEW);
+            i.replaceExtras((android.os.Bundle) null);
+            i.setClipData(null);
+            String sc = i.getData() == null ? "" : String.valueOf(i.getData().getScheme()).toLowerCase(java.util.Locale.ROOT);
+            if (sc.equals("file") || sc.equals("content") || sc.equals("intent") || sc.equals("javascript")) throw new Exception(sc);
+            i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             act.startActivity(i);
         } catch (Exception e) {
             Toast.makeText(act, Tr.t("没有能打开它的应用：") + url, Toast.LENGTH_LONG).show();

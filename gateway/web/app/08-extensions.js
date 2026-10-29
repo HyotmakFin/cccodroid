@@ -125,12 +125,13 @@
   function renderIdx(sec, labels) {
     if (labels) extLabels[sec] = labels; else labels = extLabels[sec] || [];
     const bar = $(sec + "-idx"); if (!bar) return;
+    const safeDecode = (x) => { try { return decodeURIComponent(x); } catch { return x; } };   // 坏的百分号序列别把整个列表画崩（审查 v0.5.5 W-L6）
     const items = [...document.querySelectorAll(`details[data-sec="${sec}"] .item[data-tags]`)];
     const count = new Map();
     for (const it of items) for (const g of it.dataset.tags.split(" ")) count.set(g, (count.get(g) || 0) + 1);
     const known = new Set(labels.map(([g]) => g));
     const chips = [...labels.filter(([g]) => count.get(g)),
-      ...[...count.keys()].filter((g) => !known.has(g)).sort().map((g) => [g, decodeURIComponent(g.replace(/^[a-z]+:/, ""))])];
+      ...[...count.keys()].filter((g) => !known.has(g)).sort().map((g) => [g, safeDecode(g.replace(/^[a-z]+:/, ""))])];
     if (extPick[sec] && !count.get(extPick[sec])) extPick[sec] = "";
     const cur = extPick[sec] || "";
     bar.classList.toggle("hidden", chips.length < 2 && !cur);      // 只有一类时没什么可切的
@@ -251,7 +252,8 @@
         .replace(" data-c=\"install\"", " data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
         .replace(" data-c=\"remove\"", " data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
-    box.innerHTML = (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
+    box.innerHTML = (r.allowUnsigned ? '<div class="tiny err">' + esc(t("组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它")) + "</div>" : "") +
+      (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
       (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "") +
       (r.indexError ? '<div class="it-acts"><button class="btn ghost sm" data-c="reindex">' + t("重试") + "</button></div>" : "");
     $("comp-count").textContent = (r.items || []).length || "";
@@ -540,7 +542,7 @@
       `<button data-x="install" data-id="${esc(p.id)}">${t("安装")}</button>`,
       `<div class="tiny ext-desc">${esc(p.description)}</div>`, ["m:" + tg(p.marketplace)])).join("");
     const old = box.querySelector(".ext-more-btn"); if (old) old.remove();
-    if (!more) box.innerHTML = `<div class="tiny">${t("找到 {n} 个", { n: r.total || 0 })}</div>` + html;
+    if (!more) box.innerHTML = `<div class="tiny">${t("找到 {n} 个", { n: Number(r.total) || 0 })}</div>` + html;
     else box.insertAdjacentHTML("beforeend", html);
     ext.offset += (r.available || []).length;
     if (ext.offset < (r.total || 0)) box.insertAdjacentHTML("beforeend", `<button class="btn ghost sm ext-more-btn">${t("再显示 40 个")}</button>`);

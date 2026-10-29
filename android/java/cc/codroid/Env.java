@@ -23,6 +23,7 @@ final class Env {
     static java.net.HttpURLConnection gateway(String path) throws java.io.IOException {
         if (!proveGateway()) throw new java.io.IOException(HOST + ":" + PORT + " 上不是 cccodroid 的网关（还没起来，或被别的应用占了）");
         java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://" + HOST + ":" + PORT + path).openConnection();
+        c.setInstanceFollowRedirects(false);     // 自定义头会跟着重定向转发出去（审查 10-29 第六份 低5）
         // 不发令牌原文，按次签名（GHSA-hwmm 附录 B）：核身份到真正发请求之间网关要是换了人，对方拿到的签名只对这一个请求有效、只能用一次
         try {
             byte[] nb = new byte[16];
@@ -72,6 +73,51 @@ final class Env {
                 return true;
             } finally { c.disconnect(); }
         } catch (Exception e) { return false; }
+    }
+
+    /** 代 WebView 取界面的页面与静态资源（审查 10-29 第六份 中3）。端口全机共享，网关崩溃到重拉的空档里别的应用能占住它；
+     *  它给的页面和脚本跟界面同源，能读到桥口令、能调 /api。所以这里带随机数去取，网关用令牌对「随机数 + 请求行 + 内容哈希」
+     *  回一个 HMAC（gateway/gw/access.mjs 的 staticMac），对不上就整个不交给 WebView。pq 是路径加查询串，原样发出去 */
+    static android.webkit.WebResourceResponse fetchStatic(String pq) {
+        String t = token();
+        if (t.isEmpty()) return null;
+        try {
+            byte[] nb = new byte[16];
+            new java.security.SecureRandom().nextBytes(nb);
+            String n = hex(nb);
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://" + HOST + ":" + PORT + pq).openConnection();
+            c.setConnectTimeout(2000); c.setReadTimeout(15000); c.setInstanceFollowRedirects(false); c.setUseCaches(false);
+            c.setRequestProperty("X-CC-Nonce", n);
+            c.setRequestProperty("Accept-Encoding", "identity");
+            try {
+                int code = c.getResponseCode();
+                if (code != 200) return null;
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                try (java.io.InputStream in = c.getInputStream()) {
+                    byte[] buf = new byte[1 << 16];
+                    for (int k; (k = in.read(buf)) > 0; ) { bo.write(buf, 0, k); if (bo.size() > (64 << 20)) return null; }
+                }
+                byte[] body = bo.toByteArray();
+                String got = c.getHeaderField("X-CC-Mac");
+                String want = hmac(t, "static:" + n + ":" + pq + ":" + hex(java.security.MessageDigest.getInstance("SHA-256").digest(body)));
+                if (got == null || !java.security.MessageDigest.isEqual(want.getBytes(), got.getBytes())) {
+                    android.util.Log.e("cccodroid", "界面资源 " + pq + " 不是本应用网关给的（没有或对不上 X-CC-Mac），不交给界面");
+                    return null;
+                }
+                String ct = c.getContentType(), mime = "application/octet-stream", enc = null;
+                if (ct != null) {
+                    String[] p = ct.split(";");
+                    mime = p[0].trim();
+                    for (int i = 1; i < p.length; i++) { String q = p[i].trim(); if (q.toLowerCase(java.util.Locale.ROOT).startsWith("charset=")) enc = q.substring(8); }
+                }
+                java.util.Map<String, String> h = new java.util.HashMap<>();
+                for (String k : new String[]{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Cache-Control"}) {
+                    String v = c.getHeaderField(k);
+                    if (v != null) h.put(k, v);
+                }
+                return new android.webkit.WebResourceResponse(mime, enc, 200, "OK", h, new java.io.ByteArrayInputStream(body));
+            } finally { c.disconnect(); }
+        } catch (Exception e) { return null; }
     }
 
     /** 端口上有没有人在听（不发任何东西） */

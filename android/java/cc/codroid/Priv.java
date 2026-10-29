@@ -192,7 +192,7 @@ final class Priv {
         }
     }
 
-    static final String STAGE = "/data/local/tmp/cccodroid-update.apk", STAGE_LOG = "/data/local/tmp/cccodroid-update.log";
+    static final String STAGE_LOG = "/data/local/tmp/cccodroid-update.log";
 
     /**
      * 静默装自己的新版本。两步走，因为 pm 替换本应用时会杀掉本进程，而 Shizuku 会跟着杀掉本进程开的子进程：
@@ -204,7 +204,13 @@ final class Priv {
      */
     static String pipeInstall(java.io.File apk, boolean reopenUi, String version) {
         try {
-            java.lang.Process p = newProcess(new String[]{"sh", "-c", "cat > " + STAGE + " && chmod 644 " + STAGE}, null, "/");
+            // 文件名带随机数、装之前再核一遍 sha256（审查 10-29 第六份 低6）：固定路径能被别的 shell 进程抢先占住，
+            // 或在写完到 pm install 之间换成另一个同签名的包（28 / 36 两种）
+            byte[] rb = new byte[8];
+            new java.security.SecureRandom().nextBytes(rb);
+            final String STAGE = "/data/local/tmp/cccodroid-update-" + Installer.hex(rb) + ".apk";
+            String sha = Installer.sha256(apk);
+            java.lang.Process p = newProcess(new String[]{"sh", "-c", "rm -f " + STAGE + " && cat > " + STAGE + " && chmod 644 " + STAGE}, null, "/");
             try (InputStream in = new java.io.FileInputStream(apk); OutputStream o = p.getOutputStream()) {
                 byte[] buf = new byte[1 << 16];
                 for (int n; (n = in.read(buf)) > 0; ) o.write(buf, 0, n);
@@ -219,7 +225,7 @@ final class Priv {
             // 这时的启动会被悄悄丢掉（10-22 用户手机 0.3.11→0.3.12：日志全成功，界面没回来）。
             // 所以先等两秒，起完看本应用有没有在前台，没有就再拉，三次都不行发通知
             String up = "dumpsys activity activities | grep -qE \"ResumedActivity.*" + pkg + "/\"";
-            String job = "pm install -r " + STAGE + " > " + STAGE_LOG + " 2>&1; rm -f " + STAGE + "; sleep 2; "
+            String job = "if [ \"$(sha256sum " + STAGE + " | cut -d\" \" -f1)\" = " + sha + " ]; then pm install -r " + STAGE + " > " + STAGE_LOG + " 2>&1; else echo \"Error: 安装包被换过\" > " + STAGE_LOG + "; fi; rm -f " + STAGE + "; sleep 2; "
                 + "am start-foreground-service -n " + pkg + "/.GatewayService >> " + STAGE_LOG + " 2>&1"
                 + (reopenUi ? "; ok=; for i in 1 2 3; do am start -W -n " + pkg + "/.MainActivity >> " + STAGE_LOG + " 2>&1; sleep 3; "
                      + "if " + up + "; then ok=1; break; fi; echo \"界面没起来（第 $i 次）\" >> " + STAGE_LOG + "; done; [ -n \"$ok\" ] || " + notify

@@ -2326,3 +2326,4 @@
 2326	Veut partager un fichier vers une autre appli
 2327	Touche à des clés ou identifiants : {w}
 2328	Action sensible
+2329	La vérification des signatures des composants est désactivée (un fichier allow-unsigned se trouve dans le dossier privé). Supprimez-le une fois le débogage terminé

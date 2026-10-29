@@ -80,8 +80,16 @@ public final class Share extends ContentProvider {
         if (!f.isFile()) throw new FileNotFoundException(Tr.t("文件不存在：") + f);
         if (uriFor(c, f) != null) return f;
         if (f.length() > 512L << 20) throw new IOException(Tr.t("文件超过 512 MB，不分享"));
+        // 本应用自己的凭据不往外给：网关令牌、厂商密钥配置（审查 10-29 第六份 低7）
+        String nm = f.getName();
+        if (nm.equals(".gateway-token") || nm.matches("ccapp-(providers|config|seed).*\\.json") || nm.equals("ccapp-key") || nm.equals("llama-api-key"))
+            throw new IOException(Tr.t("这是 cccodroid 自己的凭据文件，不分享"));
         File dir = new File(new Env(c).home, "exports/shared");
         dir.mkdirs();
+        // 拷出来的副本放一天就清：以前分享过什么就永远留一份
+        File[] old = dir.listFiles();
+        long cut = System.currentTimeMillis() - 24L * 3600 * 1000;
+        if (old != null) for (File o : old) if (o.isFile() && o.lastModified() < cut) o.delete();
         File dst = new File(dir, f.getName());
         java.nio.file.Files.copy(f.toPath(), dst.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         return dst;

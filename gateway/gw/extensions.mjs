@@ -380,12 +380,16 @@ async function listMcpCatalog(q, cursor) {
   if (cursor) u.searchParams.set("cursor", String(cursor).slice(0, 300));
   let j;
   try { j = await ghGet(u.href, true); } catch (e) { return { ok: false, message: tz("取不到 MCP 注册表：{err}", { err: e.message }) }; }
+  // 注册表谁都能发：版本号和位置参数原样拼进 npx 命令，不许夹带 --call 之类的选项（审查 10-29 第六份 低4）
+  const npmArgsOk = (p) => (!p.version || /^[\w.+-]{1,64}$/.test(String(p.version))) &&
+    (p.packageArguments || []).filter((a) => a.type === "positional" && (a.value || a.default))
+      .every((a) => /^[\w./:@=+,-]{1,200}$/.test(String(a.value || a.default)) && !String(a.value || a.default).startsWith("-"));
   const field = (x) => ({ name: String(x.name || ""), description: String(x.description || "").slice(0, 200), required: !!x.isRequired, secret: !!x.isSecret });
   const items = (j.servers || []).map(({ server: v }) => {
     const options = [
       ...(v.remotes || []).filter((r) => ["streamable-http", "sse"].includes(r.type) && /^https:\/\//.test(r.url || "")).map((r) => ({
         kind: "remote", transport: r.type === "sse" ? "sse" : "http", target: r.url, headers: (r.headers || []).map(field) })),
-      ...(v.packages || []).filter((p) => p.registryType === "npm" && (p.transport?.type || "stdio") === "stdio" && /^[@a-z0-9][\w./@-]*$/i.test(p.identifier || "")).map((p) => ({
+      ...(v.packages || []).filter((p) => p.registryType === "npm" && (p.transport?.type || "stdio") === "stdio" && /^[@a-z0-9][\w./@-]*$/i.test(p.identifier || "") && npmArgsOk(p)).map((p) => ({
         kind: "npm", transport: "stdio", package: p.identifier, version: p.version || "",
         target: ["npx", "-y", p.identifier + (p.version ? "@" + p.version : ""),
           ...(p.packageArguments || []).filter((a) => a.type === "positional" && (a.value || a.default)).map((a) => String(a.value || a.default))].join(" "),

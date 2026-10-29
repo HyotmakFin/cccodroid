@@ -77,6 +77,13 @@ const mac = (s) => crypto.createHmac("sha256", TOKEN).update(s).digest("hex");
 export function proof(n) {
   return /^[0-9a-f]{32,128}$/.test(String(n || "")) ? `${BOOT} ${mac(`proof:${n}:${BOOT}`)}` : null;
 }
+// 界面的页面与静态资源由 App 在原生层代取（MainActivity.shouldInterceptRequest，审查 10-29 第六份 中3）：
+// App 带一个随机数 X-CC-Nonce，这里用令牌对「随机数 + 请求行 + 内容哈希」算 HMAC 放在 X-CC-Mac 里回去。
+// 网关没起来的空档里抢占端口的应用算不出来，它给的页面和脚本 App 一律不交给 WebView
+export function staticMac(nonce, url, body) {
+  if (!/^[0-9a-f]{32}$/.test(String(nonce || ""))) return null;
+  return mac(`static:${nonce}:${url}:${crypto.createHash("sha256").update(body).digest("hex")}`);
+}
 // cccodroid 里 Cookie 不用令牌本身，用按这次启动派生的会话值：会话中途网关挂了、端口被抢，
 // 界面重连时送出去的 Cookie 到了下一个真网关就作废。网关重启后 App 按新的 BOOT 种上新 Cookie（Env.proveGateway），
 // 界面的事件总线 2 秒一重连，自己就接上了。开发端照旧用令牌：gw-swap 热换网关时界面不能掉线

@@ -638,7 +638,7 @@ final class ShizukuSetup {
             // 设置页会隐藏其他应用的悬浮窗（安卓 12 起防点击劫持，实测无线调试页也藏），所以输入只能放在通知里；
             // 带 fullScreenIntent 的通知在亮屏使用中会一直悬在顶部、不自动收起 —— 配对码对话框和输入框同时在屏幕上
             b.setFullScreenIntent(PendingIntent.getActivity(ctx, NOTE + 2,
-                new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_SHIZUKU_NOOP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                MainActivity.internal(ctx, MainActivity.ACTION_SHIZUKU_NOOP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT), true);
         }
         ctx.getSystemService(NotificationManager.class).notify(NOTE, b.build());
@@ -647,7 +647,7 @@ final class ShizukuSetup {
     private void failNote(String text) {
         set("error", text);
         PendingIntent pi = PendingIntent.getActivity(ctx, NOTE + 1,
-            new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_SHIZUKU).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            MainActivity.internal(ctx, MainActivity.ACTION_SHIZUKU).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         ctx.getSystemService(NotificationManager.class).notify(NOTE, new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.ic_secure)

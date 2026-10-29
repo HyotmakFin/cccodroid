@@ -129,17 +129,19 @@ fi
 echo "== 残留路径"
 # 下面两项靠 rg（命令行增强模块）
 if has cli; then
-t "残留 com.termux 文本" "n=\$(rg -l --no-messages -uu 'com\\.termux' \$PREFIX/bin \$PREFIX/etc \$PREFIX/lib/python3*/site-packages 2>/dev/null | head -20 | tee /dev/stderr | wc -l); echo \$n 个"
-t "/tmp 硬编码" "rg -l --no-messages -uu '\"/tmp' \$PREFIX/bin 2>/dev/null | head -5 | wc -l"
+t "残留 com.termux 文本" "rg --version >/dev/null || exit 1; n=\$(rg -l --no-messages -uu 'com\\.termux' \$PREFIX/bin \$PREFIX/etc \$PREFIX/lib/python3*/site-packages 2>/dev/null | head -20 | tee /dev/stderr | wc -l); echo \$n 个"
+t "/tmp 硬编码" "rg --version >/dev/null || exit 1; rg -l --no-messages -uu '\"/tmp' \$PREFIX/bin 2>/dev/null | head -5 | wc -l"
 fi
 cd /; rm -rf "$W"
 echo "== Claude Code"
 t "claude 命令" "claude --version"
 # 记录 vs 磁盘（组件记录、包清单、模块、自定义组件）由网关核：它有全部记录。网关自己起的自检不再问（本机实况另外报）
 TF=${CCAPP_TOKEN_FILE:-$HOME/.gateway-token}
+# 端口只认数字（审查 10-29 第六份 低2）：带 @ 之类就能把令牌头送到别处
+GP=${CCAPP_PORT:-8791}; case "$GP" in ''|*[!0-9]*) GP=8791;; esac
 if [ -z "$CCAPP_ENVFACTS" ] && [ -r "$TF" ]; then
   echo "== 状态对账"
-  out=$(curl -fsS --max-time 60 -H "X-CC-Token: $(cat "$TF")" "http://127.0.0.1:${CCAPP_PORT:-8791}/api/reconcile?run=1&format=selftest" 2>&1)
+  out=$(curl -fsS --max-time 60 -H "X-CC-Token: $(tr -d '\r\n' < "$TF")" "http://127.0.0.1:$GP/api/reconcile?run=1&format=selftest" 2>&1)
   if [ $? -ne 0 ]; then NF=$((NF+1)); echo "FAIL 状态对账 :: 问网关失败：$(echo "$out" | head -1 | cut -c1-160)"
   else while IFS= read -r l; do case "$l" in PASS*) NP=$((NP+1)); [ -z "$Q" ] && echo "$l";; FAIL*) NF=$((NF+1)); echo "$l";; esac; done <<< "$out"; fi
 fi

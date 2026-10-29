@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PATHS, log, reqLang, tr } from "./config.mjs";
+import { staticMac } from "./access.mjs";
 
 // ── HTTP ──────────────────────────────────────────────────────────────
 export const MIME = {
@@ -109,6 +110,10 @@ const STATIC_SAFE = {
   "referrer-policy": "no-referrer",
   "content-security-policy": "frame-ancestors 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'",
 };
+const macHdr = (req, data) => {
+  const m = staticMac(req.headers["x-cc-nonce"], String(req.url || ""), data);
+  return m ? { "x-cc-mac": m } : {};
+};
 export function serveStatic(req, res, urlPath) {
   let rel = urlPath === "/" ? "/index.html" : urlPath;
   rel = rel.replace(/^\/+/, "");
@@ -116,7 +121,7 @@ export function serveStatic(req, res, urlPath) {
   if (rel === "app.js") {
     const data = appJs();
     if (data) {
-      res.writeHead(200, { "content-type": MIME[".js"], "content-length": data.length, "cache-control": "no-store", ...STATIC_SAFE });
+      res.writeHead(200, { "content-type": MIME[".js"], "content-length": data.length, "cache-control": "no-store", ...STATIC_SAFE, ...macHdr(req, data) });
       return res.end(data);
     }
   }
@@ -131,6 +136,7 @@ export function serveStatic(req, res, urlPath) {
     "content-length": data.length,
     "cache-control": "no-store",
     ...STATIC_SAFE,
+    ...macHdr(req, data),
   });
   res.end(data);
 }

@@ -598,6 +598,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   }
   function inlineMd(s) {
     const maths = [];
+    s = String(s).replace(/[\u0000\u0001]/g, "");   // 占位符用的控制字符：原文里自带的先去掉，免得和占位符撞上、把别的片段顶进来（审查 v0.5.5 W-L4）
     s = holdMath(s, maths);
     // 代码片段先换成占位符（片段里整段是路径的照样能点），再统一处理链接、加粗：
     // 这样 **`代码`** 这种跨着片段的加粗也能配上对，片段里的 * 也不会被当成强调

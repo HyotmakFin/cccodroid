@@ -51,10 +51,14 @@ jobs:
           cp out/modules.plan.json out/modules/
 
       # modules.json 签名（和组件索引同一把钥匙）：App 更新工具包时验它，对不上就退回整包
+      # 同样先写上 release：旧版清单搬到新 tag 下冒充新版过不去（审查 10-29 第六份 中1）
       - name: 签名 modules.json
         env:
           INDEX_SIGNING_KEY: ${{ secrets.INDEX_SIGNING_KEY }}
-        run: node scripts/sign-modules.mjs out/modules/modules.json
+          REL: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}
+        run: |
+          node -e 'const fs=require("fs"),f="out/modules/modules.json",j=JSON.parse(fs.readFileSync(f,"utf8"));j.release=process.env.REL||"";fs.writeFileSync(f,JSON.stringify(j,null,2))'
+          node scripts/sign-modules.mjs out/modules/modules.json
 
       # 整包清单也签（审查 H3）：不是 APK 钉的那版、又没有验得过的签名，App 就不装整包。
       # 签之前写上属于哪个 Release（release 字段）：App 核对它和下载地址里的 tag 一致，

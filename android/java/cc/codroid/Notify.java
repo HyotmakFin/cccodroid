@@ -291,7 +291,7 @@ final class Notify {
     private static String sidOf(JSONObject o) { return o.isNull("sessionId") ? "" : o.optString("sessionId", ""); }
 
     private PendingIntent openIntent(String sessionId, int req) {
-        Intent i = new Intent(ctx, MainActivity.class).setAction(ACTION_OPEN)
+        Intent i = MainActivity.internal(ctx, ACTION_OPEN)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (sessionId != null && !sessionId.isEmpty()) i.putExtra("session", sessionId);
         return PendingIntent.getActivity(ctx, 60000 + req, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);

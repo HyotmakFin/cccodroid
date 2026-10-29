@@ -117,7 +117,13 @@ int main(int argc, char **argv) {
     }
   }
   int st = 0;
-  if (waitpid(pid, &st, WNOHANG) == 0) { kill(-pid, SIGHUP); kill(pid, SIGHUP); waitpid(pid, &st, 0); }
+  if (waitpid(pid, &st, WNOHANG) == 0) {
+    /* 和上面网关关终端那条一致：SIGHUP 后最多等 1 秒，不走就整组 SIGKILL，别在阻塞 waitpid 上永远挂着（审查 10-29 第六份 低6） */
+    kill(-pid, SIGHUP); kill(pid, SIGHUP);
+    pid_t w = 0;
+    for (int i = 0; i < 10 && (w = waitpid(pid, &st, WNOHANG)) == 0; i++) usleep(100000);
+    if (w == 0) { kill(-pid, SIGKILL); kill(pid, SIGKILL); waitpid(pid, &st, 0); }
+  }
   if (WIFEXITED(st)) return WEXITSTATUS(st);
   if (WIFSIGNALED(st)) return 128 + WTERMSIG(st);
   return 0;

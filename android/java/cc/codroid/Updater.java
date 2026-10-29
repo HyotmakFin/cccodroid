@@ -495,10 +495,19 @@ final class Updater {
             if (!Ed25519.verifyIndex(b, sig)) { Log.w(TAG, "planModules: modules.json 签名对不上，按整包装"); return; }
             JSONObject mj = new JSONObject(new String(b, StandardCharsets.UTF_8));
             if (!ctx.getPackageName().equals(mj.optString("target")) || mj.optInt("compat", 1) != DEVKIT_COMPAT) return;
+            // 签名只说明是我们发的，不说明是哪一版：旧版清单连签名搬到新 tag 下能冒充新版（审查 10-29 第六份 中1）。
+            // 新清单带 release 字段，要和下载地址的 tag 一致；没带的老清单只认 APK 钉的那份
+            String sha = Installer.hex(java.security.MessageDigest.getInstance("SHA-256").digest(b));
+            if (mj.has("release")) {
+                if (!mj.optString("release").equals(tagOf(base))) { Log.w(TAG, "planModules: modules.json 属于 " + mj.optString("release") + "，不是 " + tagOf(base)); return; }
+            } else {
+                JSONObject pin = devkitPin(ctx), pm = pin == null ? null : pin.optJSONObject("modules");
+                if (pm == null || !sha.equals(pm.optString("sha256"))) { Log.w(TAG, "planModules: modules.json 没写 release、也不是钉的那份"); return; }
+            }
             java.util.List<String> ids = installedModuleIds(mj);
             long dl = 0, need = 0;
             for (JSONObject m : Installer.moduleOrder(mj, ids)) { dl += m.getJSONObject("gz").optLong("bytes"); need += m.getJSONObject("tar").optLong("bytes"); }
-            devkit.modules = b; devkit.modSha = Installer.hex(java.security.MessageDigest.getInstance("SHA-256").digest(b));
+            devkit.modules = b; devkit.modSha = sha;
             devkit.moduleIds = ids; devkit.size = dl; devkit.need = need;
             devkit.file = new File(env.files, "modules-" + tagOf(base) + ".json");
         } catch (Exception e) { Log.i(TAG, "planModules: 按整包装（" + e + "）"); }
@@ -729,6 +738,11 @@ final class Updater {
             throw new IOException(Tr.t("安装包签名与本应用不一致，拒绝安装"));
         String got = a.applicationInfo != null && a.applicationInfo.targetSdkVersion >= 29 ? "36" : "28";
         if (!got.equals(wantFlavor())) throw new IOException(Tr.f("下载的是 targetSdk {0} 的安装包，要的是 {1}", got, wantFlavor()));
+        // 比真实版本号，别只信更新源声称的 tag（审查 10-29 第六份 低1）：同版本只在换 28/36 时才装，不然中间人能让它反复重装
+        PackageInfo me = pm.getPackageInfo(ctx.getPackageName(), 0);
+        String mine = ctx.getApplicationInfo().targetSdkVersion >= 29 ? "36" : "28";
+        long va = a.getLongVersionCode(), vm = me.getLongVersionCode();
+        if (va < vm || (va == vm && got.equals(mine))) throw new IOException(Tr.f("下载的安装包版本（{0}）不比已装的新，不装", a.versionName));
     }
 
     /** 工具包正在下载 / 替换：这时装 APK 会把它拦腰截断 */
@@ -804,7 +818,7 @@ final class Updater {
     /** 交给界面做：替换期间网关要停，界面切回安装进度页 */
     private void startDevkitApply() {
         if (gatewayBusy()) { devkit.set("ready", Tr.t("有任务正在跑，等它结束再装")); releaseApp(); return; }
-        ctx.startActivity(new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_APPLY_DEVKIT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        ctx.startActivity(MainActivity.internal(ctx, MainActivity.ACTION_APPLY_DEVKIT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     /** 在 MainActivity 的线程里调。ins 的进度打到安装界面 */
@@ -970,7 +984,7 @@ final class Updater {
         String text = it == app ? Tr.f("新版本 v{0} 已下载，点此安装", app.latest)
             : Tr.f("开发工具包 {0} 已下载。点此安装（约 1–2 分钟，期间暂停服务）；不点的话下次打开应用且空闲时自动装", devkit.latest);
         PendingIntent pi = PendingIntent.getActivity(ctx, it == app ? 21 : 22,
-            new Intent(ctx, MainActivity.class).setAction(MainActivity.ACTION_UPDATE).putExtra("item", it.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            MainActivity.internal(ctx, MainActivity.ACTION_UPDATE).putExtra("item", it.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)

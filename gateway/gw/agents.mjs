@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { log } from "./config.mjs";
+import crypto from "node:crypto";
+import { CFG, log } from "./config.mjs";
 
 // ── 子代理联络簿：状态外置 ───────────────────────────────────────────
 // 从 claude 的事件流里摘三类事——派出（task_started）、联络（SendMessage）、结束（task_notification / Agent 结果），
@@ -29,13 +30,22 @@ const firstLine = (s) => String(s || "").split("\n").map((x) => x.trim()).find(B
 const clip = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
 
-/** 某会话的落盘目录（按会话 cwd） */
-export const agentsDir = (cwd, sessionId) => path.join(cwd, ".cccodroid", "agents", String(sessionId).slice(0, 8));
+/** 某会话的落盘目录（按会话 cwd）。项目在共享存储（/sdcard）上时改放 home 私有目录：
+ *  交代和汇报都是对话派生的内容，放在共享存储上任何有存储权限的应用都读得到（审查 10-29 第六份 低2） */
+const SHARED = /^\/(sdcard|storage|mnt)\//;
+const realCwd = (cwd) => { try { return fs.realpathSync(cwd); } catch { return path.resolve(cwd); } };
+export const onShared = (cwd) => SHARED.test(realCwd(cwd) + "/");
+const legacyDir = (cwd, sessionId) => path.join(cwd, ".cccodroid", "agents", String(sessionId).slice(0, 8));
+/** 共享存储上的项目，联络簿的私有根目录（run 把它 --add-dir 给 claude，读汇报不用再要授权） */
+export const privateAgentsBase = (cwd) => path.join(CFG.home, ".cccodroid", "agents", crypto.createHash("sha256").update(realCwd(cwd)).digest("hex").slice(0, 12));
+export const agentsDir = (cwd, sessionId) => !onShared(cwd) ? legacyDir(cwd, sessionId) : path.join(privateAgentsBase(cwd), String(sessionId).slice(0, 8));
 
 /** 读某会话的联络簿（界面翻历史用）。最多 n 行，取最后的 */
 export function readAgentIndex(cwd, sessionId, n = 2000) {
   try {
-    const lines = fs.readFileSync(path.join(agentsDir(cwd, sessionId), "index.jsonl"), "utf8").trim().split("\n");
+    let f = path.join(agentsDir(cwd, sessionId), "index.jsonl");
+    if (!fs.existsSync(f)) f = path.join(legacyDir(cwd, sessionId), "index.jsonl");      // 0.5.5 及以前落在项目目录里的
+    const lines = fs.readFileSync(f, "utf8").trim().split("\n");
     return lines.slice(-n).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
   } catch { return []; }
 }
@@ -65,7 +75,7 @@ export function agentBook(run, { emit }) {
       fs.mkdirSync(d, { recursive: true });
       // 别把这堆文件带进用户的 git 仓库
       const gi = path.join(run.cwd, ".cccodroid", ".gitignore");
-      if (!fs.existsSync(gi)) fs.writeFileSync(gi, "*\n");
+      if (!onShared(run.cwd) && !fs.existsSync(gi)) fs.writeFileSync(gi, "*\n");
       seq = fs.readdirSync(d).filter((x) => /^\d+-/.test(x)).length;   // 续上之前轮次的编号
       dir = d;
     } catch (e) { log("子代理落盘目录建不了: " + e.message); }

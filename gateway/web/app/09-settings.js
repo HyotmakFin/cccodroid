@@ -106,7 +106,7 @@
       <div class="local-facts tiny">
         <div>${ok(j.bin)} ${j.bin ? t("llama.cpp 已装") : t("没装 llama.cpp：到「扩展」页装 llama-cpp 组件")}</div>
         <div>${j.gpu ? "✓ " + t("GPU 推理（Vulkan）") : "· " + t("只有 CPU 推理（装 GPU 驱动组件可以快几倍）")}</div>
-        <div>· ${t("内存 {total}，可用 {avail}；上下文 {ctx} token，{n} 线程", { total: gb(j.memTotal), avail: gb(j.memAvail), ctx: j.ctx.toLocaleString(), n: j.threads })}</div>
+        <div>· ${t("内存 {total}，可用 {avail}；上下文 {ctx} token，{n} 线程", { total: gb(j.memTotal), avail: gb(j.memAvail), ctx: (Number(j.ctx) || 0).toLocaleString(), n: Number(j.threads) || 0 })}</div>
       </div>
       <div class="tiny" style="margin:8px 0 4px">${t("模型（{dir}）", { dir: esc(j.dirs[0] || "") })}</div>
       ${j.models.length ? `<div class="local-models">${j.models.map((m) => `<div class="tiny">· <code>${esc(m.id)}</code> ${gb(m.size)}</div>`).join("")}</div>`
@@ -243,6 +243,7 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshQuota(); });
   /** 交给系统浏览器：安卓壳把非本机地址都转给外部浏览器（WebView 里登录会被 Google 等拦） */
   function openExternal(url) {
+    if (!/^https?:\/\//i.test(String(url || ""))) return;     // 只交 http(s)：别的协议（javascript: 之类）一律不开（审查 v0.5.5 W-L1）
     if (window.CCApp && window.CCApp.openUrl) return window.CCApp.openUrl(url);
     const a = document.createElement("a");
     a.href = url; a.target = "_blank"; a.rel = "noopener";

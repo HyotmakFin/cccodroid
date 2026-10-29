@@ -40,6 +40,8 @@
  *   - 自己要用 ptrace 的工具（gdb / strace / ltrace / lldb / valgrind / proot，以及环境变量
  *     ENOSYS_RUN_DETACH 里冒号分隔的程序名）exec 时立刻放手，连同它之后拉起的子进程：
  *     被跟踪的进程不能再被别人跟踪，不放手的话 gdb 连自己的被调试程序都挂不上。
+ *     自带 seccomp 沙箱、靠 SIGSYS 表达「拒绝即终止」的程序也可以写进去：放手后它的 TRAP 照原样生效。
+ *   - 只改 si_errno == 0 的 SIGSYS（安卓应用过滤器的 TRAP 不带数据）；带数据的是程序自己的过滤器，原样投递。
  *   - 不设 EXITKILL：组长退出时监督器随之退出，剩下还在跑的后代由内核自动解除跟踪、继续运行，不会被连坐杀掉。
  *
  * 退出码：目标程序的退出码原样传递；被信号杀死时为 128+信号号。
@@ -250,8 +252,11 @@ static int supervise(pid_t leader) {
         } else if (sig == SIGSYS) {
             siginfo_t si;
             memset(&si, 0, sizeof si);
+            /* 只改安卓自己那层：它的过滤器是不带数据的 SECCOMP_RET_TRAP（si_errno = RET_DATA = 0）。
+               程序自带沙箱（Chromium 一类）用 TRAP 时带非零数据、表示「拒绝」，原样投回去，别把它的拒绝降级成可恢复的 ENOSYS
+               （审查 10-29 第六份 中2）。自带沙箱又用零数据的程序，把名字写进 ENOSYS_RUN_DETACH，exec 时整个放手 */
             if (ptrace(PTRACE_GETSIGINFO, pid, 0, &si) == 0 &&
-                si.si_code == SYS_SECCOMP_CODE) {
+                si.si_code == SYS_SECCOMP_CODE && si.si_errno == 0) {
                 if (verbose) {
                     fprintf(stderr, "[enosys] pid %d: 拦下 syscall %ld → ENOSYS\n",
                             (int)pid, get_syscall_nr(pid, &si));

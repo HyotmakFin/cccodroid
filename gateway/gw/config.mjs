@@ -59,8 +59,9 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const TS = () => new Date().toISOString().slice(11, 19);
 // 默认落 home（私有目录），不落共享存储：脱离 App 单独跑网关时别让别的应用读到日志（审查 v0.5.4 B-L2）
 const LOG_FILE = process.env.CCAPP_LOG || path.join(CFG.home, "gateway.log");
-// 网址里的账号口令（http://user:pass@host）不进日志
-const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@");
+// 网址里的账号口令（http://user:pass@host）和查询串里的令牌（?key=…、&token=…）不进日志（后者审查 10-29 第六份 低3）
+const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@")
+  .replace(/([?&](?:key|api_?key|token|access_token|auth|sig|signature|password|secret)=)[^&\s"']+/gi, "$1***");
 export const log = (...a) => {
   const line = noCred(`[${TS()}] ${a.join(" ")}`);
   if (!LIVE) return;

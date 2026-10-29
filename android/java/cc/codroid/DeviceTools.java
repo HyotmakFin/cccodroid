@@ -190,6 +190,9 @@ final class DeviceTools {
             .setContentTitle(title.isEmpty() ? "Claude" : clip(title, 200))
             .setContentText(clip(text, 1000))
             .setStyle(new Notification.BigTextStyle().bigText(clip(text, 4000)))
+            // 锁屏上只露「Claude」，正文解锁后才看得到（审查 10-29 第六份 低3）
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(new Notification.Builder(c, CH).setSmallIcon(android.R.drawable.stat_notify_chat).setContentTitle("Claude").build())
             .setContentIntent(pi).setAutoCancel(true).build());
         return new JSONObject().put("ok", true).put("id", id);
     }

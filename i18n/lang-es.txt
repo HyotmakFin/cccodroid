@@ -2326,3 +2326,4 @@
 2326	Quiere compartir un archivo con otra app
 2327	Accede a claves o credenciales: {w}
 2328	Acción sensible
+2329	La comprobación de firmas de componentes está desactivada (hay un archivo allow-unsigned en el directorio privado). Bórralo cuando termines de depurar

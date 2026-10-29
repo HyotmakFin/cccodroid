@@ -74,7 +74,8 @@ const GB = (b) => `${(b / 1073741824).toFixed(1)}G`;
 const KILLABLE = /^(svc|svcb|cch.*|prev|bkup|hvy|psvc)$/;
 const CLASS_NAME = { pers: "常驻", sys: "系统", fg: "前台", vis: "可见", prcp: "可感知", prcl: "可感知", impf: "可感知", home: "桌面", svc: "服务", svcb: "服务", prev: "上一个应用", bkup: "备份", hvy: "重量级" };
 // 动了会出事的系统组件（多数本来就在常驻档，这里兜底）
-const CORE = [/^android$/, /^android\./, /^com\.android\.(systemui|phone|providers\..*|networkstack.*|bluetooth|nfc|se|shell|server\..*|inputdevices|location\.fused|externalstorage|mtp)$/,
+const CORE = [/^android$/, /^android\./, /^com\.android\.(systemui|phone|providers\..*|networkstack.*|bluetooth|nfc|se|shell|server\..*|inputdevices|location\.fused|externalstorage|mtp|settings|permissioncontroller|packageinstaller|vending)$/,
+  /^com\.google\.android\.(permissioncontroller|packageinstaller)$/,      // 权限弹窗、安装确认被停掉会打断用户（审查 10-29 第六份 低1）
   /^com\.google\.android\.(gms|gsf|ext\.services)$/, /^moe\.shizuku\.privileged\.api$/, /^cc\.codroid$/, /^li\.dsh\./];
 
 /** 进程分档（lru）+ 每个进程加载了哪些包（processes）。

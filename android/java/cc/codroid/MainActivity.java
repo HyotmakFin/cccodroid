@@ -46,6 +46,29 @@ public class MainActivity extends Activity {
     };
 
     static final String ACTION_APPLY_DEVKIT = "cc.codroid.APPLY_DEVKIT";
+    // 内部动作的口令：MainActivity 是导出的（启动器、分享要用），别的应用也能发这些 action 让我们去下 650MB 工具包、
+    // 重装 APK（审查 v0.5.5 Android-M2）。我们自己发的 Intent / PendingIntent 都带上这个随机口令，存在私有 SharedPreferences 里，
+    // 跨进程重启不变（通知里的 PendingIntent 才一直有效）；对不上的一律不理
+    static final String IK = "cc.ik";
+    private static volatile String ikCache;
+    static String intentKey(android.content.Context c) {
+        if (ikCache != null) return ikCache;
+        android.content.SharedPreferences sp = c.getSharedPreferences("intent", MODE_PRIVATE);
+        String k = sp.getString("k", null);
+        if (k == null || k.length() < 32) {
+            byte[] b = new byte[24]; new java.security.SecureRandom().nextBytes(b);
+            StringBuilder h = new StringBuilder(); for (byte x : b) h.append(String.format("%02x", x & 0xff));
+            k = h.toString(); sp.edit().putString("k", k).commit();
+        }
+        return ikCache = k;
+    }
+    static Intent internal(android.content.Context c, String action) {
+        return new Intent(c, MainActivity.class).setAction(action).putExtra(IK, intentKey(c));
+    }
+    private boolean fromUs(Intent i) {
+        String k = i.getStringExtra(IK);
+        return k != null && java.security.MessageDigest.isEqual(k.getBytes(), intentKey(this).getBytes());
+    }
     static final String ACTION_UPDATE = "cc.codroid.UPDATE";
     static final String ACTION_SHIZUKU = "cc.codroid.SHIZUKU";
     /** 配对通知的 fullScreenIntent：只为让通知常驻顶部，真被拉起（锁屏时）也什么都不做 */
@@ -310,11 +333,12 @@ public class MainActivity extends Activity {
     private void handle(Intent i) {
         String a = i == null ? null : i.getAction();
         if (a == null) return;
+        if (Intent.ACTION_SEND.equals(a) || Intent.ACTION_SEND_MULTIPLE.equals(a)) { receiveShare(i); return; }
+        if (a.startsWith("cc.codroid.") && !fromUs(i)) { android.util.Log.w("cccodroid", "忽略外来的内部动作 " + a); return; }
         if (ACTION_APPLY_DEVKIT.equals(a) || ACTION_UPDATE.equals(a) && "devkit".equals(i.getStringExtra("item"))) applyDevkitUi();
         else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
         else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
         else if (Notify.ACTION_OPEN.equals(a)) openSession(i.getStringExtra("session"));
-        else if (Intent.ACTION_SEND.equals(a) || Intent.ACTION_SEND_MULTIPLE.equals(a)) receiveShare(i);
     }
 
     // ── 分享进来的东西：文件拷进工作区的 uploads/（和网页上传同一处、同样的命名），文字插进输入框 ──
@@ -1169,6 +1193,16 @@ public class MainActivity extends Activity {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest req) {
                 Uri u = req.getUrl();
                 if (isUiHost(u.getHost()) && !isOwnGateway(u.toString())) return blocked();
+                // 界面自己的页面与静态资源（/api 之外的 GET）由原生代取、核过网关的 HMAC 才交出（审查 10-29 第六份 中3）。
+                // /api 照常走 WebView：它要带 Cookie、要流式（事件总线），而且回来的是数据、界面一律转义着用
+                if (isOwnGateway(u.toString()) && "GET".equalsIgnoreCase(req.getMethod())) {
+                    String p = u.getEncodedPath();
+                    if (p == null || p.isEmpty()) p = "/";
+                    if (!p.startsWith("/api/")) {
+                        android.webkit.WebResourceResponse r = Env.fetchStatic(p + (u.getEncodedQuery() != null ? "?" + u.getEncodedQuery() : ""));
+                        return r != null ? r : unavailable();
+                    }
+                }
                 return null;
             }
             @Override public void onPageFinished(WebView v, String url) {
@@ -1322,7 +1356,10 @@ public class MainActivity extends Activity {
             // 旧版种在 127.0.0.1 上的那份清掉：网关已经不认了，留着只会被别的端口收走
             cm.setCookie("http://127.0.0.1:" + Env.PORT, "cc_t_" + Env.PORT + "=; Path=/; Max-Age=0");
             cm.flush();
+            if (squatShown) { squatShown = false; loadUi(); }
         });
+        // 守护线程发现端口被占：正开着的界面马上换成说明页；占用解除、网关起来后（onBoot）再接回界面
+        GatewayService.onSquat = () -> ui.post(() -> { if (web != null && !squatShown && isOwnGateway(web.getUrl())) showSquatted(); });
         loadUi();
         // 平时启动沿用正在扫的那个标识（不重播进场）；从安装页过来就新起一个居中的
         boolean dark = uiDark();
@@ -1432,14 +1469,21 @@ public class MainActivity extends Activity {
             ui.post(() -> {
                 if (web == null) return;
                 if (ok) { web.loadUrl(Env.uiUrl()); return; }
-                boolean dark = uiDark();
-                String html = "<meta name=viewport content=\"width=device-width\"><body style=\"font:16px/1.6 sans-serif;padding:32px;background:"
-                    + css(BrowserPane.pal(this, dark, "bg")) + ";color:" + css(BrowserPane.pal(this, dark, "fg")) + "\">"
-                    + android.text.TextUtils.htmlEncode(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT)) + "</body>";
-                web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+                showSquatted();
             });
         }, "ui-prove").start();
     }
+    /** 端口被别的应用占着：界面换成一页说明，别让已经打开的页面继续把输入发过去（审查 10-29 第六份 中3） */
+    private void showSquatted() {
+        if (web == null) return;
+        boolean dark = uiDark();
+        String html = "<meta name=viewport content=\"width=device-width\"><body style=\"font:16px/1.6 sans-serif;padding:32px;background:"
+            + css(BrowserPane.pal(this, dark, "bg")) + ";color:" + css(BrowserPane.pal(this, dark, "fg")) + "\">"
+            + android.text.TextUtils.htmlEncode(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT)) + "</body>";
+        web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+        squatShown = true;
+    }
+    private boolean squatShown;
     private static String css(int c) { return String.format("#%06x", c & 0xffffff); }
 
     private void jsDialog(String msg, boolean withCancel, String def, android.webkit.JsResult r, android.webkit.JsPromptResult pr) {
@@ -1666,6 +1710,9 @@ public class MainActivity extends Activity {
             h = t;
         }
         return ipv4(h) == 0x7f000002L;
+    }
+    static android.webkit.WebResourceResponse unavailable() {
+        return new android.webkit.WebResourceResponse("text/plain", "utf-8", 502, "Bad Gateway", null, new java.io.ByteArrayInputStream(new byte[0]));
     }
     static android.webkit.WebResourceResponse blocked() {
         return new android.webkit.WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", null, new java.io.ByteArrayInputStream(new byte[0]));

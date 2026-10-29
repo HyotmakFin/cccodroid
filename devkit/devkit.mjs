@@ -563,7 +563,11 @@ function loadRecipe(dir) {
   if (!Array.isArray(r.roots) || !r.roots.length) throw new Error("roots 不能为空");
   for (const n of r.repos || []) if (!MAN.extraRepos[n]) throw new Error("不认识的仓库: " + n);
   r.files = { ...(r.files || {}) };
-  for (const p of Object.keys(r.files)) if (!p.startsWith("usr/") || p.includes("..")) throw new Error("files 只能放进 usr/ 下: " + p);
+  for (const [p, f] of Object.entries(r.files)) {
+    if (!p.startsWith("usr/") || p.includes("..")) throw new Error("files 只能放进 usr/ 下: " + p);
+    // src 也得挡（审查 10-29 第六份 中1）：绝对路径、带 .. 的能把构建机上的私钥之类打进公开发布的签名组件
+    if (!f || typeof f.src !== "string" || !f.src || path.isAbsolute(f.src) || f.src.split(/[\\/]/).includes("..")) throw new Error("files 的 src 只能是配方目录里的相对路径: " + p);
+  }
   if (r.version !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(r.version)) throw new Error("version 不合法: " + r.version);
   // fetch（仓库外的上游原件）：和市场的 check-recipes 同一套规矩，这里再挡一遍，别全指望配方仓库那边
   for (const [p, f] of Object.entries(r.fetch || {})) {
@@ -1066,7 +1070,9 @@ if (cmd === "build" || cmd === "component") {
   }
   // 组件自带的文件（入口包装、给 Claude 的 skill）：{{PREFIX}} 换成本应用的前缀
   for (const [p, f] of Object.entries((COMP && COMP.files) || {})) {
-    const text = fs.readFileSync(path.join(COMP_BASE, f.src), "utf8").replaceAll("{{PREFIX}}", R.to + "files/usr");
+    const src = fs.realpathSync(path.resolve(COMP_BASE, f.src));     // 跟过软链再比：配方目录里放个指向外面的链接也不行
+    if (!src.startsWith(fs.realpathSync(COMP_BASE) + path.sep)) throw new Error("files 的 src 出了配方目录: " + f.src);
+    const text = fs.readFileSync(src, "utf8").replaceAll("{{PREFIX}}", R.to + "files/usr");
     tw.add({ name: p, type: "0", mode: parseInt(f.mode || "644", 8), mtime: 0, data: Buffer.from(text) });
   }
   // 首次运行脚本：App 解包后跑一次（参数与 dpkg 一致：configure）

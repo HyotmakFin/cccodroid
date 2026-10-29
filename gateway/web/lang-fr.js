@@ -2329,4 +2329,5 @@ window.I18N_DICT["fr"] = {
   "要把文件分享到别的应用": "Veut partager un fichier vers une autre appli",
   "碰到了密钥或登录凭据：{w}": "Touche à des clés ou identifiants : {w}",
   "敏感操作": "Action sensible",
+  "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "La vérification des signatures des composants est désactivée (un fichier allow-unsigned se trouve dans le dossier privé). Supprimez-le une fois le débogage terminé",
 };

@@ -718,7 +718,7 @@
     catch (e) { if (p === VW.path) $("vw-body").innerHTML = `<div class="vw-empty">${t("预览打不开")}: ${esc(e.message)}</div>`; return; }
     if (p !== VW.path || VW.mode !== "html") return;
     VW.pv = { url: r.url, mtime: r.mtime };
-    $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(pvSrc())}" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock" allow="autoplay; fullscreen; clipboard-write" referrerpolicy="same-origin"></iframe>`;
+    $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(pvSrc())}" sandbox="allow-scripts allow-same-origin allow-modals allow-downloads allow-pointer-lock" allow="autoplay; fullscreen; clipboard-write" referrerpolicy="same-origin"></iframe>`;
     // Claude 一边改、你一边看：每 1.5 秒看一眼修改时间，变了就重新载入
     VW.pvTimer = setInterval(async () => {
       if (viewerEl.classList.contains("hidden") || VW.mode !== "html" || VW.path !== p) return vwHtmlStop();

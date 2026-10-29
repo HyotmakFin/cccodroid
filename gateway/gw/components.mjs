@@ -215,7 +215,9 @@ async function compList(force) {
       unsupported: compUnsupported(e),
     };
   });
-  return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, refreshing: !!ix.refreshing, items };
+  // allow-unsigned 开着就一直挂个警示（审查 10-29 第六份 低5）：调试完忘了删，签名这道防线就悄悄没了
+  const allowUnsigned = !!COMP_DIR && fs.existsSync(path.join(COMP_DIR, "allow-unsigned"));
+  return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, refreshing: !!ix.refreshing, allowUnsigned, items };
 }
 
 // 给了 size 且是小文件就一次读完再算：逐个开流对成千个小文件很慢（gpu-driver-glibc 末尾 5600 多个小文件，

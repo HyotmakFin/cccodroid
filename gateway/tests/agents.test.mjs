@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { agentBook, readAgentIndex, takeAgentNote } from "../gw/agents.mjs";
+import { agentBook, agentsDir, onShared, readAgentIndex, takeAgentNote } from "../gw/agents.mjs";
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 const load = (name) => fs.readFileSync(path.join(FIX, name), "utf8").trim().split("\n").map((l) => JSON.parse(l));
@@ -95,4 +95,13 @@ test("叫醒已结束的代理：重新算在跑，每次结束都记汇报，�
   const bad = out.find((e) => e.k === "msg_ok" && !e.ok);
   assert.equal(bad.err, "No agent named 'alpha' is reachable.");
   assert.equal(out.filter((e) => e.k === "summary").length, 1);   // 叫醒的只有一个，不再汇总
+});
+
+test("共享存储上的项目：联络簿改放 home 私有目录", () => {
+  assert.equal(onShared("/sdcard/proj"), true);
+  assert.equal(onShared("/storage/emulated/0/proj"), true);
+  assert.equal(onShared(process.env.CCAPP_TMP), false);
+  assert.ok(agentsDir("/sdcard/proj", "abcdef0123").startsWith(path.join(process.env.CCAPP_HOME, ".cccodroid", "agents") + path.sep));
+  assert.ok(agentsDir("/sdcard/proj", "abcdef0123").endsWith(path.sep + "abcdef01"));
+  assert.equal(agentsDir("/data/x/proj", "abcdef0123"), path.join("/data/x/proj", ".cccodroid", "agents", "abcdef01"));
 });

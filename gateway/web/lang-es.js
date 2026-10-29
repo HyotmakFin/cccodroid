@@ -2329,4 +2329,5 @@ window.I18N_DICT["es"] = {
   "要把文件分享到别的应用": "Quiere compartir un archivo con otra app",
   "碰到了密钥或登录凭据：{w}": "Accede a claves o credenciales: {w}",
   "敏感操作": "Acción sensible",
+  "组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它": "La comprobación de firmas de componentes está desactivada (hay un archivo allow-unsigned en el directorio privado). Bórralo cuando termines de depurar",
 };
