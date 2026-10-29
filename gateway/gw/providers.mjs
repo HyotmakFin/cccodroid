@@ -285,7 +285,7 @@ if (PREFIX) PRESETS.local = {
 };
 // 预置条目只从配置文件里取这些"属于用户"的字段；其余（名字、线路表、端点）以目录为准，
 // 这样旧配置里抄死的 label/baseUrl 不会把目录更新挡住。自定义条目则整条都是用户的。
-const USER_FIELDS = ["apiKey", "apiKeyEnv", "endpoint", "defaultModel", "fastModel", "extraEnv"];
+const USER_FIELDS = ["apiKey", "apiKeyEnv", "endpoint", "defaultModel", "fastModel", "extraEnv", "inlineImages"];
 
 /** 合成一条生效配置：目录 + 用户字段 + 所选线路 */
 function composeProvider(id, raw) {
@@ -343,7 +343,7 @@ function providerView(id, v) {
     login: !!v.login, nativeModels: !!v.nativeModels, local: !!v.local,
     baseUrl: v.baseUrl || "", modelsUrl: v.modelsUrl || "", authStyle: v.authStyle || "bearer",
     endpoints: (v.endpoints || []).map((e) => ({ id: e.id, label: e.label, labelEn: e.labelEn || "" })), endpoint: v.endpoint || null,
-    defaultModel: v.defaultModel || null, fastModel: v.fastModel || null,
+    defaultModel: v.defaultModel || null, fastModel: v.fastModel || null, inlineImages: !!v.inlineImages,
     keyUrl: v.keyUrl || null, hint: v.hint || "", hintEn: v.hintEn || "",
     hasKey: !!key, keyTail: key ? key.slice(-4) : "",
     active: id === PROVIDER.id,
@@ -365,6 +365,8 @@ function upsertProvider(id, b) {
     && !["endpoint", "defaultModel", "fastModel"].some((k) => k in b && str(b[k]) && str(b[k]) !== str(cur[k]))) return { error: "need_key", message: tz("先把 API Key 粘进来再保存") };
   if ("apiKey" in b && str(b.apiKey)) cur.apiKey = str(b.apiKey);   // 空串 = 不改（界面上不回显旧密钥）
   if (b.clearKey) delete cur.apiKey;
+  // 图片随消息发（兼容兜底，见 inlineimg.mjs）：预置和自定义都能开
+  if ("inlineImages" in b) { if (b.inlineImages === true) cur.inlineImages = true; else delete cur.inlineImages; }
   for (const k of ["endpoint", "defaultModel", "fastModel"]) if (k in b) { if (str(b[k])) cur[k] = str(b[k]); else delete cur[k]; }
   if (!PRESETS[id]) {
     for (const k of ["label", "baseUrl", "modelsUrl"]) if (k in b) cur[k] = str(b[k]);

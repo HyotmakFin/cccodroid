@@ -2373,5 +2373,6 @@ window.I18N_DICT.en = {
   "后面有一条同样的话还没确认存下，等那一轮答完（或重新打开这个会话）再加书签": "An identical message further down hasn't been confirmed as saved yet. Add the bookmark after that turn finishes (or reopen this conversation)",
   "型号清单还在加载，稍等再保存": "The model list is still loading; wait a moment before saving",
   "已回收，点此恢复": "In the trash; tap to restore",
-  "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "This message appears several times in the conversation, so it's unclear which turn you mean. Reopen the conversation and try again."
+  "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "This message appears several times in the conversation, so it's unclear which turn you mean. Reopen the conversation and try again.",
+  "图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的中转站认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。": "Send images inside the message (compatibility): tick this only if the model can't see attached images and makes things up. Some relays drop images read back by the Read tool; with this on, each attached image is also sent directly in the message."
 };

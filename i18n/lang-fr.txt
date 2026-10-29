@@ -2336,3 +2336,4 @@
 2336	La liste des modèles se charge encore ; patientez avant d'enregistrer
 2337	Dans la corbeille ; touchez pour restaurer
 2338	Ce message apparaît plusieurs fois dans la conversation : impossible de savoir de quel tour il s'agit. Rouvrez la conversation et réessayez.
+2339	Envoyer les images dans le message (compatibilité) : à cocher seulement si le modèle ne voit pas les images jointes et invente. Certains relais perdent les images relues par l'outil Read ; activé, chaque image jointe est aussi envoyée directement dans le message.

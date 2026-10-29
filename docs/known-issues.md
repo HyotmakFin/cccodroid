@@ -90,6 +90,14 @@ App info → Battery → **Unrestricted**, and in Settings → Battery → Backg
 
 Background rules follow stock Android, so the foreground service is enough. Tensor G1–G4 use a Mali GPU, so `gpu-driver-mali` should work, but nobody has tested it yet; the other GPU components don't work.
 
+## 7. Some relays can't see attached images, and the model makes things up
+
+Normally an attached image goes in like this: the message ends with an `@path`, Claude Code reads the file back with the Read tool, and the image lands inside a *tool result*. The official API and every vendor's official Anthropic endpoint handle that.
+
+Some third-party relays translate Anthropic requests to the OpenAI format and don't map images inside tool results: they either drop the image (the model says it received no image) or pass the base64 along as plain text, so the model reads gibberish and confidently describes a picture that has nothing to do with yours. A handy check from a community report: look at the input tokens for that turn. One image is normally a few hundred to about a thousand tokens; around 200 means the image was dropped; tens of thousands means it was sent as text.
+
+**Workaround:** from 0.5.8 the custom provider card has "Send images inside the message (compatibility)". With it on, each attached image is also put directly in the user message (a spot every relay handles); the `@path` route still works alongside it. Large images are shrunk to 1568 px on the long edge first; large images in mid-turn follow-ups are not shrunk and only go through Read. You don't need it for official endpoints or relays that work.
+
 ## For developers: tests can create fake bugs
 
 Item 1 is tied to automated testing (item 2 has been confirmed not to be). Before fixing a problem like this, make sure it **also happens with no tests running**:

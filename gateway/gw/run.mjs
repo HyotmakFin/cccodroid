@@ -19,6 +19,7 @@ import { SUBAGENT_HINT, agentBook, takeAgentNote, onShared, privateAgentsBase } 
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
+import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -200,6 +201,9 @@ export async function startRun(item) {
   log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);
   const t0 = Date.now();
 
+  // 接口勾了「图片随消息发」：消息里提到的图片再各带一份 image 块（太大的先缩，要等，所以放在起进程前）
+  let imgs0 = [];
+  if (!isCmd && wantsInline(P)) { const env = claudeEnv({ model, provider: P }); imgs0 = await inlineImages(message, P, { tmpDir: env.TMPDIR, env }); }
   // 上面拉模型清单、问设备工具、读建档提示都要等：这期间点了停止（还没有进程可杀）就别再起了（安全通告 GHSA-g35m）
   if (run.aborted) { log("⏹ 起进程前已停止"); return endRun(run, { durationMs: 0 }); }
   const [cmd0, args0] = claudeCmd(argv);
@@ -216,12 +220,13 @@ export async function startRun(item) {
   const writeUser = (content) => child.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n");
   // 该建档时，提醒作为本轮消息的第二段跟进去：读用户消息的地方只认第一段、或跳过 <…> 开头的段，历史 / 搜索 / 分叉比对都看不见它。斜杠命令不带（包成两段 claude 就不认它是命令了）
   // 子代理汇总也是这样跟着用户的消息进去（见 takeAgentNote），不单独叫醒主会话
-  const withNotes = (msg, extra) => {
+  // 图片块（见 inlineimg.mjs）排在用户原话后面、提醒前面
+  const withNotes = (msg, extra, imgs = []) => {
     if (P.local || msg.trim().startsWith("/")) return msg;
     const notes = [extra, takeAgentNote(run.cwd, run.sessionId)].filter(Boolean);
-    return notes.length ? [{ type: "text", text: msg }, ...notes.map((n) => ({ type: "text", text: `<system-reminder>\n${n}\n</system-reminder>` }))] : msg;
+    return notes.length || imgs.length ? [{ type: "text", text: msg }, ...imgs, ...notes.map((n) => ({ type: "text", text: `<system-reminder>\n${n}\n</system-reminder>` }))] : msg;
   };
-  writeUser(withNotes(message, arch?.note));
+  writeUser(withNotes(message, arch?.note, imgs0));
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
@@ -230,7 +235,7 @@ export async function startRun(item) {
   run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
-    try { writeUser(withNotes(item.message)); } catch { return false; }
+    try { writeUser(withNotes(item.message, null, inlineImagesSync(item.message, P))); } catch { return false; }
     run.pendingInject.push(item);
     saveRunMark();     // 马上落盘：送达前 App 被强停，下次启动它还能回到队列里，不会凭空消失
     log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容

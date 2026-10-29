@@ -30,7 +30,8 @@ function forkUserText(ev) {
   if (typeof c === "string") return c && !c.startsWith("<") ? c : null;
   if (!Array.isArray(c)) return null;
   const texts = c.filter((x) => x.type === "text" && x.text && !x.text.startsWith("<")).map((x) => x.text);
-  if (c.some((x) => x.type === "image")) texts.push("[图片]");
+  // 「图片随消息发」时原话里已有 @图片路径，不再补一行 [图片]
+  if (c.some((x) => x.type === "image") && !texts.some((x) => /@\/\S+\.(png|jpe?g|gif|webp)\b/i.test(x))) texts.push("[图片]");
   return texts.length ? texts.join("\n") : null;
 }
 
