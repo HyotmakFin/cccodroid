@@ -86,7 +86,8 @@ export function saveRunMark() {
     if (!RUNS.size && !QUEUE.length) return fs.rmSync(RUN_MARK, { force: true });
     const live = runList().filter((r) => !r.ended);
     fs.writeFileSync(RUN_MARK + ".tmp", JSON.stringify({
-      runs: live.map((r) => ({ id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt })),
+      // done：已经答完、只是进程还留着等后台任务回报，而且任务也都清零了 —— 这时被结束不算中断
+      runs: live.map((r) => ({ id: r.id, sessionId: r.sessionId, text: r.text.slice(0, 4000), startedAt: r.startedAt, ...(r.idle && !r.bgTasks ? { done: true } : {}) })),
       // 已经写进 stdin、claude 还没吃进去的插话也算排队的：一起留下
       queue: [...live.flatMap((r) => (r.pendingInject || []).map((it) => ({ ...it, injected: false }))), ...QUEUE],
     }), { mode: 0o600 });
@@ -107,7 +108,7 @@ function recoverRunMark() {
   try { m = JSON.parse(fs.readFileSync(RUN_MARK, "utf8")); } catch { return; }
   finally { try { fs.rmSync(RUN_MARK, { force: true }); } catch {} }
   // 并行时可能同时断了好几轮：「继续」卡只挂最近开始的那一轮，其余的会话内容都在，用户打开接着聊就行
-  const runs = (Array.isArray(m.runs) ? m.runs : m.run ? [m.run] : []).filter((r) => r && r.id).sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+  const runs = (Array.isArray(m.runs) ? m.runs : m.run ? [m.run] : []).filter((r) => r && r.id && !r.done).sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
   for (const r of runs) {
     if (r.sessionId) RUN_SESSIONS.set(r.id, r.sessionId);
     log(`⚠️ 上一轮没跑完就被结束了（会话 ${r.sessionId || "未建立"}），已标为中断`);

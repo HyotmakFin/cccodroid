@@ -72,7 +72,13 @@
     let cur = null;
     for (const x of subnavSecs(curPage)) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
     if (!cur) cur = (subnavSecs(curPage)[0] || {}).dataset?.sec;
-    nav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.sec === cur));
+    nav.querySelectorAll("button").forEach((b) => {
+      const on = b.dataset.sec === cur;
+      // 和更新日志的目录一样：一排放不下时，当前节的按钮跟着滚到中间（只滚导航自己，不带动整页）
+      if (on && !b.classList.contains("on") && nav.scrollWidth > nav.clientWidth)
+        nav.scrollTo({ left: b.offsetLeft - (nav.clientWidth - b.offsetWidth) / 2, behavior: "smooth" });
+      b.classList.toggle("on", on);
+    });
   }
   for (const [name, id] of Object.entries(SUBNAVS)) {
     $(id)?.addEventListener("click", (e) => {
@@ -89,7 +95,34 @@
     new MutationObserver((recs) => { if (raf || recs.every((m) => $(id) && $(id).contains(m.target))) return; raf = requestAnimationFrame(() => { raf = 0; if (curPage === name) paintSubnav(name); }); })
       .observe($("tab-" + name), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
   }
-  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (TOCS[curPage]) spyToc(curPage); }, { passive: true });
+  $("page-body").addEventListener("scroll", () => { if (SUBNAVS[curPage]) spySubnav(); else if (TOCS[curPage]) spyToc(curPage); pageAnchorSave(); }, { passive: true });
+
+  // ── 换分屏 / 转屏后停在原处 ── 只记 scrollTop 不够：宽度一变整页重排，同样的像素落到别的内容上。
+  // 滚动时记下顶上那一行是哪个元素、离顶多远；宽度变了按它对回去
+  let pgAnc = null, pgW = 0, pgAncRaf = 0;
+  function pageAnchorSave() {
+    const body = $("page-body");
+    if (body.clientWidth !== pgW || pgAncRaf) return;     // 宽度刚变、还没对回去：这时的滚动是浏览器夹出来的，不算
+    pgAncRaf = requestAnimationFrame(() => {
+      pgAncRaf = 0;
+      if (body.scrollTop < 4) { pgAnc = { top: true }; return; }
+      const r = body.getBoundingClientRect();
+      // 吸顶的分区导航 / 目录压在最上面，取它们下面那一行
+      const skip = body.querySelector(".subnav:not(:empty)");
+      const y = r.top + (skip && skip.offsetParent ? skip.offsetHeight : 0) + 12;
+      const el = document.elementsFromPoint(r.left + r.width / 2, y).find((n) => body.contains(n) && n !== body && !n.closest(".subnav, .help-toc, .mo-ghost"));
+      pgAnc = el ? { el, off: el.getBoundingClientRect().top - r.top } : null;
+    });
+  }
+  new ResizeObserver(() => {
+    const body = $("page-body"), w = body.clientWidth;
+    if (!w) { pgAnc = null; return; }        // 整页收起了：下次打开从它自己的位置算，别拿旧锚点挪
+    if (w === pgW) return;
+    const first = !pgW; pgW = w;
+    if (first || !pgAnc || !curPage) return;
+    if (pgAnc.top) body.scrollTop = 0;
+    else if (pgAnc.el.isConnected) body.scrollTop += pgAnc.el.getBoundingClientRect().top - body.getBoundingClientRect().top - pgAnc.off;
+  }).observe($("page-body"));
 
 
   // ── 设置分类：宽屏左栏分类 + 右边一类的内容；窄屏先是分类列表，点进去才是内容 ──

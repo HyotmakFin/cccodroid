@@ -131,10 +131,21 @@
     const rg = X.utils.decode_range(ws["!ref"]);
     const r1 = Math.min(rg.e.r, rg.s.r + SHEET_MAX_R - 1), c1 = Math.min(rg.e.c, rg.s.c + SHEET_MAX_C - 1);
     // 合并单元格：左上角那格带 rowspan/colspan，被盖住的格子不画
-    const span = new Map(), covered = new Set();
+    // 只处理落在显示窗口里的部分：畸形文件可以写一个盖住 A1:XFD1048576 的合并，或者成千上万个互相重叠的大合并，
+    // 全量展开会把界面卡死。合并裁到窗口内，累计展开的格数不超过窗口格数的两倍，超了后面的合并按普通格子画
+    const W = c1 - rg.s.c + 1, cov = new Uint8Array((r1 - rg.s.r + 1) * W), span = new Map();
+    const covered = (r, c) => cov[(r - rg.s.r) * W + c - rg.s.c] === 1;
+    let budget = 2 * cov.length, n = 0;
     for (const m of ws["!merges"] || []) {
-      span.set(m.s.r + "," + m.s.c, [m.e.r - m.s.r + 1, m.e.c - m.s.c + 1]);
-      for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) if (r !== m.s.r || c !== m.s.c) covered.add(r + "," + c);
+      if (++n > 20000) break;
+      if (!m || !m.s || !m.e || m.s.r > r1 || m.s.c > c1 || m.s.r < rg.s.r || m.s.c < rg.s.c || m.e.r < m.s.r || m.e.c < m.s.c) continue;
+      const er = Math.min(m.e.r, r1), ec = Math.min(m.e.c, c1), k0 = m.s.r + "," + m.s.c;
+      if (span.has(k0) || covered(m.s.r, m.s.c)) continue;      // 和前面的合并撞了左上角，别叠出错位的表
+      const area = (er - m.s.r + 1) * (ec - m.s.c + 1);
+      if ((budget -= area) < 0) break;
+      span.set(k0, [er - m.s.r + 1, ec - m.s.c + 1]);
+      for (let r = m.s.r; r <= er; r++) cov.fill(1, (r - rg.s.r) * W + m.s.c - rg.s.c, (r - rg.s.r) * W + ec - rg.s.c + 1);
+      cov[(m.s.r - rg.s.r) * W + m.s.c - rg.s.c] = 2;     // 左上角自己要画
     }
     const cols = ws["!cols"] || [], rows = ws["!rows"] || [];
     const hid = (c) => cols[c] && cols[c].hidden;    // 隐藏的列和行一样不画，别当普通格子露出来
@@ -152,7 +163,7 @@
       h += `<tr data-r="${r}"><th>${r + 1}</th>`;
       for (let c = rg.s.c; c <= c1; c++) {
         const k = r + "," + c;
-        if (covered.has(k) || hid(c)) continue;
+        if (covered(r, c) || hid(c)) continue;
         const cell = ws[X.utils.encode_cell({ r, c })];
         const sp = span.get(k);
         const txt = sheetText(cell);
