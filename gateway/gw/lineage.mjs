@@ -85,6 +85,9 @@ export function lineageRefresh() {
   return building;
 }
 
+/** 会话记录文件（回收站里的不给：汇合、取材料只对活着的会话） */
+export function lineageFile(sid) { const m = META.get(sid); return m && !m.trashed ? m.file : null; }
+
 /** 不刷新、只读已有缓存的索引记录（会话页每翻一页都要用，首次整理大户要十几秒，不能等） */
 export function lineageCached(sid) { loadCache(); return RECS.get(sid) || null; }
 
@@ -155,6 +158,19 @@ export async function lineageGraph() {
     if (!x || !x.id) continue;
     edges.push({ child, parent: x.id, at: x.at || null, ts: tsAt(RECS.get(x.id), x.at), kind: "merge", source: "explicit", how: x.how || "", missing: !RECS.has(x.id) });
     linked.add(child + ">" + x.id);
+  }
+  // 汇合记录丢了（导到别的设备、手动删过 ccapp-lineage.json）：按第一条消息末尾的落款重建
+  const byShort = new Map();
+  for (const id of RECS.keys()) { const k = id.slice(0, 4); byShort.set(k, byShort.has(k) ? null : id); }
+  for (const r of RECS.values()) {
+    if (!r.sig || (db.edges[r.id] && (db.edges[r.id].extra || []).length)) continue;
+    for (const x of r.sig) {
+      const pid = byShort.get(x.short);
+      if (!pid || pid === r.id || linked.has(r.id + ">" + pid)) continue;
+      const at = RECS.get(pid).compacts[x.n - 1]?.uuid || null;   // 第 n 章的摘要 = 第 n 次压缩；进行中的章没有，画到来源末端
+      edges.push({ child: r.id, parent: pid, at, ts: tsAt(RECS.get(pid), at), kind: "merge", source: "sig", how: "", missing: false });
+      linked.add(r.id + ">" + pid);
+    }
   }
   for (const r of RECS.values()) for (const x of r.refs || []) {
     if (!RECS.has(x.id) || linked.has(r.id + ">" + x.id) || linked.has(x.id + ">" + r.id)) continue;

@@ -12,6 +12,7 @@ import { LAST_SESSION, RUNS, latestRun, maxParallel, runFlag, runList } from "./
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { BOOT, publish } from "./bus.mjs";
 import { pickProvider, startRun } from "./run.mjs";
+import { cleanMergeFrom } from "./merge.mjs";
 import { RATE_LIMITS } from "./stream.mjs";
 
 // ── 生成与排队 ────────────────────────────────────────────────────────
@@ -276,6 +277,8 @@ export function enqueue(body) {
     permissionMode: body.permissionMode || null,
     addDirs: Array.isArray(body.addDirs) ? body.addDirs : [],
     projectId: body.projectId ? String(body.projectId) : null,
+    // 汇合（脉络阶段 2）：新会话第一条带来的来源，拿到会话号时记进 ccapp-lineage.json
+    mergeFrom: !body.sessionId && !body.follow ? cleanMergeFrom(body.mergeFrom) : null,
     at: Date.now(),
     // 只有网关自己（定时任务）会带的：前端发来的 /api/chat 不许设这些
     ...(body.internal ? { cwd: body.cwd || null, effort: body.effort || null, provider: body.provider || null, sched: body.sched || null, unattended: !!body.unattended,

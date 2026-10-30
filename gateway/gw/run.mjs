@@ -22,6 +22,7 @@ import { sessModel, sessProvider, setSessModel } from "./sessmodel.mjs";
 import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
 import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote.mjs";
 import { SPOOF_NOTE, checkSession, integrityHint, integrityNote, neutralizeMarkers, sealSession } from "./integrity.mjs";
+import { recordExtra } from "./lineage-store.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -361,6 +362,7 @@ export async function startRun(item) {
     if (RUN_SESSIONS.size > 500) RUN_SESSIONS.delete(RUN_SESSIONS.keys().next().value);
     rememberSession(run.sessionId);
     if (item.pin) setSessModel(run.sessionId, item.pin);   // 新会话首条带来的选择：有了会话号就记上
+    if (item.mergeFrom && !item.sessionId) { recordExtra(run.sessionId, item.mergeFrom); item.mergeFrom = null; }   // 汇合：当场记来源（事后推断不出来）
     saveRunMark();                       // 标记里补上会话号：被杀之后「继续」要靠它 --resume
     if (!SESSIONS.has(init.session_id)) {
       SESSIONS.set(init.session_id, { id: init.session_id, title: message.slice(0, 60), createdAt: Date.now() });

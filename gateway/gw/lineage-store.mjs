@@ -31,6 +31,30 @@ export function recordPrimary(child, parent, at, kind = "fork") {
   save();
 }
 
+/** 汇合时记附加父（新会话拿到会话号那一刻，run.mjs 调）。how：compact | excerpt | summary | manual。
+ *  manual 是「补记来源」：手动给已有会话连一条，和原有的合并去重 */
+export function recordExtra(child, list) {
+  if (!child || !Array.isArray(list)) return;
+  const db = lineageDb(), cur = db.edges[child] || {};
+  const extra = (cur.extra || []).slice();
+  for (const x of list) {
+    if (!x || !x.id || x.id === child) continue;
+    const i = extra.findIndex((y) => y.id === x.id);
+    const v = { id: x.id, at: x.at || null, how: x.how || "excerpt", note: x.note || "" };
+    if (i >= 0) extra[i] = v; else extra.push(v);
+  }
+  db.edges[child] = { ...cur, extra };
+  save();
+}
+
+/** 去掉一条附加父（补记错了） */
+export function dropExtra(child, id) {
+  const db = lineageDb(), cur = db.edges[child];
+  if (!cur || !cur.extra) return;
+  cur.extra = cur.extra.filter((x) => x.id !== id);
+  save();
+}
+
 /** 会话彻底删掉时清掉它作为「子」的记录（它作为别人的父的记录留着：子会话那边画成「源自已删除的会话」） */
 export function forgetChild(child) {
   const db = lineageDb();

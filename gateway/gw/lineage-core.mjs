@@ -30,7 +30,7 @@ function userText(e) {
 }
 
 export function emptyRecord(id) {
-  return { id, size: 0, off: 0, head: "", birth: 0, uu: [], ts: [], compacts: [], refs: [], turns: 0, first: "", firstTs: 0, lastTs: 0, cwd: "", lead: "", qN: 0 };
+  return { id, size: 0, off: 0, head: "", birth: 0, uu: [], ts: [], compacts: [], refs: [], turns: 0, first: "", firstTs: 0, lastTs: 0, cwd: "", lead: "", qN: 0, sig: null };
 }
 
 /**
@@ -86,7 +86,7 @@ export async function scanSession(file, prev) {
       if (!t) return;
       const q = t.replace(/\s+/g, " ").trim().slice(0, 80);
       r.turns++;
-      if (!r.first) r.first = q;
+      if (!r.first) { r.first = q; r.sig = parseMergeSig(t); }   // 汇合出来的新会话：第一条末尾的落款（记录丢了时按它重建来源）
       // 旧章没有题名时拿章首提问顶上（规划书 §12）：看本章前 3 句，「你好，claude」「继续」这种让给后面有内容的那句
       if (r.qN < 3) {
         const c = r.compacts[r.compacts.length - 1], had = c ? c.q : r.lead;
@@ -106,6 +106,12 @@ export async function scanSession(file, prev) {
       }
     }
   } finally { fs.closeSync(fd); }
+}
+/** 汇合的落款：第一条消息末尾「（汇合自 0ab2·5、2f50·2）」。各种语言的界面都写这一句（网关只认这个格式） */
+export const MERGE_SIG = /（汇合自 ((?:[0-9a-f]{4}·\d+)(?:、[0-9a-f]{4}·\d+)*)）\s*$/;
+export function parseMergeSig(text) {
+  const m = MERGE_SIG.exec(String(text || ""));
+  return m ? m[1].split("、").map((x) => { const [short, n] = x.split("·"); return { short, n: Number(n) }; }) : null;
 }
 const REF = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl/g;
 
