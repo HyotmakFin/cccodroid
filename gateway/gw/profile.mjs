@@ -247,8 +247,11 @@ export function saveExport(name, data) {
   const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
   const dir = path.join(base, "exports");
   fs.mkdirSync(dir, { recursive: true });
+  if (fs.lstatSync(dir).isSymbolicLink()) return { error: "bad_dir" };
   const file = path.join(dir, name);
-  fs.writeFileSync(file, buf);
+  // 不跟软链接：导出目录里有人放了同名链接，也写不到别处去
+  const C = fs.constants;
+  try { fs.writeFileSync(file, buf, { flag: C.O_WRONLY | C.O_CREAT | C.O_TRUNC | (C.O_NOFOLLOW || 0) }); } catch (e) { return { error: e.code === "ELOOP" ? "bad_target" : "write_failed" }; }
   return { ok: true, file };
 }
 

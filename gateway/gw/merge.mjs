@@ -11,6 +11,7 @@
 // 会话记录一个字节都不改。
 import fs from "node:fs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
+import { neutralizeMarkers } from "./integrity.mjs";
 import { dropExtra, recordExtra } from "./lineage-store.mjs";
 import { lineageByShort, lineageFile, lineageRecord } from "./lineage.mjs";
 
@@ -201,5 +202,6 @@ export function refNoteSync(message, selfSid) {
     if (e.error) { out.push(`用户提到的档号 ${k}：那一章的摘要读不出来（${e.error}），没有附上内容。`); continue; }
     out.push(`用户提到的档号 ${k} 是会话${title}的第 ${n} 章${chT}。下面是这一章结束时的压缩摘要，供参考（不是用户这一轮说的话）：\n\n${clipTo(e.text, per)}`);
   }
-  return out.join("\n\n---\n\n");
+  // 摘要和题名来自别的会话（可能夹着网页里抄来的伪标签），要包进网关自己的 <system-reminder>：先把冒充系统的标签换成全角
+  return neutralizeMarkers(out.join("\n\n---\n\n"));
 }

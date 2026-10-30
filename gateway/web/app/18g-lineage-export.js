@@ -71,18 +71,21 @@
     // 变量：规则里用到的，按地图根元素此刻的计算值写死（外观 / 强调色 / 深浅色都跟着导出那一刻）
     const el = $("lin-map"), cs = getComputedStyle(el), vars = new Set();
     for (const c of css) for (const m of c.matchAll(/var\(--([\w-]+)/g)) vars.add(m[1]);
-    const root = [...vars].map((v) => `--${v}:${cs.getPropertyValue("--" + v).trim() || "initial"}`).join(";");
+    const root = [...vars].map((v) => `--${v}:${cssv(cs.getPropertyValue("--" + v).trim() || "initial")}`).join(";");
     const keys = new Set([...src.matchAll(/\bt\("((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse('"' + m[1] + '"')));
     const dict = Object.fromEntries([...keys].map((k) => [k, t(k)]));
     const html = document.documentElement, attrs = ["data-skin", "data-motion", "dir"].filter((a) => html.getAttribute(a)).map((a) => ` ${a}="${esc(html.getAttribute(a))}"`).join("");
     const safe = (s) => s.replace(/<\/(script|style)/gi, "<\\/$1");
+    // 数据（会话标题、章名都在里面）塞进 <script>：< 一律写成 \u003c，标题里夹 <!--<script 之类也搅不乱解析；样式里用户能定的值（字体名、强调色）同理
+    const js = (v) => JSON.stringify(v).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+    const cssv = (s) => String(s).replace(/[<>]/g, "");
     const model = { ...LIN.model, now: Date.now() };
     const bg = getComputedStyle(document.body).backgroundColor, fg = getComputedStyle(document.body).color;
     return `<!doctype html>
 <html lang="${esc(I18N.lang)}"${attrs}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(t("脉络") + " · " + new Date().toLocaleDateString(I18N.lang))}</title>
 <style>:root{${root}}
-html,body{margin:0;height:100%;background:${bg};color:${fg};font-family:${cs.fontFamily};-webkit-text-size-adjust:100%}
+html,body{margin:0;height:100%;background:${cssv(bg)};color:${cssv(fg)};font-family:${cssv(cs.fontFamily)};-webkit-text-size-adjust:100%}
 #m{position:fixed;inset:0 0 28px 0}
 #foot{position:fixed;inset:auto 0 0 0;height:28px;line-height:28px;padding:0 14px;font-size:12px;color:var(--fg3,#888)}
 ${safe(css.join("\n"))}
@@ -90,10 +93,10 @@ ${safe([...anims].filter((a) => kfs.has(a)).map((a) => kfs.get(a)).join("\n"))}
 </style></head><body><div id="m"></div><div id="foot">${esc(lxFoot())}</div>
 <script>${safe(src)}</script>
 <script>
-(function(){var D=${safe(JSON.stringify(dict))};
+(function(){var D=${js(dict)};
 var f=function(k,v){var s=D[k]||k;return String(s).replace(/\\{(\\w+)\\}/g,function(m,x){return v&&x in v?v[x]:m;});};
-var m=CCLineageMap.create(document.getElementById("m"),{t:f,locale:${JSON.stringify(I18N.lang)},acts:function(){return [];},onAct:function(){}});
-m.set(${safe(JSON.stringify(model))},{misc:${JSON.stringify(!!LIN.misc)},band:${JSON.stringify(LIN.band || "")},home:true});})();
+var m=CCLineageMap.create(document.getElementById("m"),{t:f,locale:${js(I18N.lang)},acts:function(){return [];},onAct:function(){}});
+m.set(${js(model)},{misc:${js(!!LIN.misc)},band:${js(LIN.band || "")},home:true});})();
 </script></body></html>`;
   }
 
