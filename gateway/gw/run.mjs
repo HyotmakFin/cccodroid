@@ -460,6 +460,7 @@ export async function startRun(item) {
     if (buf.trim()) feed(buf.trim());
     buf = "";
     run.meter.close();                   // 中断 / 被杀也走这里：子代理记录最后扫一遍
+    try { run.agents?.close(); } catch (e) { log("子代理收尾出错: " + e.message); }
     // claude 已经退出，这时的记录就是下一轮的基准；提醒这一轮已经交出去（正常答完）才清掉标记
     try { sealSession(run.sessionId, sfile(), { clear: !!integNote && !run.aborted && !!lastResult && !lastResult.is_error }); } catch (e) { log(`[封签] ${e.message}`); }
     run.inputOpen = false;

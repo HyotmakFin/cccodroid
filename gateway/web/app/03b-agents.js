@@ -61,6 +61,8 @@
       a.lastAt = at; a.status = r.status || "done"; a.endAt = at; a.why = r.why || ""; a.report = r.file || a.report; a.now = "";
       if (r.steps > a.steps) a.steps = r.steps;
       if (a.by === "main" && av) av.mark("← " + a.name + " " + (a.status === "done" ? t("完成") : a.status === "stopped" ? t("已停止") : t("失败")));
+      // 后台子代理的 Agent 卡（结果只是「已启动」）跟着收：翻历史时没有 sub_done 事件，不然一直标「后台运行」
+      if (!a.parent && a.status !== "done") TOOL_CARDS.get(a.tool)?.subDone?.(a.status);
       return agTouch(agCardOf(a));
     }
     if (r.k === "resume" && a) {

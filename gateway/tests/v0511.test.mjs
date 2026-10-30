@@ -7,6 +7,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { TOKEN, localAddr, proof, sigOk } from "../gw/access.mjs";
+import { agentBook, settleAgentRecs } from "../gw/agents.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -51,4 +52,29 @@ test("自检对账：端口上是冒牌的（身份核验不过）就停，不�
   assert.equal(r.code, 1);
   assert.match(r.err, /身份核验没过/);
   assert.deepEqual(seen.map((u) => u.split("?")[0]), ["/__proof"]);
+});
+
+// 中途停止后重进：子代理不再一直显示在跑
+
+test("claude 退出时还在跑的子代理补记「已停止」，已结束的不动", () => {
+  const out = [];
+  const b = agentBook({}, { emit: (e) => out.push(e) });
+  for (const id of ["a1", "a2"]) b.feed({ type: "system", subtype: "task_started", task_type: "local_agent", task_id: id, tool_use_id: "t" + id, description: id });
+  b.feed({ type: "system", subtype: "task_notification", task_id: "a1", status: "completed", summary: "ok" });
+  b.close();
+  const done = out.filter((e) => e.k === "done").map((e) => [e.id, e.status]);
+  assert.deepEqual(done, [["a1", "done"], ["a2", "stopped"]]);
+  b.close();
+  assert.equal(out.filter((e) => e.k === "done").length, 2, "再收一次不重复记");
+});
+
+test("翻历史：派出了没结束、眼下不在跑的按已停止补；在跑的、已结束的、被叫醒后在跑的照旧", () => {
+  const recs = [
+    { at: 1, k: "spawn", id: "x" }, { at: 2, k: "spawn", id: "y" }, { at: 3, k: "spawn", id: "z" }, { at: 4, k: "spawn", id: "w" },
+    { at: 5, k: "done", id: "y", status: "done" }, { at: 6, k: "done", id: "w", status: "done" }, { at: 7, k: "resume", id: "w" },
+    { at: 8, k: "msg", from: "x", to: "main", mid: "m" },
+  ];
+  const add = settleAgentRecs(recs, new Set(["z"])).slice(recs.length);
+  assert.deepEqual(add.map((r) => [r.id, r.status, r.at]), [["x", "stopped", 8], ["w", "stopped", 7]]);
+  assert.equal(settleAgentRecs(recs.slice(0, 0)).length, 0);
 });

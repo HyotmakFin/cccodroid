@@ -203,7 +203,23 @@ export function agentBook(run, { emit }) {
       }
     }
   };
-  return { feed, agents: byTask };
+  // claude 退出了（答完、被停、被杀）：子代理都在它进程里跑，一起没了。还标着在跑的补一条「已停止」，
+  // 不然联络簿里只有派出没有结束，重进会话翻历史时一直显示在跑
+  const close = () => { for (const a of byTask.values()) if (a.status === "running") done(a, "stopped", ""); };
+  return { feed, close, agents: byTask };
+}
+
+/** 翻历史时补齐：派出了、没有结束记录、眼下也不在跑的，按已停止算（旧版网关被停时没补记录；网关被杀时也来不及记） */
+export function settleAgentRecs(recs, liveIds = new Set()) {
+  const ended = new Set(), last = new Map();
+  for (const r of recs) {
+    if (r.k === "spawn" || r.k === "resume") { ended.delete(r.id); last.set(r.id, r.at || 0); }
+    else if (r.k === "done") ended.add(r.id);
+    else if (r.from && last.has(r.from)) last.set(r.from, Math.max(last.get(r.from), r.at || 0));
+  }
+  const add = [];
+  for (const [id, at] of last) if (!ended.has(id) && !liveIds.has(id)) add.push({ at, k: "done", id, status: "stopped", why: "", file: null });
+  return add.length ? [...recs, ...add] : recs;
 }
 
 /** 旧会话（没有联络簿的）：从 claude 自己的记录里推出同样格式的记录，只在内存里给界面看，不往项目里写文件。

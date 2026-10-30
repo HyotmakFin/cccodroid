@@ -177,7 +177,19 @@ export function abortRun(run) {
   // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
   // 并行时只挂起这个会话自己排着的，别的会话不受影响
   holdLane(run);
-  if (run.child) killTree(run.child);
+  if (run.child) {
+    const c = run.child;
+    killTree(c);
+    // 收尾靠 claude 的输出管道关掉（close 事件）。要是哪个子孙另开了进程组、攥着管道没被杀到，close 就永远不来，
+    // 这一轮一直挂在「生成中」：5 秒还没收尾就再杀一遍、把管道关掉，还不行就直接收尾
+    setTimeout(() => {
+      if (run.ended) return;
+      log("⏹ 停止 5 秒后还没收尾，强制关掉 claude 的输出管道");
+      killTree(c);
+      for (const s of [c.stdin, c.stdout, c.stderr]) try { s?.destroy(); } catch {}
+      setTimeout(() => { if (!run.ended) { try { run.agents?.close(); } catch {} endRun(run, {}); } }, 2000).unref();
+    }, 5000).unref();
+  }
   return true;
 }
 

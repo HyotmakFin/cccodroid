@@ -3,7 +3,7 @@ import path from "node:path";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, importSessions, listTrash, locateUserTurn, purgeTrash, realWorkspace, restoreSession, rewindFiles, rewindFixup, trashSession, undoDelete } from "./sessionops.mjs";
 import { goalStateOf, tasksOf } from "./goal.mjs";
-import { backfillAgents, readAgentIndex } from "./agents.mjs";
+import { backfillAgents, readAgentIndex, settleAgentRecs } from "./agents.mjs";
 import { agentFilesOf, findLineOffset, lineHas, readSessionForward, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { lineageCached } from "./lineage.mjs";
 import { chapterView } from "./archive-core.mjs";
@@ -353,6 +353,8 @@ export async function routeSessions(req, res, u, p) {
       const meta = peekSession(found.file);
       let recs = meta.cwd ? readAgentIndex(meta.cwd, id) : [], src = "book";
       if (!recs.length) { recs = backfillAgents(found.file); src = "transcript"; }
+      const live = runOfSession(id)?.agents?.agents;
+      recs = settleAgentRecs(recs, new Set(live ? [...live.values()].filter((a) => a.status === "running").map((a) => a.id) : []));
       return sendJson(res, 200, { records: recs, src });
     }
 
