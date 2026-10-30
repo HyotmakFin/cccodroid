@@ -133,3 +133,6 @@ export function tr(lang, msg) {
   }
   return msg;
 }
+
+/** claude 认的权限模式（2026-10 版二进制）。没有 manual */
+export const PERM_MODES = ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"];

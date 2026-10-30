@@ -9,7 +9,7 @@
 //  · 文案跟随 LAST_LANG；中文/英文两套。
 import fs from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { runList } from "./runs.mjs";
 import { onPublish } from "./bus.mjs";
 import { LAST_LANG, log } from "./config.mjs";

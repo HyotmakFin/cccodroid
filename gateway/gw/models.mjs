@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { PROVIDER, keyOf, modelsUrlOk, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, fetchJsonCapped, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";

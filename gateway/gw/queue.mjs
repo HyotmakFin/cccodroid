@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, LIVE, LAST_LANG, log, tr, tz } from "./config.mjs";
-import { SETTINGS, saveSettings } from "./settings.mjs";
+import { SETTINGS, saveSettings } from "./settings-store.mjs";
 import { PERM_MODES, PROVIDER, keyOf, providerById } from "./providers.mjs";
 import { sessProvider } from "./sessmodel.mjs";
 import { isLoginMode } from "./models.mjs";

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { CFG, PATHS, PREFIX } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { API_KEY, PROVIDER, providerBrief } from "./providers.mjs";
 import { bridgeAlive, runClaude, safeMode } from "./claude.mjs";
 import { LAST_SESSION, RUNS } from "./runs.mjs";

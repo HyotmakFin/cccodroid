@@ -4,7 +4,7 @@ import zlib from "node:zlib";
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { CFG, GLIBC_PRELOAD, PATHS, PREFIX, glibcEnv, log, tz } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { enosysRun } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { CFG, LIVE, HERE, PREFIX, log, tz } from "./config.mjs";
-import { SETTINGS, saveSettings } from "./settings.mjs";
+import { SETTINGS, saveSettings } from "./settings-store.mjs";
 import { LLAMA_KEY_FILE, LLAMA_PORT } from "./providers.mjs";
 import { expireModelCache } from "./models.mjs";
 import { ensureShell, killTree } from "./claude.mjs";

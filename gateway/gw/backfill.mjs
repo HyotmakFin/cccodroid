@@ -12,7 +12,7 @@ import { NEXT, readBody, sendJson } from "./http.mjs";
 import { publish } from "./bus.mjs";
 import { claudeCmd, claudeEnv, currentModelInfo, ensureBridge, killTree, settingsArgs } from "./claude.mjs";
 import { isLoginMode } from "./models.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { PROVIDER } from "./providers.mjs";
 import { lineageCached, lineageGraph } from "./lineage.mjs";
 import { findSessionFile } from "./sessions.mjs";

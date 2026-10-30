@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, HERE, PREFIX } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { isLoginMode, learnWindow } from "./models.mjs";
 import { currentModelInfo } from "./claude.mjs";
 import { AUTH_CACHE, authStatus } from "./login.mjs";

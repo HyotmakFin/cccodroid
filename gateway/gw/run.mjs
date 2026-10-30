@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { PERM_MODES, PROVIDER, billAfterRun, keyOf, noteTokens, providerById } from "./providers.mjs";
 import { ALIAS_SEEN, effortLevelsOf, fetchModels, isLoginMode, normEffort } from "./models.mjs";
 import { claudeCmd, claudeEnv, currentModelInfo, ensureBridge, settingsArgs } from "./claude.mjs";

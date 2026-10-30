@@ -1,5 +1,5 @@
 import { log } from "./config.mjs";
-import { SETTINGS, saveSettings } from "./settings.mjs";
+import { SETTINGS, saveSettings } from "./settings-store.mjs";
 import { PROVIDER } from "./providers.mjs";
 import { effortLevelsOf, fetchModels, normEffort } from "./models.mjs";
 import { effectiveAutoCompact } from "./stream.mjs";

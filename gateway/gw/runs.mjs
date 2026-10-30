@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CFG } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 
 // ── 会话进程状态 ──────────────────────────────────────────────────────
 export const SESSIONS = new Map();   // 内存里记录本次运行见过的会话

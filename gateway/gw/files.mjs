@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { CFG, HERE, PREFIX, log, tz } from "./config.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { SEED_FILE } from "./providers.mjs";
 import { claudeEnv } from "./claude.mjs";
 import { NEXT, fileKind, mimeOf, readBody, readBodyBuf, sendJson } from "./http.mjs";
@@ -30,6 +30,16 @@ function inWorkspace(real) {
   return real === ws || real.startsWith(ws + path.sep);
 }
 
+/** 读文件和列目录共用的路径政策：home / 运行时 / 种子文件（工作区除外）和凭据目录一律不碰（真实路径） */
+function pathBlocked(real) {
+  for (const root of inWorkspace(real) ? [SEED_FILE] : [CFG.home, CFG.runtime, SEED_FILE]) {
+    if (!root) continue;
+    let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
+    if (real === rr || real.startsWith(rr + path.sep)) return true;
+  }
+  return SECRET_RE.test(real);
+}
+
 export function safeFilePath(p) {
   if (!p) return { error: "path required" };
   // 先按原样找：「report.txt 」（末尾真有空格）和「report.txt」是两个文件，先 trim 会认成另一个（私下反馈 10-29）。
@@ -46,14 +56,7 @@ export function safeFilePath(p) {
     try { if (tp === String(p)) throw e; real = resolve(tp); } catch (e2) { return { error: "not found", detail: e2.message }; }
   }
 
-  for (const root of inWorkspace(real) ? [SEED_FILE] : [CFG.home, CFG.runtime, SEED_FILE]) {
-    if (!root) continue;
-    let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
-    if (real === rr || real.startsWith(rr + path.sep)) return { error: "forbidden", status: 403 };
-  }
-  if (SECRET_NAMES.has(path.basename(real)) || SECRET_RE.test(real)) {
-    return { error: "forbidden", status: 403 };
-  }
+  if (pathBlocked(real) || SECRET_NAMES.has(path.basename(real))) return { error: "forbidden", status: 403 };
 
   let st; try { st = fs.statSync(real); } catch (e) { return { error: e.message }; }
   if (st.isDirectory()) return { error: "is a directory", status: 400 };
@@ -295,10 +298,13 @@ export async function routeFiles(req, res, u, p) {
       const real = fs.realpathSync(dir);
       out.path = real;
       if (real !== dir) out.parent = path.dirname(real);
+      // 列目录也过同一套政策：之前只有读文件把关，列目录能看见 home 下全部文件名（审查 10-30 v0.5.12 低1）
+      if (pathBlocked(real)) return sendJson(res, 403, { ...out, error: "forbidden" });
       const items = fs.readdirSync(real, { withFileTypes: true });
       for (const it of items) {
         if (!showHidden && it.name.startsWith(".")) continue;
         if (q && !it.name.toLowerCase().includes(q)) continue;
+        if (SECRET_NAMES.has(it.name)) continue;
         const isDir = it.isDirectory();
         let size = 0, mtime = 0;
         try { const st = fs.statSync(path.join(real, it.name)); size = isDir ? 0 : st.size; mtime = st.mtimeMs; } catch {}

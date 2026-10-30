@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, PATHS, PREFIX, log, tz } from "./config.mjs";
-import { SETTINGS, saveSettings } from "./settings.mjs";
+import { SETTINGS, saveSettings } from "./settings-store.mjs";
 import { dropModelCache, normalizeModels } from "./models.mjs";
 import { RUNS } from "./runs.mjs";
 import { NEXT, fetchText, readBody, sendJson } from "./http.mjs";
@@ -385,7 +385,20 @@ function upsertProvider(id, b) {
 
 /** 模型清单地址能不能带密钥去问：要 https、和接口地址同一个站点（审查 10-30 第九份 存疑4）。
  *  厂商配置能分享导入，别人塞个外站的 modelsUrl，一点「测试」或刷新型号就把密钥交出去了。内置厂商全都满足 */
-const siteOf = (h) => h.split(".").slice(-2).join(".");
+// 「同站点」= 注册域（eTLD+1）。只取后两级会把 co.uk、com.cn 这类公共后缀当成一个站，
+// 两家无关的 xx.co.uk 被判成同站（审查 10-30 v0.5.12 中1）。没有完整公共后缀清单，按两条规矩收紧：
+// ① 两字母国家域名下，第二级是 co/com/net/org/gov/edu/ac/… 的，后缀算三级；② 托管平台的子域互不相干（列表里的按整个后缀算）。
+// 判不准时宁可不放行：最坏只是型号清单拉不到、改用试发消息验密钥
+const SLD = new Set(["co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go", "gob", "mil", "nom", "ltd", "plc", "info", "biz", "gen", "firm", "web", "me", "int"]);
+const HOSTED = ["workers.dev", "pages.dev", "r2.dev", "vercel.app", "netlify.app", "github.io", "gitlab.io", "herokuapp.com", "onrender.com", "fly.dev", "railway.app", "deno.dev", "hf.space", "glitch.me", "replit.app", "repl.co", "appspot.com", "web.app", "firebaseapp.com", "azurewebsites.net", "cloudfront.net", "amazonaws.com", "run.app", "ngrok.io", "ngrok-free.app", "trycloudflare.com", "duckdns.org", "zeabur.app", "sealos.run", "laf.run", "cpolar.cn", "natapp.cc", "ap-northeast-1.on.aws"];
+export function siteOf(h) {
+  h = String(h).toLowerCase().replace(/\.$/, "");
+  if (/^[\d.]+$/.test(h) || h.includes(":")) return h;        // IP 只认原样
+  const lab = h.split(".");
+  for (const suf of HOSTED) if (h === suf || h.endsWith("." + suf)) return lab.slice(-(suf.split(".").length + 1)).join(".");
+  const n = lab.length >= 3 && lab[lab.length - 1].length === 2 && SLD.has(lab[lab.length - 2]) ? 3 : 2;
+  return lab.slice(-n).join(".");
+}
 export function modelsUrlOk(p) {
   try {
     const m = new URL(p.modelsUrl), b = new URL(p.baseUrl);
@@ -673,8 +686,8 @@ export function applyProvider() {
   API_KEY = loadApiKey(PROVIDER);
 }
 
-/** claude 认的权限模式（2026-10 版二进制）。没有 manual */
-export const PERM_MODES = ["default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"];
+// PERM_MODES 挪到 config.mjs：settings.mjs 加载时就要用，放这里会因循环依赖在单独导入时撞上暂时性死区（审查 10-30 v0.5.12 低5）
+export { PERM_MODES } from "./config.mjs";
 
 function pickProvider(id) { return { id, explicit: !!PROVIDERS_RAW.providers[id] || id !== BUILTIN_PROVIDER.id, ...PROVIDERS_CFG.providers[id] }; }
 /** 生效厂商：设置里的 provider 优先，其次配置文件 active，最后内置兜底 */
@@ -745,3 +758,6 @@ export async function routeProviders(req, res, u, p) {
   }
   return NEXT;
 }
+
+// 设置已在 settings-store.mjs 载入；本模块的变量此时都已初始化，在这里解析生效厂商（原来在 settings.mjs 顶层调，单独导入时会撞死区）
+applyProvider();

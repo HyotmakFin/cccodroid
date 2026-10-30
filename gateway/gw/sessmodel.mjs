@@ -10,7 +10,7 @@ import path from "node:path";
 import { CFG } from "./config.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { PROVIDER, providerById } from "./providers.mjs";
-import { SETTINGS } from "./settings.mjs";
+import { SETTINGS } from "./settings-store.mjs";
 import { cachedModels, effortLevelsOf, normEffort } from "./models.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
