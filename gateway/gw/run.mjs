@@ -12,8 +12,8 @@ import { NEXT, readBody, sendJson } from "./http.mjs";
 import { INTERRUPTED, QUEUE, RUN_LANE, RUN_SESSIONS, abortRun, endRun, holdLane, idleArm, idleDisarm, laneOfItem, publishState, runEmit, saveRunMark, setInterrupted, setPermMode } from "./queue.mjs";
 import { handleLocalCommand } from "./modelcmd.mjs";
 import { LL, ensureLlama, localCustomActive } from "./local.mjs";
-import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt } from "./usage.mjs";
-import { TASKS_HINT, contextWindowOf, promptTokens, toolsHint, translate } from "./stream.mjs";
+import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt, usageMeter } from "./usage.mjs";
+import { TASKS_HINT, contextWindowOf, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
 import { SUBAGENT_HINT, agentBook, takeAgentNote, onShared, privateAgentsBase } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
@@ -244,6 +244,9 @@ export async function startRun(item) {
   run.bgList = [];             // 后台任务明细：{ id, type, desc }（shell / 子代理 / monitor / 工作流），界面列出来、可单独停
   run.replays = 0;
   run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
+  let subDir = null;
+  run.meter = usageMeter({ sid: () => run.sessionId, model: () => run.usageModel, start: Date.now(),   // token 边跑边记（见 usage.mjs）
+    subDir: () => subDir || (subDir = sfile()?.replace(/\.jsonl$/, "/subagents") || null) });
   run.paths = pathWatch();      // 本轮写过的文件、回复里有没有写全路径（收尾时核对，见 pathnote.mjs）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
@@ -375,7 +378,7 @@ export async function startRun(item) {
   };
   const onResult = (r) => {
     lastResult = r;
-    if (!isCmd && r.usage) usageAdd({ t: 1, i: promptTokens(r.usage), o: r.usage.output_tokens || 0, c: r.usage.cache_read_input_tokens || 0 }, run.sessionId, run.usageModel);
+    run.meter.result(r, !isCmd);         // 斜杠命令不算一轮对话，但 /compact 这类真花了的 token 照记
     if (run.pendingInject.length) return;
     if (!run.bgTasks) return closeInput();
     // 答完了，只是后台任务（本地服务之类）还在跑：界面上算这一轮结束，进程和 stdin 留着等任务回报
@@ -394,6 +397,7 @@ export async function startRun(item) {
   const feed = (line) => {
     let ev; try { ev = JSON.parse(line); } catch { return; }
     if (ev.type === "control_request") return onControl(ev);
+    run.meter.feed(ev);
     // 清单工具一出结果就推，不等 4 秒轮询
     if (ev.type === "user" && ev.tool_use_result && (ev.tool_use_result.task || ev.tool_use_result.statusChange || ev.tool_use_result.updatedFields)) setImmediate(() => tasksCheck(run.sessionId));
     // 我们发的 set_permission_mode 的回执：被拒要记下来（以前直接丢掉，切了没生效也看不出来）
@@ -455,6 +459,7 @@ export async function startRun(item) {
   const finish = (code) => {
     if (buf.trim()) feed(buf.trim());
     buf = "";
+    run.meter.close();                   // 中断 / 被杀也走这里：子代理记录最后扫一遍
     // claude 已经退出，这时的记录就是下一轮的基准；提醒这一轮已经交出去（正常答完）才清掉标记
     try { sealSession(run.sessionId, sfile(), { clear: !!integNote && !run.aborted && !!lastResult && !lastResult.is_error }); } catch (e) { log(`[封签] ${e.message}`); }
     run.inputOpen = false;

@@ -325,6 +325,14 @@
       if (!us.raw.imported && !us.raw.importing && !us.busy) usImport(true);
     } catch (e) { us.err = e.message || "?"; $("us-result").textContent = "✗ " + e.message; usPaint(); if (!$("us-field").classList.contains("hidden")) usRender(); }
   }
+  // 开着用量页时跟着刷新：token 现在是边跑边记的（gw/usage.mjs usageMeter），不用等这一轮结束、也不用退出重进。数没变就不重画
+  setInterval(async () => {
+    if (curPage !== "usage" || document.hidden || us.busy || !us.raw) return;
+    let r; try { r = await api("/api/usage"); } catch { return; }
+    if (curPage !== "usage" || JSON.stringify(r.hours) === JSON.stringify(us.raw.hours)) return;
+    us.raw = r; usBuild(); usPaint();
+    if (!$("us-field").classList.contains("hidden")) usRender();
+  }, 20000);
   async function usImport(auto) {
     us.busy = true;
     $("us-result").textContent = t("正在从历史会话补算…");

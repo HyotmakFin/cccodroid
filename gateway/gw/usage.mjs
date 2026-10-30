@@ -46,6 +46,73 @@ export function usageAdd(d, sid, model, ts) {
   if (tok && sid) (b.st || (b.st = {}))[sid] = (b.st[sid] || 0) + tok;
   usageSave();
 }
+// 一个 claude 进程的 token 计量：边跑边记进当前小时。以前等 result 才整轮一次性记，三处漏算（10-30 实测）：
+//   跑几个小时的一轮要到结束才显示、全记在结束那个小时；中断 / 被杀的那一轮没有 result，整轮丢掉；
+//   result.usage 只算主会话，子代理花的 token 一个都没记（modelUsage 里有，但 --resume 起的进程会把以前几轮也算进去，没法当本轮的用）。
+// 主会话：流式事件按 message.id 记见过的最大值，涨多少记多少（message_start 给输入、message_delta 给累计输出，兼容桥常在 delta 才补输入）；
+//   result 时和这一轮的 usage 对一次账，流里没看到的（压缩这类不出流事件的请求）补上差额。
+// 子代理：流里不带用量，读它自己的记录（<会话>/subagents/agent-*.jsonl，每条 assistant 带 usage），运行中每 30 秒、每轮 result、进程退出时各扫一次。
+export function usageMeter(ctx) {
+  const add = ctx.add || usageAdd;   // 测试换成收集器
+  const seen = new Map(), cur = {}, tot = { i: 0, o: 0, c: 0 };   // tot：主会话上次对账以来流里记了多少
+  const subPos = new Map();          // 子代理记录读到哪个字节了
+  const t0 = ctx.start || Date.now();
+  const num = (x) => Number.isFinite(x) && x > 0 ? x : 0;
+  const bump = (key, u, model, main) => {
+    if (!key || !u) return;
+    const v = { i: num(u.input_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens), o: num(u.output_tokens), c: num(u.cache_read_input_tokens) };
+    const p = seen.get(key) || { i: 0, o: 0, c: 0, m: model }, d = {};   // 型号跟着请求记：delta 不带型号
+    for (const k of ["i", "o", "c"]) if (v[k] > p[k]) { d[k] = v[k] - p[k]; p[k] = v[k]; if (main) tot[k] += d[k]; }
+    seen.delete(key); seen.set(key, p);
+    if (seen.size > 5000) seen.delete(seen.keys().next().value);
+    if (d.i || d.o || d.c) add(d, ctx.sid(), p.m || ctx.model());
+  };
+  function scanSubs() {
+    const dir = ctx.subDir && ctx.subDir();
+    if (!dir) return;
+    let names = [];
+    try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".jsonl")); } catch { return; }
+    for (const n of names) {
+      const file = path.join(dir, n);
+      let st; try { st = fs.statSync(file); } catch { continue; }
+      if (st.mtimeMs < t0 - 5000) continue;        // 以前几轮的子代理
+      const from = subPos.get(n) || 0;
+      if (st.size <= from) continue;
+      let text = "";
+      try { const fd = fs.openSync(file, "r"); const b = Buffer.alloc(st.size - from); fs.readSync(fd, b, 0, b.length, from); fs.closeSync(fd); text = b.toString("utf8"); } catch { continue; }
+      const end = text.lastIndexOf("\n");
+      if (end < 0) continue;                         // 半行：等写完
+      subPos.set(n, from + Buffer.byteLength(text.slice(0, end + 1)));
+      for (const line of text.slice(0, end).split("\n")) {
+        if (!line.includes('"usage"') || !line.includes('"assistant"')) continue;
+        let e; try { e = JSON.parse(line); } catch { continue; }
+        if (e.type !== "assistant" || !e.message?.id || !(Date.parse(e.timestamp) >= t0 - 5000)) continue;
+        bump(e.message.id, e.message.usage, e.message.model, false);
+      }
+    }
+  }
+  const timer = setInterval(scanSubs, 30000);
+  timer.unref?.();
+  return {
+    feed(ev) {
+      const lane = ev.parent_tool_use_id || "";
+      if (ev.type === "stream_event") {
+        const e = ev.event;
+        if (e?.type === "message_start") { cur[lane] = e.message?.id || lane + ":" + Date.now(); bump(cur[lane], e.message?.usage, lane && e.message?.model, !lane); }
+        else if (e?.type === "message_delta" && e.usage) bump(cur[lane], e.usage, undefined, !lane);
+      } else if (ev.type === "assistant" && ev.message?.id) bump(ev.message.id, ev.message.usage, lane && ev.message.model, !lane);   // 主会话记在 init 报的型号名下（兼容桥回的名字可能不一样）
+    },
+    result(r, turn) {
+      scanSubs();
+      const u = r.usage || {};
+      const all = { i: num(u.input_tokens) + num(u.cache_read_input_tokens) + num(u.cache_creation_input_tokens), o: num(u.output_tokens), c: num(u.cache_read_input_tokens) };
+      const d = turn ? { t: 1 } : {};
+      for (const k of ["i", "o", "c"]) { if (all[k] > tot[k]) d[k] = all[k] - tot[k]; tot[k] = 0; }   // 后台任务回报会在同一进程再出一轮 result，各对各的
+      if (Object.keys(d).length) add(d, ctx.sid(), ctx.model());
+    },
+    close() { clearInterval(timer); scanSubs(); },
+  };
+}
 // 用户自己打的字才算一次对话：斜杠命令、命令回显、系统注入的不算
 export const usageIsPrompt = (text) => {
   const s = String(text || "").trimStart();
