@@ -92,6 +92,7 @@
    *  anchor：落在某一章开头（脉络里点站 / 章标题；压缩消息的 uuid，第一章是 "start"） */
   function openSession(id, jumpQ, anchor) {
     if (id !== view.sessionId) saveLastRead();   // 切走前记下读到哪（在底部就作废）
+    if ((id || null) !== view.sessionId) draftSwap(view.sessionId, id);   // 输入框、附件栏换成这个会话自己的
     closePage();
     resetView(id);
     if (!id) showWelcome();   // 新会话当场画首屏，不等重连回来——中间空着那一下就是闪

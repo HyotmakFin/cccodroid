@@ -403,6 +403,26 @@
     state.attachments = state.attachments.filter((x) => x.path !== a.path);
     renderAttachments();
   }
+  // ── 每个会话各有各的草稿（群友反馈：输入框里没发的字、附件，切会话会跟着带过去）──
+  // 切走时把输入框和附件栏记在原会话名下（新对话记在 ""），切到哪个就换上哪个的；记在 localStorage，重开应用也在。
+  // 只在用户切会话（openSession）时换；重连、新会话拿到会话号都不经过这里，正在打的字不会被换掉
+  const DRAFTS_KEY = "cc.drafts";
+  function draftsRead() { try { const o = JSON.parse(localStorage.getItem(DRAFTS_KEY) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch { return {}; } }
+  function draftSwap(from, to) {
+    const all = draftsRead(), k0 = from || "", k1 = to || "";
+    if (k0 === k1) return;
+    const text = inputEl.value, att = state.attachments.slice();
+    if (text.trim() || att.length) all[k0] = { text, att, at: Date.now() }; else delete all[k0];
+    const d = all[k1];
+    delete all[k1];
+    const keys = Object.keys(all).sort((x, y) => (all[y].at || 0) - (all[x].at || 0));
+    for (const k of keys.slice(30)) delete all[k];
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(all)); } catch {}
+    inputEl.value = d && typeof d.text === "string" ? d.text : "";
+    state.attachments = d && Array.isArray(d.att) ? d.att.filter((x) => x && x.path) : [];
+    renderAttachments(); autoGrow();
+    draftLast = inputEl.value; draftStash = ""; draftChip.classList.add("hidden");   // 「恢复误删」是上一个会话的，别带过来
+  }
   /** 输入框有字或附件栏里有东西，就算有话要发 */
   function hasDraft() { return !!inputEl.value.trim() || state.attachments.length > 0; }
 
