@@ -504,8 +504,9 @@
   }
   function pjMark(p) { return `<span class="pj-mark"><i style="background:${esc(p.color || "var(--accent)")}"></i>${esc(p.name)}</span>`; }
   function pjOfSession(id) { const s = (state.sessions || []).find((x) => x.id === id); return s ? pjOfCwd(s.cwd) : null; }
+  // 项目颜色要进 style 属性：载入时只认 #rrggbb，其余当没设（审查 10-30 第九份 前端低2）
   async function loadProjects() {
-    try { const r = await api("/api/projects"); PJ.list = r.projects || []; PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; PJ.err = ""; }
+    try { const r = await api("/api/projects"); PJ.list = (r.projects || []).map((p) => (/^#[0-9a-f]{6}$/i.test(p.color || "") ? p : { ...p, color: "" })); PJ.colors = r.colors || []; PJ.ws = r.workspace || ""; PJ.loaded = true; PJ.err = ""; }
     catch (e) { PJ.err = e.message || "?"; if (curPage === "projects" && !PJ.cur) renderProjects(); return; }   // 有缓存也重画：顶上要标出刷新失败（#49 P2-9）
     paintProjChip();
     if (curPage === "projects") renderProjects();

@@ -64,7 +64,11 @@ function officeConvert(file, key, out) {
     const ext = path.extname(file).toLowerCase().replace(/[^.a-z0-9]/g, "") || ".bin";
     const src = path.join(work, "in" + ext);
     fs.copyFileSync(file, src);
-    const env = { ...termEnv(), FONTCONFIG_FILE: officeFonts(), SAL_USE_VCLPLUGIN: "svp" };
+    // 解析的是外来文档，LibreOffice 又是出过不少漏洞的解析器（审查 10-30 第九份 后端低6）：HOME / TMPDIR 指到这次的工作目录，
+    // 不让它顺手碰到真 home 里的令牌和配置；指向密钥、令牌的环境变量一个不给。字体缓存放 office 自己的目录，免得每次重建
+    const env = { ...termEnv(), FONTCONFIG_FILE: officeFonts(), SAL_USE_VCLPLUGIN: "svp", HOME: work, TMPDIR: work, XDG_CACHE_HOME: path.join(OFFICE_DIR, "cache"), XDG_CONFIG_HOME: path.join(work, ".config") };
+    // CCAPP_LD / CCAPP_SELF_EXE / CCAPP_GLIBC_* 是 exec 垫片要的（36 版靠它起程序），别整个前缀删
+    for (const k of Object.keys(env)) if (/^(ANTHROPIC_|OPENAI_|GH_|GITHUB_)|_(KEY|TOKEN|SECRET)(_FILE)?$/.test(k)) delete env[k];
     const args = ["-env:UserInstallation=file://" + path.join(OFFICE_DIR, "profile"), "--headless", "--norestore", "--nologo",
       "--convert-to", "pdf", "--outdir", work, src];
     const nice = path.join(PREFIX, "bin", "nice");

@@ -47,13 +47,14 @@ const die = (s) => { console.log("✗ " + s); process.exit(1); };
 /** 小文件：curl 拿到内存，失败再试一次，还不行返回 null（不抛） */
 function small(url, t = 20) {
   for (let i = 0; i < 2; i++) {
-    const r = spawnSync(CURL, ["-fsSL", "--connect-timeout", "10", "--max-time", String(t), url], { maxBuffer: 32 << 20 });
+    const r = spawnSync(CURL, ["-fsSL", "--proto", "=https", "--proto-redir", "=https", "--connect-timeout", "10", "--max-time", String(t), url], { maxBuffer: 32 << 20 });
     if (r.status === 0) return r.stdout;
   }
   return null;
 }
 const jsonOf = (b) => { try { return b && JSON.parse(b.toString("utf8")); } catch { return null; } };
-const isVer = (v) => /^\d+\.\d+\.\d+/.test(v || "");
+// 整串匹配（审查 10-30 第九份 存疑3）：版本号来自镜像 / npm 源，要拼进目录和网址，「2.1.0/../x」这种不能放过
+const isVer = (v) => /^\d{1,6}\.\d{1,6}\.\d{1,6}(-[0-9A-Za-z.]{1,40})?$/.test(v || "");
 const sha = (f, alg = "sha256", enc = "hex") => { const h = crypto.createHash(alg), fd = fs.openSync(f, "r"), b = Buffer.alloc(1 << 20); let n; while ((n = fs.readSync(fd, b, 0, b.length)) > 0) h.update(b.subarray(0, n)); fs.closeSync(fd); return h.digest(enc); };
 const size = (f) => { try { return fs.statSync(f).size; } catch { return 0; } };
 
@@ -153,7 +154,7 @@ else {
 
   const fetchTo = (url, file, total, label, exact) => PG ? PG.pget({ curl: CURL, url, file, total: exact ? total : 0,
     onProgress: (d) => console.log(`@progress ${d} ${total}`) }) : new Promise((resolve) => {
-    const c = spawn(CURL, ["-fsSL", "--connect-timeout", "15", "--speed-limit", "20480", "--speed-time", "30", "-C", "-", "-o", file, url], { stdio: ["ignore", "ignore", "pipe"] });
+    const c = spawn(CURL, ["-fsSL", "--proto", "=https", "--proto-redir", "=https", "--connect-timeout", "15", "--speed-limit", "20480", "--speed-time", "30", "-C", "-", "-o", file, url], { stdio: ["ignore", "ignore", "pipe"] });
     let err = ""; c.stderr.on("data", (d) => { err += d; });
     const tick = setInterval(() => console.log(`@progress ${size(file)} ${total}`), 2000);
     c.on("close", (code) => { clearInterval(tick); console.log(`@progress ${size(file)} ${total}`); resolve(code === 0 ? "" : (err.trim().split("\n").pop() || "curl " + code).replace(/^curl: \(\d+\) /, "")); });

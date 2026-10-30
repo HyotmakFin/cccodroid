@@ -383,6 +383,16 @@ function upsertProvider(id, b) {
   return { ok: true, id, provider: providerView(id, PROVIDERS_CFG.providers[id]) };
 }
 
+/** 模型清单地址能不能带密钥去问：要 https、和接口地址同一个站点（审查 10-30 第九份 存疑4）。
+ *  厂商配置能分享导入，别人塞个外站的 modelsUrl，一点「测试」或刷新型号就把密钥交出去了。内置厂商全都满足 */
+const siteOf = (h) => h.split(".").slice(-2).join(".");
+export function modelsUrlOk(p) {
+  try {
+    const m = new URL(p.modelsUrl), b = new URL(p.baseUrl);
+    return m.protocol === "https:" && (m.hostname === b.hostname || siteOf(m.hostname) === siteOf(b.hostname));
+  } catch { return false; }
+}
+
 /** 验密钥：有模型清单接口就拉清单（不花钱）；没有就发一条 max_tokens=1 的消息 */
 async function testProvider(id) {
   const v = PROVIDERS_CFG.providers[id];
@@ -395,7 +405,7 @@ async function testProvider(id) {
     : { Authorization: `Bearer ${key}`, "anthropic-version": "2023-06-01" };
   try {
     let r, how;
-    if (v.modelsUrl) {
+    if (v.modelsUrl && modelsUrlOk(v)) {
       how = "模型清单";
       r = await fetch(v.modelsUrl, { headers: auth, signal: AbortSignal.timeout(15000) });
     } else {

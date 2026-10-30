@@ -321,7 +321,7 @@ export async function routeQueue(req, res, u, p) {
       });
     }
     if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });
-    const item = enqueue({ ...b, internal: false });
+    const item = enqueue({ ...b, internal: false, auto: undefined });   // auto（空闲压缩轮）也只许网关自己设（审查 10-30 第九份 后端低8）
     return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: RUNS.has(item.id) });
   }
   if (req.method === "POST" && p === "/api/interrupted/dismiss") {

@@ -313,7 +313,12 @@ function modelFetch(e, urls) {
   if (fs.existsSync(dst)) throw new Error(tz("已经有同名模型了"));
   const job = { phase: "downloading", done: 0, total: e.bytes || 0, err: "", cancelled: false, child: null, url: e.url || "" };
   MDL.set(e.id, job);
-  const tick = setInterval(() => { if (job.phase === "downloading") { try { job.done = fs.statSync(part).size; } catch {} } }, 500);
+  // 贴链接下的没有目录里的大小可核：剩余空间低于 1 GB 就停，别把存储灌满（审查 10-30 第九份 后端低5）
+  const tick = setInterval(() => {
+    if (job.phase !== "downloading") return;
+    try { job.done = fs.statSync(part).size; } catch {}
+    try { const st = fs.statfsSync(dir); if (st.bavail * st.bsize < (1 << 30) && !job.cancelled) { job.cancelled = job.lowSpace = true; if (job.child) killTree(job.child); } } catch {}
+  }, 500);
   (async () => {
     try {
       let lastErr = null;
@@ -346,7 +351,8 @@ function modelFetch(e, urls) {
       expireModelCache();
       log(`[local] 模型已下载 ${e.id}`);
     } catch (er) {
-      if (job.cancelled) { MDL.delete(e.id); try { fs.rmSync(part, { force: true }); } catch {} return; }
+      if (job.lowSpace) { try { fs.rmSync(part, { force: true }); } catch {} er = new Error(tz("存储空间不够了")); job.cancelled = false; }
+      else if (job.cancelled) { MDL.delete(e.id); try { fs.rmSync(part, { force: true }); } catch {} return; }
       Object.assign(job, { phase: "error", err: er.message });
       log(`[local] 模型下载失败 ${e.id}：${er.message}`);
     } finally { clearInterval(tick); }

@@ -171,13 +171,14 @@
   const okVal = (k, v) => (TYPE[k] || []).includes(v) || (SLOTS.includes(k) && typeof v === "string" && v.startsWith("u:") && ufonts.some((f) => "u:" + f.id === v));
   const typePref = {};
   for (const k in TYPE) { let v = null; try { v = localStorage.getItem("ccapp." + k); } catch {} typePref[k] = okVal(k, v) ? v : TYPE[k][0]; }
+  // 格式只取表里的：本地存的值会原样进 CSS 字符串（审查 10-30 第九份 前端低3）
   const FMT = { ttf: "truetype", otf: "opentype", woff: "woff", woff2: "woff2" };
   const fam = (id) => `"CCU ${id}"`;
   function paintFonts() {
     let el = document.getElementById("user-fonts");
     if (!el) { el = document.createElement("style"); el.id = "user-fonts"; document.head.appendChild(el); }
     // 只声明不下载：@font-face 要等真有元素用到这个字体时才去取
-    let css = ufonts.map((f) => `@font-face{font-family:${fam(f.id)};src:url("/api/fonts/file/${f.id}") format("${FMT[f.fmt] || f.fmt}");font-display:swap}`).join("\n");
+    let css = ufonts.map((f) => `@font-face{font-family:${fam(f.id)};src:url("/api/fonts/file/${f.id}") format("${FMT[f.fmt] || "truetype"}");font-display:swap}`).join("\n");
     const id = (k) => (typePref[k].startsWith("u:") ? typePref[k].slice(2) : "");
     // 导入的字体排第一，缺字（比如英文字体里没有中文）照旧落回自带字体
     if (id("uifont")) css += `\nhtml[data-uifont="u"]{--font-ui:${fam(id("uifont"))},"CC Inter","CC Hei",sans-serif}`;

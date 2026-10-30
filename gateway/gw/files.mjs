@@ -79,8 +79,15 @@ function safeWritePath(p) {
 /** 写文件但不跟最后一级软链（O_NOFOLLOW：是软链就报 ELOOP） */
 function writeNoFollow(file, buf) {
   const c = fs.constants;
-  const fd = fs.openSync(file, c.O_WRONLY | c.O_CREAT | c.O_TRUNC | c.O_NOFOLLOW, 0o644);
-  try { fs.writeFileSync(fd, buf); } finally { fs.closeSync(fd); }
+  // 先不截断：打开后按 /proc/self/fd 看实际打开的是哪个文件。核完路径到打开之间，上级目录也可能被换成软链（审查 10-30 第九份 后端低3），
+  // O_NOFOLLOW 只管最后一级；对不上就不写，原文件一个字节都不动
+  const fd = fs.openSync(file, c.O_WRONLY | c.O_CREAT | c.O_NOFOLLOW, 0o644);
+  try {
+    let real = null; try { real = fs.readlinkSync("/proc/self/fd/" + fd); } catch {}
+    if (real && real !== file) throw Object.assign(new Error("path changed"), { code: "ELOOP" });
+    fs.ftruncateSync(fd, 0);
+    fs.writeFileSync(fd, buf);
+  } finally { fs.closeSync(fd); }
 }
 
 /** 供文件面板用的快捷入口 */

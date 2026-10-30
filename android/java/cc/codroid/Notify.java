@@ -264,7 +264,10 @@ final class Notify {
             .setAutoCancel(true);
         // 选择题要选项，通知里答不了；其它的给「拒绝」，「允许」必须进应用看完整内容再点
         if (!question) {
-            Intent deny = new Intent(ctx, Events.class).setAction(ACTION_DENY).putExtra("id", id);
+            // 请求码是哈希取模，会撞；FLAG_UPDATE_CURRENT 又会把撞上的那个改成新的 extras——点 A 的「拒绝」拒掉的是 B。
+            // 带上各自的 data，系统就当成不同的 PendingIntent（审查 10-30 第九份 安卓低17）
+            Intent deny = new Intent(ctx, Events.class).setAction(ACTION_DENY).putExtra("id", id)
+                .setData(android.net.Uri.parse("cccodroid-notify://deny/" + android.net.Uri.encode(id)));
             PendingIntent pi = PendingIntent.getBroadcast(ctx, 20000 + Math.abs(id.hashCode() % 10000), deny,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             b.addAction(new Notification.Action.Builder(null, Tr.t("拒绝"), pi).build());
@@ -294,6 +297,7 @@ final class Notify {
         Intent i = MainActivity.internal(ctx, ACTION_OPEN)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (sessionId != null && !sessionId.isEmpty()) i.putExtra("session", sessionId);
+        i.setData(android.net.Uri.parse("cccodroid-notify://open/" + req + "/" + android.net.Uri.encode(sessionId == null ? "" : sessionId)));   // 同上：撞码时别串会话
         return PendingIntent.getActivity(ctx, 60000 + req, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 

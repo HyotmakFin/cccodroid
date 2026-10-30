@@ -87,7 +87,7 @@
     if (!FLT[sess.flt]) sess.flt = "all";
     if (sess.flt !== "all" && !state.sessions.some(FLT[sess.flt][1])) sess.flt = "all";
     $("sess-flt").innerHTML = Object.entries(FLT).filter(([k, f]) => k === "all" || state.sessions.some(f[1]))
-      .map(([k, f]) => `<button data-f="${k}" class="${sess.flt === k ? "on" : ""}">${esc(f[0])}</button>`).join("");
+      .map(([k, f]) => `<button data-f="${esc(k)}" class="${sess.flt === k ? "on" : ""}">${esc(f[0])}</button>`).join("");
     $("sess-flt-wrap").classList.toggle("hidden", $("sess-flt").children.length < 2);
     const keep = FLT[sess.flt][1];
     const nLive = state.sessions.filter(isLive).length;

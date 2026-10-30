@@ -134,7 +134,12 @@ public final class Share extends ContentProvider {
     // 网关日志里记着每条提问 / 插话的开头几十个字：那是用户的对话内容，诊断用不着，抹掉
     private static final Pattern ASK = Pattern.compile("(▶ (?:提问|命令) ).*?(  \\((?:续 [0-9a-f]{8}|新会话)\\))", Pattern.DOTALL);
     private static final Pattern INJ = Pattern.compile("(↪ 插话 ).*");
+    // 私钥块、.env 式的「名字里带 KEY/TOKEN/SECRET/PASSWORD 的变量=值」（审查 10-30 第九份 安卓低11）
+    private static final Pattern PEM = Pattern.compile("-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(-----END [A-Z0-9 ]*PRIVATE KEY-----|\\z)", Pattern.DOTALL);
+    private static final Pattern ENVKV = Pattern.compile("(?m)\\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIALS?)[A-Z0-9_]*\\s*[=:]\\s*)[\"']?[^\\s\"']{4,}[\"']?");
     static String scrub(String s) {
+        s = PEM.matcher(s).replaceAll("«私钥已抹去»");
+        s = ENVKV.matcher(s).replaceAll("$1«已抹去»");
         s = INJ.matcher(ASK.matcher(s).replaceAll("$1«内容已抹去»$2")).replaceAll("$1«内容已抹去»");
         s = QSECRET.matcher(s).replaceAll("$1«已抹去»");
         s = USERINFO.matcher(s).replaceAll("$1«已抹去»@");

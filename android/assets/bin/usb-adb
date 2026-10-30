@@ -44,7 +44,11 @@ def main(argv):
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip())
         return 0
-    name = argv[argv.index("--name") + 1] if "--name" in argv else ""
+    i = argv.index("--name") if "--name" in argv else -1
+    if i >= 0 and i + 1 >= len(argv):
+        print("usb-adb: --name 后面要跟设备名", file=sys.stderr)
+        return 2
+    name = argv[i + 1] if i >= 0 else ""
     print("usb-adb: 申请 USB 授权（请在弹出的系统对话框里点「确定」）…", file=sys.stderr)
     r, fds = call({"op": "usb_open", "name": name, "timeout": 90}, want_fd=True)
     if not r.get("ok") or not fds:

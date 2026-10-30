@@ -156,11 +156,14 @@ function pkgAlive(pid) {
 function lock() {
   fs.mkdirSync(STATE, { recursive: true });
   const f = path.join(STATE, ".lock");
-  try {
-    const pid = Number(fs.readFileSync(f, "utf8"));
+  // 用 wx 原子占锁：先查再写，两个 pkg 同时起来会都以为自己拿到了（审查 10-30 第九份 安卓低15）。占着的进程已经没了就清掉重占
+  for (let i = 0; ; i++) {
+    try { fs.writeFileSync(f, String(process.pid), { flag: "wx" }); break; }
+    catch (e) { if (e.code !== "EEXIST" || i >= 2) throw e; }
+    let pid = 0; try { pid = Number(fs.readFileSync(f, "utf8")); } catch {}
     if (pid && pid !== process.pid && pkgAlive(pid)) die(`另一个 pkg（pid ${pid}）正在运行，等它结束再试`);
-  } catch {}
-  fs.writeFileSync(f, String(process.pid));
+    try { fs.unlinkSync(f); } catch {}
+  }
   process.on("exit", () => { try { if (fs.readFileSync(f, "utf8") === String(process.pid)) fs.unlinkSync(f); } catch {} });
   for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, () => { console.error("\npkg：被中断（再跑一次同样的命令会接着来）"); process.exit(130); });
 }

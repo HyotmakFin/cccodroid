@@ -238,6 +238,8 @@ final class DeviceTools {
 
     private static JSONObject clipWrite(Context c, JSONObject a) throws Exception {
         String text = a.optString("text", "");
+        // 剪贴板走 Binder，内容过大系统直接抛异常；也别让一段巨量文字把剪贴板占住（审查 10-30 第九份 安卓低12）
+        if (text.length() > 200000) return fail(Tr.f("太长了（{0} 字），剪贴板一次最多放 20 万字", text.length()));
         onMain(() -> { c.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Claude", text)); return null; });
         return new JSONObject().put("ok", true).put("chars", text.length());
     }

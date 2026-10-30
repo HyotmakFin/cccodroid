@@ -65,8 +65,13 @@ const TS = () => new Date().toISOString().slice(11, 19);
 // 默认落 home（私有目录），不落共享存储：脱离 App 单独跑网关时别让别的应用读到日志（审查 v0.5.4 B-L2）
 const LOG_FILE = process.env.CCAPP_LOG || path.join(CFG.home, "gateway.log");
 // 网址里的账号口令（http://user:pass@host）和查询串里的令牌（?key=…、&token=…）不进日志（后者审查 10-29 第六份 低3）
-const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@")
-  .replace(/([?&](?:key|api_?key|token|access_token|auth|sig|signature|password|secret)=)[^&\s"']+/gi, "$1***");
+export const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@")
+  .replace(/([?&](?:key|api_?key|token|access_token|auth|sig|signature|password|secret)=)[^&\s"']+/gi, "$1***")
+  // 长得像密钥的串：claude 的 stderr、厂商报错原文都会进日志（审查 10-30 第九份 后端低7）
+  .replace(/\b(sk-(?:ant-)?[A-Za-z0-9_-]{4})[A-Za-z0-9_-]{8,}/g, "$1***")
+  .replace(/\b(gh[pousr]_)[A-Za-z0-9]{8,}/g, "$1***")
+  .replace(/\b(Bearer\s+)[A-Za-z0-9._~+\/-]{8,}=*/gi, "$1***")
+  .replace(/(x-api-key["']?\s*[:=]\s*["']?)[^\s"',}]{8,}/gi, "$1***");
 // 日志有上限（审查 10-30 第九份 高3）：超过 4 MB 挪成 gateway.log.1（只留一份旧的），单行截到 4000 字，
 // 别让反复请求把私有目录写满
 const LOG_MAX = 4 << 20;

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings.mjs";
-import { PROVIDER, keyOf, providerBrief, providerById } from "./providers.mjs";
+import { PROVIDER, keyOf, modelsUrlOk, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, fetchJsonCapped, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
 import { effectiveModel } from "./sessmodel.mjs";
@@ -204,7 +204,7 @@ async function fetchModelsOf(p, force) {
   if (isLoginMode(p)) return keep((p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS);
 
   const key = keyOf(p);
-  if (p.modelsUrl && (key || p.modelsAuth === "none")) {
+  if (p.modelsUrl && ((key && modelsUrlOk(p)) || p.modelsAuth === "none")) {
     try {
       const headers = {};
       if (key) {

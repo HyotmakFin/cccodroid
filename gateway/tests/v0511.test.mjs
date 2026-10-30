@@ -187,3 +187,22 @@ test("1.1 GB 的会话：能分叉、能导出导入", { skip: !process.env.BIG 
   assert.deepEqual(r.imported, [sid]);
   assert.equal(forEachLine(findSessionFile(sid).file, () => {}), 1101);
 });
+
+// 日志脱敏：stderr / 报错原文里的密钥
+import { noCred } from "../gw/config.mjs";
+test("日志脱敏：常见密钥格式只留前几位", () => {
+  const s = noCred("err sk-ant-api03-abcdefghijklmnop Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.x.y ghp_ABCDEFGH12345 x-api-key: 0123456789abcdef https://u:p@h/x?key=zzz");
+  for (const bad of ["abcdefghijklmnop", "eyJhbGciOiJIUzI1NiJ9", "ABCDEFGH12345", "0123456789abcdef", "u:p@", "zzz"]) assert.ok(!s.includes(bad), bad + " :: " + s);
+  assert.equal(noCred("普通一行 skip-list 完成 ok"), "普通一行 skip-list 完成 ok");
+});
+
+// 模型清单地址带密钥前先核站点
+import { modelsUrlOk } from "../gw/providers.mjs";
+test("模型清单地址：同主机 / 同站点 + https 才带密钥去问", () => {
+  const ok = (b, m) => modelsUrlOk({ baseUrl: b, modelsUrl: m });
+  assert.equal(ok("https://api.deepseek.com/anthropic", "https://api.deepseek.com/models"), true);
+  assert.equal(ok("https://dashscope.aliyuncs.com/apps/anthropic", "https://x.aliyuncs.com/v1/models"), true);
+  assert.equal(ok("https://api.deepseek.com/anthropic", "https://evil.example/models"), false);
+  assert.equal(ok("https://api.deepseek.com/anthropic", "http://api.deepseek.com/models"), false);
+  assert.equal(ok("https://api.deepseek.com", "not a url"), false);
+});

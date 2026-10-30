@@ -102,7 +102,7 @@
 
   function renderTermTabs() {
     $("term-tabs").innerHTML = TERM.list.map((x) => `
-      <span class="term-tab ${x.id === TERM.cur ? "cur" : ""} ${x.alive === false ? "dead" : ""}" data-id="${x.id}">
+      <span class="term-tab ${x.id === TERM.cur ? "cur" : ""} ${x.alive === false ? "dead" : ""}" data-id="${esc(x.id)}">
         <span class="tt-name">${esc(x.title)}</span><span class="tt-x" data-x="1" aria-label="${esc(t("关闭"))}">×</span>
       </span>`).join("");
     $("term-tabs").querySelectorAll(".term-tab").forEach((el) => el.addEventListener("click", (e) => {
@@ -120,7 +120,7 @@
     // 先断本地的输出流再发 kill：连接池满的时候 kill 请求排在它后面，等它就永远等不到（审查 #49 P2-7）
     const a = TERM.inst.get(id);
     if (a) termDetach(a);
-    try { await api(`/api/term/${id}/kill`, { method: "POST", body: "{}" }); }
+    try { await api(`/api/term/${encodeURIComponent(id)}/kill`, { method: "POST", body: "{}" }); }
     catch (e) { if (e.status !== 404) { toast(t("关闭终端失败：{msg}", { msg: e.message }), true); if (a && TERM.cur === id) termAttach(a); return; } }
     if (a) { a.ro?.disconnect(); a.xt.dispose(); a.el.remove(); TERM.inst.delete(id); }
     TERM.list = TERM.list.filter((y) => y.id !== id);
@@ -200,7 +200,7 @@
   function termAttach(a) {
     if (a.es || a.exited) return;
     const { id, xt } = a;
-    const es = new EventSource(`/api/term/${id}/stream`);
+    const es = new EventSource(`/api/term/${encodeURIComponent(id)}/stream`);
     a.es = es;
     es.addEventListener("replay", (m) => { xt.reset(); try { xt.write(JSON.parse(m.data)); } catch {} });
     es.addEventListener("o", (m) => { try { xt.write(JSON.parse(m.data)); } catch {} });
@@ -246,7 +246,7 @@
       a.q = ""; a.timer = 0;
       // 串起来发，保证顺序（并发的 fetch 不保证先到先处理）
       // 没送到要说一声：网关重启时按键无声丢掉，人以为命令已经发出去了（审查 F4）
-      a.sending = a.sending.then(() => fetch(`/api/term/${a.id}/in`, { method: "POST", body })
+      a.sending = a.sending.then(() => fetch(`/api/term/${encodeURIComponent(a.id)}/in`, { method: "POST", body })
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); })
         .catch(() => { if (!a.lostIn) { a.lostIn = true; a.xt.write("\r\n\x1b[2m" + t("[输入没送到终端，网关可能在重启]") + "\x1b[0m\r\n"); setTimeout(() => { a.lostIn = false; }, 3000); } }));
     }, 6);
@@ -259,7 +259,7 @@
     if (a.xt.cols === a.cols && a.xt.rows === a.rows) return;
     a.cols = a.xt.cols; a.rows = a.xt.rows;
     clearTimeout(a.rt);
-    a.rt = setTimeout(() => api(`/api/term/${a.id}/resize`, {
+    a.rt = setTimeout(() => api(`/api/term/${encodeURIComponent(a.id)}/resize`, {
       method: "POST", body: JSON.stringify({ cols: a.cols, rows: a.rows }),
     }).catch(() => {}), 120);
   }
