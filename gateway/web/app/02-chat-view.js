@@ -126,6 +126,9 @@
     userTextOf.set(b.parentElement, text);
     const [body, refs] = splitRefs(text);
     setHtml(b, body ? renderMd(body) : "");
+    linRefLinks(b);   // 档号可点（18e-lineage-merge.js）
+    b.addEventListener("click", (e) => { const a = e.target.closest(".u-chref"); if (a) linGoRef(a.dataset.ref); });
+    b.addEventListener("keydown", (e) => { const a = e.key === "Enter" && e.target.closest(".u-chref"); if (a) linGoRef(a.dataset.ref); });
     if (refs.length) {
       b.insertAdjacentHTML("beforebegin", refsHtml(refs));
       if (!body) b.classList.add("hidden");

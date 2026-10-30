@@ -2485,5 +2485,10 @@ window.I18N_DICT.en = {
   "点一行弹出的菜单里还有「汇合…」和「剖面」：汇合是勾几个会话、把它们的思路合进一个新会话；剖面是把一个会话一轮轮摊开，看每轮用了多久、派了几个子代理。": "The menu that pops up when you tap a row also has \"Merge…\" and \"Drill down\": merging checks a few sessions and carries their thinking into one new session; drilling down lays a session out turn by turn, showing how long each turn took and how many subagents it sent.",
   "聊天时写「a1b2·3」这样的档号，AI 会拿到那一章结束时的摘要。工具栏的「导出」能把脉络存成图片或网页。": "Write an archive number like \"a1b2·3\" in chat and the AI gets the summary from the end of that chapter. \"Export\" in the toolbar saves the lineage as an image or a web page.",
   "已选 {n} 个。真脉络里这时点底下的「下一步」进向导。": "{n} selected. On the real Lineage page you'd now tap \"Next\" at the bottom to open the wizard.",
-  "在真脉络里，这会打开「{t}」的剖面。": "On the real Lineage page, this opens the drill-down for \"{t}\"."
+  "在真脉络里，这会打开「{t}」的剖面。": "On the real Lineage page, this opens the drill-down for \"{t}\".",
+  "跳到这一章": "Jump to this chapter",
+  "脉络还在整理，稍后再点": "Lineage is still being indexed. Try again in a moment.",
+  "没找到档号 {r} 对应的会话": "No session found for {r}",
+  "有 {n} 个会话的号都以 {s} 开头，在图上挑一个": "{n} sessions start with {s}. Pick one on the map.",
+  "{r}：没有这一章": "{r}: no such chapter"
 };

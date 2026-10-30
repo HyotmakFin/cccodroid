@@ -2448,3 +2448,8 @@
 2448	Écrivez un numéro d'archive comme « a1b2·3 » dans la conversation et l'IA reçoit le résumé de la fin de ce chapitre. « Exporter » dans la barre d'outils enregistre la lignée en image ou en page web.
 2449	{n} sélectionnée(s). Sur la vraie page Lignée, vous toucheriez maintenant « Suivant » en bas pour ouvrir l'assistant.
 2450	Sur la vraie page Lignée, cela ouvre le détail de « {t} ».
+2451	Aller à ce chapitre
+2452	La lignée est encore en cours d’indexation. Réessayez dans un instant.
+2453	Aucune session ne correspond à {r}
+2454	{n} sessions commencent par {s}. Choisissez-en une sur la carte.
+2455	{r} : ce chapitre n’existe pas

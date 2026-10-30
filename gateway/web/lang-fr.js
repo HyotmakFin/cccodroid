@@ -2451,4 +2451,9 @@ window.I18N_DICT["fr"] = {
   "聊天时写「a1b2·3」这样的档号，AI 会拿到那一章结束时的摘要。工具栏的「导出」能把脉络存成图片或网页。": "Écrivez un numéro d'archive comme « a1b2·3 » dans la conversation et l'IA reçoit le résumé de la fin de ce chapitre. « Exporter » dans la barre d'outils enregistre la lignée en image ou en page web.",
   "已选 {n} 个。真脉络里这时点底下的「下一步」进向导。": "{n} sélectionnée(s). Sur la vraie page Lignée, vous toucheriez maintenant « Suivant » en bas pour ouvrir l'assistant.",
   "在真脉络里，这会打开「{t}」的剖面。": "Sur la vraie page Lignée, cela ouvre le détail de « {t} ».",
+  "跳到这一章": "Aller à ce chapitre",
+  "脉络还在整理，稍后再点": "La lignée est encore en cours d’indexation. Réessayez dans un instant.",
+  "没找到档号 {r} 对应的会话": "Aucune session ne correspond à {r}",
+  "有 {n} 个会话的号都以 {s} 开头，在图上挑一个": "{n} sessions commencent par {s}. Choisissez-en une sur la carte.",
+  "{r}：没有这一章": "{r} : ce chapitre n’existe pas",
 };

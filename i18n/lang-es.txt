@@ -2448,3 +2448,8 @@
 2448	Escribe un número de archivo como «a1b2·3» en el chat y la IA recibe el resumen del final de ese capítulo. «Exportar» en la barra guarda el linaje como imagen o página web.
 2449	{n} seleccionadas. En el Linaje real tocarías ahora «Siguiente» abajo para abrir el asistente.
 2450	En el Linaje real, esto abre el detalle de «{t}».
+2451	Ir a este capítulo
+2452	El linaje aún se está indexando. Inténtalo de nuevo en un momento.
+2453	No hay ninguna sesión para {r}
+2454	{n} sesiones empiezan por {s}. Elige una en el mapa.
+2455	{r}: ese capítulo no existe

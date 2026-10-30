@@ -2598,6 +2598,9 @@ html.wel #hint-row #proj-chip:not(.hidden) ~ #model-chip > .chip:first-child{mar
 .u-refs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--g1);max-width:min(85%,680px);margin-bottom:var(--g1)}
 .u-ref{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg2);color:var(--fg2);border-radius:12px;padding:7px 11px;font-size:12.5px;line-height:1.3;cursor:pointer;max-width:240px}
 .u-ref span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.u-chref{text-decoration:underline dotted;text-underline-offset:3px;text-decoration-thickness:1px;cursor:pointer;border-radius:4px;font-variant-numeric:tabular-nums;transition:background-color .15s}
+.u-chref:hover,.u-chref:focus-visible{background:color-mix(in srgb,currentColor 12%,transparent);outline:none}
+.u-chref:active{background:color-mix(in srgb,currentColor 20%,transparent)}
 .u-ref svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .u-ref.img{padding:0;overflow:hidden;border-radius:13px}
 .u-ref.img img{display:block;width:89px;height:89px;object-fit:cover;background:var(--bg3)}

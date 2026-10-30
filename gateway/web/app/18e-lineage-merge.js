@@ -234,3 +234,41 @@
     o.addEventListener("click", (e) => { if (e.target.closest("[data-close]") && W.ed) { W.ed.destroy(); W.ed = null; } }, true);
     step1();
   }
+
+  // ── 自己气泡里的档号可点（§13.9）：「c624·3」→ 那个会话第 3 章开头；会话号前缀撞了就去脉络页让人挑 ──
+  // 认法同网关（gw/merge.mjs REF_RE）；代码、链接、公式里的不动
+  const CH_REF = /(?<![0-9a-f])([0-9a-f]{4})[·・](\d{1,4})(?!\d)/g;
+  function linRefLinks(root) {
+    if (!/[·・]/.test(root.textContent)) return;
+    const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement.closest("code,pre,a,.katex") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    const hits = [];
+    for (let n; (n = tw.nextNode());) { CH_REF.lastIndex = 0; if (CH_REF.test(n.data)) hits.push(n); }
+    for (const n of hits) {
+      const f = document.createDocumentFragment();
+      let i = 0;
+      for (const m of n.data.matchAll(CH_REF)) {
+        f.append(n.data.slice(i, m.index));
+        const a = document.createElement("span");
+        a.className = "u-chref"; a.setAttribute("role", "link"); a.tabIndex = 0;
+        a.dataset.ref = m[1] + "·" + m[2]; a.title = t("跳到这一章"); a.textContent = m[0];
+        f.append(a); i = m.index + m[0].length;
+      }
+      f.append(n.data.slice(i));
+      n.replaceWith(f);
+    }
+  }
+  async function linGoRef(ref) {
+    const s = ref.slice(0, 4), n = Number(ref.slice(5));
+    let g = LIN.g;
+    if (!g) {
+      try { g = await api("/api/lineage"); } catch (e) { return toast(e.message, true); }
+      if (g.building) return toast(t("脉络还在整理，稍后再点"));
+      LIN.g = g;
+    }
+    const hit = g.nodes.filter((x) => x.id.startsWith(s));
+    if (!hit.length) return toast(t("没找到档号 {r} 对应的会话", { r: ref }), true);
+    if (hit.length > 1) { openPage("lineage"); return toast(t("有 {n} 个会话的号都以 {s} 开头，在图上挑一个", { n: hit.length, s })); }
+    const c = (hit[0].chapters || [])[n - 1];
+    if (!c && n !== 1) return toast(t("{r}：没有这一章", { r: ref }), true);
+    openSession(hit[0].id, null, n === 1 ? "start" : c.anchor || "");
+  }
