@@ -107,6 +107,7 @@ export async function routeArchive(req, res, u, p) {
   let sid = b.session ? String(b.session) : "", by = b.session ? "user" : "ai";
   if (!sid && b.run) sid = RUNS.get(String(b.run))?.sessionId || "";
   if (!sid) return sendJson(res, 400, { ok: false, errors: ["cannot tell which session this is (run not found)"] });
+  if (!SID.test(sid)) return sendJson(res, 400, { ok: false, errors: ["bad session id"] });
   const r = await fileChapter(sid, { title: b.title, same: !!b.same, status: b.status, chapter: b.chapter, misc: !!b.misc, by });
   return sendJson(res, r.ok ? 200 : 422, r);
 }

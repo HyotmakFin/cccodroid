@@ -72,13 +72,18 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   /** 看得见、能聚焦的控件（模态的初始焦点和 Tab 循环用） */
   const focusables = (root) => [...root.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")]
     .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== "hidden");
-  /** 焦点挪进模态：已经在里面就不动；里面没有可聚焦的就聚焦容器本身（审查 #52 P2-12） */
+  // 最近一次操作是不是键盘：手指点的时候程序聚焦到按钮上，WebView 刚加载完会把它当键盘焦点描上选中框
+  let kbNav = false;
+  document.addEventListener("keydown", (e) => { if (e.key === "Tab" || e.key.startsWith("Arrow")) kbNav = true; }, true);
+  document.addEventListener("pointerdown", () => { kbNav = false; }, true);
+  /** 焦点挪进模态：已经在里面就不动；用键盘才落到第一个控件，否则聚焦容器本身（审查 #52 P2-12） */
   function focusInto(root, prefer) {
     if (!root.isConnected || root.contains(document.activeElement)) return;
     // 不挑输入框：手机上程序聚焦输入框会直接弹出键盘
-    const el = (prefer && prefer.getClientRects().length ? prefer : null) || focusables(root).find((x) => !x.matches("input, textarea, select"));
+    const el = kbNav && ((prefer && prefer.getClientRects().length ? prefer : null) || focusables(root).find((x) => !x.matches("input, textarea, select")));
     if (el) return el.focus({ preventScroll: true });
     if (!root.hasAttribute("tabindex")) root.tabIndex = -1;
+    root.dataset.fr = "";   // 容器本身拿焦点不描框（style.css [data-fr]）
     root.focus({ preventScroll: true });
   }
   /** Tab 不许跑出模态：首尾循环；焦点在外面时拉回第一个 */

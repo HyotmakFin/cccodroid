@@ -13,6 +13,7 @@ import { trashSession } from "./sessionops.mjs";
 import { termEnv } from "./terminal.mjs";
 import { killTree } from "./claude.mjs";
 import { runOfSession } from "./runs.mjs";
+import { checkSession, resealAfterEdit } from "./integrity.mjs";
 
 const FILE = path.join(CFG.home, "ccapp-projects.json");
 // 项目颜色：和界面强调色同一套饱和度，按顺序分配（用户可改）
@@ -112,6 +113,7 @@ export function moveSession(sid, projectId) {
   const dir = path.join(PATHS.projects, projectSlug(cwd));
   if (path.dirname(found.file) === dir) return { ok: true, same: true };
   fs.mkdirSync(dir, { recursive: true });
+  const dirty = checkSession(sid, found.file);   // 改写 cwd 前先核对，搬完重新封签：网关自己改的不算外部改动，原本不干净的也不洗白
   const text = fs.readFileSync(found.file, "utf8");
   const out = text.split("\n").map((l) => {
     if (!l.includes('"cwd"')) return l;
@@ -124,6 +126,7 @@ export function moveSession(sid, projectId) {
   const side = path.join(path.dirname(found.file), sid);
   if (isDir(side)) { try { fs.renameSync(side, path.join(dir, sid)); } catch {} }
   fs.rmSync(found.file, { force: true });
+  resealAfterEdit(sid, dst, dirty);
   PEEK_CACHE.delete(found.file);
   log(`📁 会话 ${sid.slice(0, 8)} → ${p ? "项目 " + p.name : "工作区"}`);
   return { ok: true };

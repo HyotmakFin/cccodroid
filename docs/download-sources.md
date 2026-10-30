@@ -125,7 +125,7 @@ Cover at least: npm only; official reachable but downloading from a mirror; offi
 
 - Repositories are listed in `REPOS`, each with a `base` and a list of `mirrors`.
 - **Verification**: fetch `Release` and `Release.gpg` and verify against `TERMUX_KEYS`; check `Packages.gz` against the sha256 in `Release`; check each `.deb` against the sha256 in `Packages`.
-  - Termux's own hosts (`OFFICIAL_HOST`) may fall back to HTTPS alone if the signature can't be fetched.
+  - Signature missing means the source is skipped, Termux's own hosts included; if every source fails, the cached index is used.
   - **Any other mirror with a missing or bad signature is not used.**
 - **Mirrors in China**: TUNA, USTC, BFSU and NJU carry main and x11 only, **no glibc repo** (checked 2026-10-20); Aliyun has no Termux mirror. They lag the official repo by 10–15 hours, so an index from the official repo may point at packages a mirror doesn't have yet (404); the code just moves to the next source.
 - **Packages are fetched first from whichever source served the index** (`repo.from`), so an unreachable official host doesn't stall every package.

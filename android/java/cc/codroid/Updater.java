@@ -608,10 +608,12 @@ final class Updater {
         } catch (Exception ex) { return null; }
     }
 
-    /** 发布列表地址。home/.config/cccodroid/update-feed 里写了地址就用它（测试更新流程用，形状同 GitHub API） */
+    /** 发布列表地址。home/.config/cccodroid/update-feed 里写了地址就用它（测试更新流程用，形状同 GitHub API）。
+     *  只在可调试的包里认：正式包里应用身份的任何程序都能写这个文件，拿它把更新检查指到别处（审查 v0.5.9 B1） */
     private String feed() {
         File f = new File(env.home, ".config/cccodroid/update-feed");
-        try { if (f.isFile()) { String u = new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim(); if (!u.isEmpty()) return u; } }
+        boolean debuggable = (ctx.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        try { if (debuggable && f.isFile()) { String u = new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim(); if (!u.isEmpty()) return u; } }
         catch (Exception ignored) {}
         return "https://api.github.com/repos/" + REPO + "/releases?per_page=30";
     }

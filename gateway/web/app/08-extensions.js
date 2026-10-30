@@ -252,7 +252,7 @@
         .replace(" data-c=\"install\"", " data-c=\"install\"" + (c.verified ? "" : " data-unverified=\"1\"") + (miss.length ? " disabled" : ""))
         .replace(" data-c=\"remove\"", " data-c=\"remove\"" + (used.length ? ' data-usedby="' + listOf(used) + '"' : ""));
     }).join("");
-    box.innerHTML = (r.allowUnsigned ? '<div class="tiny err">' + esc(t("组件签名检查已关闭（私有目录里有 allow-unsigned 开关文件）。调试完请删掉它")) + "</div>" : "") +
+    box.innerHTML = (r.allowUnsigned ? '<div class="tiny err">' + esc(t("组件签名检查已关闭（网关带了测试开关启动）")) + "</div>" : "") +
       (html || '<div class="tiny">' + (r.indexError ? t("组件清单取不到：{msg}", { msg: esc(r.indexError) }) : t("暂时没有可装的组件。")) + "</div>") +
       (html && r.indexError ? '<div class="tiny err">' + t("部分组件清单取不到：{msg}", { msg: esc(r.indexError) }) + "</div>" : "") +
       (r.indexError ? '<div class="it-acts"><button class="btn ghost sm" data-c="reindex">' + t("重试") + "</button></div>" : "");

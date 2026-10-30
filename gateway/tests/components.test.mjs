@@ -1,5 +1,5 @@
 // 组件索引（gw/components.mjs 的 compIndex）：磁盘缓存、先出旧列表后台再拉、换镜像与一天后回主地址。
-// 本机起一个服务当四个地址（官方 / 社区 × 主地址 / 镜像）；索引不签名，靠组件目录里的 allow-unsigned 放行
+// 本机起一个服务当四个地址（官方 / 社区 × 主地址 / 镜像）；索引不签名，靠 CCAPP_COMPONENTS_ALLOW_UNSIGNED=1 放行
 import "../gw/config.mjs";   // 放最前：没走 scripts/test.mjs（没有临时 home）就在这里拦下，下面一行都不跑
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import http from "node:http";
 const COMP_DIR = path.join(path.dirname(process.env.CCAPP_PREFIX), "components");
 const CACHE = path.join(COMP_DIR, "index.cache");
 fs.mkdirSync(COMP_DIR, { recursive: true });
-fs.writeFileSync(path.join(COMP_DIR, "allow-unsigned"), "");
+process.env.CCAPP_COMPONENTS_ALLOW_UNSIGNED = "1";
 
 const hits = { preset: 0, presetMirror: 0, community: 0, communityMirror: 0 };
 const S = { presetDown: false, ver: 1 };

@@ -67,8 +67,7 @@ public class SchedAlarm extends BroadcastReceiver {
             try {
                 for (int n = 0; n < 20; n++) {
                     try {
-                        HttpURLConnection h = Env.gateway("/api/sched/tick");
-                        h.setRequestMethod("POST");
+                        HttpURLConnection h = Env.gateway("POST", "/api/sched/tick", null);
                         h.setConnectTimeout(2000); h.setReadTimeout(5000);
                         int code = h.getResponseCode();
                         h.disconnect();

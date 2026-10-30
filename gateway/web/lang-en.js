@@ -2378,5 +2378,6 @@ window.I18N_DICT.en = {
   "建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。": "Tip: set a daily spending limit and a balance alert in the provider's console. If you think the key has leaked, revoke it there and create a new one.",
   "要改管着提示词或安全检查的文件：{w}": "Wants to change a file that controls Claude's instructions or safety checks: {w}",
   "消息输入框": "Message input",
-  "额度速览": "Usage at a glance"
+  "额度速览": "Usage at a glance",
+  "组件签名检查已关闭（网关带了测试开关启动）": "Component signature checks are off (the gateway was started with the test switch)"
 };

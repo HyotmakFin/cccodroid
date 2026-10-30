@@ -467,6 +467,7 @@ html[dir="rtl"] .drawer-panel{animation-name:slide-rtl}
 .nav-item:hover{background:var(--bg3);color:var(--fg)}
 .nav-item.on{background:var(--active-bg);color:var(--accent);font-weight:500}
 .nav-item svg{width:18px;height:18px;flex:none;stroke-width:1.9}
+[data-fr]:focus{outline:none}
 .nav-item span{flex:1;min-width:0}
 .nav-item .caret{width:15px;height:15px;transition:transform .15s;color:var(--fg3)}
 .nav-more.open .caret{transform:rotate(180deg)}
@@ -511,7 +512,7 @@ html.dock-l .side-recent{margin:0 -12px;padding:0 12px 8px}
 .sr-all{display:block;margin:6px 12px 0;padding:4px 0;border:0;background:none;color:var(--fg3);font:inherit;font-size:12.5px;cursor:pointer}
 .sr-all:hover{color:var(--accent)}
 .sr-empty{padding:10px 12px;color:var(--fg3);font-size:13px}
-.nav-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--fg2);background:var(--bg4);border-radius:999px;padding:0 8px;flex:none}
+.nav-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1;color:var(--fg3);font-weight:400;flex:none;white-space:nowrap}
 .nav-badge i{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:sr-pulse 1.4s infinite}
 /* 弹出菜单：长按会话、账户行 */
 .pop-menu{position:fixed;z-index:95;min-width:220px;max-width:min(320px,calc(100vw - 16px));background:var(--bg);border:1px solid var(--line);

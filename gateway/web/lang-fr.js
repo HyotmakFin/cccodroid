@@ -2344,4 +2344,5 @@ window.I18N_DICT["fr"] = {
   "要改管着提示词或安全检查的文件：{w}": "Veut modifier un fichier qui contrôle les instructions ou les vérifications de sécurité de Claude : {w}",
   "消息输入框": "Saisie du message",
   "额度速览": "Aperçu de l'utilisation",
+  "组件签名检查已关闭（网关带了测试开关启动）": "La vérification des signatures des composants est désactivée (la passerelle a été lancée avec l'option de test)",
 };

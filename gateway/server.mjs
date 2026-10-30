@@ -80,7 +80,7 @@ import { routeSessModel } from "./gw/sessmodel.mjs";
 import { routeLineage } from "./gw/lineage.mjs";
 import { routeBackfill } from "./gw/backfill.mjs";
 import { routeArchive } from "./gw/archive.mjs";
-import { COOKIE, SESSION, UI_HOST, cookieHostOk, denyLog, denyReason, proof, tokenOk } from "./gw/access.mjs";
+import { COOKIE, SESSION, UI_HOST, cookieHostOk, denyLog, denyReason, localAddr, proof, tokenOk } from "./gw/access.mjs";
 import { startWorkIsland, stopWorkIslandSync } from "./gw/work-island.mjs";
 
 // 各模块的路由函数，按原来分支的先后排；返回 NEXT 表示不归它管
@@ -113,7 +113,7 @@ const server = http.createServer(async (req, res) => {
   }
   // App 核身份用（见 access.mjs 的 proof）：不要令牌，回的东西没有令牌算不出来
   if (req.method === "GET" && p === "/__proof") {
-    const r = proof(u.searchParams.get("n"));
+    const r = proof(u.searchParams.get("n"), localAddr(req));
     if (!r) return sendJson(res, 400, { error: "bad nonce" });
     res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
     return res.end(r);
@@ -156,9 +156,16 @@ try { fs.mkdirSync(CFG.home, { recursive: true }); } catch {}
 try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 startStreamFix();
 
-// 界面专用地址：同一个处理函数再听一份。听不上（被别的应用抢先占了）就不听，App 核身份时会发现不是真网关、不交凭据
+// 界面专用地址：同一个处理函数再听一份。听不上（被别的应用抢先占了）App 核身份时会发现不是真网关、不交凭据；
+// 这里每 2 秒再试，对方一放手就接回来（核身份绑了监听地址，对方转发到 127.0.0.1 也过不了，见 access.mjs 的 proof）
 const uiServer = http.createServer((req, res) => server.emit("request", req, res));
-uiServer.on("error", (e) => log(`⚠️ 界面地址 ${UI_HOST}:${CFG.port} 监听失败：${e.code || e.message}`));
+let uiRetryLogged = false;
+uiServer.on("error", (e) => {
+  if (!uiRetryLogged) log(`⚠️ 界面地址 ${UI_HOST}:${CFG.port} 监听失败：${e.code || e.message}，每 2 秒重试`);
+  uiRetryLogged = true;
+  setTimeout(() => uiServer.listen(CFG.port, UI_HOST), 2000).unref();
+});
+uiServer.on("listening", () => { if (uiRetryLogged) log(`界面地址 ${UI_HOST}:${CFG.port} 已接回`); });
 uiServer.listen(CFG.port, UI_HOST);
 server.listen(CFG.port, "127.0.0.1", () => {
   log(`claude-apk 网关 v3 已启动  http://127.0.0.1:${CFG.port}`);

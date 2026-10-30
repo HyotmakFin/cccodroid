@@ -58,7 +58,9 @@ function compFetch(src, quick) {
 // 备用源：cccodroid.net 镜像了两份索引（连同 .sig，逐字节同 GitHub）。主地址拉不到才用；照样验签，镜像不需要被信任
 const COMP_INDEX_MIRROR = { preset: process.env.CCAPP_COMPONENTS_INDEX_MIRROR || "https://cccodroid.net/components/official/components.json",
   community: process.env.CCAPP_COMPONENTS_COMMUNITY_INDEX_MIRROR || "https://cccodroid.net/components/community/components.json" };   // 环境变量只给测试用
-/** 取一份索引并验签。unsigned 只在私有目录里有 allow-unsigned 开关文件时才放行（/sdcard 别的应用也能写） */
+/** 取一份索引并验签。没签名、签名不对一律拒绝；只有网关启动时带了 CCAPP_COMPONENTS_ALLOW_UNSIGNED=1（测试用）才放行。
+ *  以前看私有目录里有没有 allow-unsigned 文件，应用身份跑的任何程序（包括模型自己）touch 一下就把签名关了（审查 v0.5.9 D2） */
+const allowUnsigned = () => process.env.CCAPP_COMPONENTS_ALLOW_UNSIGNED === "1";
 // 上回主地址拉不到、靠镜像拉到的：这回先试镜像（记在磁盘缓存里，重开 App 也记得）
 // 镜像地址 → 改用镜像的时刻（两份索引各记各的）；一天后重新先试主地址——镜像是定时同步的，可能比 GitHub 晚一拍
 let compIndexViaMirror = {};
@@ -80,7 +82,7 @@ async function compFetchIndex(src, mirror) {
   let sig = null;
   try { sig = Buffer.from(String(await compFetch(src + ".sig", true)).trim(), "base64"); } catch {}
   const ok = sig && sig.length === 64 && crypto.verify(null, body, COMP_INDEX_PUBKEY, sig);
-  if (!ok && !fs.existsSync(path.join(COMP_DIR, "allow-unsigned"))) throw new Error(sig ? tz("索引签名不对，已拒绝") : tz("索引没有签名，已拒绝"));
+  if (!ok && !allowUnsigned()) throw new Error(sig ? tz("索引签名不对，已拒绝") : tz("索引没有签名，已拒绝"));
   return { ...JSON.parse(String(body)), signed: !!ok };
 }
 
@@ -215,9 +217,8 @@ async function compList(force) {
       unsupported: compUnsupported(e),
     };
   });
-  // allow-unsigned 开着就一直挂个警示（审查 10-29 第六份 低5）：调试完忘了删，签名这道防线就悄悄没了
-  const allowUnsigned = !!COMP_DIR && fs.existsSync(path.join(COMP_DIR, "allow-unsigned"));
-  return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, refreshing: !!ix.refreshing, allowUnsigned, items };
+  // 签名检查关着就一直挂个警示（审查 10-29 第六份 低5）
+  return { supported: true, devkit: dk ? (dk.sha256 || "").slice(0, 12) : null, indexError: ix.error, refreshing: !!ix.refreshing, allowUnsigned: allowUnsigned(), items };
 }
 
 // 给了 size 且是小文件就一次读完再算：逐个开流对成千个小文件很慢（gpu-driver-glibc 末尾 5600 多个小文件，

@@ -39,7 +39,9 @@ export const UI_HOST = "127.0.0.2";
 const UI_HOSTPORT = `${UI_HOST}:${CFG.port}`;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${CFG.port}`, `localhost:${CFG.port}`, UI_HOSTPORT]);
 /** 这个请求能不能凭 Cookie 认、能不能种 Cookie：cccodroid 里只有界面专用地址可以 */
-export const cookieHostOk = (req) => !PREFIX || String(req.headers.host || "").toLowerCase() === UI_HOSTPORT;
+// Host 头谁都能写：再核一下连接实际进的是哪个监听地址。冒牌的占住 127.0.0.2、把界面请求转发到 127.0.0.1 上来时，这里就不认
+export const localAddr = (req) => String(req.socket?.localAddress || "").replace(/^::ffff:/, "");
+export const cookieHostOk = (req) => !PREFIX || (String(req.headers.host || "").toLowerCase() === UI_HOSTPORT && localAddr(req) === UI_HOST);
 const ALLOWED_ORIGINS = new Set([...ALLOWED_HOSTS].map((h) => `http://${h}`));
 
 function same(t, want) {
@@ -53,14 +55,17 @@ export const tokenOk = (t) => same(t, TOKEN);
 // ── App 自己的请求按次签名（GHSA-hwmm 附录 B）──
 // 以前 App 核完身份（有 3 秒缓存）再另开一个连接带上令牌原文：中间这段时间网关要是换了人，令牌就交出去了。
 // 现在 App 不发令牌，发 X-CC-Sig: 时间戳.随机数.HMAC(令牌, sig:时间戳:随机数:路径)。冒牌的收到也只能原样转发这一个请求，
-// 随机数用过一次就作废，时间戳差一分钟以上也不认
+// 随机数用过一次就作废，时间戳差一分钟以上也不认。
+// 一并签进去的还有：这次启动的编号 BOOT（随机数表在内存里，重启就清空；崩溃空档里被冒牌的截走的签名到了重启后的网关不认）、
+// 连接进的监听地址（App 只连 127.0.0.2，冒牌的占住它再转发到 127.0.0.1 就对不上）、方法、请求体的 sha256（X-CC-Body，读体时核，见 http.mjs）
 const SIG_SEEN = new Map();
-export function sigOk(v, pathAndQuery) {
+export const EMPTY_SHA = crypto.createHash("sha256").update("").digest("hex");
+export function sigOk(v, pathAndQuery, { method = "GET", local = UI_HOST, body = EMPTY_SHA } = {}) {
   const m = /^(\d{10,16})\.([0-9a-f]{32})\.([0-9a-f]{64})$/.exec(String(v || ""));
-  if (!m) return false;
+  if (!m || !/^[0-9a-f]{64}$/.test(body)) return false;
   const now = Date.now(), ts = Number(m[1]);
   if (Math.abs(now - ts) > 60e3) return false;
-  if (!same(m[3], crypto.createHmac("sha256", TOKEN).update(`sig:${m[1]}:${m[2]}:${pathAndQuery}`).digest("hex"))) return false;
+  if (!same(m[3], crypto.createHmac("sha256", TOKEN).update(`sig2:${BOOT}:${local}:${method}:${m[1]}:${m[2]}:${body}:${pathAndQuery}`).digest("hex"))) return false;
   if (SIG_SEEN.has(m[2])) return false;
   SIG_SEEN.set(m[2], now);
   if (SIG_SEEN.size > 2000) for (const [k, t] of SIG_SEEN) if (now - t > 120e3 || SIG_SEEN.size > 2000) SIG_SEEN.delete(k); else break;
@@ -74,15 +79,16 @@ export function sigOk(v, pathAndQuery) {
 // BOOT 是这次启动的编号，一并算进去，App 据此知道网关换过了没有。
 export const BOOT = crypto.randomBytes(16).toString("hex");
 const mac = (s) => crypto.createHmac("sha256", TOKEN).update(s).digest("hex");
-export function proof(n) {
-  return /^[0-9a-f]{32,128}$/.test(String(n || "")) ? `${BOOT} ${mac(`proof:${n}:${BOOT}`)}` : null;
+// local 是连接实际进的监听地址：冒牌的占住 127.0.0.2、把 /__proof 转发给 127.0.0.1 上的真网关，算出来的是 127.0.0.1 的，App 不认
+export function proof(n, local = UI_HOST) {
+  return /^[0-9a-f]{32,128}$/.test(String(n || "")) ? `${BOOT} ${mac(`proof:${n}:${BOOT}:${local}`)}` : null;
 }
 // 界面的页面与静态资源由 App 在原生层代取（MainActivity.shouldInterceptRequest，审查 10-29 第六份 中3）：
 // App 带一个随机数 X-CC-Nonce，这里用令牌对「随机数 + 请求行 + 内容哈希」算 HMAC 放在 X-CC-Mac 里回去。
 // 网关没起来的空档里抢占端口的应用算不出来，它给的页面和脚本 App 一律不交给 WebView
-export function staticMac(nonce, url, body) {
+export function staticMac(nonce, url, body, local = UI_HOST) {
   if (!/^[0-9a-f]{32}$/.test(String(nonce || ""))) return null;
-  return mac(`static:${nonce}:${url}:${crypto.createHash("sha256").update(body).digest("hex")}`);
+  return mac(`static:${nonce}:${local}:${url}:${crypto.createHash("sha256").update(body).digest("hex")}`);
 }
 // cccodroid 里 Cookie 不用令牌本身，用按这次启动派生的会话值：会话中途网关挂了、端口被抢，
 // 界面重连时送出去的 Cookie 到了下一个真网关就作废。网关重启后 App 按新的 BOOT 种上新 Cookie（Env.proveGateway），
@@ -101,7 +107,11 @@ export function denyReason(req, u) {
   if (origin !== undefined && !ALLOWED_ORIGINS.has(String(origin).toLowerCase())) return 403;
   if (!u.pathname.startsWith("/api/")) return null;          // 静态页面与资源不含秘密
   if (tokenOk(String(req.headers["x-cc-token"] || ""))) return null;
-  if (req.headers["x-cc-sig"] && sigOk(req.headers["x-cc-sig"], String(req.url || ""))) return null;   // 按请求行原样比，不经 URL 规范化
+  if (req.headers["x-cc-sig"]) {
+    const body = String(req.headers["x-cc-body"] || EMPTY_SHA);
+    // 按请求行原样比，不经 URL 规范化
+    if (sigOk(req.headers["x-cc-sig"], String(req.url || ""), { method: req.method, local: localAddr(req), body })) { req.ccBodySha = body; return null; }
+  }
   // 凭 Cookie 的：浏览器标明是别的源发起的就不认。SameSite 不看端口，内置浏览器里开的本机页面（127.0.0.1:3000 之类）
   // 发的 <img> / no-cors 请求不带 Origin、却会带上 Cookie（审查 H7）。界面自己的请求是 same-origin；
   // 地址栏直接打开是 none；claude、curl 这类不发这个头

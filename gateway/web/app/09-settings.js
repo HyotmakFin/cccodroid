@@ -261,7 +261,7 @@
     if (!live()) { openExternal(r.url); return watchLogin(p); }
     openExternal(r.url);
         $("login-flow").innerHTML = `<div class="tiny">${t("已在浏览器打开授权页。授权后浏览器会跳回本机，登录自动完成。")}
-        ${t("没自动打开？")}<a href="${esc(r.url)}" target="_blank" rel="noopener">${t("点这里打开")}</a></div>
+        ${t("没自动打开？")}<a href="${esc(webUrl(r.url))}" target="_blank" rel="noopener">${t("点这里打开")}</a></div>
       <div class="prov-manual">
         <div class="tiny">${t("浏览器没跳回来（或在别的设备上授权）？在终端里登录：授权码由你直接贴给 claude，本应用不经手。")}</div>
         <button class="btn sm" id="btn-login-term">${t("在终端里登录")}</button>

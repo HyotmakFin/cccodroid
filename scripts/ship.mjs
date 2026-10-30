@@ -237,6 +237,11 @@ if (FROM) { for (const s of STEPS.slice(0, STEPS.indexOf(FROM))) state.done[s] |
 for (const s of plan) {
   if (!DEV && state.done[s]) { console.log(`· ${s}（已完成）`); continue; }
   console.log(`▸ ${s}`);
+  // --from 跳过了 verify（标成 assumed）：对外的步骤前照样核一遍包，别把没核过的产物传上去（审查 v0.5.9 D3）
+  if (PUBLIC.includes(s) && state.done.verify === "assumed") {
+    try { await S.verify(); state.done.verify = new Date().toISOString(); save(); }
+    catch (e) { console.error(`✗ verify（${s} 之前补核）：${e.message}`); save(); process.exit(1); }
+  }
   try { await S[s](); } catch (e) {
     console.error(`✗ ${s}：${e.message}\n  修好后再跑同一条命令，会从 ${s} 接着来`);
     save(); process.exit(1);

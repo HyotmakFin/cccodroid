@@ -125,7 +125,7 @@ node install-claude.mjs --recheck    # 补核
 
 - 仓库列表在 `REPOS`，每个仓库有一个 `base` 和一组 `mirrors`。
 - **验签**：先取 `Release` 和 `Release.gpg`，用 `TERMUX_KEYS` 验签；`Packages.gz` 按 `Release` 里记的 sha256 核对；每个 `.deb` 再按 `Packages` 里的 sha256 核对。
-  - Termux 自己的域名（`OFFICIAL_HOST`）拿不到签名文件时，照旧只靠 HTTPS。
+  - 签名文件取不到的源一律不用，Termux 自己的域名也一样；全都取不到时用缓存的旧索引。
   - **其他镜像拿不到签名或签名不对，一律不用。**
 - **国内镜像**：清华、中科大、北外、南大都只同步了 main 和 x11，**没有 glibc 仓库**（2026-10-20 核实）；阿里云没有 Termux 镜像。国内镜像比官方晚 10 到 15 个小时：索引从官方拿、包从镜像下时，可能遇到 404，代码会自动换下一个来源。
 - **索引从哪个来源拿到的，下载包时就先试那个来源**（`repo.from`），免得官方连不上时，每个包都先在官方地址上空等。

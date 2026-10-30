@@ -20,16 +20,24 @@ final class Env {
     }
 
     /** 连本机网关：先核身份，再带上令牌头。网关没起来、没生成令牌、或端口上不是它时抛 IOException，调用方照"没就绪"处理即可 */
-    static java.net.HttpURLConnection gateway(String path) throws java.io.IOException {
+    static java.net.HttpURLConnection gateway(String path) throws java.io.IOException { return gateway("GET", path, null); }
+
+    /** 同上，指定方法；body 是之后要写出去的请求体（没有给 null），签名里带它的 sha256，调用方照旧自己 setDoOutput 再写 */
+    static java.net.HttpURLConnection gateway(String method, String path, byte[] body) throws java.io.IOException {
         if (!proveGateway()) throw new java.io.IOException(HOST + ":" + PORT + " 上不是 cccodroid 的网关（还没起来，或被别的应用占了）");
+        String b = boot;
         java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("http://" + HOST + ":" + PORT + path).openConnection();
         c.setInstanceFollowRedirects(false);     // 自定义头会跟着重定向转发出去（审查 10-29 第六份 低5）
-        // 不发令牌原文，按次签名（GHSA-hwmm 附录 B）：核身份到真正发请求之间网关要是换了人，对方拿到的签名只对这一个请求有效、只能用一次
+        c.setRequestMethod(method);
+        // 不发令牌原文，按次签名（GHSA-hwmm 附录 B）：核身份到真正发请求之间网关要是换了人，对方拿到的签名只对这一个请求有效、只能用一次。
+        // 签进去的还有核到的启动号、监听地址、方法、请求体哈希：截走的签名到了重启后的网关不认，转发时改方法改体也不认（协议见 gateway/gw/access.mjs 的 sigOk）
         try {
             byte[] nb = new byte[16];
             new java.security.SecureRandom().nextBytes(nb);
             String ts = String.valueOf(System.currentTimeMillis()), n = hex(nb);
-            c.setRequestProperty("X-CC-Sig", ts + "." + n + "." + hmac(token(), "sig:" + ts + ":" + n + ":" + path));
+            String bh = hex(java.security.MessageDigest.getInstance("SHA-256").digest(body == null ? new byte[0] : body));
+            c.setRequestProperty("X-CC-Body", bh);
+            c.setRequestProperty("X-CC-Sig", ts + "." + n + "." + hmac(token(), "sig2:" + b + ":" + HOST + ":" + method + ":" + ts + ":" + n + ":" + bh + ":" + path));
         } catch (Exception e) { throw new java.io.IOException(e); }
         return c;
     }
@@ -62,7 +70,7 @@ final class Env {
                 }
                 String[] p = new String(buf, 0, len, java.nio.charset.StandardCharsets.UTF_8).trim().split(" ");
                 if (p.length != 2 || !p[0].matches("[0-9a-f]{32}")) return false;
-                String want = hmac(t, "proof:" + n + ":" + p[0]);
+                String want = hmac(t, "proof:" + n + ":" + p[0] + ":" + HOST);   // 绑监听地址：冒牌的转发到 127.0.0.1 上的真网关，算出来的对不上
                 if (!java.security.MessageDigest.isEqual(want.getBytes(), p[1].getBytes())) return false;
                 provedAt = System.currentTimeMillis();
                 if (!p[0].equals(boot)) {
@@ -99,7 +107,7 @@ final class Env {
                 }
                 byte[] body = bo.toByteArray();
                 String got = c.getHeaderField("X-CC-Mac");
-                String want = hmac(t, "static:" + n + ":" + pq + ":" + hex(java.security.MessageDigest.getInstance("SHA-256").digest(body)));
+                String want = hmac(t, "static:" + n + ":" + HOST + ":" + pq + ":" + hex(java.security.MessageDigest.getInstance("SHA-256").digest(body)));
                 if (got == null || !java.security.MessageDigest.isEqual(want.getBytes(), got.getBytes())) {
                     android.util.Log.e("cccodroid", "界面资源 " + pq + " 不是本应用网关给的（没有或对不上 X-CC-Mac），不交给界面");
                     return null;

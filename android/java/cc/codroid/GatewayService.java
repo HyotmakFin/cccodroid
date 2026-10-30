@@ -106,7 +106,10 @@ public class GatewayService extends Service {
     }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
-        if (i != null && ACTION_STOP.equals(i.getAction())) {
+        // 只认自己通知里那个「停止」：服务是导出的，有跨用户权限的进程（shell、别的拿了 Shizuku 的应用）也能发；对不上就当普通启动（审查 v0.5.9 B5）
+        String ik = i == null ? null : i.getStringExtra(MainActivity.IK);
+        if (i != null && ACTION_STOP.equals(i.getAction()) && ik != null
+                && java.security.MessageDigest.isEqual(ik.getBytes(), MainActivity.intentKey(this).getBytes())) {
             stopping = true;
             killGateway();
             ShizukuSetup.get(this).onExit();
@@ -232,7 +235,7 @@ public class GatewayService extends Service {
             new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 1,
-            new Intent(this, GatewayService.class).setAction(ACTION_STOP),
+            new Intent(this, GatewayService.class).setAction(ACTION_STOP).putExtra(MainActivity.IK, MainActivity.intentKey(this)),
             PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(this, CH)
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)

@@ -2341,3 +2341,4 @@
 2341	Quiere cambiar un archivo que controla las instrucciones o los controles de seguridad de Claude: {w}
 2342	Campo de mensaje
 2343	Resumen de uso
+2344	La comprobación de firmas de componentes está desactivada (la pasarela se inició con el interruptor de pruebas)

@@ -5,9 +5,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { BOOT, COOKIE, SESSION, TOKEN, UI_HOST, cookieHostOk, denyReason, proof, sigOk, staticMac, tokenOk } from "../gw/access.mjs";
+import { BOOT, COOKIE, EMPTY_SHA, SESSION, TOKEN, UI_HOST, cookieHostOk, denyReason, proof, sigOk, staticMac, tokenOk } from "../gw/access.mjs";
 
-const req = (headers) => ({ headers });
+// 连接进的监听地址默认跟着 Host 走（真实情况）；转发场景单独给 local
+const req = (headers, local) => ({ headers, socket: { localAddress: local || (String(headers.host || "").startsWith(UI_HOST) ? UI_HOST : "127.0.0.1") } });
 const url = (p) => new URL("http://127.0.0.1:8799" + p);
 const HOST = "127.0.0.1:8799";
 // cccodroid（测试里设了 CCAPP_PREFIX）的界面走专用地址，会话 Cookie 只在这里认
@@ -71,7 +72,8 @@ test("证明：回启动号和 HMAC，随机数不合格式就不答", () => {
   const n = crypto.randomBytes(16).toString("hex");
   const [boot, m] = proof(n).split(" ");
   assert.equal(boot, BOOT);
-  assert.equal(m, crypto.createHmac("sha256", TOKEN).update(`proof:${n}:${BOOT}`).digest("hex"));
+  assert.equal(m, crypto.createHmac("sha256", TOKEN).update(`proof:${n}:${BOOT}:${UI_HOST}`).digest("hex"));
+  assert.notEqual(proof(n, "127.0.0.1"), proof(n), "冒牌的占住 127.0.0.2 再转发给 127.0.0.1：算出来的不一样，App 不认");
   for (const bad of ["", "abc", "g".repeat(32), "a".repeat(129), null]) assert.equal(proof(bad), null);
 });
 
@@ -90,12 +92,23 @@ test("界面专用地址（GHSA-hwmm 1）：cccodroid 里 Cookie 只在 127.0.0.
 });
 
 test("按次签名（GHSA-hwmm 附录 B）：对的放行一次，重放、改路径、过期、格式不对都不认", () => {
-  const sig = (p, ts = Date.now(), n = crypto.randomBytes(16).toString("hex")) =>
-    `${ts}.${n}.${crypto.createHmac("sha256", TOKEN).update(`sig:${ts}:${n}:${p}`).digest("hex")}`;
+  const sig = (p, ts = Date.now(), n = crypto.randomBytes(16).toString("hex"), { boot = BOOT, local = UI_HOST, method = "GET", body = EMPTY_SHA } = {}) =>
+    `${ts}.${n}.${crypto.createHmac("sha256", TOKEN).update(`sig2:${boot}:${local}:${method}:${ts}:${n}:${body}:${p}`).digest("hex")}`;
+  const R = (h, local = UI_HOST, method = "GET") => ({ url: "/api/status", method, headers: { host: UIH, ...h }, socket: { localAddress: local } });
   const a = sig("/api/status");
-  assert.equal(denyReason(({ url: "/api/status", headers: { host: HOST, "x-cc-sig": a } }), url("/api/status")), null);
-  assert.equal(denyReason(({ url: "/api/status", headers: { host: HOST, "x-cc-sig": a } }), url("/api/status")), 403);          // 同一个随机数第二次
-  assert.equal(sigOk(sig("/api/status"), "/api/file?path=/x"), false);                               // 签的是别的路径
+  assert.equal(denyReason(R({ "x-cc-sig": a }), url("/api/status")), null);
+  assert.equal(denyReason(R({ "x-cc-sig": a }), url("/api/status")), 403);          // 同一个随机数第二次
+  // 截走的签名：网关重启过（启动号不同）、被转发到 127.0.0.1、换了方法、换了请求体，都不认
+  assert.equal(denyReason(R({ "x-cc-sig": sig("/api/status", Date.now(), undefined, { boot: "0".repeat(32) }) }), url("/api/status")), 403);
+  assert.equal(denyReason(R({ "x-cc-sig": sig("/api/status") }, "127.0.0.1"), url("/api/status")), 403);
+  assert.equal(denyReason(R({ "x-cc-sig": sig("/api/status") }, UI_HOST, "POST"), url("/api/status")), 403);
+  const bh = crypto.createHash("sha256").update('{"behavior":"deny"}').digest("hex");
+  const okReq = R({ "x-cc-sig": sig("/api/status", Date.now(), undefined, { method: "POST", body: bh }), "x-cc-body": bh }, UI_HOST, "POST");
+  assert.equal(denyReason(okReq, url("/api/status")), null);
+  assert.equal(okReq.ccBodySha, bh, "放行后记下体哈希，读体时核（http.mjs）");
+  assert.equal(denyReason(R({ "x-cc-sig": sig("/api/status", Date.now(), undefined, { method: "POST", body: bh }), "x-cc-body": EMPTY_SHA }, UI_HOST, "POST"), url("/api/status")), 403);
+  assert.equal(sigOk(sig("/api/status"), "/api/file?path=/x"), false);
+  assert.equal(denyReason(req({ host: UI_HOST + ":8799", cookie: `${COOKIE}=${SESSION}` }, "127.0.0.1"), url("/api/state")), process.env.CCAPP_PREFIX ? 403 : null, "Host 写 127.0.0.2、连接其实进的 127.0.0.1（转发）：Cookie 不认");                               // 签的是别的路径
   assert.equal(sigOk(sig("/api/file?path=%2Fa"), "/api/file?path=%2Fa"), true);
   assert.equal(sigOk(sig("/api/status", Date.now() - 120e3), "/api/status"), false);                // 过期
   for (const bad of ["", "x", "1.2.3", sig("/api/status").replace(/.$/, "g")]) assert.equal(sigOk(bad, "/api/status"), false);
@@ -103,8 +116,9 @@ test("按次签名（GHSA-hwmm 附录 B）：对的放行一次，重放、改�
 
 test("界面资源 HMAC（staticMac）：绑随机数、请求行、内容；随机数格式不对不给", () => {
   const n = "0123456789abcdef0123456789abcdef", body = Buffer.from("<html>");
-  const want = crypto.createHmac("sha256", TOKEN).update(`static:${n}:/?k=1:${crypto.createHash("sha256").update(body).digest("hex")}`).digest("hex");
+  const want = crypto.createHmac("sha256", TOKEN).update(`static:${n}:${UI_HOST}:/?k=1:${crypto.createHash("sha256").update(body).digest("hex")}`).digest("hex");
   assert.equal(staticMac(n, "/?k=1", body), want);
+  assert.notEqual(staticMac(n, "/?k=1", body, "127.0.0.1"), want);
   assert.notEqual(staticMac(n, "/app.js", body), want);
   assert.notEqual(staticMac(n, "/?k=1", Buffer.from("<html>x")), want);
   assert.equal(staticMac("xyz", "/", body), null);

@@ -1,7 +1,8 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { PATHS, log, reqLang, tr } from "./config.mjs";
-import { staticMac } from "./access.mjs";
+import { localAddr, staticMac } from "./access.mjs";
 
 // ── HTTP ──────────────────────────────────────────────────────────────
 export const MIME = {
@@ -68,6 +69,8 @@ export async function fetchText(r, max = 8 * 1024 * 1024) {
 }
 export const fetchJsonCapped = async (r, max) => JSON.parse(await fetchText(r, max));
 
+// App 按次签名的请求：签名里带了请求体的 sha256（access.mjs 的 sigOk），读完核对，冒牌的转发时改了体就不认
+const bodySigOk = (req, b) => !req.ccBodySha || crypto.createHash("sha256").update(b).digest("hex") === req.ccBodySha;
 export function readBodyBuf(req, max = 64 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = []; let n = 0;
@@ -76,7 +79,7 @@ export function readBodyBuf(req, max = 64 * 1024 * 1024) {
       if (n > max) { reject(new Error("body too large")); req.destroy(); return; }
       chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => { const b = Buffer.concat(chunks); bodySigOk(req, b) ? resolve(b) : reject(new Error("body does not match signature")); });
     req.on("error", reject);
   });
 }
@@ -127,7 +130,7 @@ const STATIC_SAFE = {
   "content-security-policy": "frame-ancestors 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'",
 };
 const macHdr = (req, data) => {
-  const m = staticMac(req.headers["x-cc-nonce"], String(req.url || ""), data);
+  const m = staticMac(req.headers["x-cc-nonce"], String(req.url || ""), data, localAddr(req));
   return m ? { "x-cc-mac": m } : {};
 };
 export function serveStatic(req, res, urlPath) {
@@ -166,7 +169,7 @@ export function readBody(req) {
       if (n > 16 * 1024 * 1024) { reject(new Error("body too large")); req.destroy(); return; }
       chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => { const b = Buffer.concat(chunks); bodySigOk(req, b) ? resolve(b.toString("utf8")) : reject(new Error("body does not match signature")); });
     req.on("error", reject);
   });
 }

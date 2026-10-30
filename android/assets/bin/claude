@@ -7,8 +7,10 @@ unset LD_PRELOAD
 PRE=${CCAPP_GLIBC_PRELOAD:-${CCAPP_CLAUDE_PRELOAD:-${CCAPP_BIN%/bin}/lib/seccomp-enosys.so}}
 # 应用内终端：网关把这家的密钥放在 0600 私有文件里、只给路径（不进环境变量），照网关起 claude 的办法交给 apiKeyHelper。
 # 放在最前面：用户自己再带 --settings 时，以用户的为准
-if [ -n "$CCAPP_KEY_FILE" ] && [ -r "$CCAPP_KEY_FILE" ]; then
-  set -- --settings "{\"apiKeyHelper\":\"cat '$CCAPP_KEY_FILE'\"}" "$@"
-fi
+# 路径要拼进 JSON 和 shell 命令：只收普通字符（网关给的路径都是这样），带引号之类的不用（审查 v0.5.9 D7）
+case "$CCAPP_KEY_FILE" in
+  ""|*[!A-Za-z0-9._/-]*) ;;
+  *) [ -r "$CCAPP_KEY_FILE" ] && set -- --settings "{\"apiKeyHelper\":\"cat '$CCAPP_KEY_FILE'\"}" "$@" ;;
+esac
 exec "${CCAPP_LD:-$PREFIX/glibc/lib/ld-linux-aarch64.so.1}" --library-path "$PREFIX/glibc/lib" ${PRE:+--preload "$PRE"} \
   "$HOME/.local/share/cccodroid/claude/current/claude" "$@"

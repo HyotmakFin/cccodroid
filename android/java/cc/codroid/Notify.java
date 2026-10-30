@@ -300,13 +300,12 @@ final class Notify {
     /** 通知里点「拒绝」：转给网关，跟界面里点拒绝走同一个接口 */
     static void deny(Context c, String id) {
         try {
-            HttpURLConnection h = Env.gateway("/api/perm/answer");
-            h.setRequestMethod("POST");
+            byte[] body = new JSONObject().put("id", id).put("behavior", "deny")
+                .put("message", "用户在通知里拒绝了这次操作。").toString().getBytes(StandardCharsets.UTF_8);
+            HttpURLConnection h = Env.gateway("POST", "/api/perm/answer", body);
             h.setDoOutput(true);
             h.setConnectTimeout(3000); h.setReadTimeout(5000);
             h.setRequestProperty("Content-Type", "application/json");
-            byte[] body = new JSONObject().put("id", id).put("behavior", "deny")
-                .put("message", "用户在通知里拒绝了这次操作。").toString().getBytes(StandardCharsets.UTF_8);
             h.getOutputStream().write(body);
             int code = h.getResponseCode();
             Log.i(TAG, "通知里拒绝 " + id + " → HTTP " + code);

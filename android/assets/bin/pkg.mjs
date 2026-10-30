@@ -49,9 +49,8 @@ const REPOS = [
 ];
 // 仓库索引的签名钥：Termux 自动构建钥（termux-keyring 的 termux-autobuilds.gpg；与 keyserver.ubuntu.com、keys.openpgp.org 上同指纹的一致）。
 // Release 验过签名，Packages.gz 按 Release 里的 sha256 核，每个 .deb 再按 Packages 里的 sha256 核 —— 所以从哪个镜像下都一样可信。
-// Termux 自己的域名（packages*.termux.dev）拿不到签名文件时照旧只靠 HTTPS；别的镜像没有有效签名一律不用
+// 签名文件取不到的源一律不用，官方域名也一样（以前官方域名会退回只靠 HTTPS，整条信任链就落到中间人手里）；全都取不到时用缓存的旧索引
 // 钥匙（TERMUX_KEYS）和验签都在旁边的 pgp.mjs
-const OFFICIAL_HOST = /^https:\/\/packages(-cf)?\.termux\.dev\//;
 
 // 在本应用里没有意义的包（给 Termux App 本身发广播的）
 const EXCLUDE = new Set(["termux-am", "termux-am-socket", "termux-api", "termux-tools", "termux-exec", "termux-keyring", "termux-licenses"]);
@@ -239,8 +238,8 @@ function loadRepo(repo) {
     try {
       const relBuf = curlBuf(`${base}dists/${repo.dist}/Release`);
       let sig = null; try { sig = curlBuf(`${base}dists/${repo.dist}/Release.gpg`, 60).toString(); } catch {}
-      if (sig) verifyDetached(relBuf, sig, TERMUX_KEYS);              // 签名不对直接抛，换下一个源
-      else if (!OFFICIAL_HOST.test(base)) throw new Error("镜像的 Release 签名取不到");
+      if (!sig) throw new Error("Release 的签名取不到");
+      verifyDetached(relBuf, sig, TERMUX_KEYS);              // 签名不对直接抛，换下一个源
       const rel = relBuf.toString();
       const rp = `${repo.component}/binary-${repo.arch}/Packages.gz`;
       const want = (rel.split("SHA256:")[1] || "").split("\n").find((l) => l.trim().endsWith(" " + rp));

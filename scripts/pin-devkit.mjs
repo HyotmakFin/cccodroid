@@ -3,11 +3,30 @@
 //   node scripts/pin-devkit.mjs <Release 目录 URL> <输出文件>
 // 换工具包版本时：改 devkit-sources.txt，再跑一次这个，两个文件一起提交。build.sh 会核对两者是同一版。
 import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 const [base, out] = process.argv.slice(2);
+// 钉进 APK 的哈希不能只凭 TLS 取（审查 v0.5.9 D6）：锁文件和 modules.json 都先用 App 里那把公钥验签
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PUB = (() => {
+  const m = /-----BEGIN PUBLIC KEY-----\\n([A-Za-z0-9+/=]+)\\n-----END PUBLIC KEY-----/.exec(fs.readFileSync(path.join(ROOT, "gateway/gw/components.mjs"), "utf8"));
+  if (!m) { console.error("✗ gateway/gw/components.mjs 里找不到索引公钥"); process.exit(1); }
+  return crypto.createPublicKey(`-----BEGIN PUBLIC KEY-----\n${m[1]}\n-----END PUBLIC KEY-----\n`);
+})();
+async function sigOk(url, body, optional) {
+  const r = await fetch(url, { redirect: "follow" });
+  if (!r.ok && optional && r.status === 404) { console.error(`! ${url} 不存在（10-29 之前发的工具包没签锁文件），跳过`); return; }
+  if (!r.ok) { console.error(`✗ 取不到签名 ${url}：HTTP ${r.status}`); process.exit(1); }
+  if (!crypto.verify(null, body, PUB, Buffer.from((await r.text()).trim(), "base64"))) { console.error(`✗ 验签失败：${url}`); process.exit(1); }
+}
 if (!base || !out) { console.error("用法: node pin-devkit.mjs <base/> <out.json>"); process.exit(2); }
 const r = await fetch(base.replace(/\/?$/, "/") + "devkit.lock.json", { redirect: "follow" });
 if (!r.ok) { console.error(`✗ 取不到清单：HTTP ${r.status}`); process.exit(1); }
 const lockBuf = Buffer.from(await r.arrayBuffer());
+// 锁文件的签名 10-29 起才有，之后发的必须有（同 publish-devkit.mjs 的核对）
+const ymd = (base.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})/) || []).slice(1).map(Number);
+await sigOk(base.replace(/\/?$/, "/") + "devkit.lock.json.sig", lockBuf, ymd.length === 3 && ymd[0] * 1e4 + ymd[1] * 100 + ymd[2] < 20261029);
 const lock = JSON.parse(lockBuf.toString("utf8"));
 const tag = (base.match(/\/download\/([^/]+)\/?$/) || [])[1] || "";
 const pick = (o) => o && { file: o.file, sha256: o.sha256, bytes: o.bytes };
@@ -19,6 +38,7 @@ pin.lock = { file: "devkit.lock.json", sha256: (await import("node:crypto")).cre
 const mr = await fetch(pin.base + "modules.json", { redirect: "follow" });
 if (mr.ok) {
   const b = Buffer.from(await mr.arrayBuffer());
+  await sigOk(pin.base + "modules.json.sig", b);
   pin.modules = { file: "modules.json", sha256: (await import("node:crypto")).createHash("sha256").update(b).digest("hex"), bytes: b.length };
 }
 fs.writeFileSync(out, JSON.stringify(pin, null, 1) + "\n");

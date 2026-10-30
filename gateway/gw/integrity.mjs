@@ -47,11 +47,18 @@ function saveSeals() {
   try { fs.writeFileSync(SEAL_FILE() + ".tmp", JSON.stringify(SEALS), { mode: 0o600 }); fs.renameSync(SEAL_FILE() + ".tmp", SEAL_FILE()); } catch (e) { log(`[封签] 写不进：${e.message}`); }
 }
 
-/** 文件前 n 个字节的 sha256（n 省略就是整个文件）；文件比 n 短返回 null */
-function hashOf(file, n) {
-  let buf; try { buf = fs.readFileSync(file); } catch { return null; }
-  if (n != null && buf.length < n) return null;
-  return crypto.createHash("sha256").update(n == null ? buf : buf.subarray(0, n)).digest("hex");
+/** 会话文件的 sha256：分块读，不整个读进内存（导入上限 512 MB，每轮开头结尾各算一次）。
+ *  超过 64 MB 只算头尾各 32 MB 再加上总长——中间被改认不出来，但不会把网关卡死或撑爆（审查 v0.5.9 A1） */
+const SEAL_FULL = 64 << 20, SEAL_PART = 32 << 20;
+function hashOf(file) {
+  let fd; try { fd = fs.openSync(file, "r"); } catch { return null; }
+  try {
+    const size = fs.fstatSync(fd).size, h = crypto.createHash("sha256"), buf = Buffer.allocUnsafe(1 << 20);
+    const feed = (from, to) => { for (let p = from; p < to;) { const k = fs.readSync(fd, buf, 0, Math.min(buf.length, to - p), p); if (k <= 0) break; h.update(buf.subarray(0, k)); p += k; } };
+    if (size <= SEAL_FULL) feed(0, size);
+    else { h.update(`partial:${size}:`); feed(0, SEAL_PART); feed(size - SEAL_PART, size); }
+    return h.digest("hex");
+  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
 }
 
 /** 给会话文件封签。flag：要带上的标记（"imported" / "edited"）；不给就沿用原有的，除非 clear（提醒已经交给模型了） */
