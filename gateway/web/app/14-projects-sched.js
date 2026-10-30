@@ -172,7 +172,7 @@
     const o = document.createElement("div");
     o.className = "pj-ov" + (narrow ? " narrow" : "");
     const xb = `<button class="icon-btn" data-close aria-label="${esc(t(narrow ? "返回" : "关闭"))}"><svg viewBox="0 0 24 24">${narrow ? PI.back : PI.x}</svg></button>`;
-    o.innerHTML = `<div class="pj-sheet" role="dialog" aria-modal="true"><div class="pj-shead">${narrow ? xb : ""}<h3>${esc(title)}</h3>${narrow ? "" : xb}</div>
+    o.innerHTML = `<div class="pj-sheet" role="dialog" aria-modal="true" aria-labelledby="pj-title"><div class="pj-shead">${narrow ? xb : ""}<h3 id="pj-title">${esc(title)}</h3>${narrow ? "" : xb}</div>
       <div class="pj-smain">${body}</div><div class="pj-sfoot">${foot}</div></div>`;
     OV.open(o, { kind: "modal", keep: true, cover: true });   // 填了一半的表单，转屏也别丢
     o.addEventListener("click", (e) => {

@@ -68,7 +68,7 @@
         <button id="btn-attach" class="mini-btn hidden" aria-label="附加图片或文件" title="附加图片或文件" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M21.4 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg>
     </button>
-    <textarea id="input" rows="1" dir="auto" placeholder="" autocomplete="off" spellcheck="false"></textarea>
+    <textarea id="input" rows="1" dir="auto" placeholder="" aria-label="消息输入框" data-i18n-attr="aria-label" autocomplete="off" spellcheck="false"></textarea>
     <!-- 忙碌且输入框有字时才出现：打断当前 + 立刻发这条 -->
         <button id="btn-interject" class="hidden" aria-label="插话" title="插话：递进正在跑的这一轮，不打断" data-i18n-attr="aria-label,title">
       <svg viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10H12l1-8z"/></svg>
@@ -382,7 +382,7 @@
 
 <!-- ── 设置：宽屏是居中的弹窗（左分类、右内容），窄屏整页推入（先分类列表，点进去看一类）── -->
 <div id="set-ov" class="hidden">
-  <div class="set-sheet" role="dialog" aria-modal="true">
+  <div class="set-sheet" role="dialog" aria-modal="true" aria-labelledby="set-title">
     <div class="set-shead">
       <button id="set-back" class="icon-btn" aria-label="返回" data-i18n-attr="aria-label"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
       <h3 id="set-title" data-i18n>设置</h3>

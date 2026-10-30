@@ -2342,4 +2342,6 @@ window.I18N_DICT["es"] = {
   "图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的第三方调用方式认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。": "Enviar las imágenes dentro del mensaje (compatibilidad): márcalo solo si el modelo no ve las imágenes adjuntas y se inventa cosas. Algunas formas de llamada de terceros no reconocen las imágenes leídas con Read; activado, cada imagen adjunta también se envía directamente en el mensaje.",
   "建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。": "Consejo: fija un límite de gasto diario y un aviso de saldo en la consola del proveedor. Si crees que la clave se ha filtrado, revócala allí y crea una nueva.",
   "要改管着提示词或安全检查的文件：{w}": "Quiere cambiar un archivo que controla las instrucciones o los controles de seguridad de Claude: {w}",
+  "消息输入框": "Campo de mensaje",
+  "额度速览": "Resumen de uso",
 };

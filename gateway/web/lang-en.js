@@ -2376,5 +2376,7 @@ window.I18N_DICT.en = {
   "这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。": "This message appears several times in the conversation, so it's unclear which turn you mean. Reopen the conversation and try again.",
   "图片随消息一起发（兼容）：模型看不懂附图、照着乱编时再勾。有的第三方调用方式认不出 Read 读回来的图，勾上后附图会另带一份直接放进消息里。": "Send images inside the message (compatibility): tick this only if the model can't see attached images and makes things up. Some third-party API setups miss images read back by the Read tool; with this on, each attached image is also sent directly in the message.",
   "建议到厂商控制台设个单日消费上限和余额提醒；怀疑 Key 泄漏了，就在那里作废、换个新的。": "Tip: set a daily spending limit and a balance alert in the provider's console. If you think the key has leaked, revoke it there and create a new one.",
-  "要改管着提示词或安全检查的文件：{w}": "Wants to change a file that controls Claude's instructions or safety checks: {w}"
+  "要改管着提示词或安全检查的文件：{w}": "Wants to change a file that controls Claude's instructions or safety checks: {w}",
+  "消息输入框": "Message input",
+  "额度速览": "Usage at a glance"
 };

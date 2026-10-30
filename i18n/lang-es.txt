@@ -2339,3 +2339,5 @@
 2339	Enviar las imágenes dentro del mensaje (compatibilidad): márcalo solo si el modelo no ve las imágenes adjuntas y se inventa cosas. Algunas formas de llamada de terceros no reconocen las imágenes leídas con Read; activado, cada imagen adjunta también se envía directamente en el mensaje.
 2340	Consejo: fija un límite de gasto diario y un aviso de saldo en la consola del proveedor. Si crees que la clave se ha filtrado, revócala allí y crea una nueva.
 2341	Quiere cambiar un archivo que controla las instrucciones o los controles de seguridad de Claude: {w}
+2342	Campo de mensaje
+2343	Resumen de uso

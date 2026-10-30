@@ -367,6 +367,7 @@
     vwMdStop();          // 长 Markdown 的分段 observer：以前要等下一次预览才断（审查 #49 P3-7）
     vwDropEd();
     vwHtmlStop();
+    VW.text = ""; VW.wb = VW.sheets = null;   // 大文本、工作簿别跟着查看器一直挂在内存里（#56）
     MO.hide(viewerEl, MO.paneOut(), 170, () => { $("vw-body").innerHTML = ""; });   // 内容等滑出去了再清，别先白一下
     // 文件面板开着就刷新一下：大小 / 修改时间可能变了
     if (!filesEl.classList.contains("hidden") && state.fs.path) fsLoad(state.fs.path, { keepSel: true });

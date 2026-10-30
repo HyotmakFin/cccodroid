@@ -493,7 +493,10 @@
     await Promise.all([loadSettings(), loadCaps(), loadSessions()]);
     uiSync(); loadFonts();               // 界面定制（ccapp-ui.json）、导入字体的清单，各和本地缓存对一下（换过机、清过缓存时补回来）
     updateCtx(state.ctxUsed, state.ctxTotal);   // 别把恢复回来的用量抹成 0
-    setInterval(refreshStatus, 45000);
+    // 后台时不轮询（#56），切回前台补一次
+    let statusMissed = false;
+    setInterval(() => { if (document.hidden) statusMissed = true; else refreshStatus(); }, 45000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && statusMissed) { statusMissed = false; refreshStatus(); } });
     // 设置里有几类（设备与权限、更新、通知、用量……）要等接口回话才显示：开机空下来先拉一遍，
     // 打开设置时就是现成的，不再一项项往外冒（打开时照旧再刷一次）
     setTimeout(() => { if (!setOpen) { loadProviders(); loadPriv(); loadUpd(); loadNotify(); loadDev(); loadQuota().catch(() => {}); } }, 2500);

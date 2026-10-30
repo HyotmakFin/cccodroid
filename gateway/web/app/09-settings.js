@@ -507,6 +507,7 @@
     const el = qcEl = document.createElement("div");
     el.className = "qcard";
     el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", t("额度速览"));   // 不抢焦点的浮卡，不是模态，不加 aria-modal
     OV.open(el, { anchor: ctxBar, place: qcPlace, keep: true, onClose: () => { if (qcEl === el) qcEl = null; } });
     el.addEventListener("click", (e) => {
       const a = e.target.closest("[data-qc]");
