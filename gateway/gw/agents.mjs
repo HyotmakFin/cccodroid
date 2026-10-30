@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { CFG, log } from "./config.mjs";
+import { forEachLine } from "./bigfile.mjs";
 
 // ── 子代理联络簿：状态外置 ───────────────────────────────────────────
 // 从 claude 的事件流里摘三类事——派出（task_started）、联络（SendMessage）、结束（task_notification / Agent 结果），
@@ -227,7 +228,7 @@ export function settleAgentRecs(recs, liveIds = new Set()) {
 export function backfillAgents(sessionFile) {
   const sub = path.join(sessionFile.replace(/\.jsonl$/, ""), "subagents");
   let names; try { names = fs.readdirSync(sub).filter((n) => n.endsWith(".meta.json")); } catch { return []; }
-  const lines = (f) => { try { return fs.readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
+  const lines = (f) => { const out = []; try { forEachLine(f, (l) => { if (l) try { out.push(JSON.parse(l)); } catch {} }); } catch {} return out; };
   const agents = [];
   for (const n of names) {
     let m; try { m = JSON.parse(fs.readFileSync(path.join(sub, n), "utf8")); } catch { continue; }

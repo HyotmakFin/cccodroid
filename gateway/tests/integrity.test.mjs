@@ -95,7 +95,9 @@ test("导入的会话带 imported 标记，第一次接着聊会提醒", async (
     { name: "manifest.json", data: Buffer.from(JSON.stringify({ format: "cccodroid-sessions", sessions: [{ id: sid }] })) },
     { name: `sessions/${sid}.jsonl`, data: Buffer.from(line + "\n") },
   ]);
-  const r = importSessions(zip);
+  const zf = path.join(process.env.CCAPP_TMP, "imp-" + sid + ".zip");
+  fs.writeFileSync(zf, zip);
+  const r = await importSessions(zf);
   assert.deepEqual(r.imported, [sid]);
   const { findSessionFile } = await import("../gw/sessions.mjs");
   assert.equal(checkSession(sid, findSessionFile(sid).file), "imported");

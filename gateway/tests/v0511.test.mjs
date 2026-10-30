@@ -78,3 +78,112 @@ test("翻历史：派出了没结束、眼下不在跑的按已停止补；在�
   assert.deepEqual(add.map((r) => [r.id, r.status, r.at]), [["x", "stopped", 8], ["w", "stopped", 7]]);
   assert.equal(settleAgentRecs(recs.slice(0, 0)).length, 0);
 });
+
+// 巨型会话：按行流式读写、流式 zip 导出导入
+import crypto from "node:crypto";
+import { forEachLine, rewriteLines, zipEntries, zipExtract, zipToFile } from "../gw/bigfile.mjs";
+import { zipBuild, zipRead } from "../gw/sessionops.mjs";
+const T = (n) => path.join(process.env.CCAPP_TMP, n);
+
+test("forEachLine 与 split 逐行一致（跨块的长行、结尾有无换行、中文）", () => {
+  for (const tail of ["", "\n"]) {
+    const text = ["a", "中文一行", "x".repeat(3 << 20), "", "末行"].join("\n") + tail;
+    fs.writeFileSync(T("l.txt"), text);
+    const got = []; const n = forEachLine(T("l.txt"), (l) => { got.push(l); });
+    assert.deepEqual(got, text.split("\n")); assert.equal(n, got.length);
+    rewriteLines(T("l.txt"), T("l2.txt"), (l) => l.toUpperCase());
+    assert.equal(fs.readFileSync(T("l2.txt"), "utf8"), text.toUpperCase());
+  }
+  const seen = []; forEachLine(T("l.txt"), (l, i) => { seen.push(i); if (i === 1) return false; });
+  assert.deepEqual(seen, [0, 1]);
+});
+
+test("流式 zip：写出的包老读法也认，老包流式读法也认；解压按实际字节扣额度", async () => {
+  const big = crypto.randomBytes(1 << 20).toString("hex").repeat(3);   // 6 MB，跨好几块
+  fs.writeFileSync(T("big.txt"), big);
+  await zipToFile(T("a.zip"), [{ name: "m.json", data: "{}" }, { name: "d/big.txt", file: T("big.txt") }, { name: "empty", data: "" }]);
+  const old = zipRead(fs.readFileSync(T("a.zip")));
+  assert.deepEqual(old.map((e) => [e.name, e.data.length]), [["m.json", 2], ["d/big.txt", big.length], ["empty", 0]]);
+  const ents = zipEntries(T("a.zip"));
+  await zipExtract(T("a.zip"), ents[1], T("out.txt"), { left: Infinity }, null);
+  assert.equal(fs.readFileSync(T("out.txt"), "utf8"), big);
+  await zipExtract(T("a.zip"), ents[2], T("out0"), { left: 0 });
+  assert.equal(fs.readFileSync(T("out0"), "utf8"), "");
+  await assert.rejects(zipExtract(T("a.zip"), ents[1], T("out2.txt"), { left: 1000 }), /太大/);
+  fs.writeFileSync(T("b.zip"), zipBuild([{ name: "s.txt", data: "abc" }, { name: "z.txt", data: "q".repeat(5000) }]));
+  const e2 = zipEntries(T("b.zip"));
+  await zipExtract(T("b.zip"), e2[0], T("s.txt"), { left: 99 }); await zipExtract(T("b.zip"), e2[1], T("z.txt"), { left: 1e6 });
+  assert.equal(fs.readFileSync(T("s.txt"), "utf8"), "abc"); assert.equal(fs.readFileSync(T("z.txt"), "utf8").length, 5000);
+  assert.throws(() => zipEntries(T("big.txt")), /zip/);
+});
+
+test("会话导出再导入（流式）：cwd 改成本机工作区、子代理记录跟着走；分叉和删消息照常", async () => {
+  const { CFG, PATHS } = await import("../gw/config.mjs");
+  const ops = await import("../gw/sessionops.mjs");
+  const { findSessionFile } = await import("../gw/sessions.mjs");
+  const sid = crypto.randomUUID(), dir = path.join(PATHS.projects, "-x");
+  fs.mkdirSync(path.join(dir, sid, "subagents"), { recursive: true });
+  const u1 = crypto.randomUUID(), a1 = crypto.randomUUID(), u2 = crypto.randomUUID(), a2 = crypto.randomUUID();
+  const L = [
+    { type: "user", uuid: u1, parentUuid: null, sessionId: sid, cwd: "/x", message: { role: "user", content: "第一问" } },
+    { type: "assistant", uuid: a1, parentUuid: u1, sessionId: sid, cwd: "/x", message: { role: "assistant", content: [{ type: "text", text: "y".repeat(2 << 20) }] } },
+    { type: "user", uuid: u2, parentUuid: a1, sessionId: sid, cwd: "/x", message: { role: "user", content: "第二问" } },
+    { type: "assistant", uuid: a2, parentUuid: u2, sessionId: sid, cwd: "/x", message: { role: "assistant", content: [{ type: "text", text: "答" }] } },
+  ];
+  fs.writeFileSync(path.join(dir, sid + ".jsonl"), L.map((x) => JSON.stringify(x)).join("\n") + "\n");
+  fs.writeFileSync(path.join(dir, sid, "subagents", "agent-1.jsonl"), "{}\n");
+  const ex = await ops.exportSessions([sid]);
+  assert.equal(ex.count, 1);
+  // 换个 id 导回来（同 id 会被跳过）
+  const nid = crypto.randomUUID();
+  const ents = zipEntries(ex.file);
+  const files = [];
+  for (const e of ents) { await zipExtract(ex.file, e, T("x-" + files.length), { left: Infinity }); const d = fs.readFileSync(T("x-" + files.length)); files.push({ name: e.name.replaceAll(sid, nid), data: e.name === "manifest.json" ? d.toString().replaceAll(sid, nid) : d }); }
+  fs.writeFileSync(T("re.zip"), zipBuild(files));
+  const r = await ops.importSessions(T("re.zip"));
+  assert.deepEqual(r.imported, [nid]);
+  const f = findSessionFile(nid).file;
+  const lines = fs.readFileSync(f, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every((x) => x.cwd === fs.realpathSync(CFG.workspace)));
+  assert.ok(fs.existsSync(path.join(path.dirname(f), nid, "subagents", "agent-1.jsonl")));
+  assert.equal((await ops.importSessions(T("re.zip"))).skipped[0], nid);
+  // 分叉：保留第一轮
+  const fk = ops.forkSession(sid, "", 0, { uuid: u2, before: true });
+  assert.equal(fk.ok, true, fk.message);
+  const fl = fs.readFileSync(findSessionFile(fk.id).file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(fl.map((x) => x.uuid), [u1, a1]);
+  assert.ok(fl.every((x) => x.sessionId === fk.id));
+  // 删第一轮的回复：第二问接到第一问上
+  const del = ops.deleteMessage(sid, "", 0, "assistant", u1);
+  assert.equal(del.ok, true, del.message);
+  const dl = fs.readFileSync(findSessionFile(sid).file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(dl.map((x) => x.uuid), [u1, u2, a2]);
+  assert.equal(dl[1].parentUuid, u1);
+});
+
+// 真 1 GB 以上的会话（慢，默认不跑）：BIG=1 node scripts/test.mjs v0511
+test("1.1 GB 的会话：能分叉、能导出导入", { skip: !process.env.BIG }, async () => {
+  const { PATHS } = await import("../gw/config.mjs");
+  const ops = await import("../gw/sessionops.mjs");
+  const { findSessionFile } = await import("../gw/sessions.mjs");
+  const sid = crypto.randomUUID(), dir = path.join(PATHS.projects, "-big"), file = path.join(dir, sid + ".jsonl");
+  fs.mkdirSync(dir, { recursive: true });
+  const fd = fs.openSync(file, "w"), filler = "z".repeat(1 << 20);
+  let prev = null, keep = null;
+  for (let i = 0; i < 1100; i++) {
+    const u = crypto.randomUUID();
+    fs.writeSync(fd, JSON.stringify({ type: "user", uuid: u, parentUuid: prev, sessionId: sid, cwd: "/x", message: { role: "user", content: "问" + i + " " + filler } }) + "\n");
+    prev = u; if (i === 1000) keep = u;
+  }
+  fs.closeSync(fd);
+  assert.ok(fs.statSync(file).size > 1.1e9);
+  const fk = ops.forkSession(sid, "", 0, { uuid: keep, before: true });
+  assert.equal(fk.ok, true, fk.message);
+  assert.equal(forEachLine(findSessionFile(fk.id).file, () => {}), 1001);
+  const ex = await ops.exportSessions([sid]);
+  fs.rmSync(file); fs.rmSync(findSessionFile(fk.id).file);
+  const r = await ops.importSessions(ex.file);
+  assert.deepEqual(r.imported, [sid]);
+  assert.equal(forEachLine(findSessionFile(sid).file, () => {}), 1101);
+});

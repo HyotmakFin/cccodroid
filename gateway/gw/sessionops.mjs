@@ -9,6 +9,7 @@ import { claudeCmd, claudeEnv, killTree } from "./claude.mjs";
 import { LAST_SESSION, forgetSession, runOfSession } from "./runs.mjs";
 import { forgetChild, recordPrimary } from "./lineage-store.mjs";
 import { checkSession, neutralizeMarkers, resealAfterEdit, sealSession } from "./integrity.mjs";
+import { forEachLine, lineWriter, zipEntries, zipExtract, zipToFile } from "./bigfile.mjs";
 
 // ── 会话管理：回收站 / 导出 / 导入 ─────────────────────────────────────
 // 回收站放在 claude 的 projects 目录之外（它看不见，--resume 也就找不回来），同一文件系统，挪进挪出都是 rename。
@@ -42,52 +43,56 @@ function forkUserText(ev) {
 export function locateUserTurn(id, userText, after, uuid = "") {
   const found = findSessionFile(id);
   if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
-  const lines = fs.readFileSync(found.file, "utf8").split("\n");
+  // 按行流式读（gw/bigfile.mjs）：会话 1 GB 以上时整份读成字符串会超过 V8 单串上限，分叉、回退、删消息全挂
   const users = [];
-  lines.forEach((line, i) => {
+  const count = forEachLine(found.file, (line, i) => {
     if (!line.includes('"user"')) return;
     let ev; try { ev = JSON.parse(line); } catch { return; }
     const t = forkUserText(ev);
-    if (t != null) users.push({ i, t: forkNorm(t), uuid: ev.uuid || null });
+    // 只留比对要用的：全文的哈希和前 80 个字。存全文的话，每条都贴了大段文字的会话光这张表就能吃掉上 GB。
+    // 前 80 字要另拷一份：V8 的 slice 只是切片，背后拽着整条原文不放
+    if (t != null) { const n = forkNorm(t); users.push({ i, h: crypto.createHash("sha1").update(n).digest("hex"), t80: Buffer.from(n.slice(0, 80)).toString(), uuid: ev.uuid || null }); }
   });
   if (uuid) {
     const j = users.findIndex((u) => u.uuid === uuid);
-    if (j >= 0) return { ok: true, found, lines, users, best: j };
+    if (j >= 0) return { ok: true, found, count, users, best: j };
     // 给了 uuid 却对不上：记录变过（压缩、别处改过），按原文猜可能认错轮，宁可让人刷新（#52 P1-2）
     return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
   }
-  const want = forkNorm(neutralizeMarkers(userText)), head = want.slice(0, 80);
-  const same = (t) => t === want || (head.length >= 8 && (t.startsWith(head) || want.startsWith(t.slice(0, 80))));
+  const want = forkNorm(neutralizeMarkers(userText)), head = want.slice(0, 80), wh = crypto.createHash("sha1").update(want).digest("hex");
+  const same = (u) => u.h === wh || (head.length >= 8 && (u.t80.startsWith(head) || want.startsWith(u.t80)));
   // 没 uuid 的只会是这次刚发、还在尾巴上的消息，界面数「后面还有几条」是准的：
   // 只有一条同文就是它；好几条同文时必须恰好对上条数，对不上就拒绝，不挑「最接近的」去猜（#52 P1-2）
-  const cand = users.map((u, j) => (same(u.t) ? j : -1)).filter((j) => j >= 0);
+  const cand = users.map((u, j) => (same(u) ? j : -1)).filter((j) => j >= 0);
   const exact = cand.filter((j) => users.length - 1 - j === (Number(after) || 0));
   const best = cand.length === 1 ? cand[0] : exact.length === 1 ? exact[0] : -1;
   if (!cand.length) return { ok: false, status: 409, message: tz("在会话记录里找不到这一轮，刷新后再试。") };
   if (best < 0) return { ok: false, status: 409, message: tz("这句话在会话里出现了好几次，认不准是哪一轮。重新打开这个会话再试。") };
-  return { ok: true, found, lines, users, best };
+  return { ok: true, found, count, users, best };
 }
 
 export function forkSession(id, userText, after, { before = false, uuid = "" } = {}) {
   const loc = locateUserTurn(id, userText, after, uuid);
   if (!loc.ok) return loc;
-  const { found, lines, users } = loc;
+  const { found, count, users } = loc;
   const best = before ? loc.best - 1 : loc.best;      // 回退：只留这条之前的
-  const cut = best + 1 < users.length ? users[best + 1].i : lines.length;
-  if (cut === lines.length && runOfSession(id)) return { ok: false, status: 409, message: tz("这一轮还在生成，等它答完再分叉。") };
+  const cut = best + 1 < users.length ? users[best + 1].i : count;
+  if (cut === count && runOfSession(id)) return { ok: false, status: 409, message: tz("这一轮还在生成，等它答完再分叉。") };
   const nid = crypto.randomUUID();
-  const out = [];
-  let at = null;   // 分叉点：抄过去的最后一条链上消息（脉络的主父记录用）
-  for (const line of lines.slice(0, cut)) {
-    if (!line.trim()) continue;
-    if (line.includes('"uuid"')) { try { const e = JSON.parse(line); if (e.uuid && !e.isSidechain && /^(user|assistant|system)$/.test(e.type)) at = e.uuid; } catch {} }
-    if (!line.includes(id)) { out.push(line); continue; }
-    try { const ev = JSON.parse(line); if (ev.sessionId === id) ev.sessionId = nid; out.push(JSON.stringify(ev)); }
-    catch { out.push(line); }
-  }
   const dir = path.dirname(found.file);
   const dirty = checkSession(id, found.file);          // 原会话不干净（导入的、在别处改过的），分出来的也带着标记
-  fs.writeFileSync(path.join(dir, nid + ".jsonl"), out.join("\n") + "\n");
+  let at = null;   // 分叉点：抄过去的最后一条链上消息（脉络的主父记录用）
+  const w = lineWriter(path.join(dir, nid + ".jsonl"));
+  try {
+    forEachLine(found.file, (line, i) => {
+      if (i >= cut) return false;
+      if (!line.trim()) return;
+      if (line.includes('"uuid"')) { try { const e = JSON.parse(line); if (e.uuid && !e.isSidechain && /^(user|assistant|system)$/.test(e.type)) at = e.uuid; } catch {} }
+      if (!line.includes(id)) return w.write(line);
+      try { const ev = JSON.parse(line); if (ev.sessionId === id) ev.sessionId = nid; w.write(JSON.stringify(ev)); }
+      catch { w.write(line); }
+    });
+  } finally { w.close(); }
   sealSession(nid, path.join(dir, nid + ".jsonl"), { flag: dirty || undefined });
   // 同名目录里是子代理记录、超长工具结果：一起抄过去，引用它们的路径照旧有效
   const side = path.join(dir, id);
@@ -110,34 +115,38 @@ export function deleteMessage(id, userText, after, which, uuid = "") {
   if (runOfSession(id)) return { ok: false, status: 409, message: tz("这个会话正在生成中，等它答完再删。") };
   const loc = locateUserTurn(id, userText, after, uuid);
   if (!loc.ok) return loc;
-  const { found, lines, users, best } = loc;
-  const from = users[best].i, to = best + 1 < users.length ? users[best + 1].i : lines.length;
-  const drop = new Set();
-  if (which === "user") drop.add(from);
-  else for (let i = from + 1; i < to; i++) {
-    const l = lines[i]; if (!l.trim()) continue;
-    try { const ev = JSON.parse(l); if (CHAIN_TYPES.has(ev.type) && !ev.isSidechain) drop.add(i); } catch {}
-  }
-  if (!drop.size) return { ok: false, status: 409, message: tz("这条消息在会话记录里没有可删的内容。") };
-  const parentOf = new Map();
-  for (const i of drop) { try { const ev = JSON.parse(lines[i]); if (ev.uuid) parentOf.set(ev.uuid, ev.parentUuid ?? null); } catch {} }
-  const up = (u) => { let n = 0; while (u && parentOf.has(u) && n++ < 100000) u = parentOf.get(u); return u; };
-  const out = [];
-  lines.forEach((l, i) => {
-    if (drop.has(i) || !l.trim()) return;
-    if (!parentOf.size || !l.includes("arentUuid")) return out.push(l);
-    let ev; try { ev = JSON.parse(l); } catch { return out.push(l); }
-    let ch = false;
-    for (const k of ["parentUuid", "logicalParentUuid"]) if (ev[k] && parentOf.has(ev[k])) { ev[k] = up(ev[k]); ch = true; }
-    out.push(ch ? JSON.stringify(ev) : l);
+  const { found, count, users, best } = loc;
+  const from = users[best].i, to = best + 1 < users.length ? users[best + 1].i : count;
+  // 第二遍只看这一轮的行：哪些要删、它们各自的父消息
+  const drop = new Set(), parentOf = new Map();
+  forEachLine(found.file, (l, i) => {
+    if (i >= to) return false;
+    if (i < from || (which === "user" ? i !== from : i === from) || !l.trim()) return;
+    let ev; try { ev = JSON.parse(l); } catch { return; }
+    if (which !== "user" && !(CHAIN_TYPES.has(ev.type) && !ev.isSidechain)) return;
+    drop.add(i);
+    if (ev.uuid) parentOf.set(ev.uuid, ev.parentUuid ?? null);
   });
+  if (!drop.size) return { ok: false, status: 409, message: tz("这条消息在会话记录里没有可删的内容。") };
+  const up = (u) => { let n = 0; while (u && parentOf.has(u) && n++ < 100000) u = parentOf.get(u); return u; };
   const bdir = EDITS_DIR;
   fs.mkdirSync(bdir, { recursive: true });
   const backup = id + "." + Date.now() + ".jsonl";
   fs.copyFileSync(found.file, path.join(bdir, backup));
   const dirty = checkSession(id, found.file);          // 改之前先核对，改完重新封签：网关自己改的不算外部改动，原本不干净的也不洗白
   const tmp = found.file + ".tmp-del";
-  fs.writeFileSync(tmp, out.join("\n") + "\n");
+  const w = lineWriter(tmp);
+  try {
+    forEachLine(found.file, (l, i) => {
+      if (drop.has(i) || !l.trim()) return;
+      if (!parentOf.size || !l.includes("arentUuid")) return w.write(l);
+      let ev; try { ev = JSON.parse(l); } catch { return w.write(l); }
+      let ch = false;
+      for (const k of ["parentUuid", "logicalParentUuid"]) if (ev[k] && parentOf.has(ev[k])) { ev[k] = up(ev[k]); ch = true; }
+      w.write(ch ? JSON.stringify(ev) : l);
+    });
+  } catch (e) { w.close(); fs.rmSync(tmp, { force: true }); throw e; }
+  w.close();
   fs.renameSync(tmp, found.file);
   resealAfterEdit(id, found.file, dirty);
   PEEK_CACHE.delete(found.file);
@@ -220,18 +229,18 @@ export function rewindTargetOk(want) {
 export function rewindFixup(sessionFile, sid, uuid, files) {
   const snaps = [];   // [{ id, backups }]，同一条消息的快照更新合并进去
   try {
-    for (const l of fs.readFileSync(sessionFile, "utf8").split("\n")) {
+    forEachLine(sessionFile, (l) => {
       // 两种记录：每条用户消息一份快照（file-history-snapshot）；轮次中途第一次改到某个文件时补一条 file-history-delta，挂到它所属的快照上
       const snap = l.includes('"file-history-snapshot"'), delta = l.includes('"file-history-delta"');
-      if (!snap && !delta) continue;
-      let ev; try { ev = JSON.parse(l); } catch { continue; }
+      if (!snap && !delta) return;
+      let ev; try { ev = JSON.parse(l); } catch { return; }
       const sn = ev.snapshot || {}, id = delta ? ev.snapshotMessageId : (ev.messageId || sn.messageId);
-      if (!id) continue;
+      if (!id) return;
       let cur = snaps.find((x) => x.id === id);
       if (!cur) snaps.push(cur = { id, backups: {} });
       if (delta) { if (ev.trackingPath && ev.backup) cur.backups[ev.trackingPath] = ev.backup; }
       else Object.assign(cur.backups, sn.trackedFileBackups || {});
-    }
+    });
   } catch { return { fixed: 0, failed: 0 }; }
   const at = snaps.findIndex((x) => x.id === uuid);
   if (at < 0) return { fixed: 0, failed: 0 };
@@ -412,28 +421,22 @@ export function zipRead(buf, max = 512 * 1024 * 1024) {
 }
 
 /** 导出：manifest.json + sessions/<id>.jsonl + sessions/<id>/…（子代理等） */
-// 原文和压出来的 zip 同时在内存里：不设总量的话，几 GB 的会话一导出就把网关撑爆（审查 10-29 L2）
-const EXPORT_MAX = 768 * 1024 * 1024;
-export function exportSessions(ids) {
+// 边读边压边写盘（gw/bigfile.mjs）：一个会话 1 GB 以上也导得出，网关内存不跟着涨。只受 zip32 的 4 GB 和剩余空间限制
+const freeBytes = (dir) => { try { const s = fs.statfsSync(dir); return s.bavail * s.bsize; } catch { return Infinity; } };
+export async function exportSessions(ids) {
   const entries = [], list = [];
-  let total = 0;
-  const read = (f) => {
-    total += fs.statSync(f).size;
-    if (total > EXPORT_MAX) throw new Error(tz("选的会话加起来超过 {n} MB，分几次导出", { n: EXPORT_MAX >> 20 }));
-    return fs.readFileSync(f);
-  };
   const walk = (dir, rel) => {
     for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
       const f = path.join(dir, d.name);
       if (d.isDirectory()) walk(f, rel + "/" + d.name);
-      else if (d.isFile()) entries.push({ name: rel + "/" + d.name, data: read(f) });
+      else if (d.isFile()) entries.push({ name: rel + "/" + d.name, file: f });
     }
   };
   for (const id of ids) {
     const found = findSessionFile(id);
     if (!found) continue;
     const meta = peekSession(found.file);
-    entries.push({ name: `sessions/${id}.jsonl`, data: read(found.file) });
+    entries.push({ name: `sessions/${id}.jsonl`, file: found.file });
     const side = path.join(PATHS.projects, found.project, id);
     if (fs.existsSync(side)) walk(side, `sessions/${id}`);
     list.push({ id, title: NAMES[id] || meta.title, renamed: !!NAMES[id], cwd: meta.cwd, mtime: fs.statSync(found.file).mtimeMs });
@@ -443,46 +446,64 @@ export function exportSessions(ids) {
   const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
   const dir = path.join(base, "exports");
   fs.mkdirSync(dir, { recursive: true });
+  if (freeBytes(dir) < (256 << 20)) throw new Error(tz("存储空间不够了"));
   const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
   const file = path.join(dir, `sessions-${stamp}.zip`);
-  const zip = zipBuild(entries);
-  fs.writeFileSync(file, zip);
-  return { file, count: list.length, bytes: zip.length };
+  const bytes = await zipToFile(file, entries);
+  return { file, count: list.length, bytes };
 }
 
-/** 导入：一律落进当前工作区（cwd 改写成本机工作区，--resume 才找得到）；同 id 已有的跳过 */
-export function importSessions(buf) {
-  const files = zipRead(buf);
-  const man = files.find((f) => f.name === "manifest.json");
+/** 导入：一律落进当前工作区（cwd 改写成本机工作区，--resume 才找得到）；同 id 已有的跳过。
+ *  file 是已经落盘的会话包（路由把请求体直接写到盘上）。逐条按字节范围解到目标位置，主记录边解边改 cwd；
+ *  解出来的总量不许吃到只剩 512 MB 空间（目录里写的大小可能是假的，按实际解出来的扣） */
+export async function importSessions(file) {
+  const ents = zipEntries(file);
+  const man = ents.find((e) => e.name === "manifest.json");
   let manifest = {};
-  try { manifest = JSON.parse(man.data.toString("utf8")); } catch { throw new Error(tz("缺少 manifest.json，不是会话包")); }
+  try {
+    if (!man || man.usize > (16 << 20)) throw 0;
+    const tmp = file + ".manifest";
+    await zipExtract(file, man, tmp, { left: 16 << 20 });
+    try { manifest = JSON.parse(fs.readFileSync(tmp, "utf8")); } finally { fs.rmSync(tmp, { force: true }); }
+  } catch { throw new Error(tz("缺少 manifest.json，不是会话包")); }
   if (manifest.format !== "cccodroid-sessions") throw new Error(tz("不是 cccodroid 会话包"));
   const ws = realWorkspace();
   const dir = path.join(PATHS.projects, projectSlug(ws));
   fs.mkdirSync(dir, { recursive: true });
+  const budget = { left: freeBytes(dir) - (512 << 20) };
+  if (budget.left <= 0) throw new Error(tz("存储空间不够了"));
   const res = { imported: [], skipped: [] };
+  const fixCwd = (l) => {
+    if (!l.includes('"cwd"')) return l;
+    try { const ev = JSON.parse(l); if (ev.cwd) ev.cwd = ws; return JSON.stringify(ev); } catch { return l; }
+  };
   for (const s of manifest.sessions || []) {
     const id = String(s.id || "");
     if (!SID_RE.test(id)) continue;
-    const main = files.find((f) => f.name === `sessions/${id}.jsonl`);
+    const main = ents.find((e) => e.name === `sessions/${id}.jsonl`);
     if (!main) continue;
     if (findSessionFile(id) || fs.existsSync(path.join(TRASH_DIR, id))) { res.skipped.push(id); continue; }
-    const lines = main.data.toString("utf8").split("\n").map((l) => {
-      if (!l.includes('"cwd"')) return l;
-      try { const ev = JSON.parse(l); if (ev.cwd) ev.cwd = ws; return JSON.stringify(ev); } catch { return l; }
-    });
-    fs.writeFileSync(path.join(dir, id + ".jsonl"), lines.join("\n"));
-    if (s.mtime) try { fs.utimesSync(path.join(dir, id + ".jsonl"), new Date(), new Date(s.mtime)); } catch {}
-    sealSession(id, path.join(dir, id + ".jsonl"), { flag: "imported" });   // 包里的历史谁都能写：第一次接着聊时提醒模型（见 integrity.mjs）
-    const pre = `sessions/${id}/`;
-    for (const f of files) {
-      if (!f.name.startsWith(pre)) continue;
-      const rel = f.name.slice(pre.length);
-      if (rel.split("/").some((x) => !x || x === "." || x === "..")) continue;   // 防目录穿越
-      const dst = path.join(dir, id, rel);
-      fs.mkdirSync(path.dirname(dst), { recursive: true });
-      fs.writeFileSync(dst, f.data);
+    const dst = path.join(dir, id + ".jsonl"), side = path.join(dir, id), hadSide = fs.existsSync(side);
+    try {
+      // 先解到临时名，整条会话（含子代理记录）都解完再改名：中途失败不留半截会话
+      await zipExtract(file, main, dst + ".part", budget, fixCwd);
+      const pre = `sessions/${id}/`;
+      for (const e of ents) {
+        if (!e.name.startsWith(pre)) continue;
+        const rel = e.name.slice(pre.length);
+        if (rel.split("/").some((x) => !x || x === "." || x === "..")) continue;   // 防目录穿越
+        const out = path.join(side, rel);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        await zipExtract(file, e, out, budget);
+      }
+      fs.renameSync(dst + ".part", dst);
+    } catch (err) {
+      fs.rmSync(dst + ".part", { force: true });
+      if (!hadSide) fs.rmSync(side, { recursive: true, force: true });
+      throw err;
     }
+    if (s.mtime) try { fs.utimesSync(dst, new Date(), new Date(s.mtime)); } catch {}
+    sealSession(id, dst, { flag: "imported" });   // 包里的历史谁都能写：第一次接着聊时提醒模型（见 integrity.mjs）
     if (s.renamed && s.title) NAMES[id] = String(s.title).slice(0, 120);
     res.imported.push(id);
   }

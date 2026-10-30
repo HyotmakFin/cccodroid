@@ -2346,4 +2346,7 @@ window.I18N_DICT["fr"] = {
   "额度速览": "Aperçu de l'utilisation",
   "组件签名检查已关闭（网关带了测试开关启动）": "La vérification des signatures des composants est désactivée (la passerelle a été lancée avec l'option de test)",
   "上一个导入还没完，等它结束再导": "Une importation est déjà en cours. Attendez qu’elle se termine.",
+  "会话包超过 4 GB，分几次导出": "Le paquet de sessions dépasserait 4 Go. Exportez en plusieurs fois.",
+  "压缩包解开后太大，没有导入": "L’archive est trop volumineuse une fois décompressée. Rien n’a été importé.",
+  "存储空间不够了": "Espace de stockage insuffisant",
 };

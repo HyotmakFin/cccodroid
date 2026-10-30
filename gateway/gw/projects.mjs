@@ -14,6 +14,7 @@ import { termEnv } from "./terminal.mjs";
 import { killTree } from "./claude.mjs";
 import { runOfSession } from "./runs.mjs";
 import { checkSession, resealAfterEdit } from "./integrity.mjs";
+import { rewriteLines } from "./bigfile.mjs";
 
 const FILE = path.join(CFG.home, "ccapp-projects.json");
 // 项目颜色：和界面强调色同一套饱和度，按顺序分配（用户可改）
@@ -114,14 +115,13 @@ export function moveSession(sid, projectId) {
   if (path.dirname(found.file) === dir) return { ok: true, same: true };
   fs.mkdirSync(dir, { recursive: true });
   const dirty = checkSession(sid, found.file);   // 改写 cwd 前先核对，搬完重新封签：网关自己改的不算外部改动，原本不干净的也不洗白
-  const text = fs.readFileSync(found.file, "utf8");
-  const out = text.split("\n").map((l) => {
-    if (!l.includes('"cwd"')) return l;
-    try { const ev = JSON.parse(l); if (ev.cwd) ev.cwd = cwd; return JSON.stringify(ev); } catch { return l; }
-  }).join("\n");
   const dst = path.join(dir, sid + ".jsonl");
   const st = fs.statSync(found.file);
-  fs.writeFileSync(dst, out);
+  // 按行流式改写（gw/bigfile.mjs）：1 GB 以上的会话整份读成字符串会超过 V8 单串上限
+  rewriteLines(found.file, dst, (l) => {
+    if (!l.includes('"cwd"')) return l;
+    try { const ev = JSON.parse(l); if (ev.cwd) ev.cwd = cwd; return JSON.stringify(ev); } catch { return l; }
+  });
   try { fs.utimesSync(dst, st.atime, st.mtime); } catch {}
   const side = path.join(path.dirname(found.file), sid);
   if (isDir(side)) { try { fs.renameSync(side, path.join(dir, sid)); } catch {} }

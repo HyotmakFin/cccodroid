@@ -2343,3 +2343,6 @@
 2343	Aperçu de l'utilisation
 2344	La vérification des signatures des composants est désactivée (la passerelle a été lancée avec l'option de test)
 2345	Une importation est déjà en cours. Attendez qu’elle se termine.
+2346	Le paquet de sessions dépasserait 4 Go. Exportez en plusieurs fois.
+2347	L’archive est trop volumineuse une fois décompressée. Rien n’a été importé.
+2348	Espace de stockage insuffisant

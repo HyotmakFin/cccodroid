@@ -2343,3 +2343,6 @@
 2343	Resumen de uso
 2344	La comprobación de firmas de componentes está desactivada (la pasarela se inició con el interruptor de pruebas)
 2345	Todavía hay una importación en curso. Espera a que termine.
+2346	El paquete de sesiones superaría los 4 GB. Expórtalo en varias tandas.
+2347	El archivo es demasiado grande al descomprimirlo. No se importó nada.
+2348	No hay suficiente espacio de almacenamiento

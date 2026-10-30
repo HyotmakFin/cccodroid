@@ -4,12 +4,13 @@ import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SID_RE, TRASH_KEEP_DAYS, exportSessions, deleteMessage, forkSession, importSessions, listTrash, locateUserTurn, purgeTrash, realWorkspace, restoreSession, rewindFiles, rewindFixup, trashSession, undoDelete } from "./sessionops.mjs";
 import { goalStateOf, tasksOf } from "./goal.mjs";
 import { backfillAgents, readAgentIndex, settleAgentRecs } from "./agents.mjs";
+import { bodyToFile, forEachLine } from "./bigfile.mjs";
 import { agentFilesOf, findLineOffset, lineHas, readSessionForward, readSessionPage, transcriptItems } from "./transcript.mjs";
 import { lineageCached } from "./lineage.mjs";
 import { chapterView } from "./archive-core.mjs";
 import { runOfSession } from "./runs.mjs";
 import { archiveBrief, archiveDb, archivedTitle } from "./archive-store.mjs";
-import { NEXT, readBody, readBodyBuf, sendJson } from "./http.mjs";
+import { NEXT, readBody, sendJson } from "./http.mjs";
 
 // ── 会话重命名表 ──────────────────────────────────────────────────────
 export let NAMES = {};
@@ -271,22 +272,24 @@ export async function routeSessions(req, res, u, p) {
     const b = JSON.parse((await readBody(req)) || "{}");
     const ids = b.all ? listSessions(100000).map((x) => x.id) : [].concat(b.ids || []).map(String);
     try {
-      const r = exportSessions(ids);
+      const r = await exportSessions(ids);
       log(`导出 ${r.count} 个会话 → ${r.file}`);
       return sendJson(res, 200, { ok: true, ...r, shared: !!process.env.CCAPP_SHARED && r.file.startsWith(process.env.CCAPP_SHARED) });
     } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
   }
   if (req.method === "POST" && p === "/api/sessions/import") {
-    // 导入包整个在内存里解（原包 + 各条目 + 解出来的），一次只导一个、原包上限 128 MB（审查 10-30 第九份 中3）：
-    // 低内存机上并发几个大包能把网关连同正在跑的 claude 一起挤掉
+    // 请求体直接落盘、逐条解压写盘（gw/bigfile.mjs），内存不跟包大小走：1 GB 以上的会话也导得进。
+    // 一次只导一个（审查 10-30 第九份 中3）；包上限是 zip32 的 4 GB，解出来的总量受剩余空间限制
     if (importBusy) { req.resume(); return sendJson(res, 409, { ok: false, message: tz("上一个导入还没完，等它结束再导") }); }
     importBusy = true;
+    const tmp = path.join(CFG.home, `.import-${Date.now()}.zip`);
     try {
-      const r = importSessions(await readBodyBuf(req, 128 * 1024 * 1024));
+      await bodyToFile(req, tmp, 0xffffffff);
+      const r = await importSessions(tmp);
       log(`导入会话：${r.imported.length} 个，跳过 ${r.skipped.length} 个`);
       return sendJson(res, 200, { ok: true, ...r });
     } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
-    finally { importBusy = false; }
+    finally { importBusy = false; fs.rmSync(tmp, { force: true }); }
   }
   if (p.startsWith("/api/session/")) {
     const rest = decodeURIComponent(p.slice("/api/session/".length));
@@ -365,13 +368,13 @@ export async function routeSessions(req, res, u, p) {
       if (!f) return sendJson(res, 200, { items: [] });
       const items = [];
       try {
-        for (const l of fs.readFileSync(f, "utf8").split("\n")) {
-          if (!l) continue;
-          let ev; try { ev = JSON.parse(l); } catch { continue; }
-          if (ev.type === "user" && typeof ev.message?.content === "string") continue;   // 第一条是主代理给它的提示，Agent 卡参数里已有
+        forEachLine(f, (l) => {
+          if (!l) return;
+          let ev; try { ev = JSON.parse(l); } catch { return; }
+          if (ev.type === "user" && typeof ev.message?.content === "string") return;   // 第一条是主代理给它的提示，Agent 卡参数里已有
           for (const it of transcriptItems({ ...ev, isSidechain: false })) if (it.role !== "thinking" && it.role !== "user") items.push(it);
-          if (items.length > 400) break;
-        }
+          if (items.length > 400) return false;
+        });
       } catch {}
       return sendJson(res, 200, { items });
     }

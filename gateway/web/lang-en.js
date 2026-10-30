@@ -2380,5 +2380,8 @@ window.I18N_DICT.en = {
   "消息输入框": "Message input",
   "额度速览": "Usage at a glance",
   "组件签名检查已关闭（网关带了测试开关启动）": "Component signature checks are off (the gateway was started with the test switch)",
-  "上一个导入还没完，等它结束再导": "Another import is still running. Wait for it to finish."
+  "上一个导入还没完，等它结束再导": "Another import is still running. Wait for it to finish.",
+  "会话包超过 4 GB，分几次导出": "The session package would exceed 4 GB. Export in smaller batches.",
+  "压缩包解开后太大，没有导入": "The archive is too large once unpacked. Nothing was imported.",
+  "存储空间不够了": "Not enough storage space"
 };

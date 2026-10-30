@@ -256,7 +256,7 @@
     toast(t("正在导入…"));
     try {
       const r = await api("/api/sessions/import", {
-        method: "POST", headers: { "content-type": "application/zip" }, body: await f.arrayBuffer(),
+        method: "POST", headers: { "content-type": "application/zip" }, body: f,   // 直接交文件：大包不先整个读进页面内存
       });
       toast(r.skipped.length
         ? t("已导入 {n} 个会话，跳过 {m} 个已存在的", { n: r.imported.length, m: r.skipped.length })
