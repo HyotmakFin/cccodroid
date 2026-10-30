@@ -2456,4 +2456,8 @@ window.I18N_DICT["fr"] = {
   "没找到档号 {r} 对应的会话": "Aucune session ne correspond à {r}",
   "有 {n} 个会话的号都以 {s} 开头，在图上挑一个": "{n} sessions commencent par {s}. Choisissez-en une sur la carte.",
   "{r}：没有这一章": "{r} : ce chapitre n’existe pas",
+  "存在 {dir}，有存储权限的应用都能读到": "Enregistré dans {dir}. Toute app ayant accès au stockage peut le lire.",
+  "存在应用私有目录里，别的应用读不到": "Enregistré dans le dossier privé de l’app. Les autres apps ne peuvent pas le lire.",
+  "这个会话补记的来源已经满了（最多 {n} 个）": "Cette session a déjà le nombre maximal de sources ajoutées ({n}).",
+  "汇合的第一条没发出去（切到了别的会话），已经复制，可以粘贴到新对话里": "Le message de fusion n’a pas été envoyé, car vous avez changé de session. Il est copié : collez-le dans une nouvelle conversation.",
 };

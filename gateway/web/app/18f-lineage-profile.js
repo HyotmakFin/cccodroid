@@ -219,7 +219,7 @@
       <div class="lp-track">${think >= 500 ? `<b class="lp-bar pre" style="${pos(s.p0, s.t0)}"></b>` : ""}<b class="lp-bar${s.agent ? " ag" : ""}${s.err ? " err" : ""}" style="${pos(s.t0, s.t1)}"></b></div></li>`;
   }
   /** 提问里的附件路径（@/… 或 [附件：…]）对看剖面没用，占地方：去掉，换成一句「附件」 */
-  const pfQ = (q) => { const x = String(q || "").replace(/(?:@\/\S+|\[附件：[^\]]+\])\s*/g, "").trim(); return x === String(q || "").trim() ? x : (x ? x + " " : "") + t("（带附件）"); };
+  const pfQ = (q) => { const x = String(q || "").replace(new RegExp("(?:@\\/\\S+|" + BIG_REF + ")\\s*", "g"), "").trim(); return x === String(q || "").trim() ? x : (x ? x + " " : "") + t("（带附件）"); };
   const pfSteps = (a, step) => a.steps.length ? a.steps.map((s) => step(s, "in")).join("") + (a.tools > a.steps.length ? `<li class="lp-note">${esc(t("还有 {n} 次工具调用没列出来。", { n: a.tools - a.steps.length }))}</li>` : "")
     : `<li class="lp-note">${esc(t("没调用工具。"))}</li>`;
   function pfToggleAgent(el) {

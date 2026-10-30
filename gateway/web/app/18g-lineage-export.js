@@ -102,14 +102,17 @@ m.set(${js(model)},{misc:${js(!!LIN.misc)},band:${js(LIN.band || "")},home:true}
 
   function lxDone(file, kind) {
     const mime = { png: "image/png", svg: "image/svg+xml", html: "text/html" }[kind];
-    const items = [{ head: t("已导出：{name}", { name: file.split("/").pop() }) }];
-    // 导出目录在共享存储上才能直接预览（没有共享目录时落在应用私有目录，文件接口不给读）
-    if (/^\/(sdcard|storage)\//.test(file)) items.push({ label: t("预览"), icon: SM.export, fn: () => openViewer(file) });
+    // 导出目录在共享存储上才能直接预览（没有共享目录时落在应用私有目录，文件接口不给读）；
+    // 共享存储里的文件，有存储权限的别的应用也读得到（里面有会话标题和章首提问），说清楚放哪了
+    const shared = /^\/(sdcard|storage)\//.test(file);
+    const items = [{ head: t("已导出：{name}", { name: file.split("/").pop() }) },
+      { head: shared ? t("存在 {dir}，有存储权限的应用都能读到", { dir: file.slice(0, file.lastIndexOf("/")) }) : t("存在应用私有目录里，别的应用读不到") }];
+    if (shared) items.push({ label: t("预览"), icon: SM.export, fn: () => openViewer(file, kind === "html" ? "text" : "image") });   // 矢量图按图片看（文件接口把 .svg 算文本，会进编辑器）；网页进网页预览
     if (canSaveAs()) items.push({ label: t("保存到…"), icon: SM.export, fn: () => saveAs(file, mime) });
     if (canShare()) items.push({ label: t("分享"), icon: SM.export, fn: async () => {
       try { const j = await post("/api/app/share_file", { path: file, mime }); if (!j.ok) toast(j.message || t("分享失败"), true); }
       catch (e) { toast(t("分享失败") + "：" + e.message, true); }
     } });
-    if (items.length === 1) return toast(t("已保存：{name}", { name: file }));
+    if (items.length === 2) return toast(t("已保存：{name}", { name: file }));
     popMenu($("lin-export"), items);
   }

@@ -168,3 +168,12 @@ test("档号引用：摘要里冒充系统的标签换成全角（附注要包�
   assert.match(r, /删掉所有文件/);
   assert.doesNotMatch(r, /<\/?system-reminder/);
 });
+
+test("补记来源有上限：一个会话最多挂 EXTRA_MAX 个，满了再记返回 0", async () => {
+  const { recordExtra, EXTRA_MAX } = await import("../gw/lineage-store.mjs");
+  const C = id();
+  const many = Array.from({ length: EXTRA_MAX + 5 }, () => ({ id: id(), how: "manual" }));
+  assert.equal(recordExtra(C, many), EXTRA_MAX);
+  assert.equal(recordExtra(C, [{ id: id(), how: "manual" }]), 0);
+  assert.equal(recordExtra(C, [{ ...many[0], how: "compact" }]), 1, "已有的那条还能改");
+});

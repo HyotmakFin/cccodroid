@@ -73,6 +73,11 @@ test("一轮的细节：主会话工具起止，子代理和孙代理各自的�
   // 字节位置必须在行首、不能越界
   assert.equal((await turnDetail(S, t.off + 1, t.end)).error, "bad_range");
   assert.equal((await turnDetail(S, t.off, t.end + 1e6)).error, "bad_range");
+  // 行首对齐、不越界，但不是剖面列过的那一轮：整章、跨轮都不给读
+  const c2 = await chapterProfile(S, 2);
+  assert.equal((await turnDetail(S, c2.turns[0].off, c2.turns[1].end)).error, "bad_range", "跨两轮");
+  assert.equal((await turnDetail(S, 0, fs.statSync(path.join(dir, S + ".jsonl")).size)).error, "bad_range", "整个文件");
+  assert.equal((await turnDetail(S, c2.turns[0].off, c2.turns[0].end)).error, undefined);
 });
 
 test("接口：会话号要合规，找不到给 404", async () => {

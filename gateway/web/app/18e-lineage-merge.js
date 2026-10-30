@@ -42,7 +42,7 @@
       const r = await post("/api/lineage/extra", { child: P.child, add: P.ids });
       toast(t("已补记 {n} 个来源", { n: r.n || P.ids.length }));
       linPickEnd(); loadLineage();
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { toast(e.message === "too_many" ? t("这个会话补记的来源已经满了（最多 {n} 个）", { n: 32 }) : e.message, true); }
   });
 
   // 卡片「更多…」：从这里分叉、补记来源、撤掉补错的来源
@@ -228,7 +228,12 @@
         newChatIn(W.proj || null);
         view.pendingMerge = from;
         // 和回退一样等新会话的首屏画完再发
-        setTimeout(() => { if (!view.sessionId && view.pendingMerge === from) send(text); }, 300);
+        // 这 300 毫秒里切去了别的会话：不往那边发，也别把写好的长消息丢了——复制下来，告诉一声
+        setTimeout(() => {
+          if (!view.sessionId && view.pendingMerge === from) return send(text);
+          if (view.pendingMerge === from) view.pendingMerge = null;
+          copyText(text); toast(t("汇合的第一条没发出去（切到了别的会话），已经复制，可以粘贴到新对话里"), true);
+        }, 300);
       }
     });
     o.addEventListener("click", (e) => { if (e.target.closest("[data-close]") && W.ed) { W.ed.destroy(); W.ed = null; } }, true);

@@ -7,7 +7,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { CFG } from "../gw/config.mjs";
-import { modelsUrlOk, siteOf } from "../gw/providers.mjs";
+import { modelsUrlOk } from "../gw/providers.mjs";
 import { routeFiles } from "../gw/files.mjs";
 
 const GW = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,8 +21,9 @@ test("模型清单地址：多级公共后缀、托管平台子域不算同站",
   assert.equal(ok("https://a.vercel.app", "https://b.vercel.app/m"), false);
   assert.equal(ok("https://api.deepseek.com/anthropic", "https://api.deepseek.com/models"), true);
   assert.equal(ok("https://open.bigmodel.cn/api/anthropic", "https://open.bigmodel.cn/api/paas/v4/models"), true);
-  assert.equal(ok("https://api.example.co.uk/v1", "https://models.example.co.uk/m"), true);
-  assert.equal(siteOf("1.2.3.4"), "1.2.3.4");
+  assert.equal(ok("https://api.example.co.uk/v1", "https://models.example.co.uk/m"), false, "不同主机一律不带密钥");
+  for (const suf of ["ddns.net", "hopto.org", "blogspot.com", "azureedge.net", "surge.sh", "gitbook.io", "sch.uk", "k12.ca.us"])
+    assert.equal(ok(`https://victim.${suf}/v1`, `https://evil.${suf}/m`), false, suf);
 });
 
 function fakeRes() {

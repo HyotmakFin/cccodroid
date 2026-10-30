@@ -383,26 +383,14 @@ function upsertProvider(id, b) {
   return { ok: true, id, provider: providerView(id, PROVIDERS_CFG.providers[id]) };
 }
 
-/** 模型清单地址能不能带密钥去问：要 https、和接口地址同一个站点（审查 10-30 第九份 存疑4）。
- *  厂商配置能分享导入，别人塞个外站的 modelsUrl，一点「测试」或刷新型号就把密钥交出去了。内置厂商全都满足 */
-// 「同站点」= 注册域（eTLD+1）。只取后两级会把 co.uk、com.cn 这类公共后缀当成一个站，
-// 两家无关的 xx.co.uk 被判成同站（审查 10-30 v0.5.12 中1）。没有完整公共后缀清单，按两条规矩收紧：
-// ① 两字母国家域名下，第二级是 co/com/net/org/gov/edu/ac/… 的，后缀算三级；② 托管平台的子域互不相干（列表里的按整个后缀算）。
-// 判不准时宁可不放行：最坏只是型号清单拉不到、改用试发消息验密钥
-const SLD = new Set(["co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go", "gob", "mil", "nom", "ltd", "plc", "info", "biz", "gen", "firm", "web", "me", "int"]);
-const HOSTED = ["workers.dev", "pages.dev", "r2.dev", "vercel.app", "netlify.app", "github.io", "gitlab.io", "herokuapp.com", "onrender.com", "fly.dev", "railway.app", "deno.dev", "hf.space", "glitch.me", "replit.app", "repl.co", "appspot.com", "web.app", "firebaseapp.com", "azurewebsites.net", "cloudfront.net", "amazonaws.com", "run.app", "ngrok.io", "ngrok-free.app", "trycloudflare.com", "duckdns.org", "zeabur.app", "sealos.run", "laf.run", "cpolar.cn", "natapp.cc", "ap-northeast-1.on.aws"];
-export function siteOf(h) {
-  h = String(h).toLowerCase().replace(/\.$/, "");
-  if (/^[\d.]+$/.test(h) || h.includes(":")) return h;        // IP 只认原样
-  const lab = h.split(".");
-  for (const suf of HOSTED) if (h === suf || h.endsWith("." + suf)) return lab.slice(-(suf.split(".").length + 1)).join(".");
-  const n = lab.length >= 3 && lab[lab.length - 1].length === 2 && SLD.has(lab[lab.length - 2]) ? 3 : 2;
-  return lab.slice(-n).join(".");
-}
+/** 模型清单地址能不能带密钥去问：要 https、和接口地址同一个主机（审查 10-30 第九份 存疑4、v0.5.12 中1、v0.5.13 低1）。
+ *  厂商配置能分享导入，别人塞个外站的 modelsUrl，一点「测试」或刷新型号就把密钥交出去了。
+ *  以前按「同站点」放行，但共享后缀（动态域名、云存储、托管平台）列不全，总有两家无关租户被判成同站；内置厂商的清单都和接口同主机。
+ *  不放行时最坏只是型号清单拉不到、改用试发消息验密钥 */
 export function modelsUrlOk(p) {
   try {
     const m = new URL(p.modelsUrl), b = new URL(p.baseUrl);
-    return m.protocol === "https:" && (m.hostname === b.hostname || siteOf(m.hostname) === siteOf(b.hostname));
+    return m.protocol === "https:" && m.hostname.toLowerCase().replace(/\.$/, "") === b.hostname.toLowerCase().replace(/\.$/, "");
   } catch { return false; }
 }
 

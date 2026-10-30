@@ -2453,3 +2453,7 @@
 2453	Aucune session ne correspond à {r}
 2454	{n} sessions commencent par {s}. Choisissez-en une sur la carte.
 2455	{r} : ce chapitre n’existe pas
+2456	Enregistré dans {dir}. Toute app ayant accès au stockage peut le lire.
+2457	Enregistré dans le dossier privé de l’app. Les autres apps ne peuvent pas le lire.
+2458	Cette session a déjà le nombre maximal de sources ajoutées ({n}).
+2459	Le message de fusion n’a pas été envoyé, car vous avez changé de session. Il est copié : collez-le dans une nouvelle conversation.

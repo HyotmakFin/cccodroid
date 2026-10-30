@@ -201,7 +201,8 @@ import { modelsUrlOk } from "../gw/providers.mjs";
 test("模型清单地址：同主机 / 同站点 + https 才带密钥去问", () => {
   const ok = (b, m) => modelsUrlOk({ baseUrl: b, modelsUrl: m });
   assert.equal(ok("https://api.deepseek.com/anthropic", "https://api.deepseek.com/models"), true);
-  assert.equal(ok("https://dashscope.aliyuncs.com/apps/anthropic", "https://x.aliyuncs.com/v1/models"), true);
+  assert.equal(ok("https://dashscope.aliyuncs.com/apps/anthropic", "https://x.aliyuncs.com/v1/models"), false);
+  assert.equal(ok("https://dashscope.aliyuncs.com/apps/anthropic", "https://dashscope.aliyuncs.com/compatible-mode/v1/models"), true);
   assert.equal(ok("https://api.deepseek.com/anthropic", "https://evil.example/models"), false);
   assert.equal(ok("https://api.deepseek.com/anthropic", "http://api.deepseek.com/models"), false);
   assert.equal(ok("https://api.deepseek.com", "not a url"), false);

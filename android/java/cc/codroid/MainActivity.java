@@ -428,6 +428,7 @@ public class MainActivity extends Activity {
                     String id = android.provider.DocumentsContract.getDocumentId(u);
                     if ("com.android.externalstorage.documents".equals(au) && id.indexOf(58) > 0) {
                         String vol = id.substring(0, id.indexOf(58)), rel = id.substring(id.indexOf(58) + 1);
+                        if (!vol.matches("[A-Za-z0-9-]+")) return null;   // 卷名只是 primary 或 1234-ABCD 这种；后面还有 canonical 前缀核对兜底
                         p = ("primary".equalsIgnoreCase(vol) ? android.os.Environment.getExternalStorageDirectory().getPath() : "/storage/" + vol) + "/" + rel;
                     } else if ("com.android.providers.downloads.documents".equals(au) && id.startsWith("raw:")) p = id.substring(4);
                 }
@@ -457,8 +458,18 @@ public class MainActivity extends Activity {
                 String name = displayName(u).replaceAll("[^\\w.\\-()\\u4e00-\\u9fff]+", "_").replaceAll("^[.\\s]+", "");
                 if (name.length() > 120) name = name.substring(name.length() - 120);
                 String stamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date());
-                File out = new File(dir, stamp + "-" + (name.isEmpty() ? "upload.bin" : name));
-                for (int k = 2; out.exists(); k++) out = new File(dir, stamp + "-" + k + "-" + name);
+                String base = name.isEmpty() ? "upload.bin" : name;
+                // 独占创建占住名字：同一秒附加两个同名大文件（两批分享）时，后一个不会截断前一个还在写的文件
+                File out = new File(dir, stamp + "-" + base);
+                try {
+                    for (int k = 2; !out.createNewFile(); k++) {
+                        if (k > 999) throw new java.io.IOException("name");
+                        out = new File(dir, stamp + "-" + k + "-" + base);
+                    }
+                } catch (Exception e) {
+                    ui.post(() -> android.widget.Toast.makeText(this, Tr.f("「{0}」附加失败：{1}", displayName(u), e.getMessage()), android.widget.Toast.LENGTH_LONG).show());
+                    continue;
+                }
                 try (InputStream in = openShared(u); OutputStream o = new FileOutputStream(out)) {
                     byte[] buf = new byte[1 << 16];
                     long w = 0, check = 0;

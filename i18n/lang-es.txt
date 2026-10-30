@@ -2453,3 +2453,7 @@
 2453	No hay ninguna sesión para {r}
 2454	{n} sesiones empiezan por {s}. Elige una en el mapa.
 2455	{r}: ese capítulo no existe
+2456	Guardado en {dir}. Cualquier app con acceso al almacenamiento puede leerlo.
+2457	Guardado en la carpeta privada de la app. Otras apps no pueden leerlo.
+2458	Esta sesión ya tiene el máximo de fuentes añadidas ({n}).
+2459	El mensaje de fusión no se envió porque cambiaste de sesión. Está copiado; pégalo en una conversación nueva.

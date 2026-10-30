@@ -32,19 +32,25 @@ export function recordPrimary(child, parent, at, kind = "fork") {
 }
 
 /** 汇合时记附加父（新会话拿到会话号那一刻，run.mjs 调）。how：compact | excerpt | summary | manual。
- *  manual 是「补记来源」：手动给已有会话连一条，和原有的合并去重 */
+ *  manual 是「补记来源」：手动给已有会话连一条，和原有的合并去重。
+ *  一个会话最多挂 EXTRA_MAX 个附加父（审查 v0.5.13 低6：接口刷不爆记录文件）；返回这次实际记上的条数 */
+export const EXTRA_MAX = 32;
 export function recordExtra(child, list) {
-  if (!child || !Array.isArray(list)) return;
+  if (!child || !Array.isArray(list)) return 0;
+  let n = 0;
   const db = lineageDb(), cur = db.edges[child] || {};
   const extra = (cur.extra || []).slice();
   for (const x of list) {
     if (!x || !x.id || x.id === child) continue;
     const i = extra.findIndex((y) => y.id === x.id);
     const v = { id: x.id, at: x.at || null, how: x.how || "excerpt", note: x.note || "" };
-    if (i >= 0) extra[i] = v; else extra.push(v);
+    if (i >= 0) extra[i] = v; else if (extra.length < EXTRA_MAX) extra.push(v); else continue;
+    n++;
   }
+  if (!n) return 0;
   db.edges[child] = { ...cur, extra };
   save();
+  return n;
 }
 
 /** 去掉一条附加父（补记错了） */

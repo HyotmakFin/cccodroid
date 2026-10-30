@@ -183,6 +183,11 @@ export async function turnDetail(id, from, to) {
     try { fs.readSync(fd, b, 0, 1, from - 1); } finally { fs.closeSync(fd); }
     if (b[0] !== 10) return { error: "bad_range" };
   }
+  // 只读剖面列过的轮（审查 v0.5.13 低5）：from 必须是某一轮的开头，to 不超过那一轮的结尾（进行中的章会往后长，旧的结尾仍算数）。
+  // 那一章的剖面多半在缓存里，不在就现算一遍（本来也要先看剖面才点得到这一轮）
+  const n = 1 + rec.compacts.filter((c) => c.off <= from).length;
+  const ch = await chapterProfile(id, n);
+  if (ch.error || !ch.turns.some((u) => u.off === from && to <= u.end)) return { error: "bad_range" };
   const key = `t:${id}:${from}:${to}`;
   if (CACHE.has(key)) return remember(key, CACHE.get(key));
 

@@ -2490,5 +2490,9 @@ window.I18N_DICT.en = {
   "脉络还在整理，稍后再点": "Lineage is still being indexed. Try again in a moment.",
   "没找到档号 {r} 对应的会话": "No session found for {r}",
   "有 {n} 个会话的号都以 {s} 开头，在图上挑一个": "{n} sessions start with {s}. Pick one on the map.",
-  "{r}：没有这一章": "{r}: no such chapter"
+  "{r}：没有这一章": "{r}: no such chapter",
+  "存在 {dir}，有存储权限的应用都能读到": "Saved in {dir}. Any app with storage access can read it.",
+  "存在应用私有目录里，别的应用读不到": "Saved in the app's private folder. Other apps can't read it.",
+  "这个会话补记的来源已经满了（最多 {n} 个）": "This session already has the maximum number of added sources ({n}).",
+  "汇合的第一条没发出去（切到了别的会话），已经复制，可以粘贴到新对话里": "The merge message wasn't sent because you switched sessions. It's copied, so you can paste it into a new chat."
 };

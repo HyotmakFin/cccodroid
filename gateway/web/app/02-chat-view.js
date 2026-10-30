@@ -107,11 +107,13 @@
   const IMG_RE = /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i;
   // 大附件（超过 BIG_ATT）不写成 @路径（claude 会整份读进上下文），写成「[附件：路径 · 大小，…]」只给路径，
   // 气泡里照样画成文件卡片（不出缩略图）
-  const REF1 = "(?:@\\/\\S+|\\[附件：\\/[^\\]\\n]+\\])", REF_TAIL = new RegExp(REF1 + "(?:\\s+" + REF1 + ")*\\s*$");
+  //   认准后面那段固定文字（05-composer.js attRef），路径按最短匹配取：文件名里带「 · 」「]」也不截错
+  const BIG_REF = "\\[附件：(\\/[^\\n]+?) · [^\\n·，\\]]+，文件较大没有直接读入，需要时按路径读取\\]";
+  const REF1 = "(?:@\\/\\S+|" + BIG_REF + ")", REF_TAIL = new RegExp(REF1 + "(?:\\s+" + REF1 + ")*\\s*$");
   function splitRefs(text) {
     const m = REF_TAIL.exec(text || "");
     if (!m) return [text, []];
-    const refs = [...m[0].matchAll(new RegExp(REF1, "g"))].map(([r]) => r[0] === "@" ? { p: r.slice(1) } : { p: r.slice(4, -1).split(" · ")[0], big: true });
+    const refs = [...m[0].matchAll(new RegExp(REF1, "g"))].map(([r, big]) => r[0] === "@" ? { p: r.slice(1) } : { p: big, big: true });
     return [text.slice(0, m.index).trimEnd(), refs];
   }
   function refsHtml(refs) {
