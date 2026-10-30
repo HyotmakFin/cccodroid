@@ -120,3 +120,15 @@ test("补记来源：手动连一条、撤掉；自己和不存在的会话不�
   await post({ child: B, drop: A });
   assert.equal(db().edges[B].extra.length, 0);
 });
+
+test("脉络卡片「从这里分叉」：latest 不指轮，整段抄过去并记主父", async () => {
+  const A = id(); put(A, chain(A, 3, 120));
+  const { forkSession } = await import("../gw/sessionops.mjs");
+  const r = forkSession(A, "", 0, { latest: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.kept, 3);
+  const db = JSON.parse(fs.readFileSync(path.join(process.env.CCAPP_HOME, "ccapp-lineage.json"), "utf8"));
+  assert.equal(db.edges[r.id].primary.id, A);
+  const E = id(); put(E, [{ type: "assistant", uuid: id(), sessionId: E, timestamp: iso(1), message: { role: "assistant", content: [{ type: "text", text: "hi" }] } }]);
+  assert.equal(forkSession(E, "", 0, { latest: true }).ok, false);
+});

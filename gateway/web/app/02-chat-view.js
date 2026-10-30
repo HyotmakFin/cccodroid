@@ -105,14 +105,18 @@
   // 发送时附件以「@路径」接在末尾（claude 靠它读文件）。气泡里不露这串前缀：末尾那段纯 @路径 拆出来，
   // 图片画成缩略图、别的文件画成小卡片；复制 / 重发仍用原文
   const IMG_RE = /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i;
+  // 大附件（超过 BIG_ATT）不写成 @路径（claude 会整份读进上下文），写成「[附件：路径 · 大小，…]」只给路径，
+  // 气泡里照样画成文件卡片（不出缩略图）
+  const REF1 = "(?:@\\/\\S+|\\[附件：\\/[^\\]\\n]+\\])", REF_TAIL = new RegExp(REF1 + "(?:\\s+" + REF1 + ")*\\s*$");
   function splitRefs(text) {
-    const m = /@\/\S+(?:\s+@\/\S+)*\s*$/.exec(text || "");
+    const m = REF_TAIL.exec(text || "");
     if (!m) return [text, []];
-    return [text.slice(0, m.index).trimEnd(), m[0].trim().split(/\s+/).map((r) => r.slice(1))];
+    const refs = [...m[0].matchAll(new RegExp(REF1, "g"))].map(([r]) => r[0] === "@" ? { p: r.slice(1) } : { p: r.slice(4, -1).split(" · ")[0], big: true });
+    return [text.slice(0, m.index).trimEnd(), refs];
   }
   function refsHtml(refs) {
     const FILE = '<svg class="ui-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
-    return `<div class="u-refs">${refs.map((p) => IMG_RE.test(p)
+    return `<div class="u-refs">${refs.map(({ p, big }) => !big && IMG_RE.test(p)
       ? `<button class="u-ref img" data-p="${esc(p)}"><img src="${fileUrl(p)}" alt="" loading="lazy"></button>`
       : `<button class="u-ref" data-p="${esc(p)}">${FILE}<span>${esc(p.split("/").pop())}</span></button>`).join("")}</div>`;
   }

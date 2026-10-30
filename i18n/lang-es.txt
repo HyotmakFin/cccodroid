@@ -2349,3 +2349,41 @@
 2349	Imagen externa · {host} · toca para cargar
 2350	Cargar imágenes externas al tocar
 2351	Las imágenes web de los archivos Markdown se muestran primero como un botón y solo se piden al tocarlas, así sus servidores no saben cuándo lees
+2352	Toca las sesiones del mapa para seleccionar todas las que quieras fusionar
+2353	Toca las sesiones del mapa para elegir sus fuentes
+2354	{n} sesiones seleccionadas
+2355	Añadir fuentes a «{t}» · {n} seleccionadas
+2356	Enlazar
+2357	Se añadieron {n} fuentes
+2358	Añadir fuentes…
+2359	Quitar fuente: {t}
+2360	¿Dejar de registrar «{a}» como fuente de «{b}»? Las sesiones no se ven afectadas.
+2361	Quitada
+2362	Fusionar {n} sesiones
+2363	La nueva sesión no ve las conversaciones originales, solo el material que lleves. El resumen de compactación no cuesta nada; el extracto toma algunas rondas del texto original (por defecto la última).
+2364	Resumen de compactación
+2365	Extracto
+2366	Esta sesión aún no se ha compactado; solo se puede extraer
+2367	No se encontraron rondas para extraer
+2368	Marca las rondas que quieras llevar (últimas {n})
+2369	Extracto de {n} rondas
+2370	Material total: {c}
+2371	Qué hacer a continuación
+2372	Una o dos frases, p. ej.: unir las conclusiones de ambas y decidir un plan
+2373	Dónde ponerla
+2374	Por defecto «{p}»: de ahí viene la mayor parte del material.
+2375	(resumen de compactación)
+2376	(extracto de la conversación reciente)
+2377	A continuación está el material traído de {n} sesiones. Léelo todo primero y luego continúa hacia el objetivo del final; señala antes cualquier contradicción entre los materiales.
+2378	(Sin objetivo: resume primero hasta dónde llegó cada material y luego pregúntame qué hacer)
+2379	Este es el primer mensaje de la nueva sesión y puedes editarlo. No borres la firma del final: sirve para reconocer las fuentes al migrar entre dispositivos.
+2380	Iniciar nueva sesión
+2381	Obteniendo material…
+2382	Una sesión no tiene resumen de compactación; cámbiala a extracto
+2383	El primer mensaje está vacío
+2384	Reunir el hilo de varias sesiones en una nueva
+2385	Más…
+2386	«{name}» es grande ({s}); guardándolo en el espacio de trabajo…
+2387	Esta sesión aún no tiene mensajes tuyos, así que no se puede bifurcar.
+2388	No se puede leer el directorio del archivo comprimido; puede estar dañado
+2389	Descomprimido ocupa {n} MB, más que el límite de {max} MB

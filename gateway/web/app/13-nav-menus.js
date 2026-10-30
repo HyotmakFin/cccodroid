@@ -409,7 +409,7 @@
     ]);
   }
   // 脉络弹层：这个会话的来源（从哪个会话分叉 / 回退来）+ 各章（卷）。全局亲缘图在阶段 1 的脉络页
-  async function lineageMenu(id, anchor) {
+  async function lineageMenu(id, anchor, more) {
     let r;
     try { r = await api("/api/archive?session=" + encodeURIComponent(id)); } catch (e) { return toast(e.status === 404 ? t("这个会话还没有记录") : e.message, true); }
     const p2 = (n) => String(n).padStart(2, "0"), md = (ms) => { const d = new Date(ms); return p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
@@ -435,7 +435,9 @@
       const title = prompt(t("新的题名"), last.title || "");
       if (!title) return;
       post("/api/archive", { session: id, title, chapter: n }).then(() => loadSessions(), (e) => toast((e.body && e.body.errors || [e.message]).join("；"), true));
-    } }, { label: t("在脉络中查看"), icon: SM.lineage, fn: () => { closeDrawer(); openLineage(id); } });
+    } });
+    // 从脉络页（手机树）点开的：已经在脉络里，换成汇合 / 分叉 / 补记这几项
+    if (more) items.push(...more); else items.push({ label: t("在脉络中查看"), icon: SM.lineage, fn: () => { closeDrawer(); openLineage(id); } });
     popMenu(anchor, items, null, "lineage");
   }
   // 账户菜单：常用的在上，不可逆的放最下

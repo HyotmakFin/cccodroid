@@ -8,11 +8,13 @@ import { SEED_FILE } from "./providers.mjs";
 import { claudeEnv } from "./claude.mjs";
 import { NEXT, fileKind, mimeOf, readBody, readBodyBuf, sendJson } from "./http.mjs";
 import { toFront } from "./local.mjs";
+import { bodyToFile } from "./bigfile.mjs";
 
 // ── 文件收发：读图 / 读文件 / 把东西递进来 ────────────────────────────
 // /api/file   把磁盘上的文件流给界面（消息里的图片靠它显示）
 // /api/upload 把界面拿到的东西（粘贴/拖放/选择）落盘成 claude 能读的路径
 export const UPLOAD_DIR = path.join(CFG.workspace, "uploads");
+const UPLOAD_MAX = 4 * 1024 ** 3;   // 单个附件上限（流式落盘）
 
 /** 绝不外发的路径：密钥所在的应用私有目录、运行时、以及几个具名的凭据文件。
  *  说明：这台网关本就只监听 127.0.0.1，且 /api/chat 等于本机任意命令执行 ——
@@ -253,24 +255,30 @@ export async function routeFiles(req, res, u, p) {
       .replace(/[^\w.\-()一-鿿]+/g, "_")   // 空格也换成 _：路径带空格在提示词里很难引用
       .replace(/^[.\s]+/, "")
       .slice(0, 120);
-    const buf = await readBodyBuf(req);
-    if (!buf.length) return sendJson(res, 400, { error: "empty body" });
+    // 流式落盘，不进内存（以前整份读进 64 MB 缓冲，大附件直接失败）。超过门限的附件 App 壳一般直接递路径、不走这里；
+    // 粘贴 / 拖进来的大文件还会走这里，上限 4 GB，且先看剩余空间
+    const len = Number(req.headers["content-length"] || 0);
+    if (len > UPLOAD_MAX) return sendJson(res, 413, { error: "too large" });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    try { const sf = fs.statfsSync(UPLOAD_DIR); if (len && sf.bavail * sf.bsize < len + (512 << 20)) return sendJson(res, 507, { error: "no space" }); } catch {}
     const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
     // 同一秒同名的（一次附加两个同名文件）别互相覆盖：撞了就加 -2、-3
     const nm = safe || "upload.bin", dot = nm.lastIndexOf("."), stem = dot > 0 ? nm.slice(0, dot) : nm, ext = dot > 0 ? nm.slice(dot) : "";
     let out = "";
     for (let i = 1; i < 1000 && !out; i++) {
       const cand = path.join(UPLOAD_DIR, `${stamp}-${i === 1 ? nm : stem + "-" + i + ext}`);
-      try { fs.writeFileSync(cand, buf, { flag: "wx" }); out = cand; }
+      try { fs.writeFileSync(cand, "", { flag: "wx" }); out = cand; }
       catch (e) { if (e.code !== "EEXIST") return sendJson(res, 500, { error: e.message }); }
     }
     if (!out) return sendJson(res, 500, { error: "name taken" });
+    let size;
+    try { size = await bodyToFile(req, out, UPLOAD_MAX); } catch (e) { return sendJson(res, /large/.test(e.message) ? 413 : 400, { error: e.message }); }
+    if (!size) { fs.rmSync(out, { force: true }); return sendJson(res, 400, { error: "empty body" }); }
     const kind = fileKind(out, false);
-    log(`[upload] ${safe || "upload.bin"} ${buf.length}B → ${out}`);
+    log(`[upload] ${safe || "upload.bin"} ${size}B → ${out}`);
     return sendJson(res, 200, {
       ok: true, path: out, name: path.basename(out),
-      size: buf.length, mime: mimeOf(out), kind,
+      size, mime: mimeOf(out), kind,
     });
   }
   // ── 截屏给 Claude：经 priv 以 shell 身份 screencap，存进 uploads 当附件。delay 秒后再截（先切到要截的应用），截完叫回前台 ──

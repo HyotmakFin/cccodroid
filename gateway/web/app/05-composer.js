@@ -1,11 +1,17 @@
   // ── 发送 ──────────────────────────────────────────────────────────
+  // 附件大小门限（与 App 壳 MainActivity.BIG_ATTACH 同值）：超过的不写成 @路径 —— claude 见到 @路径 会把整份读进上下文，
+  // 几百 MB 的东西读不进还白占一轮；只写路径和大小，用到时让它自己按路径读（解压、抽样、跑脚本）。这句落款各语言都写中文，气泡按它认（02 splitRefs）
+  const BIG_ATT = 20 << 20;
+  const isBigAtt = (a) => !!a.big || a.size > BIG_ATT;
+  const attRef = (a) => isBigAtt(a) ? `[附件：${a.path} · ${a.size ? fmtSize(a.size) : "?"}，文件较大没有直接读入，需要时按路径读取]` : "@" + a.path;
   const newCid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
   async function send(forcedText, mode) {
     const fromInput = forcedText == null;
     const typed = (fromInput ? inputEl.value : forcedText).trim();
     // 附件只在附件栏里显示，发出时才把 @路径 接到末尾（claude 靠它读文件）；手动写过的不重复
-    const refs = fromInput ? state.attachments.map((a) => "@" + a.path).filter((r) => !typed.includes(r)) : [];
+    // 大附件只给路径（见 attRef），Claude 用到时自己按路径读
+    const refs = fromInput ? state.attachments.map(attRef).filter((r) => !typed.includes(r)) : [];
     const text = typed && refs.length ? typed + "\n\n" + refs.join(" ") : typed || refs.join(" ");
     if (!text) return;
     if (fromInput) draftLast = "";      // 发出去的不算「误删」：有的输入法清空后还会补一个空的 input 事件
@@ -78,6 +84,8 @@
           follow: view.sessionId ? null : view.lastRunId,
           projectId: view.sessionId ? null : view.projectId || null,     // 新会话：在项目目录里跑
           pin: view.sessionId ? null : state.pendingModel || null,       // 新会话在面板里单独选的模型 / 思考强度
+          // 脉络汇合开出来的新会话：第一条带上来源，网关拿到会话号时记下（gw/merge.mjs）
+          mergeFrom: !view.sessionId && !view.lastRunId ? view.pendingMerge || null : null,
           cid,
           mode: mode || "auto",
         }),
@@ -87,6 +95,7 @@
       if (gen !== view.gen) return;
       view.runIds.add(r.id);
       view.lastRunId = r.id;
+      view.pendingMerge = null;
       lastSendAt = Date.now();
       if (r.injected) toast(t("已插话：当前这一步做完，Claude 就会看到"));
       else if (!r.started) toast(mode === "inject" ? t("这一轮正在收尾，插不进去 —— 已排到最前，马上发出")
@@ -382,7 +391,7 @@
     attachStrip.classList.toggle("hidden", !list.length);
     attachStrip.innerHTML = list.map((a, i) => `
       <div class="att" data-i="${i}">
-        ${a.kind === "image"
+        ${a.kind === "image" && !isBigAtt(a)
           ? `<img src="${fileUrl(a.path)}" alt="">`
           : `<span class="att-ico">${esc((a.name.split(".").pop() || "?").slice(0, 4))}</span>`}
         <span class="att-name">${esc(a.name)}</span>
@@ -432,6 +441,8 @@
     if (!list.length) return [];
     const done = [];
     for (const f of list) {
+      // 大文件（粘贴 / 拖进来的；从选择器挑的 App 壳已经分流了）：网关流式落盘，这里只提示一下要等
+      if (f.size > BIG_ATT) toast(t("「{name}」较大（{s}），正在收进工作区…", { name: f.name, s: fmtSize(f.size) }));
       try {
         const r = await fetch("/api/upload?name=" + encodeURIComponent(f.name || "upload.bin"), {
           method: "POST",
@@ -459,11 +470,11 @@
     const p = e.detail?.value;
     if (!p) return;
     const name = p.split("/").pop();
-    state.attachments.push({
-      path: p, name, size: 0,
-      kind: /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i.test(p) ? "image" : "other",
-    });
+    // 大小先不知道：按大附件算（不出缩略图、发出去只给路径），问到大小再改
+    const a = { path: p, name, size: 0, big: true, kind: /\.(png|jpe?g|gif|webp|bmp|avif|heic)$/i.test(p) ? "image" : "other" };
+    state.attachments.push(a);
     renderAttachments();
+    api("/api/file/stat?path=" + encodeURIComponent(p)).then((r) => { a.size = r.size || 0; a.big = false; renderAttachments(); }, () => {});
     toast(t("已附加 {name}", { name }));
   });
   window.addEventListener("ccapp-insert", (e) => {

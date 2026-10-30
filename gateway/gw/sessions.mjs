@@ -442,7 +442,7 @@ export async function routeSessions(req, res, u, p) {
     if (req.method === "POST" && action === "fork") {
       const b = JSON.parse((await readBody(req)) || "{}");
       let r;
-      try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0, { uuid: String(b.uuid || "").slice(0, 64) }); }
+      try { r = forkSession(id, String(b.userText || ""), Number(b.after) || 0, { uuid: String(b.uuid || "").slice(0, 64), latest: b.latest === true }); }
       catch (e) { r = { ok: false, status: 500, message: e.message }; }
       return sendJson(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: "fork", message: tr(LAST_LANG, r.message) });
     }

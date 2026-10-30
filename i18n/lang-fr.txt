@@ -2349,3 +2349,41 @@
 2349	Image externe · {host} · touchez pour charger
 2350	Charger les images externes au toucher
 2351	Les images web des fichiers Markdown s'affichent d'abord comme un bouton et ne sont chargées qu'au toucher : leurs serveurs ne savent pas quand vous lisez
+2352	Touchez les sessions sur la carte pour sélectionner toutes celles à fusionner
+2353	Touchez les sessions sur la carte pour choisir ses sources
+2354	{n} sessions sélectionnées
+2355	Ajouter des sources à « {t} » · {n} sélectionnées
+2356	Relier
+2357	{n} sources ajoutées
+2358	Ajouter des sources…
+2359	Retirer la source : {t}
+2360	Ne plus considérer « {a} » comme source de « {b} » ? Les sessions elles-mêmes ne sont pas modifiées.
+2361	Retirée
+2362	Fusionner {n} sessions
+2363	La nouvelle session ne voit pas les conversations d'origine, seulement le matériel que vous apportez. Le résumé de compactage est gratuit ; l'extrait reprend quelques échanges du texte original (le dernier par défaut).
+2364	Résumé de compactage
+2365	Extrait
+2366	Cette session n'a pas encore été compactée : seul l'extrait est possible
+2367	Aucun échange à extraire
+2368	Cochez les échanges à apporter ({n} derniers)
+2369	Extrait de {n} échanges
+2370	Total du matériel : {c}
+2371	Ce qu'il faut faire ensuite
+2372	Une ou deux phrases, p. ex. : réunir les conclusions des deux et arrêter un plan
+2373	Où la placer
+2374	Par défaut « {p} » : l'essentiel du matériel en provient.
+2375	(résumé de compactage)
+2376	(extrait de la conversation récente)
+2377	Voici le matériel repris de {n} sessions. Lisez tout d'abord, puis poursuivez vers l'objectif indiqué à la fin ; signalez d'abord les contradictions entre les documents.
+2378	(Pas d'objectif : résumez d'abord où en est chaque document, puis demandez-moi la suite)
+2379	Voici le premier message de la nouvelle session ; vous pouvez le modifier. Gardez la ligne de signature à la fin : elle permet de retrouver les sources lors d'un transfert entre appareils.
+2380	Démarrer la nouvelle session
+2381	Récupération du matériel…
+2382	Une session n'a pas de résumé de compactage : passez à l'extrait
+2383	Le premier message est vide
+2384	Réunir le fil de plusieurs sessions dans une nouvelle
+2385	Plus…
+2386	« {name} » est volumineux ({s}) ; enregistrement dans l'espace de travail…
+2387	Cette session ne contient encore aucun message de votre part : impossible de la bifurquer.
+2388	Impossible de lire le répertoire de l'archive ; elle est peut-être endommagée
+2389	Une fois décompressé, il fait {n} Mo, au-delà de la limite de {max} Mo

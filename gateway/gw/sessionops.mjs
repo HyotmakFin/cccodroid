@@ -40,7 +40,7 @@ function forkUserText(ev) {
 // ── 分叉（续）/ 回退 / 回收站 / 导出导入 ───────────────────────────────
 // 界面给了这条消息的 uuid（从历史读出来的都有）就按 uuid 认；原文 + 后面还有几条只是兜底：
 // 只读了中间一段时界面数不全后面的条数，同样的话问过两次就可能认到另一轮（审查 #49 P1-2）
-export function locateUserTurn(id, userText, after, uuid = "") {
+export function locateUserTurn(id, userText, after, uuid = "", latest = false) {
   const found = findSessionFile(id);
   if (!found) return { ok: false, status: 404, message: tz("找不到这个会话。") };
   // 按行流式读（gw/bigfile.mjs）：会话 1 GB 以上时整份读成字符串会超过 V8 单串上限，分叉、回退、删消息全挂
@@ -53,6 +53,8 @@ export function locateUserTurn(id, userText, after, uuid = "") {
     // 前 80 字要另拷一份：V8 的 slice 只是切片，背后拽着整条原文不放
     if (t != null) { const n = forkNorm(t); users.push({ i, h: crypto.createHash("sha1").update(n).digest("hex"), t80: Buffer.from(n.slice(0, 80)).toString(), uuid: ev.uuid || null }); }
   });
+  // 脉络卡片「从这里分叉」：不指哪一轮，就是最新一轮（整段抄过去）
+  if (latest) return users.length ? { ok: true, found, count, users, best: users.length - 1 } : { ok: false, status: 409, message: tz("这个会话里还没有你的消息，没法分叉。") };
   if (uuid) {
     const j = users.findIndex((u) => u.uuid === uuid);
     if (j >= 0) return { ok: true, found, count, users, best: j };
@@ -71,8 +73,8 @@ export function locateUserTurn(id, userText, after, uuid = "") {
   return { ok: true, found, count, users, best };
 }
 
-export function forkSession(id, userText, after, { before = false, uuid = "" } = {}) {
-  const loc = locateUserTurn(id, userText, after, uuid);
+export function forkSession(id, userText, after, { before = false, uuid = "", latest = false } = {}) {
+  const loc = locateUserTurn(id, userText, after, uuid, latest && !before);
   if (!loc.ok) return loc;
   const { found, count, users } = loc;
   const best = before ? loc.best - 1 : loc.best;      // 回退：只留这条之前的

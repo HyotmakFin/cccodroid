@@ -3219,3 +3219,42 @@ html[data-motion="on"] .tool.mo-flash::after{content:"";position:absolute;inset:
 .ma-chip:not(.on) span{text-decoration:line-through}
 .ma-chip.on{color:var(--fg);background:var(--panel)}
 .ma-chip:not(.on){border-style:dashed;opacity:.75}
+/* 脉络 · 汇合 / 补记来源：多选时底部一条操作栏；选上的线蓝色加粗（map.js），手机树行尾一个勾 */
+.lin-pick{position:absolute;inset-inline:0;bottom:0;z-index:5;display:flex;align-items:center;gap:var(--g2);padding:10px 16px calc(10px + var(--safe-b, 0px));background:var(--bg);border-top:1px solid var(--line);box-shadow:0 -6px 20px var(--shadow)}
+.lin-pick.hidden{display:none}
+.lin-pick #lin-pick-n{flex:1;min-width:0;font-size:13.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lin-pick .btn{width:auto;margin:0;flex:none}
+.lin-pick .btn:disabled{opacity:.4}
+html[data-motion="on"] .lin-pick:not(.hidden){animation:mo-rise var(--mo-soft) linear}
+.lmap.picking .lm-canvas{cursor:pointer}
+.lmap.picking .lm-now{bottom:76px}
+.lmap.picking .lm-tree{padding-bottom:calc(var(--safe-b, 0px) + 76px)}
+.lmap .t-title.pk{fill:var(--lm-blue);font-weight:600}
+.lm-trow .lm-ck{flex:none;width:18px;height:18px;margin-inline-start:8px;border:1.6px solid var(--fg3);border-radius:50%;box-sizing:border-box}
+.lm-trow.pk.on .lm-ck{border-color:var(--lm-blue);background:var(--lm-blue);box-shadow:inset 0 0 0 3px var(--bg)}
+.lm-trow.pk.no{opacity:.4}
+/* 汇合向导（套 .pj-sheet 弹层） */
+.mg-lead{margin:0 0 var(--g2)}
+.mg-src{border:1px solid var(--line);border-radius:12px;padding:12px;margin:var(--g2) 0}
+.mg-h{display:flex;gap:10px;align-items:baseline;margin-bottom:8px;font-size:14.5px}
+.mg-h i,.mg-mats i{font-style:normal;font:12px var(--mono);color:var(--fg3);flex:none}
+.mg-h span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-src .pj-seg button:disabled{opacity:.4}
+.mg-turns.hidden{display:none}
+.mg-turns ol{list-style:none;margin:6px 0 0;padding:0;max-height:240px;overflow-y:auto;overscroll-behavior:contain;border-top:1px solid var(--line)}
+.mg-turns li label{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.mg-turns li input{margin-top:3px;flex:none;accent-color:var(--lm-blue,var(--accent))}
+.mg-turns li span{min-width:0;display:flex;flex-direction:column;gap:2px}
+.mg-turns li b{font-weight:500;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mg-turns li small{font-size:12px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-mats > div{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.mg-mats span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-mats small{font-size:12px;color:var(--fg3);white-space:nowrap}
+.mg-goal{min-height:84px}
+.mg-ed{margin-top:var(--g2);border:1px solid var(--line);border-radius:10px;min-height:320px;height:52vh;overflow:hidden;display:flex}
+.mg-ed > *{flex:1;min-width:0;overflow:auto}
+.mg-ta{border:0;min-height:100%;resize:none;font-family:var(--mono);font-size:13px}
+.pj-sfoot .mg-cnt{margin-inline-end:auto;font-size:12px;color:var(--fg3)}
+/* 多选的进退场：操作栏从底下升起 / 沉下去；刚勾上的那一个勾弹一下 */
+html[data-motion] .lin-pick.mo-out-sheet{animation:mo-sheet-out calc(.17s * var(--mo-x,1)) cubic-bezier(.4,0,1,1) both!important}
+html[data-motion="on"] .lmap .lm-pk-new{transform-box:fill-box;transform-origin:center;animation:mo-pop var(--mo-pop) linear}

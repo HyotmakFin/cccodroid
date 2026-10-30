@@ -57,6 +57,7 @@
     view.cids = new Set();
     view.lastRunId = null;
     view.projectId = null;
+    view.pendingMerge = null;
     view.title = "";
     paintTitle();
     view.goal = null;
@@ -662,11 +663,12 @@
       saveUiState();
     }
     const keepRuns = new Set(view.runIds), keepCids = new Set(view.cids);
-    const sid = view.sessionId, keepProj = view.projectId;   // 重连会重置视图：新会话已挑的项目留着
+    const sid = view.sessionId, keepProj = view.projectId, keepMerge = view.pendingMerge;   // 重连会重置视图：新会话已挑的项目、汇合来源留着
     const resume = sid && view.next != null && !view.anchor ? view.cursor : null;   // 正看着中间某一段：重连后接着那段
     resetView(sid);
     if (resume != null) view.resume = resume;
     if (!sid && keepProj) { view.projectId = keepProj; paintProjChip(); }
+    if (!sid) view.pendingMerge = keepMerge || null;
     view.runIds = keepRuns; view.cids = keepCids;
     pickViewRun();
     renderSessions();

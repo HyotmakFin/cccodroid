@@ -8,7 +8,7 @@
     LIN.map = CCLineageMap.create($("lin-map"), {
       t, locale: I18N.lang, misc: LIN.misc, band: LIN.band,
       acts: (s) => s.trashed ? [{ act: "restore", label: t("恢复"), pri: true }]
-        : [{ act: "open", label: t("打开"), pri: true }, { act: "menu", label: t("章节与题名") }, { act: "merge", label: t("汇合…"), off: true, title: t("即将推出") }],
+        : [{ act: "open", label: t("打开"), pri: true }, { act: "menu", label: t("章节与题名") }, { act: "merge", label: t("汇合…"), title: t("把几个会话的思路合进一个新会话") }, { act: "more", label: t("更多…") }],
       onAct: linAct,
     });
     return LIN.map;
@@ -16,6 +16,8 @@
   function linAct(act, arg, el, sel) {
     if (act === "open" && arg && arg !== sel) return openSession(arg);   // 定时任务卡片里点某一次
     if (act === "open") return openSession(sel);
+    if (act === "merge") return linPickStart("merge", [sel]);   // 18e-lineage-merge.js
+    if (act === "more") return linMore(sel, el);
     if (act === "chapter") {
       // 地图上的站 / 卡片里的章：落在那一章开头（第一章 = 会话开头）
       const n = Number(arg), c = LIN.g?.nodes.find((x) => x.id === sel)?.chapters[n - 1];
@@ -29,7 +31,9 @@
         ? { label: new Date(r.ts).toLocaleString() + " · " + t("已回收，点此恢复"), icon: SM.trash, fn: () => linAct("restore", null, el, r.id) }
         : { label: new Date(r.ts).toLocaleString(), icon: SM.chat, fn: () => openSession(r.id) })]);
       if (node && node.trashed) return popMenu(el, [{ head: node.title }, { label: t("恢复"), icon: SM.trash, fn: () => linAct("restore", null, el, id) }]);
-      return lineageMenu(id, el);
+      // 多选中点行是勾选（map.js 自己处理），这里不弹
+      if (MG.pick) return;
+      return lineageMenu(id, el, linTreeItems(id));
     }
     // 网关回 200 也可能一个都没恢复（failed 里写着原因）：照实说（审查 B-04）
     if (act === "restore") return post("/api/trash/restore", { ids: [arg || sel] }).then((r) => {

@@ -8,6 +8,8 @@
 //   opts.onAct(act, id, el)  按钮 / 卡片里各章 / 定时任务各次被点
 //   opts.onSelect(id|null)   选中变了
 //   opts.onGesture(kind)     做了一个手势：pan / zoom / home（教程据此判断这一步做对了）
+//   m.pick(ids|null, onChange, skip)  多选模式（汇合 / 补记来源挑会话）：点线 = 选上 / 取消，不弹卡片；
+//                            skip 里的、定时任务、回收站里的不能选；onChange(ids 数组)。传 null 退出
 //   opts.misc                显示杂项（含一问一答）；opts.band 只看某一带（key）—— 都可以 set 时改
 // model：{ now, bands: [{ key, name }], sessions: [会话] }，会话：
 //   { id, short, band, title, ghost, from, to, running, trashed, misc, parent, at, kind, missingParent,
@@ -34,7 +36,7 @@
 
   function create(root, opts = {}) {
     const t = opts.t || fmt;
-    const st = { model: null, vis: [], BY: {}, sel: null, k: 1, tx: 0, ty: 0, raf: 0, W: 0, H: 0, AX: null, L: null, mode: "", placed: false, misc: !!opts.misc, band: opts.band || null };
+    const st = { model: null, vis: [], BY: {}, sel: null, k: 1, tx: 0, ty: 0, raf: 0, W: 0, H: 0, AX: null, L: null, mode: "", placed: false, misc: !!opts.misc, band: opts.band || null, pick: null };
     root.classList.add("lmap");
     root.innerHTML = `<div class="lm-canvas"><div class="lm-main"></div><div class="lm-axis"></div><div class="lm-band"></div>
       <button class="lm-now" type="button"></button><div class="lm-card"></div></div><div class="lm-tree"></div>`;
@@ -133,11 +135,21 @@
       return out;
     }
 
+    const pickable = (s) => !!s && !s.task && !s.trashed && !(st.pick && st.pick.skip.has(s.id));
+    function togglePick(id) {
+      const P = st.pick, s = st.BY[id]; if (!P || !pickable(s)) return;
+      if (P.set.has(id)) P.set.delete(id); else P.set.add(id);
+      P.last = P.set.has(id) ? id : null;   // 刚勾上的那一个画勾时弹一下（只这一次）
+      if (st.mode === "tree") paintTree(); else paint();
+      P.last = null;
+      P.onChange && P.onChange([...P.set]);
+    }
+
     function bandName(key) { const b = (st.model.bands || []).find((x) => x.key === key); return b ? b.name : key; }
 
     // ── 画（平板）──
     function paint() {
-      const AX = st.AX = buildAxis(st.k), L = st.L = layout(), BY = st.BY, sel = st.sel, fam = sel ? family(sel) : null;
+      const AX = st.AX = buildAxis(st.k), L = st.L = layout(), BY = st.BY, PK = st.pick, sel = PK ? null : st.sel, fam = sel ? family(sel) : null;
       const W = st.W = AX.width, H = st.H = L.height;
       // 时间轴底色按整张图宽铺：原先 right:0 只有画布宽，往左拖到头时右边露出一截没底色的空白
       layer.axis.style.width = Math.max(W, cv.clientWidth) + "px";
@@ -157,9 +169,11 @@
       const TR = "var(--lm-track)";
       for (const s of st.vis) {
         const P = L.pos[s.id]; if (!P) continue;
-        const on = !fam || fam.has(s.id), isSel = s.id === sel, cls = on ? "" : "dim";
-        const stroke = isSel ? "var(--fg)" : fam && on ? "var(--fg2)" : TR;
-        const sw = isSel ? 2.6 : fam && on ? 2.2 : 2, y = P.y;
+        // 多选时：选上的蓝线加粗、不能选的退暗，其余照常
+        const picked = PK && PK.set.has(s.id);
+        const on = PK ? pickable(s) : !fam || fam.has(s.id), isSel = s.id === sel, cls = on ? "" : "dim";
+        const stroke = picked ? "var(--lm-blue)" : isSel ? "var(--fg)" : fam && on ? "var(--fg2)" : TR;
+        const sw = picked ? 3.2 : isSel ? 2.6 : fam && on ? 2.2 : 2, y = P.y;
         if (s.task) {
           const a = AX.X(startOf(s)), b = AX.X(endOf(s));
           lines.push(`<g class="${cls}"><line x1="${a}" y1="${y}" x2="${b}" y2="${y}" stroke="${isSel ? "var(--fg2)" : TR}" stroke-width="1.6" stroke-dasharray="3 5" stroke-linecap="round"/>${s.task.runs.map((r) => `<circle cx="${AX.X(r.ts)}" cy="${y}" r="3.2" fill="${isSel ? "var(--fg)" : "var(--fg3)"}"/>`).join("")}</g>`);
@@ -217,9 +231,10 @@
             labels.push(`<text class="t-title t-ch${c.ghost ? " ghost" : ""}${last ? " cur" : ""}" x="${a}" y="${y - 11}">${esc(txt)}</text>`);
           });
         }
+        if (picked) body += `<g class="${PK.last === s.id ? "lm-pk-new" : ""}"><circle cx="${x0}" cy="${y}" r="6.5" fill="var(--bg)" stroke="var(--lm-blue)" stroke-width="2"/><path d="M${x0 - 3} ${y} l2.2 2.3 l4 -4.3" fill="none" stroke="var(--lm-blue)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>`;
         if (s.running) body += `<circle cx="${x1}" cy="${y}" r="4" class="lm-run"><animate attributeName="r" values="3.4;5;3.4" dur="1.6s" repeatCount="indefinite"/></circle>`;
         lines.push(`<g class="${cls}">${conn}${body}</g>`);
-        if (!isSel) labels.push(`<text class="t-title${dead || s.ghost ? " ghost" : ""} ${cls}" x="${x0 - 2}" y="${y - 11}" data-sx="${x0 - 2}" data-ex="${x1}" data-w="${textW(clip(s.title)) + (dead ? 60 : 0)}">${esc(clip(s.title))}${dead ? ` <tspan class="t-axis" dx="4">${esc(t("回收站"))}</tspan>` : ""}</text>`);
+        if (!isSel) labels.push(`<text class="t-title${dead || s.ghost ? " ghost" : ""}${picked ? " pk" : ""} ${cls}" x="${x0 - 2}" y="${y - 11}" data-sx="${x0 - 2}" data-ex="${x1}" data-w="${textW(clip(s.title)) + (dead ? 60 : 0)}">${esc(clip(s.title))}${dead ? ` <tspan class="t-axis" dx="4">${esc(t("回收站"))}</tspan>` : ""}</text>`);
         // 点按热区：比线粗得多的透明描边 + 标题那一块
         hits.push(`<line data-id="${esc(s.id)}" x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="transparent" stroke-width="22"/><rect data-id="${esc(s.id)}" x="${x0 - 4}" y="${y - 26}" width="${Math.max(x1 - x0, textW(clip(s.title)) + 8)}" height="22" fill="transparent"/>`);
       }
@@ -227,6 +242,7 @@
       layer.axis.innerHTML = `<svg width="${W}" height="30">${ax.join("")}</svg>`;
       layer.band.innerHTML = L.bandY.map((b) => `<div style="top:${b.y + 4}px">${esc(bandName(b.key))}</div>`).join("");
       layer.card.innerHTML = sel ? card(sel) : "";
+      root.classList.toggle("picking", !!PK);
       st.sticky = layer.main.querySelectorAll ? [...layer.main.querySelectorAll("text[data-sx]")].map((el) => ({ el, sx: +el.dataset.sx, ex: +el.dataset.ex, w: +el.dataset.w, x: +el.dataset.sx })) : [];
       place();
     }
@@ -355,6 +371,12 @@
         const now = performance.now();
         if (now - lastTap < 300) { lastTap = 0; return home(); }
         lastTap = now;
+        if (st.pick) {
+          // 多选：点站也算点这条线
+          const h = d.target.closest && d.target.closest("[data-id],[data-st]");
+          if (h) togglePick(h.getAttribute("data-id") || h.getAttribute("data-st"));
+          return;
+        }
         const stn = d.target.closest && d.target.closest("[data-st]");
         if (stn && opts.onAct) { lastTap = 0; return opts.onAct("chapter", stn.getAttribute("data-n"), stn, stn.getAttribute("data-st")); }
         const hit = d.target.closest && d.target.closest("[data-id]");
@@ -426,13 +448,16 @@
         const src = [...(s.extra || []), ...(s.reads || []).filter((x) => x.early)].map((e) => BY[e.id]).filter(Boolean);
         if (src.length) meta += `<span>← ${src.map((o) => esc(o.title.slice(0, 6))).join("、")}</span>`;
         if (s.trashed) meta = `<span>${esc(t("回收站"))}</span><span>${esc(range(s.from, s.to))}</span>`;
-        return `<div class="lm-trow${s.trashed || s.ghost ? " ghost" : ""}${s.id === st.sel ? " sel" : ""}" data-id="${esc(s.id)}"><div class="gut" style="width:${gw}px"><svg width="${gw}" height="80">${svg}</svg></div>
-          <div class="main"><div class="tt">${esc(s.title)}</div><div class="mm">${meta}</div></div></div>`;
+        const pk = st.pick ? (st.pick.set.has(s.id) ? " pk on" : pickable(s) ? " pk" : " pk no") : "";
+        return `<div class="lm-trow${s.trashed || s.ghost ? " ghost" : ""}${!st.pick && s.id === st.sel ? " sel" : ""}${pk}" data-id="${esc(s.id)}"><div class="gut" style="width:${gw}px"><svg width="${gw}" height="80">${svg}</svg></div>
+          <div class="main"><div class="tt">${esc(s.title)}</div><div class="mm">${meta}</div></div>${pk ? `<span class="lm-ck${st.pick.last === s.id ? " lm-pk-new" : ""}"></span>` : ""}</div>`;
       }).join("") || `<div class="lm-empty">${esc(t("还没有会话"))}</div>`;
+      root.classList.toggle("picking", !!st.pick);
     }
     tree.addEventListener("click", (e) => {
       const r = e.target.closest("[data-id]"); if (!r) return;
       const id = r.getAttribute("data-id");
+      if (st.pick) return togglePick(id);
       // 手机上没有卡片：点一行选中，并交给外面弹菜单（App 里是会话的脉络弹层）
       select(id);
       opts.onAct && opts.onAct("tree", id, r, id);
@@ -478,7 +503,17 @@
       },
       select,
       home,
-      state: () => ({ sel: st.sel, k: st.k, tx: st.tx, ty: st.ty, mode: st.mode, W: st.W, H: st.H, n: st.vis.length }),
+      pick(ids, onChange, skip) {
+        const was = !!st.pick;
+        st.pick = ids ? { set: new Set(ids), onChange, skip: new Set(skip || []) } : null;
+        if (st.mode === "tree") paintTree(); else if (st.model) paint();
+        // 退出多选：原来选中的那条的卡片弹回来（和选线同一个动效）
+        if (was && !ids && st.sel && st.mode === "map" && document.documentElement.dataset.motion === "on") {
+          root.classList.remove("mo-pick"); void root.offsetWidth; root.classList.add("mo-pick");
+          clearTimeout(st.moT); st.moT = setTimeout(() => root.classList.remove("mo-pick"), 1200);
+        }
+      },
+      state: () => ({ pick: st.pick ? [...st.pick.set] : null, sel: st.sel, k: st.k, tx: st.tx, ty: st.ty, mode: st.mode, W: st.W, H: st.H, n: st.vis.length }),
       destroy() { if (ro) ro.disconnect(); cancelAnimationFrame(st.raf); root.innerHTML = ""; root.classList.remove("lmap", "tree"); },
     };
   }

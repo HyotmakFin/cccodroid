@@ -379,6 +379,9 @@ public class MainActivity extends Activity {
             dir.mkdirs();
             int n = 0;
             for (android.net.Uri u : uris) {
+                // 大文件在共享存储里有真实路径：直接给路径，不拷（附件大小门限，见 BIG_ATTACH）
+                String real = sizeOf(u) > BIG_ATTACH ? realPath(u) : null;
+                if (real != null) { n++; toPage("ccapp-attach", real); continue; }
                 String name = displayName(u).replaceAll("[^\\w.\\-()\\u4e00-\\u9fff]+", "_").replaceAll("^[.\\s]+", "");
                 if (name.length() > 120) name = name.substring(name.length() - 120);
                 String stamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date());
@@ -409,6 +412,69 @@ public class MainActivity extends Activity {
             // 分享文件时 EXTRA_TEXT 常是标题之类的附带说明，只有单纯分享文字时才插进去
             if (n == 0 && uris.isEmpty() && text != null) toPage("ccapp-insert", text);
         }, "share-in").start();
+    }
+    /** 附件大小门限（与界面 05-composer.js 的 BIG_ATT 同值）：超过的不经网页上传 */
+    static final long BIG_ATTACH = 20L << 20;
+    /** content:// 对应的共享存储真实路径（系统文件选择器、下载、媒体库常见的几种）；对不上、读不了、不在 /storage 下都给 null。
+     *  只认共享存储：指向本应用私有目录的照旧走 openShared 的拦截 */
+    private String realPath(Uri u) {
+        try {
+            String p = null, sc = String.valueOf(u.getScheme());
+            if ("file".equals(sc)) p = u.getPath();
+            else if ("content".equals(sc)) {
+                String au = String.valueOf(u.getAuthority());
+                if (au.equals(getPackageName()) || au.startsWith(getPackageName() + ".")) return null;
+                if (android.provider.DocumentsContract.isDocumentUri(this, u)) {
+                    String id = android.provider.DocumentsContract.getDocumentId(u);
+                    if ("com.android.externalstorage.documents".equals(au) && id.indexOf(58) > 0) {
+                        String vol = id.substring(0, id.indexOf(58)), rel = id.substring(id.indexOf(58) + 1);
+                        p = ("primary".equalsIgnoreCase(vol) ? android.os.Environment.getExternalStorageDirectory().getPath() : "/storage/" + vol) + "/" + rel;
+                    } else if ("com.android.providers.downloads.documents".equals(au) && id.startsWith("raw:")) p = id.substring(4);
+                }
+                if (p == null) {
+                    try (android.database.Cursor c = getContentResolver().query(u, new String[]{"_data"}, null, null, null)) {
+                        if (c != null && c.moveToFirst() && !c.isNull(0)) p = c.getString(0);
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (p == null) return null;
+            File f = new File(p).getCanonicalFile();
+            String c = f.getPath();
+            if (!c.startsWith("/storage/") && !c.startsWith("/sdcard/")) return null;
+            if (c.contains("/Android/data/" + getPackageName()) || c.contains("/Android/obb/" + getPackageName())) return null;
+            return f.isFile() && f.canRead() ? c : null;
+        } catch (Exception e) { return null; }
+    }
+    /** 选择器里挑的大文件：有路径的递路径，没有的后台拷进 uploads/（不经网页） */
+    private void attachBig(java.util.List<Uri> list) {
+        new Thread(() -> {
+            File dir = new File(env.workspace(), "uploads");
+            for (Uri u : list) {
+                String real = realPath(u);
+                if (real != null) { toPage("ccapp-attach", real); continue; }
+                ui.post(() -> android.widget.Toast.makeText(this, Tr.t("文件较大，正在收进工作区…"), android.widget.Toast.LENGTH_SHORT).show());
+                dir.mkdirs();
+                String name = displayName(u).replaceAll("[^\\w.\\-()\\u4e00-\\u9fff]+", "_").replaceAll("^[.\\s]+", "");
+                if (name.length() > 120) name = name.substring(name.length() - 120);
+                String stamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date());
+                File out = new File(dir, stamp + "-" + (name.isEmpty() ? "upload.bin" : name));
+                for (int k = 2; out.exists(); k++) out = new File(dir, stamp + "-" + k + "-" + name);
+                try (InputStream in = openShared(u); OutputStream o = new FileOutputStream(out)) {
+                    byte[] buf = new byte[1 << 16];
+                    long w = 0, check = 0;
+                    for (int r; (r = in.read(buf)) > 0; ) {
+                        o.write(buf, 0, r);
+                        if ((w += r) < check) continue;
+                        check = w + (64L << 20);
+                        if (dir.getUsableSpace() < (512L << 20)) throw new java.io.IOException(Tr.t("存储空间不够了"));
+                    }
+                    toPage("ccapp-attach", out.getPath());
+                } catch (Exception e) {
+                    out.delete();
+                    ui.post(() -> android.widget.Toast.makeText(this, Tr.f("「{0}」附加失败：{1}", displayName(u), e.getMessage()), android.widget.Toast.LENGTH_LONG).show());
+                }
+            }
+        }, "attach-big").start();
     }
     /** 别的应用分享进来的流（审查 10-30 第九份 安卓低7）：读是在我们自己的进程里读的，
      *  file:///data/user/0/cc.codroid/files/home/.gateway-token 这种指向我们私有目录的、或我们自己 provider 的 content://，
@@ -1730,8 +1796,16 @@ public class MainActivity extends Activity {
             return;
         }
         if (req == 7 && fileCb != null) {
-            fileCb.onReceiveValue(chooserResult(res, data));
+            // 附件大小门限：超过 BIG_ATTACH 的不交给网页（网页要把整个文件经 fetch 送进网关，几百 MB 时界面和网关都扛不住），
+            // 在这边处理 —— 共享存储里有真实路径的只递路径，Claude 按路径自己读；没有的（云盘、别的应用私有的）在后台流式拷进 uploads/
+            Uri[] all = chooserResult(res, data);
+            ValueCallback<Uri[]> cb = fileCb;
             fileCb = null;
+            if (all == null) { cb.onReceiveValue(null); return; }
+            java.util.ArrayList<Uri> small = new java.util.ArrayList<>(), big = new java.util.ArrayList<>();
+            for (Uri u : all) (sizeOf(u) > BIG_ATTACH ? big : small).add(u);
+            cb.onReceiveValue(small.isEmpty() ? null : small.toArray(new Uri[0]));
+            if (!big.isEmpty()) attachBig(big);
         }
     }
 
