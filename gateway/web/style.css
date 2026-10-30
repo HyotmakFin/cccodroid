@@ -1024,6 +1024,7 @@ html[dir="rtl"] .bubble code,html[dir="rtl"] .bubble pre,html[dir="rtl"] .mono{d
 .vw-gpop .btn{width:auto;margin:0}
 
 .vw-md{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;max-width:none;margin:0}
+.md-img-ext{display:block;margin:10px auto;padding:8px 12px;max-width:100%;border:1px dashed var(--line);border-radius:6px;background:transparent;color:var(--fg2,var(--fg));font:inherit;font-size:12.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vw-md .md-img{display:block;max-width:100%;height:auto;margin:10px auto;border-radius:6px}
 .vw-img{flex:1;min-height:0;overflow:auto;display:flex;background:var(--code-bg);border-radius:9px}
 .vw-img img{margin:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
@@ -1277,6 +1278,7 @@ html[dir="rtl"] .field select{background-position:12px 50%,17px 50%}   /* 从右
 .vw-mded .cm-md-img{display:block;margin:6px 0}
 .vw-mded .cm-md-img img{display:block;max-width:100%;max-height:50vh;border-radius:8px}
 .vw-mded .cm-md-img.bad{display:none}
+.vw-mded .cm-md-img-ext{display:block;margin:6px 0;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;color:var(--fg2,var(--fg));font-size:12.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vw-mded .cm-line.cm-md-table,.vw-mded .cm-line.cm-md-html{font-family:var(--mono);font-size:.84em;color:var(--fg2)}
 /* 查找替换面板 */
 .vw-mded .cm-panels{background:var(--bg2);color:var(--fg);border-color:var(--line)}

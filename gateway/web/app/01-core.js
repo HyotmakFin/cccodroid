@@ -587,6 +587,25 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     api("/api/ui", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ [k]: v == null ? null : v }) }).catch(() => {});
     document.dispatchEvent(new CustomEvent("cc:ui", { detail: { key: k } }));
   }
+  // ── 外链图片点一下才加载（0.5.12）：md 里写的 http(s) 图一渲染就会去请求对方服务器，对方能看到 IP 和读的时间。
+  //   默认先画成一个按钮，点了才加载；点过的地址本次记住。设置里关掉（extImg = "auto"）就照旧直接加载。
+  //   本机地址、相对路径、data:/blob: 不拦
+  const EXT_OK = new Set();
+  function extImg(u) {
+    if (!/^https?:/i.test(u) || EXT_OK.has(u) || uiGet("extImg") === "auto") return null;
+    let host = "";
+    try { host = new URL(u).hostname; } catch { host = u.slice(0, 40); }
+    if (host === location.hostname || host === "localhost" || /^127\./.test(host) || host === "[::1]") return null;
+    return { ext: 1, src: u, host, label: t("外链图片 · {host} · 点一下加载", { host }), ok: () => EXT_OK.add(u) };
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".md-img-ext"); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    EXT_OK.add(b.dataset.src);
+    const i = document.createElement("img");
+    i.className = "md-img"; i.src = b.dataset.src; i.alt = b.dataset.alt || ""; i.referrerPolicy = "no-referrer";
+    b.replaceWith(i);
+  }, true);
   async function uiSync() {
     const d = await api("/api/ui").catch(() => null); if (!d) return;
     // 网关还没有、本地有（升级上来的第一次）：把本地的推上去，别被空的盖掉
@@ -656,7 +675,11 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
     return esc(s)
       // 图片：只有调用方给了解析函数（查看器预览按文件所在目录解析相对路径）才渲染；聊天里不认
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, u) =>
-        mdImg ? hold(`<img class="md-img" src="${esc(mdImg(u.replace(/&amp;/g, "&")))}" alt="${alt}" loading="lazy">`) : all)
+        { if (!mdImg) return all;
+          const r = mdImg(u.replace(/&amp;/g, "&"));
+          return hold(typeof r === "object"
+            ? `<button type="button" class="md-img-ext" data-src="${esc(r.src)}" data-alt="${alt}">${esc(r.label)}</button>`
+            : `<img class="md-img" src="${esc(r)}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer">`); })
       .replace(/`([^`\n]+)`/g, (_, c) => {
         const m = c.match(/^((?:\/storage|\/sdcard|\/data|\/mnt)(?:\/[^\s:]+)+\/?)(:\d+(?::\d+)?)?$/);
         const w = !m && wroteOf(c);

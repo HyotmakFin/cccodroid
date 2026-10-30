@@ -867,7 +867,7 @@
   ];
   /** md 里的图片地址 → 能加载的地址（相对路径按这个文件所在目录算） */
   function mdImgSrc(u) {
-    if (/^(https?:|data:|blob:)/i.test(u)) return u;
+    if (/^(https?:|data:|blob:)/i.test(u)) return extImg(u) || u;   // 外链图默认先给按钮（01-core extImg）
     // 按段 decodeURIComponent：decodeURI 不解 %23 %3F（# ?），fig%23one.png 会被当成字面带百分号的文件名（审查 #50 S2-08）
     const dec = (x) => { try { return decodeURIComponent(x); } catch { return x; } };
     const rel = u.startsWith("/");

@@ -2346,3 +2346,6 @@
 2346	Le paquet de sessions dépasserait 4 Go. Exportez en plusieurs fois.
 2347	L’archive est trop volumineuse une fois décompressée. Rien n’a été importé.
 2348	Espace de stockage insuffisant
+2349	Image externe · {host} · touchez pour charger
+2350	Charger les images externes au toucher
+2351	Les images web des fichiers Markdown s'affichent d'abord comme un bouton et ne sont chargées qu'au toucher : leurs serveurs ne savent pas quand vous lisez

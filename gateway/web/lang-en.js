@@ -2383,5 +2383,8 @@ window.I18N_DICT.en = {
   "上一个导入还没完，等它结束再导": "Another import is still running. Wait for it to finish.",
   "会话包超过 4 GB，分几次导出": "The session package would exceed 4 GB. Export in smaller batches.",
   "压缩包解开后太大，没有导入": "The archive is too large once unpacked. Nothing was imported.",
-  "存储空间不够了": "Not enough storage space"
+  "存储空间不够了": "Not enough storage space",
+  "外链图片 · {host} · 点一下加载": "External image · {host} · tap to load",
+  "外链图片点一下才加载": "Load external images on tap",
+  "md 文件里引用的网络图片先显示成按钮，点了才去请求，对方服务器看不到你何时在读": "Web images referenced in Markdown files show as a button first and are only fetched when tapped, so their servers can't see when you're reading"
 };

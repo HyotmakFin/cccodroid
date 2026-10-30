@@ -496,6 +496,9 @@
   });
   $("set-idlecompact").addEventListener("change", (e) => saveSettings({ idleCompaction: e.target.checked }));
   $("set-guard").addEventListener("change", (e) => saveSettings({ guard: e.target.checked }));
+  const extSync = () => { $("set-extimg").checked = uiGet("extImg") !== "auto"; };
+  extSync(); document.addEventListener("cc:ui", (e) => { if (e.detail.key === "extImg" || e.detail.key == null) extSync(); });
+  $("set-extimg").addEventListener("change", (e) => uiSet("extImg", e.target.checked ? null : "auto"));
   $("set-workisland").addEventListener("change", (e) => saveSettings({ workIsland: e.target.checked }));
   $("set-parallel").addEventListener("change", (e) => {
     const v = Math.round(Number(e.target.value));

@@ -2349,4 +2349,7 @@ window.I18N_DICT["fr"] = {
   "会话包超过 4 GB，分几次导出": "Le paquet de sessions dépasserait 4 Go. Exportez en plusieurs fois.",
   "压缩包解开后太大，没有导入": "L’archive est trop volumineuse une fois décompressée. Rien n’a été importé.",
   "存储空间不够了": "Espace de stockage insuffisant",
+  "外链图片 · {host} · 点一下加载": "Image externe · {host} · touchez pour charger",
+  "外链图片点一下才加载": "Charger les images externes au toucher",
+  "md 文件里引用的网络图片先显示成按钮，点了才去请求，对方服务器看不到你何时在读": "Les images web des fichiers Markdown s'affichent d'abord comme un bouton et ne sont chargées qu'au toucher : leurs serveurs ne savent pas quand vous lisez",
 };

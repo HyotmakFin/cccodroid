@@ -2346,3 +2346,6 @@
 2346	El paquete de sesiones superaría los 4 GB. Expórtalo en varias tandas.
 2347	El archivo es demasiado grande al descomprimirlo. No se importó nada.
 2348	No hay suficiente espacio de almacenamiento
+2349	Imagen externa · {host} · toca para cargar
+2350	Cargar imágenes externas al tocar
+2351	Las imágenes web de los archivos Markdown se muestran primero como un botón y solo se piden al tocarlas, así sus servidores no saben cuándo lees
