@@ -2431,3 +2431,20 @@
 2431	Échec de l'export : {e}
 2432	Impossible de dessiner l'image
 2433	Exporté : {name}
+2434	Fusionner deux sessions vous-même
+2435	Quand plusieurs lignes en sont chacune à mi-chemin et que vous voulez continuer dans une seule nouvelle session : sélectionnez « Refondre la passerelle », touchez « Fusionner… » sur sa carte, puis touchez « Essayer un autre routage » pour cocher les deux.
+2436	Sur la vraie page Lignée, vous toucheriez ensuite « Suivant » et un assistant en trois étapes s'ouvre : pour chaque source, son résumé de compaction ou quelques tours d'origine → une ligne sur la suite → l'aperçu du premier message, modifiable. Une fois envoyé, c'est une nouvelle session, avec une ligne venant de chaque source.
+2437	La visite ne fait que répéter la sélection ; aucune session n'est réellement créée.
+2438	Cocher deux sessions
+2439	Détail : le déroulé, tour par tour
+2440	« Détail » sur la carte déplie une session : pour chaque tour d'un chapitre, son début et sa fin, le nombre d'appels d'outils et de sous-agents ; les sessions bifurquées d'un tour sont rangées sous ce tour.
+2441	Touchez un tour pour voir la durée de chaque appel d'outil et de chaque sous-agent.
+2442	Essayez « Détail » sur la carte « Refondre la passerelle ».
+2443	Toucher « Détail »
+2444	« Exporter » dans la barre d'outils enregistre cette carte en image, en vectoriel ou en page web interactive.
+2445	Écrivez un numéro d'archive comme « a1b2·3 » dans la conversation et l'IA reçoit le résumé de la fin de ce chapitre, sans copier-coller.
+2446	Fusion et détail
+2447	Le menu qui s'ouvre en touchant une ligne propose aussi « Fusionner… » et « Détail » : fusionner coche quelques sessions et réunit leur réflexion dans une nouvelle session ; le détail déplie une session tour par tour, avec la durée de chaque tour et le nombre de sous-agents.
+2448	Écrivez un numéro d'archive comme « a1b2·3 » dans la conversation et l'IA reçoit le résumé de la fin de ce chapitre. « Exporter » dans la barre d'outils enregistre la lignée en image ou en page web.
+2449	{n} sélectionnée(s). Sur la vraie page Lignée, vous toucheriez maintenant « Suivant » en bas pour ouvrir l'assistant.
+2450	Sur la vraie page Lignée, cela ouvre le détail de « {t} ».

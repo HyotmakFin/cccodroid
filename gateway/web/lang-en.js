@@ -2468,5 +2468,22 @@ window.I18N_DICT.en = {
   "图上还没有会话": "There are no sessions on the map yet",
   "导出失败：{e}": "Export failed: {e}",
   "图片没画出来": "The image couldn't be drawn",
-  "已导出：{name}": "Exported: {name}"
+  "已导出：{name}": "Exported: {name}",
+  "动手汇合两个会话": "Merge two sessions yourself",
+  "几条线各做了一半，想合成一个新会话接着干：选中「重构网关」，点卡片上的「汇合…」，再点「试另一种路由写法」，两条都打上勾。": "When several lines each got halfway and you want to carry on in one new session: select \"Refactor the gateway\", tap \"Merge…\" on its card, then tap \"Try another routing approach\" so both are checked.",
+  "真脉络里接着点「下一步」，向导分三步：每个来源用压缩摘要还是摘几轮原文 → 写一句接下来要干什么 → 预览第一条消息，可以改。发出去就是一个新会话，图上从两条线各汇一根进来。": "On the real Lineage page you'd tap \"Next\" and a three-step wizard follows: for each source, its compaction summary or a few turns of the original → one line about what comes next → a preview of the first message, which you can edit. Once sent it's a new session, with a line flowing in from each source.",
+  "导览里只演练挑选，不会真的开会话。": "The tour only rehearses the picking; it won't actually start a session.",
+  "勾上两个会话": "Check two sessions",
+  "剖面：一轮轮是怎么跑的": "Drill down: how it ran, turn by turn",
+  "卡片上的「剖面」把一个会话摊开：一章里每一轮的起止、用了几次工具、派了几个子代理；从哪一轮分叉出去的也挂在那一轮下面。": "\"Drill down\" on the card lays a session out: when each turn in a chapter ran, how many tool calls it made, how many subagents it sent; sessions forked off a turn hang under that turn.",
+  "再点一轮，能看到每次工具调用和每个子代理各跑了多久。": "Tap a turn to see how long each tool call and each subagent ran.",
+  "点「重构网关」卡片上的「剖面」试试。": "Try \"Drill down\" on the \"Refactor the gateway\" card.",
+  "点「剖面」": "Tap \"Drill down\"",
+  "工具栏的「导出」能把这张图存成图片、矢量图或能拖能点的网页。": "\"Export\" in the toolbar saves this map as an image, a vector file, or a web page you can pan and tap.",
+  "聊天时写「a1b2·3」这样的档号，AI 会拿到那一章结束时的摘要，不用整段复制过去。": "Write an archive number like \"a1b2·3\" in chat and the AI gets the summary from the end of that chapter, no copy-pasting needed.",
+  "汇合与剖面": "Merge and drill down",
+  "点一行弹出的菜单里还有「汇合…」和「剖面」：汇合是勾几个会话、把它们的思路合进一个新会话；剖面是把一个会话一轮轮摊开，看每轮用了多久、派了几个子代理。": "The menu that pops up when you tap a row also has \"Merge…\" and \"Drill down\": merging checks a few sessions and carries their thinking into one new session; drilling down lays a session out turn by turn, showing how long each turn took and how many subagents it sent.",
+  "聊天时写「a1b2·3」这样的档号，AI 会拿到那一章结束时的摘要。工具栏的「导出」能把脉络存成图片或网页。": "Write an archive number like \"a1b2·3\" in chat and the AI gets the summary from the end of that chapter. \"Export\" in the toolbar saves the lineage as an image or a web page.",
+  "已选 {n} 个。真脉络里这时点底下的「下一步」进向导。": "{n} selected. On the real Lineage page you'd now tap \"Next\" at the bottom to open the wizard.",
+  "在真脉络里，这会打开「{t}」的剖面。": "On the real Lineage page, this opens the drill-down for \"{t}\"."
 };

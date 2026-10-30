@@ -88,6 +88,18 @@ A **scheduled task** runs Claude once on this device at the set time. Nobody is 
 - You can limit runs to Wi-Fi or charging, cap cost and duration per run, and set a daily total. Most third-party APIs don't report cost, so cost caps don't apply to them.
 - The timer lives in the gateway: tasks run on time while the app is open or in the background. If the system kills it or the device is off, the run is missed and handled by the task's If missed setting next time you open the app; it's never made up silently.
 
+## Lineage
+
+The Lineage page in the sidebar draws all your sessions as a subway map: time runs left to right, each line is a session, grouped into bands by project. In portrait it becomes an indented tree. On your first visit, tap "How to read" at the top right. The two-minute tour uses sample data and never touches your sessions.
+
+- **Stations and archive numbers.** Each compaction ends a chapter and adds a station to the line. "a1b2·3" is an archive number: the first four characters of the session ID · the chapter. Tap a station to jump to the start of that chapter.
+- **Where a line comes from.** A line branching off another midway is a fork. One that turns back at the branch point is a rewind. One that flows in with an arrow is a merge. Old chapters without a title show their first prompt in gray; "Backfill titles" in the toolbar names them all at once.
+- **Merging.** When several sessions each got halfway and you want to carry on in one new session: select a line, tap "Merge…" on its card, check the other sessions, then tap "Next". The wizard has three steps: for each source, choose its compaction summary or a few hand-picked turns; write one line about what comes next; preview the first message (you can edit it). Once sent, a line flows into the new session from each source.
+- **Add sources, fork from here.** Under "More…" on the card: sessions where you once pasted a hand-off by hand have no inferable source, so link them with "Add sources…", and undo if you got it wrong. "Fork from here" branches a new session from this session's latest turn.
+- **Archive references.** Write "see a1b2·3" in a message and the compaction summary from the end of that chapter is attached for Claude (it doesn't show in your bubble). Up to three per message. If that chapter is still open and has no summary yet, Claude is told where the session file is so it can read it if needed.
+- **Drill down.** "Drill down" on the card lays a session out turn by turn: when each turn ran, how many tool calls it made, how many subagents it sent, how many errors. Sessions forked off a turn hang under it; tap one to drill into it. Tap a turn to see every tool call (the light part is thinking before the call, the dark part is the tool running) and how long each subagent ran, with nested subagents indented. The back button steps out one level at a time.
+- **Export.** "Export" in the toolbar saves the current map as an image (PNG), a vector file (SVG), or a single-file web page you can pan and tap (HTML), then lets you save it elsewhere or share it.
+
 ## Files, terminal, browser
 
 - **Files and viewer**: edit and save code in place; if the file changed on disk, you are asked before saving. Markdown, images, PDF and HTML preview directly, and HTML reloads when it changes. Word and Excel open as is; PPT and old .doc need LibreOffice, installed on first use.
