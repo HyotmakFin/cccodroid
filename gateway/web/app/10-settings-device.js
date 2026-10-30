@@ -96,7 +96,7 @@
     $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="refresh">${t("刷新")}</button>` +
       (st.dev ? "" : `<button class="btn sm ghost" data-act="audit">${t("特权命令记录")}</button>`));
     $("priv-auto-row").classList.toggle("hidden", !(wl && st.paired));
-    $("priv-auto").checked = st.autostart !== false;
+    $("priv-auto").checked = !!st.autostart;
     $("priv-ka-row").classList.toggle("hidden", !!st.dev);
     $("priv-ka-row").style.opacity = st.state === "ok" ? "1" : ".45";
     $("priv-ka").disabled = st.state !== "ok";
@@ -381,7 +381,14 @@
   let lastDev = null;
   const devBack = () => loadDev().then((ok) => { if (!ok && lastDev) devRender(lastDev); });
   const devSet = (body) => post("/api/app/dev_set", body)
-    .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return devBack(); } lastDev = st; devRender(st); })
+    .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return devBack(); } lastDev = st; devRender(st);
+      // 第一次开读屏要在原生对话框里点头（DeviceTools.set）：提示一下，点完把状态拉回来
+      if (st.message && body.a11y && st.a11y?.mode === "off") {
+        toast(st.message);
+        const iv = setInterval(() => loadDev().then(() => { if (lastDev?.a11y?.mode !== "off") clearInterval(iv); }), 1500);
+        setTimeout(() => clearInterval(iv), 60000);
+      }
+    })
     .catch((e2) => { toast(e2.message, true); devBack(); });
   async function loadDev() {
     let st;

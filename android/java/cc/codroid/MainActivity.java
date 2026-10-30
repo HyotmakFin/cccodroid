@@ -71,6 +71,7 @@ public class MainActivity extends Activity {
     }
     static final String ACTION_UPDATE = "cc.codroid.UPDATE";
     static final String ACTION_SHIZUKU = "cc.codroid.SHIZUKU";
+    static final String ACTION_A11Y_OK = "cc.codroid.A11Y_OK";
     /** 配对通知的 fullScreenIntent：只为让通知常驻顶部，真被拉起（锁屏时）也什么都不做 */
     static final String ACTION_SHIZUKU_NOOP = "cc.codroid.SHIZUKU_NOOP";
     /** 界面在前台吗：自动静默更新只在用户没盯着界面时做 */
@@ -329,6 +330,17 @@ public class MainActivity extends Activity {
         if (web != null) web.evaluateJavascript(guarded("Theme.system", "window.Theme&&Theme.system(" + systemNight() + ")"), null);
     }
 
+    /** 第一次开读屏 / 点按前问一句（审查 v0.5.9 B4）：系统那套「此应用将能读取屏幕」的提示被我们写系统设置绕过了，这里补上 */
+    private void confirmA11y(String mode) {
+        if (!"auto".equals(mode) && !"on".equals(mode)) return;
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(Tr.t("允许 Claude 读屏和点按？"))
+            .setMessage(Tr.t("打开后，Claude 能看到屏幕上的内容（包括别的应用里的），也能替你点按、输入。cccodroid 会直接打开无障碍服务，系统不会再提示。\n\n随时可以在 设置 → 设备工具 里关掉。"))
+            .setPositiveButton(Tr.t("允许"), (d, w) -> DeviceTools.a11yConfirmed(this, mode))
+            .setNegativeButton(Tr.t("取消"), null)
+            .show();
+    }
+
     /** 通知或设置页递过来的动作 */
     private void handle(Intent i) {
         String a = i == null ? null : i.getAction();
@@ -338,6 +350,7 @@ public class MainActivity extends Activity {
         if (ACTION_APPLY_DEVKIT.equals(a) || ACTION_UPDATE.equals(a) && "devkit".equals(i.getStringExtra("item"))) applyDevkitUi();
         else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
         else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
+        else if (ACTION_A11Y_OK.equals(a)) confirmA11y(i.getStringExtra("mode"));
         else if (Notify.ACTION_OPEN.equals(a)) openSession(i.getStringExtra("session"));
     }
 
@@ -897,17 +910,14 @@ public class MainActivity extends Activity {
 
     /**
      * targetSdk ≥ 30：共享目录 /sdcard/cccodroid（交付 APK、截图、本地工具包）要「所有文件访问」。
-     * Shizuku 已授权就用 appops 直接给；否则问一次，带去系统设置页。给了以后重启网关才进 CCAPP_SHARED
+     * 问一次，带去系统设置页（Shizuku 授权了也不代为打开，见下）。给了以后重启网关才进 CCAPP_SHARED
      */
     private void askAllFiles() {
         if (getApplicationInfo().targetSdkVersion < 30 || Build.VERSION.SDK_INT < 30 || android.os.Environment.isExternalStorageManager()) return;
-        if (Priv.granted()) {
-            new Thread(() -> android.util.Log.i("cccodroid", "所有文件访问（Shizuku）：" + Priv.run("appops set --uid " + getPackageName() + " MANAGE_EXTERNAL_STORAGE allow"))).start();
-            return;
-        }
         SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
         if (sp.getBoolean("askedAllFiles", false)) return;
         sp.edit().putBoolean("askedAllFiles", true).apply();
+        // Shizuku 授权了也先问（审查 v0.5.9 B2）：以前直接 appops 给，绕过了系统的专用同意界面
         new android.app.AlertDialog.Builder(this)
             .setTitle(Tr.t("允许访问共享存储"))
             .setMessage(Tr.t("cccodroid 和其他应用交换文件（交付的 APK、截图、离线工具包）用的是 /sdcard/cccodroid。这个版本的安卓要你在设置里打开「所有文件访问」才能读写它。\n\n不开也能用，只是这些文件只留在应用私有目录里。"))

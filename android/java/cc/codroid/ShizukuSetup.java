@@ -113,7 +113,7 @@ final class ShizukuSetup {
         JSONArray lg;
         synchronized (ring) { lg = new JSONArray(ring); }
         o.put("setup", new JSONObject().put("phase", phase).put("message", message).put("done", done).put("total", total).put("log", lg));
-        o.put("autostart", prefs().getBoolean("autostart", true));
+        o.put("autostart", prefs().getBoolean("autostart", false));
         o.put("paired", prefs().getBoolean("paired", false));
         o.put("pairOk", pairOk);
         if (Priv.running()) verifyPairAsync();
@@ -121,7 +121,7 @@ final class ShizukuSetup {
         // 这次开机有没有收到 BOOT_COMPLETED（国产 ROM 的"自启动管理"会拦）。配对之后重启过才有意义
         long bootAt = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime();
         SharedPreferences sp = prefs();
-        o.put("bootMissed", sp.getBoolean("paired", false) && sp.getBoolean("autostart", true)
+        o.put("bootMissed", sp.getBoolean("paired", false) && sp.getBoolean("autostart", false)
             && bootAt > sp.getLong("pairedAt", Long.MAX_VALUE) && sp.getLong("bootSeen", 0) < bootAt);
         o.put("bootAt", bootAt / 60000);                     // 本次开机的分钟数：前端据此把「我已允许」记到下次开机
         o.put("wireless", Build.VERSION.SDK_INT >= 30);
@@ -377,7 +377,7 @@ final class ShizukuSetup {
      * 开机时 Wi‑Fi 可能还没连上，最多等 3 分钟。
      */
     void reactivateAsync(boolean boot) {
-        if (!prefs().getBoolean("autostart", true) || !prefs().getBoolean("paired", false) || !hasWss()) return;
+        if (!prefs().getBoolean("autostart", false) || !prefs().getBoolean("paired", false) || !hasWss()) return;
         if (Build.VERSION.SDK_INT < 30 || !Priv.installed()) return;
         new Thread(() -> {
             try {

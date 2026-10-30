@@ -55,6 +55,11 @@ final class DeviceTools {
     static final String[] SCREEN = {"screen_read", "screen_tap", "screen_swipe", "screen_type", "screen_key", "screenshot"};
     private static int noteId = 600;
 
+    /** 用户在原生对话框里确认过开读屏（MainActivity.confirmA11y） */
+    static void a11yConfirmed(Context c, String mode) {
+        sp(c).edit().putBoolean("a11yOk", true).putString("a11y", mode).commit();
+        if (mode.equals("on")) new Thread(() -> A11y.enable(c, 4000)).start();
+    }
     private static SharedPreferences sp(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
     private static boolean isScreen(String t) { for (String s : SCREEN) if (s.equals(t)) return true; return false; }
     private static boolean known(String t) { for (String s : BASIC) if (s.equals(t)) return true; return isScreen(t); }
@@ -88,9 +93,15 @@ final class DeviceTools {
         }
         if (r.has("idle")) e.putInt("a11yIdle", Math.max(1, Math.min(r.getInt("idle"), 240)));
         String mode = r.optString("a11y", "");
-        if (mode.equals("off") || mode.equals("auto") || mode.equals("on")) e.putString("a11y", mode);
+        // 第一次从「关」打开读屏：要用户在原生对话框里点头（审查 v0.5.9 B4）。这条设置能经网关改，被带偏的模型也改得了；
+        // 对话框只能在 App 前台弹，后台发起的直接没下文
+        boolean ask = (mode.equals("auto") || mode.equals("on")) && "off".equals(sp(c).getString("a11y", "off")) && !sp(c).getBoolean("a11yOk", false);
+        if (ask) {
+            try { c.startActivity(MainActivity.internal(c, MainActivity.ACTION_A11Y_OK).putExtra("mode", mode).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) {}
+        } else if (mode.equals("off") || mode.equals("auto") || mode.equals("on")) e.putString("a11y", mode);
         e.commit();
         JSONObject res = status(c);
+        if (ask) { res.put("message", Tr.t("请在弹出的对话框里确认")); return res; }
         // 切到「常开」就马上开；切到「关」就马上关；「用时自动开」现在开着就让它按空闲时间自己关
         if (mode.equals("on")) { String why = A11y.enable(c, 4000); res = status(c); if (why != null) res.put("message", why); }
         if (mode.equals("off")) { A11y.disable(c); res = status(c); }
