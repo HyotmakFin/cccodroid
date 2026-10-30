@@ -172,7 +172,7 @@ server.listen(CFG.port, "127.0.0.1", () => {
   log(`  运行时 ${CFG.runtime}`);
   log(`  工作区 ${CFG.workspace}`);
   log(`  前端   ${PATHS.web}  存在=${fs.existsSync(PATHS.web)}`);
-  log(`  密钥   ${API_KEY ? "已配置 (" + API_KEY.slice(0, 6) + "…)" : "缺失"}`);
+  log(`  密钥   ${API_KEY ? "已配置" : "缺失"}`);
   log(`  模型   ${SETTINGS.model}   权限 ${SETTINGS.permissionMode}`);
   if (!fs.existsSync(PATHS.claude)) log(`  ⚠️ 未找到 claude: ${PATHS.claude}`);
   if (!fs.existsSync(PATHS.loader)) log(`  ⚠️ 未找到 glibc loader: ${PATHS.loader}`);

@@ -10,9 +10,20 @@ import { termEnv } from "./terminal.mjs";
 // ── git 可视化：改了哪些文件、逐行对比、提交历史、提交 / 撤销 ──────────────
 // 只是 git 命令的薄壳，用终端同一套环境（PATH 里有 git）。仓库位置由前端给（文件面板当前目录 / 编辑器里的文件）
 const GIT_MAX = 768 * 1024;
+// 文件面板一进目录就自动跑 status/diff：仓库自带的配置不能借机执行命令（safe.directory=* 让本地配置一律被信任）。
+// fsmonitor 全关；只读命令再把属性来源换成空树（仓库 .gitattributes 挂的 clean 过滤器 / diff 驱动不生效），diff 类关外部比较与 textconv。
+// add/commit 是用户点的，不换属性来源——否则 LFS 之类的过滤器在提交时被跳过
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const GIT_RO = new Set(["status", "diff", "show", "log", "for-each-ref", "rev-parse", "remote", "branch"]);
+function gitArgs(args) {
+  const pre = ["-c", "core.quotePath=false", "-c", "color.ui=false", "-c", "core.fsmonitor=false"];
+  if (!GIT_RO.has(args[0])) return [...pre, ...args];
+  const extra = args[0] === "diff" || args[0] === "show" || args[0] === "log" ? ["--no-ext-diff", "--no-textconv"] : [];
+  return [...pre, `--attr-source=${EMPTY_TREE}`, args[0], ...extra, ...args.slice(1)];
+}
 function git(cwd, args, { input, timeout = 30000, max = GIT_MAX } = {}) {
   return new Promise((resolve) => {
-    const c = execFile("git", ["-c", "core.quotePath=false", "-c", "color.ui=false", ...args],
+    const c = execFile("git", gitArgs(args),
       { cwd, env: { ...termEnv(), GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0", LC_ALL: "C.UTF-8" }, timeout, maxBuffer: max * 2, encoding: "utf8" },
       (err, out, errOut) => resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: out || "", err: (errOut || (err && err.code === "ENOENT" ? "找不到 git" : err?.message) || "").trim() }));
     if (input != null) { c.stdin.end(input); }
@@ -26,7 +37,7 @@ async function gitNet(root, args) {
   const sc = await git(root, ["config", "core.sshCommand"]);
   const env = sc.out.trim() ? {} : { GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20" };
   return new Promise((resolve) => {
-    execFile("git", ["-c", "core.quotePath=false", "-c", "color.ui=false", ...args],
+    execFile("git", ["-c", "core.quotePath=false", "-c", "color.ui=false", "-c", "core.fsmonitor=false", ...args],
       { cwd: root, env: { ...termEnv(), GIT_TERMINAL_PROMPT: "0", LC_ALL: "C.UTF-8", ...env }, timeout: 180000, maxBuffer: 4 << 20, encoding: "utf8" },
       (err, out, errOut) => resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: out || "", err: (errOut || (err && err.killed ? "timeout" : err?.message) || "").trim() }));
   });

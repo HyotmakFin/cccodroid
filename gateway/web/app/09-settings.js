@@ -830,7 +830,7 @@
   const AC_PRESETS = [["#2b6fd6", tk("蓝")], ["#0f8b8d", tk("青")], ["#2f8a4c", tk("绿")], ["#b7791f", tk("琥珀")], ["#d9622b", tk("橙")], ["#d23a2f", tk("红")], ["#c2408a", tk("品红")], ["#7a4fd0", tk("紫")]];
   function renderAccent() {
     const box = $("ac-sw"); if (!box || !window.Theme || !Theme.accentFor) return;
-    const cur = uiGet("accent") || "", skin = Theme.skin, mode = Theme.current || "light";
+    const cur = /^#[0-9a-f]{6}$/i.test(uiGet("accent") || "") ? uiGet("accent") : "", skin = Theme.skin, mode = Theme.current || "light";
     const sw = (hex) => Theme.accentFor(hex, skin, mode).acc;
     const custom = cur && !AC_PRESETS.some(([h]) => h === cur);
     box.innerHTML = `<button type="button" class="ac-dot ac-def${cur ? "" : " on"}" data-ac="" title="${esc(t("默认"))}"><svg viewBox="0 0 24 24"><path d="M6 18L18 6"/></svg></button>`

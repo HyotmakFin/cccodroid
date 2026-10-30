@@ -109,7 +109,7 @@ final class Env {
                 String got = c.getHeaderField("X-CC-Mac");
                 String want = hmac(t, "static:" + n + ":" + HOST + ":" + pq + ":" + hex(java.security.MessageDigest.getInstance("SHA-256").digest(body)));
                 if (got == null || !java.security.MessageDigest.isEqual(want.getBytes(), got.getBytes())) {
-                    android.util.Log.e("cccodroid", "界面资源 " + pq + " 不是本应用网关给的（没有或对不上 X-CC-Mac），不交给界面");
+                    android.util.Log.e("cccodroid", "界面资源 " + pq.replaceAll("[?#].*", "") + " 不是本应用网关给的（没有或对不上 X-CC-Mac），不交给界面");
                     return null;
                 }
                 String ct = c.getContentType(), mime = "application/octet-stream", enc = null;
