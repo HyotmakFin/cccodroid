@@ -121,6 +121,18 @@ const FORK_TAIL = / · (分叉|回退|分岔|Fork|Rewind|Branch)( \d+)?$/i;
 const lastQ = (r) => [...r.compacts].reverse().map((c) => c.q).find((q) => q && !weakPrompt(q)) || r.lead || r.first;
 const tsAt = (rec, uuid) => { const i = rec && uuid ? rec.uu.indexOf(uuid) : -1; return i >= 0 ? rec.ts[i] : 0; };
 
+/** 按会话号前缀找（档号引用用）：只看已有缓存、不刷新、不碰回收站，同步返回 —— 插话写进 stdin 的那一刻等不起整理索引 */
+export function lineageByShort(short) {
+  loadCache();
+  const adb = archiveDb().sessions, out = [];
+  for (const r of RECS.values()) {
+    if (!r.id.startsWith(short) || META.get(r.id)?.trashed || !META.get(r.id)) continue;
+    const cv = chapterView(r, adb[r.id] || null), name = NAMES[r.id] ? NAMES[r.id].replace(FORK_TAIL, "") : "";
+    out.push({ id: r.id, rec: r, file: META.get(r.id).file, title: name || cv.sessionTitle || lastQ(r) || "", chapters: cv.chapters });
+  }
+  return out;
+}
+
 /**
  * 给前端：节点（会话，带每章题名）+ 边。只有元数据和标题，没有消息正文。
  * 旧会话兼容（规划书 §12）：章没建档时 title 为 null，q 是章首第一句提问，界面灰字顶上；

@@ -23,7 +23,7 @@ import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
 import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote.mjs";
 import { SPOOF_NOTE, checkSession, integrityHint, integrityNote, neutralizeMarkers, sealSession } from "./integrity.mjs";
 import { recordExtra } from "./lineage-store.mjs";
-import { refNote } from "./merge.mjs";
+import { refNote, refNoteSync } from "./merge.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -254,7 +254,10 @@ export async function startRun(item) {
   run.paths = pathWatch();      // 本轮写过的文件、回复里有没有写全路径（收尾时核对，见 pathnote.mjs）
   run.inject = (item) => {
     if (!run.inputOpen || run.ended || run.aborted) return false;
-    try { writeUser(withNotes(item.message, null, inlineImagesSync(item.message, P))); } catch { return false; }
+    // 插话里的档号也附上那一章的摘要（同步版：只查已有索引，等不起整理）
+    let refI = "";
+    if (!P.local) try { refI = refNoteSync(item.message, run.sessionId); } catch (e) { log("插话档号引用失败: " + e.message); }
+    try { writeUser(withNotes(item.message, refI || null, inlineImagesSync(item.message, P))); } catch { return false; }
     run.pendingInject.push(item);
     saveRunMark();     // 马上落盘：送达前 App 被强停，下次启动它还能回到队列里，不会凭空消失
     log(`↪ 插话 ${item.message.trim().slice(0, 60).replace(/\s+/g, " ")}`);   // 压成一行：诊断包按行抹掉对话内容

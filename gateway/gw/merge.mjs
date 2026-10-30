@@ -12,7 +12,7 @@
 import fs from "node:fs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { dropExtra, recordExtra } from "./lineage-store.mjs";
-import { lineageFile, lineageRecord } from "./lineage.mjs";
+import { lineageByShort, lineageFile, lineageRecord } from "./lineage.mjs";
 
 const SID = /^[0-9a-f-]{36}$/i;
 const TAIL0 = 4 << 20, TAIL_MAX = 32 << 20;   // 摘录从文件尾往回读：先 4 MB，轮数不够再翻倍，最多 32 MB
@@ -169,20 +169,29 @@ export async function routeMerge(req, res, u, p) {
 // 前缀对不上 / 撞车 / 章还没结束（没有摘要）：不附摘要，只给一句说明，让模型照实告诉用户
 export const REF_RE = /(?<![0-9a-f])([0-9a-f]{4})[·・](\d{1,4})(?!\d)/g;
 const REF_MAX = 3, REF_TOTAL = 8000;
-export async function refNote(message, selfSid) {
-  const body = String(message || "").replace(MERGE_SIG, "");
-  const want = [];
+const refsIn = (message) => {
+  const body = String(message || "").replace(MERGE_SIG, ""), want = [];
   for (const m of body.matchAll(REF_RE)) { const k = m[1] + "·" + m[2]; if (!want.includes(k)) want.push(k); if (want.length >= REF_MAX) break; }
+  return want;
+};
+/** 新的一轮：先把索引整理到最新再查 */
+export async function refNote(message, selfSid) {
+  if (!refsIn(message).length) return "";
+  const { lineageRefresh } = await import("./lineage.mjs");
+  await lineageRefresh();
+  return refNoteSync(message, selfSid);
+}
+/** 插话（运行中写进 stdin）：只用已有的索引，同步出结果；出错就当没有 */
+export function refNoteSync(message, selfSid) {
+  const want = refsIn(message);
   if (!want.length) return "";
-  const { lineageGraph } = await import("./lineage.mjs");
-  const g = await lineageGraph();
   const out = [], per = Math.floor(REF_TOTAL / want.length);
   for (const k of want) {
     const [short, ns] = k.split("·"), n = Number(ns);
-    const hits = g.nodes.filter((x) => x.id.startsWith(short) && !x.trashed);
+    const hits = lineageByShort(short);
     if (!hits.length) { out.push(`用户提到的档号 ${k}：找不到以 ${short} 开头的会话（可能已删除或在回收站），没有附上内容。`); continue; }
     if (hits.length > 1) { out.push(`用户提到的档号 ${k}：有 ${hits.length} 个会话都以 ${short} 开头，认不准是哪个，没有附上内容。可以请用户在脉络里核对。`); continue; }
-    const node = hits[0], rec = await lineageRecord(node.id), file = lineageFile(node.id);
+    const node = hits[0], rec = node.rec, file = node.file;
     const title = node.title ? `「${node.title.slice(0, 40)}」` : "";
     const ch = node.chapters[n - 1], chT = ch && ch.title ? `（这一章的题名：${ch.title}）` : "";
     if (node.id === selfSid && n > rec.compacts.length) { out.push(`用户提到的档号 ${k} 就是当前会话正在进行的这一章，上下文里已经有了。`); continue; }
