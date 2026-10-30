@@ -2618,6 +2618,8 @@ html.wel.wel-setup #wl-below{flex:none;margin-bottom:auto;padding-top:var(--g2)}
 .prof-row{display:flex;align-items:center;gap:var(--g2);flex-wrap:wrap;justify-content:flex-end}
 /* 「还原」不许被头像和昵称挤成一字一行（俄语 768 宽，审查 #52 V-03）：放不下就整个换到下一行 */
 #prof-reset{flex:none;max-width:100%}
+/* 设置里按钮允许按字断行（overflow-wrap:anywhere），这里会被挤成一字一行（#55：俄语 768px 竖排 11 行）。整行不断，放不下就整个折到下一行，再不够才省略 */
+#set-ov #prof-reset{white-space:nowrap;overflow-wrap:normal;overflow:hidden;text-overflow:ellipsis}
 .prof-av{width:40px;height:40px;font-size:17px;border:0;cursor:pointer;padding:0;position:relative}
 .prof-av:hover{box-shadow:0 0 0 2px var(--accent-dim)}
 #prof-name{width:12em;max-width:40vw}
