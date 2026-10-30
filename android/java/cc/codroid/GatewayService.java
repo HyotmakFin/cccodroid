@@ -144,7 +144,9 @@ public class GatewayService extends Service {
         while (!stopping) {
             if (paused) { update(Tr.t("正在更新开发工具包…")); sleep(1000); continue; }
             if (!env.devkitReady()) { update(Tr.t("工具链未安装")); sleep(3000); continue; }
-            if (alive()) { update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT); sleep(5000); continue; }
+            // 走到这里的是接手的网关（不是本服务拉起的，拉起的在下面 waitFor 里，一退出就作废核身份缓存）：
+            // 2 秒看一次，缩短它挂掉到发现端口换了人之间的空档（审查 10-30 第九份 中5）
+            if (alive()) { update(Tr.t("运行中 · 127.0.0.1:") + Env.PORT); sleep(2000); continue; }
             if (squatted()) {
                 update(Tr.f("端口 {0} 被别的应用占着，网关起不来。重启手机，或卸载最近装的可疑应用", Env.PORT));
                 Env.resetBoot();

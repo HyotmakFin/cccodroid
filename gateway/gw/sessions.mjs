@@ -161,6 +161,7 @@ async function indexSessionFile(file, size) {
   return e;
 }
 let searchChain = Promise.resolve();
+let importBusy = false;
 function searchSessions(q) {
   const run = searchChain.then(() => searchSessionsNow(q));
   searchChain = run.catch(() => {});
@@ -276,11 +277,16 @@ export async function routeSessions(req, res, u, p) {
     } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
   }
   if (req.method === "POST" && p === "/api/sessions/import") {
+    // 导入包整个在内存里解（原包 + 各条目 + 解出来的），一次只导一个、原包上限 128 MB（审查 10-30 第九份 中3）：
+    // 低内存机上并发几个大包能把网关连同正在跑的 claude 一起挤掉
+    if (importBusy) { req.resume(); return sendJson(res, 409, { ok: false, message: tz("上一个导入还没完，等它结束再导") }); }
+    importBusy = true;
     try {
-      const r = importSessions(await readBodyBuf(req, 512 * 1024 * 1024));
+      const r = importSessions(await readBodyBuf(req, 128 * 1024 * 1024));
       log(`导入会话：${r.imported.length} 个，跳过 ${r.skipped.length} 个`);
       return sendJson(res, 200, { ok: true, ...r });
     } catch (e) { return sendJson(res, 400, { ok: false, message: e.message }); }
+    finally { importBusy = false; }
   }
   if (p.startsWith("/api/session/")) {
     const rest = decodeURIComponent(p.slice("/api/session/".length));

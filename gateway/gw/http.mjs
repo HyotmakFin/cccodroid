@@ -122,17 +122,20 @@ export function sendJson(res, code, obj) {
 // CSP 只管脚本（审查 H1）：界面所有脚本都是同源文件、没有内联脚本和内联事件，所以 script-src 'self' 不碍事，
 // 而 XSS 要用的 <img onerror>、javascript: 链接、内联 <script> 全被拦 —— 万一哪天转义漏了一处，也到不了「调网关跑命令」那一步。
 // 留着 unsafe-eval：打开 docx 的 mammoth 里有 new Function（它不吃页面内容，留着不削弱上面那条）；wasm-unsafe-eval 给 pdf.js 的解码器。
-// 图片、样式、连接、iframe 不收紧：外链图、预览窗格（另一个端口）都要用，收紧了容易误伤，换来的防护不大。
+// 图片、样式、iframe 不收紧：外链图、预览窗格（另一个端口）都要用，收紧了容易误伤，换来的防护不大。
+// 连接和表单只许同源（审查 10-30 第九份 中2）：界面的 fetch / EventSource 全是网关自己的路径，data: / blob: 留给截图转文件；
+// 这样哪怕有一处转义漏了，脚本也没法把会话内容 fetch 到外面去
 // Referrer-Policy：首屏 URL 带着 t= / k=，别经 Referer 漏给任何地方（审查 中8）
 const STATIC_SAFE = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
-  "content-security-policy": "frame-ancestors 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'",
+  "content-security-policy": "frame-ancestors 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self' data: blob:; form-action 'self'; object-src 'none'; base-uri 'none'",
 };
 const macHdr = (req, data) => {
   const m = staticMac(req.headers["x-cc-nonce"], String(req.url || ""), data, localAddr(req));
   return m ? { "x-cc-mac": m } : {};
 };
+const miss404 = { at: 0, n: 0 };
 export function serveStatic(req, res, urlPath) {
   let rel = urlPath === "/" ? "/index.html" : urlPath;
   rel = rel.replace(/^\/+/, "");
@@ -146,7 +149,10 @@ export function serveStatic(req, res, urlPath) {
   }
   const full = path.join(PATHS.web, rel);
   if (!full.startsWith(PATHS.web + path.sep) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
-    log(`404 ${rel}`);
+    // 404 不逐条记（审查 10-30 第九份 高3）：10 秒里只记第一条，其余的计数并进下一条
+    const now = Date.now();
+    if (now - miss404.at > 10e3) { log(`404 ${rel.slice(0, 200)}${miss404.n ? `（此前 10 秒内另有 ${miss404.n} 次 404）` : ""}`); miss404.at = now; miss404.n = 0; }
+    else miss404.n++;
     return sendJson(res, 404, { error: "not found", path: rel });
   }
   const data = fs.readFileSync(full);

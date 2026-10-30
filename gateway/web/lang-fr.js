@@ -2345,4 +2345,5 @@ window.I18N_DICT["fr"] = {
   "消息输入框": "Saisie du message",
   "额度速览": "Aperçu de l'utilisation",
   "组件签名检查已关闭（网关带了测试开关启动）": "La vérification des signatures des composants est désactivée (la passerelle a été lancée avec l'option de test)",
+  "上一个导入还没完，等它结束再导": "Une importation est déjà en cours. Attendez qu’elle se termine.",
 };

@@ -111,7 +111,7 @@ export function agentBook(run, { emit }) {
     batch.push(a);
     let file = null;
     if (ensureDir()) {
-      a.dir = path.join(dir, `${String(a.n).padStart(2, "0")}-${slug(a.name)}-${a.id.slice(0, 6)}`);
+      a.dir = path.join(dir, `${String(a.n).padStart(2, "0")}-${slug(a.name)}-${a.id.slice(0, 6).replace(/[^\w-]/g, "_")}`);   // task_id 来自事件流，带 ../ 就跳出目录（审查 10-30 第九份 存疑3）
       const prompt = briefs.get(a.tool) || ev.prompt || "";
       file = write(path.join(a.dir, "brief.md"), `# ${a.name}\n\n${prompt}\n`);
     }

@@ -384,7 +384,13 @@ public class MainActivity extends Activity {
                 String stamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.US).format(new java.util.Date());
                 java.io.File out = new java.io.File(dir, stamp + "-" + (name.isEmpty() ? "shared.bin" : name));
                 for (int k = 2; out.exists(); k++) out = new java.io.File(dir, stamp + "-" + k + "-" + name);
-                try (InputStream in = getContentResolver().openInputStream(u); OutputStream o = new FileOutputStream(out)) {
+                InputStream in0;
+                try { in0 = openShared(u); }
+                catch (Exception e) {
+                    ui.post(() -> android.widget.Toast.makeText(this, Tr.f("分享的文件没收下：{0}", e.getMessage()), android.widget.Toast.LENGTH_LONG).show());
+                    continue;
+                }
+                try (InputStream in = in0; OutputStream o = new FileOutputStream(out)) {
                     byte[] buf = new byte[1 << 16];
                     long w = 0, check = 0;
                     for (int r; (r = in.read(buf)) > 0; ) {
@@ -403,6 +409,32 @@ public class MainActivity extends Activity {
             // 分享文件时 EXTRA_TEXT 常是标题之类的附带说明，只有单纯分享文字时才插进去
             if (n == 0 && uris.isEmpty() && text != null) toPage("ccapp-insert", text);
         }, "share-in").start();
+    }
+    /** 别的应用分享进来的流（审查 10-30 第九份 安卓低7）：读是在我们自己的进程里读的，
+     *  file:///data/user/0/cc.codroid/files/home/.gateway-token 这种指向我们私有目录的、或我们自己 provider 的 content://，
+     *  照收就等于把私有文件拷进 uploads 交出去。file:// 先打开、再按 /proc/self/fd 读真实路径判断，中途换软链也躲不过 */
+    private InputStream openShared(android.net.Uri u) throws java.io.IOException {
+        String sc = String.valueOf(u.getScheme()).toLowerCase(java.util.Locale.ROOT);
+        if ("content".equals(sc)) {
+            String au = String.valueOf(u.getAuthority());
+            if (au.equals(getPackageName()) || au.startsWith(getPackageName() + ".")) throw new java.io.IOException(Tr.t("不收本应用私有目录里的文件"));
+            InputStream in = getContentResolver().openInputStream(u);
+            if (in == null) throw new java.io.IOException(Tr.t("读不了这个文件"));
+            return in;
+        }
+        if (!"file".equals(sc) || u.getPath() == null) throw new java.io.IOException(Tr.t("读不了这个文件"));
+        android.os.ParcelFileDescriptor pfd = android.os.ParcelFileDescriptor.open(new File(u.getPath()), android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+        String real;
+        try { real = android.system.Os.readlink("/proc/self/fd/" + pfd.getFd()); }
+        catch (Exception e) { pfd.close(); throw new java.io.IOException(Tr.t("读不了这个文件")); }
+        // 本用户、别的用户空间、设备加密区、外置扩容盘上的私有目录都算
+        String q = java.util.regex.Pattern.quote(getPackageName()), dd = getApplicationInfo().dataDir;
+        if (real.matches("(/mnt/expand/[^/]+)?/data/(data|user(_de)?/\\d+)/" + q + "(/.*)?|/mnt/expand/[^/]+/(user|user_de)/\\d+/" + q + "(/.*)?")
+                || dd != null && (real.equals(dd) || real.startsWith(dd + "/"))) {
+            pfd.close();
+            throw new java.io.IOException(Tr.t("不收本应用私有目录里的文件"));
+        }
+        return new android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd);
     }
     /** 往页面里调代码都套一层：错误在注入代码里自己接住，连同入口名交给页面按原文显示（app.js __ccErr）。
      *  不接的话，从注入代码里冒出去的错 WebView 只给一句「Script error.」，没有文件、行号和原因，查不出是哪一处 */

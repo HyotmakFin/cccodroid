@@ -166,6 +166,9 @@ uiServer.on("error", (e) => {
   setTimeout(() => uiServer.listen(CFG.port, UI_HOST), 2000).unref();
 });
 uiServer.on("listening", () => { if (uiRetryLogged) log(`界面地址 ${UI_HOST}:${CFG.port} 已接回`); });
+// 慢速请求占着连接不放（审查 10-30 第九份 中4）：请求头 20 秒、整个请求 10 分钟内收完（上传走本机回环，够用），
+// 同时最多 256 个连接。事件总线是长回应，不受 requestTimeout 管
+for (const s of [server, uiServer]) { s.headersTimeout = 20e3; s.requestTimeout = 600e3; s.maxConnections = 256; }
 uiServer.listen(CFG.port, UI_HOST);
 server.listen(CFG.port, "127.0.0.1", () => {
   log(`claude-apk 网关 v3 已启动  http://127.0.0.1:${CFG.port}`);

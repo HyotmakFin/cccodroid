@@ -2342,3 +2342,4 @@
 2342	Saisie du message
 2343	Aperçu de l'utilisation
 2344	La vérification des signatures des composants est désactivée (la passerelle a été lancée avec l'option de test)
+2345	Une importation est déjà en cours. Attendez qu’elle se termine.

@@ -67,11 +67,21 @@ const LOG_FILE = process.env.CCAPP_LOG || path.join(CFG.home, "gateway.log");
 // 网址里的账号口令（http://user:pass@host）和查询串里的令牌（?key=…、&token=…）不进日志（后者审查 10-29 第六份 低3）
 const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1***@")
   .replace(/([?&](?:key|api_?key|token|access_token|auth|sig|signature|password|secret)=)[^&\s"']+/gi, "$1***");
+// 日志有上限（审查 10-30 第九份 高3）：超过 4 MB 挪成 gateway.log.1（只留一份旧的），单行截到 4000 字，
+// 别让反复请求把私有目录写满
+const LOG_MAX = 4 << 20;
+let logSize = -1;
 export const log = (...a) => {
-  const line = noCred(`[${TS()}] ${a.join(" ")}`);
+  let line = noCred(`[${TS()}] ${a.join(" ")}`);
   if (!LIVE) return;
+  if (line.length > 4000) line = line.slice(0, 4000) + " …";
   console.log(line);
-  try { fs.appendFileSync(LOG_FILE, line + "\n"); } catch {}
+  try {
+    if (logSize < 0) logSize = fs.existsSync(LOG_FILE) ? fs.statSync(LOG_FILE).size : 0;
+    if (logSize > LOG_MAX) { fs.renameSync(LOG_FILE, LOG_FILE + ".1"); logSize = 0; }
+    fs.appendFileSync(LOG_FILE, line + "\n");
+    logSize += Buffer.byteLength(line) + 1;
+  } catch {}
 };
 
 // ── 提示语的多语言 ────────────────────────────────────────────────────

@@ -423,7 +423,7 @@ final class Priv {
                     int type = din.read();
                     if (type < 0) break;
                     int len = din.readInt();
-                    if (len == 0) break;
+                    if (len <= 0 || len > (1 << 24)) break;     // 负数或离谱的长度别去 new（审查 10-30 第九份 安卓低13）
                     byte[] b = new byte[len];
                     din.readFully(b);
                     if (type == 0) { pin.write(b); pin.flush(); }

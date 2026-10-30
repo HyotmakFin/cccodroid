@@ -59,13 +59,18 @@ const PORT = /^\d{1,5}$/.test(process.env.CCAPP_PORT || "") ? process.env.CCAPP_
 // App / 工具包版本：问本机网关（终端里有它的令牌文件）
 async function appInfo() {
   try {
-    const tok = fs.readFileSync(process.env.CCAPP_TOKEN_FILE, "utf8").trim();
-    const r = await fetch(`http://127.0.0.1:${PORT}/api/app/upd_status`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(8000) });
+    const tok = fs.readFileSync(process.env.CCAPP_TOKEN_FILE, "utf8").trim(), mac = (s) => crypto.createHmac("sha256", tok).update(s).digest("hex");
+    // 不发令牌原文（审查 10-30 第九份 高2）：先核身份（端口上可能是网关没起来时抢占的应用），再按 sig2 一次一签
+    const n = crypto.randomBytes(16).toString("hex");
+    const [boot, pm] = (await (await fetch(`http://127.0.0.1:${PORT}/__proof?n=${n}`, { signal: AbortSignal.timeout(8000) })).text()).trim().split(" ");
+    if (!/^[0-9a-f]{32}$/.test(boot || "") || pm !== mac(`proof:${n}:${boot}:127.0.0.1`)) throw new Error("not the gateway");
+    const sig = (p) => { const ts = Date.now(), r = crypto.randomBytes(16).toString("hex"); return { "X-CC-Sig": `${ts}.${r}.${mac(`sig2:${boot}:127.0.0.1:GET:${ts}:${r}:${crypto.createHash("sha256").update("").digest("hex")}:${p}`)}` }; };
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/app/upd_status`, { headers: sig("/api/app/upd_status"), signal: AbortSignal.timeout(8000) });
     const j = await r.json(), it = (id) => (j.items || []).find((x) => x.id === id)?.current || "";
     // stable / latest 现在是哪一版
     let channel = "";
     if (/^(stable|latest)$/.test(WANT)) try {
-      const v = await (await fetch(`http://127.0.0.1:${PORT}/api/claude/versions`, { headers: { "X-CC-Token": tok }, signal: AbortSignal.timeout(30000) })).json();
+      const v = await (await fetch(`http://127.0.0.1:${PORT}/api/claude/versions`, { headers: sig("/api/claude/versions"), signal: AbortSignal.timeout(30000) })).json();
       channel = v[WANT] || "";
     } catch {}
     return { app: it("app"), devkit: it("devkit"), current: it("claude"), channel };

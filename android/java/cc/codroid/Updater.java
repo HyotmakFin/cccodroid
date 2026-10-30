@@ -1034,8 +1034,10 @@ final class Updater {
     private static int cmpNums(String a, String b) {
         String[] x = a.split("[^0-9]+"), y = b.split("[^0-9]+");
         for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            long p = i < x.length && !x[i].isEmpty() ? Long.parseLong(x[i]) : 0, q = i < y.length && !y[i].isEmpty() ? Long.parseLong(y[i]) : 0;
-            if (p != q) return p < q ? -1 : 1;
+            // 按字符串比数值：超过 long 的数字段 parseLong 会抛（审查 10-30 第九份 安卓低16）
+            String p = i < x.length ? x[i].replaceFirst("^0+", "") : "", q = i < y.length ? y[i].replaceFirst("^0+", "") : "";
+            int c = p.length() != q.length() ? Integer.compare(p.length(), q.length()) : p.compareTo(q);
+            if (c != 0) return c < 0 ? -1 : 1;
         }
         return 0;
     }

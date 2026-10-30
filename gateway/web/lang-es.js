@@ -2345,4 +2345,5 @@ window.I18N_DICT["es"] = {
   "消息输入框": "Campo de mensaje",
   "额度速览": "Resumen de uso",
   "组件签名检查已关闭（网关带了测试开关启动）": "La comprobación de firmas de componentes está desactivada (la pasarela se inició con el interruptor de pruebas)",
+  "上一个导入还没完，等它结束再导": "Todavía hay una importación en curso. Espera a que termine.",
 };

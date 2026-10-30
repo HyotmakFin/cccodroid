@@ -2379,5 +2379,6 @@ window.I18N_DICT.en = {
   "要改管着提示词或安全检查的文件：{w}": "Wants to change a file that controls Claude's instructions or safety checks: {w}",
   "消息输入框": "Message input",
   "额度速览": "Usage at a glance",
-  "组件签名检查已关闭（网关带了测试开关启动）": "Component signature checks are off (the gateway was started with the test switch)"
+  "组件签名检查已关闭（网关带了测试开关启动）": "Component signature checks are off (the gateway was started with the test switch)",
+  "上一个导入还没完，等它结束再导": "Another import is still running. Wait for it to finish."
 };
