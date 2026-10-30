@@ -68,6 +68,27 @@ async function recentTurns(file, want = 30) {
 
 const clipTo = (s, n) => (s.length > n ? s.slice(0, n) + "\n\n（……后面还有 " + (s.length - n) + " 字，没带过来）" : s);
 
+/** 压缩摘要那一行：按扫描时记下的字节位置直接读，不从头翻。{ uuid, text } 或 { error } */
+function compactAt(file, off) {
+  const fd = fs.openSync(file, "r");
+  let s = "";
+  try {
+    const chunks = [];
+    for (let pos = off, got = 0; got < 64 << 20; ) {
+      const buf = Buffer.alloc(1 << 20), n = fs.readSync(fd, buf, 0, buf.length, pos);
+      if (!n) break;
+      const i = buf.subarray(0, n).indexOf(10);
+      chunks.push(buf.subarray(0, i >= 0 ? i : n));
+      if (i >= 0) break;
+      pos += n; got += n;
+    }
+    s = Buffer.concat(chunks).toString("utf8");
+  } finally { fs.closeSync(fd); }
+  let e; try { e = JSON.parse(s); } catch { return { error: "bad_line" }; }
+  if (!e.isCompactSummary) return { error: "moved" };   // 文件被改写过、位置对不上：下次刷新索引会重扫
+  return { uuid: e.uuid, text: textOf(e.message && e.message.content).trim() };
+}
+
 /** 一个会话的交接材料：{ how, at, text, chars } 或 { error } */
 export async function material(id, how, uuids = []) {
   const rec = await lineageRecord(id), file = lineageFile(id);
@@ -75,24 +96,9 @@ export async function material(id, how, uuids = []) {
   if (how === "compact") {
     const c = rec.compacts[rec.compacts.length - 1];
     if (!c || !(c.off >= 0)) return { error: "no_compact" };
-    // 压缩摘要那一行：按扫描时记下的字节位置直接读，不从头翻
-    const fd = fs.openSync(file, "r");
-    let s = "";
-    try {
-      const chunks = [];
-      for (let pos = c.off, got = 0; got < 64 << 20; ) {
-        const buf = Buffer.alloc(1 << 20), n = fs.readSync(fd, buf, 0, buf.length, pos);
-        if (!n) break;
-        const i = buf.subarray(0, n).indexOf(10);
-        chunks.push(buf.subarray(0, i >= 0 ? i : n));
-        if (i >= 0) break;
-        pos += n; got += n;
-      }
-      s = Buffer.concat(chunks).toString("utf8");
-    } finally { fs.closeSync(fd); }
-    let e; try { e = JSON.parse(s); } catch { return { error: "bad_line" }; }
-    if (!e.isCompactSummary) return { error: "moved" };   // 文件被改写过、位置对不上：下次刷新索引会重扫
-    const text = clipTo(textOf(e.message && e.message.content).trim(), TOTAL);
+    const e = compactAt(file, c.off);
+    if (e.error) return e;
+    const text = clipTo(e.text, TOTAL);
     return { how, at: e.uuid, ts: c.ts, text, chars: text.length, chapter: rec.compacts.length };
   }
   if (how === "excerpt") {
@@ -112,6 +118,7 @@ export async function material(id, how, uuids = []) {
   return { error: "bad_how" };
 }
 
+import { MERGE_SIG } from "./lineage-core.mjs";
 export { MERGE_SIG, parseMergeSig } from "./lineage-core.mjs";
 
 /** /api/chat 带来的 mergeFrom 只留认得的字段（新会话才收） */
@@ -154,4 +161,36 @@ export async function routeMerge(req, res, u, p) {
     const r = await material(id, u.searchParams.get("how") || "excerpt", uuids);
     return sendJson(res, r.error ? (r.error === "not_found" ? 404 : 400) : 200, r);
   } catch (e) { return sendJson(res, 500, { error: e.message }); }
+}
+
+// ── 档号引用（规划书 §9.5、§13.1 第 4 项）──
+// 消息里写了「0ab2·61」（会话号前四位 · 第几章）：把那一章结束时的压缩摘要作为本轮用户消息的第二段 <system-reminder> 附上，
+// 模型就知道用户说的是哪段往事；气泡里不显示（读用户消息的地方只认第一段）。汇合落款里的档号不算（材料已经在正文里了）。
+// 前缀对不上 / 撞车 / 章还没结束（没有摘要）：不附摘要，只给一句说明，让模型照实告诉用户
+export const REF_RE = /(?<![0-9a-f])([0-9a-f]{4})[·・](\d{1,4})(?!\d)/g;
+const REF_MAX = 3, REF_TOTAL = 8000;
+export async function refNote(message, selfSid) {
+  const body = String(message || "").replace(MERGE_SIG, "");
+  const want = [];
+  for (const m of body.matchAll(REF_RE)) { const k = m[1] + "·" + m[2]; if (!want.includes(k)) want.push(k); if (want.length >= REF_MAX) break; }
+  if (!want.length) return "";
+  const { lineageGraph } = await import("./lineage.mjs");
+  const g = await lineageGraph();
+  const out = [], per = Math.floor(REF_TOTAL / want.length);
+  for (const k of want) {
+    const [short, ns] = k.split("·"), n = Number(ns);
+    const hits = g.nodes.filter((x) => x.id.startsWith(short) && !x.trashed);
+    if (!hits.length) { out.push(`用户提到的档号 ${k}：找不到以 ${short} 开头的会话（可能已删除或在回收站），没有附上内容。`); continue; }
+    if (hits.length > 1) { out.push(`用户提到的档号 ${k}：有 ${hits.length} 个会话都以 ${short} 开头，认不准是哪个，没有附上内容。可以请用户在脉络里核对。`); continue; }
+    const node = hits[0], rec = await lineageRecord(node.id), file = lineageFile(node.id);
+    const title = node.title ? `「${node.title.slice(0, 40)}」` : "";
+    const ch = node.chapters[n - 1], chT = ch && ch.title ? `（这一章的题名：${ch.title}）` : "";
+    if (node.id === selfSid && n > rec.compacts.length) { out.push(`用户提到的档号 ${k} 就是当前会话正在进行的这一章，上下文里已经有了。`); continue; }
+    if (!n || n > rec.compacts.length + 1) { out.push(`用户提到的档号 ${k}：会话${title}只有 ${rec.compacts.length + 1} 章，没有第 ${n} 章。`); continue; }
+    if (n === rec.compacts.length + 1) { out.push(`用户提到的档号 ${k} 是会话${title}还在进行的最新一章，还没压缩过、没有摘要。需要的话可以读会话记录 ${file}。`); continue; }
+    const c = rec.compacts[n - 1], e = file && c && c.off >= 0 ? compactAt(file, c.off) : { error: "no_file" };
+    if (e.error) { out.push(`用户提到的档号 ${k}：那一章的摘要读不出来（${e.error}），没有附上内容。`); continue; }
+    out.push(`用户提到的档号 ${k} 是会话${title}的第 ${n} 章${chT}。下面是这一章结束时的压缩摘要，供参考（不是用户这一轮说的话）：\n\n${clipTo(e.text, per)}`);
+  }
+  return out.join("\n\n---\n\n");
 }

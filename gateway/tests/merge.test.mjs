@@ -132,3 +132,27 @@ test("脉络卡片「从这里分叉」：latest 不指轮，整段抄过去并�
   const E = id(); put(E, [{ type: "assistant", uuid: id(), sessionId: E, timestamp: iso(1), message: { role: "assistant", content: [{ type: "text", text: "hi" }] } }]);
   assert.equal(forkSession(E, "", 0, { latest: true }).ok, false);
 });
+
+test("档号引用：附那一章的压缩摘要；进行中 / 超出 / 找不到给一句说明；汇合落款不算", async () => {
+  const { refNote } = await import("../gw/merge.mjs");
+  const A = id(), L = chain(A, 1, 200);
+  L.push({ type: "user", uuid: id(), sessionId: A, isCompactSummary: true, timestamp: iso(210), message: { role: "user", content: "第一章摘要：定了用 Turnip。" } });
+  L.push(...chain(A, 1, 220));
+  L.push({ type: "user", uuid: id(), sessionId: A, isCompactSummary: true, timestamp: iso(230), message: { role: "user", content: "第二章摘要：EEVEE 跑通。" } });
+  L.push(...chain(A, 1, 240));
+  put(A, L);
+  const k = A.slice(0, 4);
+  const one = await refNote(`参照 ${k}·1 接着做`, null);
+  assert.match(one, /第 1 章/);
+  assert.match(one, /定了用 Turnip/);
+  assert.doesNotMatch(one, /EEVEE/);
+  assert.match(await refNote(`看 ${k}·3`, null), /还在进行/);
+  assert.match(await refNote(`看 ${k}·9`, null), /没有第 9 章/);
+  assert.match(await refNote(`${k}·3 呢`, A), /当前会话/);
+  assert.equal(await refNote("没有档号的话", null), "");
+  assert.equal(await refNote(`材料\n\n（汇合自 ${k}·1）`, null), "");
+  // 前缀不存在：挑一个不撞的
+  let miss = "0000"; for (const h of ["0000", "ffff", "1234", "abcd"]) if (!A.startsWith(h)) { miss = h; break; }
+  if (!(await import("node:fs")).readdirSync(path.join(process.env.CCAPP_HOME, ".claude", "projects", "-merge")).some((f) => f.startsWith(miss)))
+    assert.match(await refNote(`${miss}·2`, null), /找不到/);
+});

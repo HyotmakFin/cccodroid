@@ -23,6 +23,7 @@ import { inlineImages, inlineImagesSync, wantsInline } from "./inlineimg.mjs";
 import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote.mjs";
 import { SPOOF_NOTE, checkSession, integrityHint, integrityNote, neutralizeMarkers, sealSession } from "./integrity.mjs";
 import { recordExtra } from "./lineage-store.mjs";
+import { refNote } from "./merge.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -212,6 +213,8 @@ export async function startRun(item) {
   const sfile = () => run.sessionId ? findSessionFile(String(run.sessionId))?.file : null;
   const integ = checkSession(run.sessionId, sfile());
   const integNote = isCmd || P.local ? "" : integrityNote(integ);
+  // 消息里提到档号（0ab2·61）：附上那一章的压缩摘要（见 merge.mjs refNote）。读不出来就算了，不挡这一轮
+  const refN = isCmd || P.local ? "" : await refNote(message, run.sessionId).catch((e) => { log("档号引用失败: " + e.message); return ""; });
   // 上面拉模型清单、问设备工具、读建档提示都要等：这期间点了停止（还没有进程可杀）就别再起了（安全通告 GHSA-g35m）
   if (run.aborted) { log("⏹ 起进程前已停止"); return endRun(run, { durationMs: 0 }); }
   const [cmd0, args0] = claudeCmd(argv);
@@ -238,7 +241,7 @@ export async function startRun(item) {
   };
   // 上一轮只写了文件名没写全路径：这一轮的消息带上提醒（见 pathnote.mjs）。命令那轮不带（带了也包不进去，提醒会白白丢掉）
   const pathNote = isCmd || P.local ? "" : takePathNote(run.sessionId);
-  writeUser(withNotes(message, [integNote, arch?.note, pathNote].filter(Boolean).join("\n\n"), imgs0));
+  writeUser(withNotes(message, [integNote, arch?.note, pathNote, refN].filter(Boolean).join("\n\n"), imgs0));
   run.inputOpen = true;
   run.pendingInject = [];      // 已写进 stdin、还没被 claude 吃进去的插话
   run.bgTasks = 0;             // claude 报的后台任务数（见 feed）
