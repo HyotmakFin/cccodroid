@@ -305,6 +305,9 @@
   const TOCS = { help: ["help-toc", "help-body"], changelog: ["cl-toc", "cl-body"] };
   function tocSecs(name) { return [...$(TOCS[name][1]).querySelectorAll(".help-sec")].filter((x) => !x.classList.contains("hidden")); }
   function spyHelp() { spyToc("help"); }
+  // 点了目录：高亮钉在点的那一节，直到手动滚。不钉的话，最后几节短、滚不到顶，高亮会落到上一节或最后一节（看着像点哪不打哪）
+  let tocPin = null;
+  ["touchstart", "wheel", "keydown"].forEach((ev) => $("page-body").addEventListener(ev, () => { tocPin = null; }, { passive: true }));
   function spyToc(name) {
     const toc = $(TOCS[name][0]), body = $("page-body");
     if (curPage !== name || !toc.children.length) return;
@@ -315,10 +318,12 @@
     for (const x of secs) if (x.getBoundingClientRect().top <= top) cur = x.dataset.sec;
     if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) cur = (secs.at(-1) || {}).dataset?.sec || cur;
     if (!cur) cur = (secs[0] || {}).dataset?.sec;
+    if (tocPin && tocPin.name === name && secs.some((x) => x.dataset.sec === tocPin.sec)) cur = tocPin.sec;
     toc.querySelectorAll("button").forEach((b) => {
       const on = b.dataset.sec === cur;
       if (on && !b.classList.contains("on")) {
-        if (narrow) b.scrollIntoView({ inline: "center", block: "nearest" });
+        // 横排目录只横着挪自己。别用 scrollIntoView：它会连带去滚整页，把点目录后正在平滑滚的那一下掐断，停在半路
+        if (narrow) { const br = b.getBoundingClientRect(), tr = toc.getBoundingClientRect(); toc.scrollBy({ left: br.left + br.width / 2 - tr.left - tr.width / 2 }); }
         // 竖排目录比屏幕长（更新日志几十版）：目录自己滚，让当前项留在中间，不带着整页动
         else if (toc.scrollHeight > toc.clientHeight) toc.scrollTop = b.offsetTop - toc.clientHeight / 2;
       }
@@ -330,6 +335,7 @@
     const x = $("help-body").querySelector(`.help-sec[data-sec="${b.dataset.sec}"]`); if (!x) return;
     const body = $("page-body"), toc = $("help-toc");
     const off = getComputedStyle(toc).flexDirection === "row" ? toc.offsetHeight + 8 : 8;
+    tocPin = { name: "help", sec: b.dataset.sec };
     body.scrollTo({ top: body.scrollTop + x.getBoundingClientRect().top - body.getBoundingClientRect().top - off, behavior: "smooth" });
   });
   $("help-q").addEventListener("input", (e) => {
@@ -419,6 +425,7 @@
     const toc = $("cl-toc");
     const off = getComputedStyle(toc).flexDirection === "row" ? toc.offsetHeight + 8 : 8;
     // 直接跳，不平滑：一路滑过去会把沿途几十版挨个渲染又收回
+    tocPin = { name: "changelog", sec: b.dataset.sec };
     clPin(x, off);
   });
   $("cl-q").addEventListener("input", (e) => {
