@@ -8,6 +8,7 @@ import { NAMES, PEEK_CACHE, PINS, findSessionFile, peekSession, saveNames, saveP
 import { claudeCmd, claudeEnv, killTree } from "./claude.mjs";
 import { LAST_SESSION, forgetSession, runOfSession } from "./runs.mjs";
 import { forgetChild, recordPrimary } from "./lineage-store.mjs";
+import { lineageForget } from "./lineage.mjs";
 import { checkSession, neutralizeMarkers, resealAfterEdit, sealSession } from "./integrity.mjs";
 import { forEachLine, lineWriter, zipEntries, zipExtract, zipToFile } from "./bigfile.mjs";
 
@@ -47,6 +48,9 @@ export function locateUserTurn(id, userText, after, uuid = "", latest = false) {
   const users = [];
   const count = forEachLine(found.file, (line, i) => {
     if (!line.includes('"user"')) return;
+    // 工具结果（带 toolUseResult 键）不是用户说的话：不解析，读几百 MB 的文件结果时省掉大部分时间（审查 v0513b 低-7）。
+    // 认的是「,"toolUseResult":」——字符串值里的引号一定转义成 \"，正文里出现这个词不会被误认
+    if (line.includes(',"toolUseResult":')) return;
     let ev; try { ev = JSON.parse(line); } catch { return; }
     const t = forkUserText(ev);
     // 只留比对要用的：全文的哈希和前 80 个字。存全文的话，每条都贴了大段文字的会话光这张表就能吃掉上 GB。
@@ -152,6 +156,7 @@ export function deleteMessage(id, userText, after, which, uuid = "") {
   fs.renameSync(tmp, found.file);
   resealAfterEdit(id, found.file, dirty);
   PEEK_CACHE.delete(found.file);
+  lineageForget(id);
   const st = fs.statSync(found.file);
   UNDO.set(id, { backup, size: st.size, mtime: st.mtimeMs });
   log(`删消息 ${id.slice(0, 8)}：第 ${best + 1} 轮的${which === "user" ? "提问" : "回复"}，${drop.size} 行`);
@@ -168,6 +173,7 @@ export function undoDelete(id, backup) {
   if (st.size !== u.size || st.mtimeMs !== u.mtime) return { ok: false, status: 409, message: tz("删除之后会话又有了新内容，没法撤销。") };
   const dirty = checkSession(id, found.file);
   fs.copyFileSync(src, found.file);
+  lineageForget(id);
   resealAfterEdit(id, found.file, dirty);
   PEEK_CACHE.delete(found.file);
   UNDO.delete(id);
@@ -450,7 +456,13 @@ export async function exportSessions(ids) {
   fs.mkdirSync(dir, { recursive: true });
   if (freeBytes(dir) < (256 << 20)) throw new Error(tz("存储空间不够了"));
   const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
-  const file = path.join(dir, `sessions-${stamp}.zip`);
+  // 同一秒导出两次别互相覆盖（审查 v0513b 低-11）：用 wx 先把名字占住，并发的两次也各拿各的
+  let file = null;
+  for (let k = 1; !file && k < 100; k++) {
+    const f = path.join(dir, k === 1 ? `sessions-${stamp}.zip` : `sessions-${stamp}-${k}.zip`);
+    try { fs.closeSync(fs.openSync(f, "wx")); file = f; } catch (e) { if (e.code !== "EEXIST") throw e; }
+  }
+  if (!file) throw new Error(tz("导出目录里同名文件太多了"));
   const bytes = await zipToFile(file, entries);
   return { file, count: list.length, bytes };
 }

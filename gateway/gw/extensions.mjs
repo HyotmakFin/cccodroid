@@ -155,6 +155,8 @@ const HOOK_SCRIPTS = {"cc-autosave.mjs":"// cccodroid 内置 hook（Claude 答�
 function hookSettingsFile(scope, dir) {
   if (scope === "user") return path.join(CFG.home, ".claude", "settings.json");
   const d = path.resolve(String(dir || CFG.workspace));
+  // 界面只管工作区这一份；别的目录不给读写（里面的 hooks 命令可能带密钥）
+  if (d !== path.resolve(CFG.workspace)) throw new Error("only the workspace project is managed here");
   let ok = false;
   try { ok = fs.statSync(d).isDirectory(); } catch {}
   if (!ok) throw new Error("project dir not found: " + d);
@@ -177,8 +179,11 @@ function listHooks(dir) {
     try { file = hookSettingsFile(scope, dir); } catch (e) { scopes.push({ scope, error: e.message }); continue; }
     const r = readSettingsFile(file);
     const h = r.j && r.j.hooks;
+    // 事件名只放字母的（和保存时 cleanHooks 一个规矩）；配置文件可能来自克隆的仓库，怪名字不往界面送
+    const hooks = {};
+    if (h && typeof h === "object" && !Array.isArray(h)) for (const [ev, v] of Object.entries(h)) if (/^[A-Za-z]{1,40}$/.test(ev)) hooks[ev] = v;
     scopes.push({ scope, file, exists: r.exists, error: r.error, badJson: !!r.badJson,
-      hooks: h && typeof h === "object" && !Array.isArray(h) ? h : {}, disableAll: !!(r.j && r.j.disableAllHooks) });
+      hooks, disableAll: !!(r.j && r.j.disableAllHooks) });
   }
   return { scopes, events: HOOK_EVENTS, workspace: CFG.workspace, dir: path.resolve(String(dir || CFG.workspace)), scriptsDir: HOOK_SCRIPTS_DIR };
 }

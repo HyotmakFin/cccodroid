@@ -40,10 +40,6 @@ import java.util.concurrent.CountDownLatch;
  * 每一步都能重入：装到一半被杀，下次打开从缺的那一步接着来。
  */
 public class MainActivity extends Activity {
-    /** 本地工具包（离线安装 / 开发期）：放在共享目录的话，首装的来源选择里多一项直接用它（照样核对来源） */
-    static final String[] LOCAL_DEVKIT = {
-        "/sdcard/cccodroid/devkit-cc.codroid.tar.gz", "/sdcard/cccodroid/devkit-cc.codroid.tar",
-    };
 
     static final String ACTION_APPLY_DEVKIT = "cc.codroid.APPLY_DEVKIT";
     // 内部动作的口令：MainActivity 是导出的（启动器、分享要用），别的应用也能发这些 action 让我们去下 650MB 工具包、
@@ -72,6 +68,7 @@ public class MainActivity extends Activity {
     static final String ACTION_UPDATE = "cc.codroid.UPDATE";
     static final String ACTION_SHIZUKU = "cc.codroid.SHIZUKU";
     static final String ACTION_A11Y_OK = "cc.codroid.A11Y_OK";
+    static final String ACTION_PRIV_OK = "cc.codroid.PRIV_OK";
     /** 配对通知的 fullScreenIntent：只为让通知常驻顶部，真被拉起（锁屏时）也什么都不做 */
     static final String ACTION_SHIZUKU_NOOP = "cc.codroid.SHIZUKU_NOOP";
     /** 界面在前台吗：自动静默更新只在用户没盯着界面时做 */
@@ -331,14 +328,86 @@ public class MainActivity extends Activity {
     }
 
     /** 第一次开读屏 / 点按前问一句（审查 v0.5.9 B4）：系统那套「此应用将能读取屏幕」的提示被我们写系统设置绕过了，这里补上 */
-    private void confirmA11y(String mode) {
-        if (!"auto".equals(mode) && !"on".equals(mode)) return;
-        new android.app.AlertDialog.Builder(this)
-            .setTitle(Tr.t("允许 Claude 读屏和点按？"))
-            .setMessage(Tr.t("打开后，Claude 能看到屏幕上的内容（包括别的应用里的），也能替你点按、输入。cccodroid 会直接打开无障碍服务，系统不会再提示。\n\n随时可以在 设置 → 设备工具 里关掉。"))
-            .setPositiveButton(Tr.t("允许"), (d, w) -> DeviceTools.a11yConfirmed(this, mode))
+    private long a11yAskAt;
+    private void confirmA11y(String mode, boolean on) {
+        boolean screen = "auto".equals(mode) || "on".equals(mode);
+        if (!screen && !on) return;
+        // 弹框的口令同 uid 的进程读得到，别让它反复弹来磨人：20 秒内只弹一次
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - a11yAskAt < 20_000) return;
+        a11yAskAt = now;
+        android.app.AlertDialog d = new android.app.AlertDialog.Builder(this)
+            .setTitle(screen ? Tr.t("允许 Claude 读屏和点按？") : Tr.t("打开设备工具？"))
+            .setMessage(screen ? Tr.t("打开后，Claude 能看到屏幕上的内容（包括别的应用里的），也能替你点按、输入。cccodroid 会直接打开无障碍服务，系统不会再提示。\n\n随时可以在 设置 → 设备工具 里关掉。")
+                : Tr.t("打开后，Claude 能读写剪贴板、发通知、打开应用、列出已装应用、分享文件。\n\n随时可以在 设置 → 设备工具 里关掉。"))
+            .setPositiveButton(Tr.t("允许"), (x, w) -> DeviceTools.a11yConfirmed(this, screen ? mode : "", on))
             .setNegativeButton(Tr.t("取消"), null)
-            .show();
+            .create();
+        guard(d, android.content.DialogInterface.BUTTON_POSITIVE);
+    }
+
+    // ── 敏感确认框：显示期间设备工具不许动屏幕（DeviceTools.call），按钮一秒后才能点、被别的窗口盖住时不收触摸 ──
+    private static final java.util.concurrent.atomic.AtomicInteger GUARDED = new java.util.concurrent.atomic.AtomicInteger();
+    static boolean guarding() { return GUARDED.get() > 0; }
+    private boolean guard(android.app.AlertDialog d, int... buttons) {
+        GUARDED.incrementAndGet();
+        final boolean[] gone = { false };
+        d.setOnShowListener((x) -> {
+            for (int b : buttons) {
+                android.widget.Button btn = d.getButton(b);
+                if (btn == null) continue;
+                btn.setFilterTouchesWhenObscured(true);
+                btn.setEnabled(false);
+                ui.postDelayed(() -> btn.setEnabled(true), 1000);
+            }
+        });
+        // 监听挂在 show 之前（getDecorView 会先把窗口内容建出来），关得再快也不会漏掉这次减计数
+        d.getWindow().getDecorView().addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
+            @Override public void onViewAttachedToWindow(android.view.View v) {}
+            @Override public void onViewDetachedFromWindow(android.view.View v) { if (!gone[0]) { gone[0] = true; GUARDED.decrementAndGet(); } }
+        });
+        // 弹不出来（Activity 正在销毁之类）：计数退回去，不然设备工具的屏幕操作会一直被挡着
+        try { d.show(); } catch (RuntimeException ex) { if (!gone[0]) { gone[0] = true; GUARDED.decrementAndGet(); } android.util.Log.w("cccodroid", "确认框弹不出来", ex); return false; }
+        return true;
+    }
+
+    /** 预览页想跳到外站：没开「联网」时先问一句，地址原样摆出来给用户看 */
+    private void confirmExternal(String url) {
+        String show = url == null ? "" : url.length() > 300 ? url.substring(0, 300) + "…" : url;
+        android.app.AlertDialog d = new android.app.AlertDialog.Builder(this)
+            .setTitle(Tr.t("让这个网页跳到外部浏览器？"))
+            .setMessage(show + "\n\n" + Tr.t("预览中的网页没有开「联网」。跳过去会把上面这个地址交给浏览器，地址里可能夹带它读到的内容。"))
+            .setPositiveButton(Tr.t("打开"), (x, w) -> openExternal(url))
+            .setNegativeButton(Tr.t("不打开"), null)
+            .create();
+        guard(d, android.content.DialogInterface.BUTTON_POSITIVE);
+    }
+
+    /** 白名单以外的特权命令执行前问一句（见 Priv.ask / PrivRules）：关掉、按返回都算拒绝。
+     *  按钮一秒后才能点，盖在上面的窗口挡着时不收触摸 —— 防止脚本抢在用户前面把「允许」点掉 */
+    private void confirmPriv(String id, String cmd, String who, boolean trustable) {
+        if (id == null) return;
+        boolean clip = Tr.t("设备工具：读取剪贴板").equals(cmd);
+        // 发起方是按对方进程的环境变量认的，对方能伪造：只作参考
+        String by = "claude".equals(who) ? "Claude" : "terminal".equals(who) ? Tr.t("终端") : "cc-mem".equals(who) ? "cc-mem" : Tr.t("不明程序");
+        final boolean[] said = { false };
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this)
+            .setTitle(clip ? Tr.t("允许读取剪贴板？") : Tr.t("允许执行这条特权命令？"))
+            .setMessage(Tr.t("发起方（自报，仅供参考）：") + by + "\n\n" + (clip ? Tr.t("剪贴板里可能有你从别的应用复制的密码、验证码。不是你让 Claude 读的就拒绝。")
+                : cmd + "\n\n" + Tr.t("它会以 Shizuku（shell）身份运行，能装卸应用、改权限或系统设置。不认识这条命令就拒绝。")))
+            .setPositiveButton(Tr.t("允许"), (x, w) -> { said[0] = true; Priv.answer(id, 1); })
+            .setNegativeButton(Tr.t("拒绝"), (x, w) -> { said[0] = true; Priv.answer(id, 0); });
+        // 命令里引用了文件的，不给「不再问」：信任的是文字，文件内容随时能换（见 Priv.trustable）
+        if (trustable) b.setNeutralButton(Tr.t("允许，这条命令 10 分钟内不再问"), (x, w) -> { said[0] = true; Priv.answer(id, 2); });
+        android.app.AlertDialog d = b.create();
+        d.setOnDismissListener((x) -> { PRIV_DLG.remove(id); if (!said[0]) Priv.answer(id, 0); });
+        PRIV_DLG.put(id, d);
+        if (!guard(d, android.content.DialogInterface.BUTTON_POSITIVE, android.content.DialogInterface.BUTTON_NEUTRAL)) { PRIV_DLG.remove(id); Priv.answer(id, 0); }
+    }
+    private static final java.util.Map<String, android.app.Dialog> PRIV_DLG = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Priv.ask 等不到回答（超时）时收起对话框：别留一个点了也没用的「允许」在屏幕上 */
+    static void dropPriv(String id) {
+        new Handler(Looper.getMainLooper()).post(() -> { android.app.Dialog d = PRIV_DLG.remove(id); if (d != null) try { d.dismiss(); } catch (Exception ignored) {} });
     }
 
     /** 通知或设置页递过来的动作 */
@@ -350,7 +419,8 @@ public class MainActivity extends Activity {
         if (ACTION_APPLY_DEVKIT.equals(a) || ACTION_UPDATE.equals(a) && "devkit".equals(i.getStringExtra("item"))) applyDevkitUi();
         else if (ACTION_UPDATE.equals(a)) Updater.get(this).apply(i.getStringExtra("item"), true);
         else if (ACTION_SHIZUKU.equals(a)) ShizukuSetup.get(this).activate();
-        else if (ACTION_A11Y_OK.equals(a)) confirmA11y(i.getStringExtra("mode"));
+        else if (ACTION_A11Y_OK.equals(a)) confirmA11y(i.getStringExtra("mode"), i.getBooleanExtra("on", false));
+        else if (ACTION_PRIV_OK.equals(a)) confirmPriv(i.getStringExtra("id"), i.getStringExtra("cmd"), i.getStringExtra("who"), i.getBooleanExtra("trust", false));
         else if (Notify.ACTION_OPEN.equals(a)) openSession(i.getStringExtra("session"));
     }
 
@@ -374,6 +444,18 @@ public class MainActivity extends Activity {
         }
         i.setAction(null);                                  // 同一个意图只收一次（转屏重建时别再收）
         if (uris.isEmpty() && (text == null || text.isEmpty())) return;
+        // 标明是哪个应用递过来的：任何应用都能直接把文字、文件递进来（审查 v0513b 低-18）。只放进输入框 / 附件，发不发由用户定
+        String from = null;
+        try {
+            android.net.Uri ref = getReferrer();
+            String pkg = ref != null && "android-app".equals(ref.getScheme()) ? ref.getHost() : null;
+            if (pkg != null && !pkg.equals(getPackageName())) {
+                from = pkg;
+                android.content.pm.PackageManager pm = getPackageManager();
+                try { from = String.valueOf(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0))); } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        if (from != null) android.widget.Toast.makeText(this, Tr.f("收到来自「{0}」的分享，发之前看一眼", from), android.widget.Toast.LENGTH_LONG).show();
         new Thread(() -> {
             java.io.File dir = new java.io.File(env.workspace(), "uploads");
             dir.mkdirs();
@@ -554,8 +636,9 @@ public class MainActivity extends Activity {
         if (pin == null || pin.optJSONObject("gz") == null) throw new java.io.IOException(Tr.t("APK 里的工具包清单坏了"));
         String file = pin.getJSONObject("gz").getString("file"), base = pin.getString("base");
         String gh = base + file, mirror = Updater.devkitMirror(base, file);
+        // 以前共享目录里有 devkit-cc.codroid.tar.gz 就自动多一项「用共享目录里的文件」：那里任何有存储权限的应用都能放，
+        // 等于替人摆好一个诱饵（审查 v0513b 低-24）。离线装照样能走「选择本地文件…」，自己挑的文件才装
         String local = null;
-        for (String l : LOCAL_DEVKIT) if (new File(l).canRead()) { local = l; break; }
         while (true) {
             String c = chooseDevkitSource(pin, local);
             if ("github".equals(c) || "mirror".equals(c)) {
@@ -1273,6 +1356,7 @@ public class MainActivity extends Activity {
         // 网页调试默认关：开着时任何连上 adb 的电脑都能读页面（含网关令牌）。
         // 要调试就在终端里 touch ~/.webdebug，重开应用生效；只有本机终端写得进私有目录
         WebView.setWebContentsDebuggingEnabled(new File(env.home, ".webdebug").exists());
+        guardServiceWorkers();
         web = new WebView(this) {
             @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
                 if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) { hangCheck(); imeCheck(); }
@@ -1303,6 +1387,9 @@ public class MainActivity extends Activity {
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 if (isOwnGateway(url)) return false;
+                // 预览没开「联网」时，网页自己整页跳到外站（top.location、target=_blank）会落到这里，
+                // 交给外部浏览器就等于把地址里夹带的内容送了出去。拦截那层管不到整页跳转，这里先问一句（10-31 复核补）
+                if (pvOffline && !localHost(Uri.parse(url).getHost())) { confirmExternal(url); return true; }
                 openExternal(url);
                 return true;
             }
@@ -1312,6 +1399,13 @@ public class MainActivity extends Activity {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest req) {
                 Uri u = req.getUrl();
                 if (isUiHost(u.getHost()) && !isOwnGateway(u.toString())) return blocked();
+                // HTML 预览没开「联网」时：整个界面 WebView 不许出本机（审查 v0513b 中-5）。CSP 管得住 fetch / 图片 / 脚本，
+                // 管不住预览页把自己跳到外站（地址里带着读到的文件）；iframe 的整页跳转也走这里，在这一层一起拦
+                if (pvOffline && !localHost(u.getHost())) return blocked();
+                // 界面 WebView 用不着 Service Worker；预览页要是注册一个，它发的请求不归页面的 CSP 管（10-31 复核）。注册时取脚本这一步就拦掉
+                java.util.Map<String, String> rh = req.getRequestHeaders();
+                if (rh != null) for (java.util.Map.Entry<String, String> h : rh.entrySet())
+                    if ("service-worker".equalsIgnoreCase(h.getKey()) && "script".equalsIgnoreCase(h.getValue())) return blocked();
                 // 界面自己的页面与静态资源（/api 之外的 GET）由原生代取、核过网关的 HMAC 才交出（审查 10-29 第六份 中3）。
                 // /api 照常走 WebView：它要带 Cookie、要流式（事件总线），而且回来的是数据、界面一律转义着用
                 if (isOwnGateway(u.toString()) && "GET".equalsIgnoreCase(req.getMethod())) {
@@ -1331,6 +1425,7 @@ public class MainActivity extends Activity {
                 }
                 // 网关页面落地就清历史：脱困跳转、看门狗重载留下的条目都没有回去的意义
                 if (isOwnGateway(url)) v.clearHistory();
+                if (isOwnGateway(url)) pvOffline = false;   // 界面重新载入了：查看器没开着，别把「不联网」留下来
                 pushInsets();
                 if (handoff != null && isOwnGateway(url)) ui.postDelayed(MainActivity.this::dropHandoff, 180);
                 if (pendingSid != null && isOwnGateway(url)) { String sid = pendingSid; pendingSid = null; openSession(sid); }
@@ -1344,6 +1439,8 @@ public class MainActivity extends Activity {
             }
             // ── 嵌入式浏览器窗格（宽屏）：页面决定开不开、摆在哪；关掉（✕）回调 __ccBrowserClosed ──
             @android.webkit.JavascriptInterface public boolean hasPane() { return true; }
+            /** 查看器开着不联网的 HTML 预览（true）/ 关了或允许联网（false），见 shouldInterceptRequest */
+            @android.webkit.JavascriptInterface public void previewNet(String k, boolean offline) { if (!Env.bridgeOk(k)) return; pvOffline = offline; }
             @android.webkit.JavascriptInterface public void paneOpen(String k, String url) { if (!Env.bridgeOk(k)) return;
                 if (url != null && !url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) return;
                 if (isGatewayUrl(url)) return;
@@ -1362,6 +1459,8 @@ public class MainActivity extends Activity {
                 if (url == null || url.isEmpty() || url.startsWith("https://") || url.startsWith("http://"))
                     ui.post(() -> BrowserActivity.open(MainActivity.this, url));
             }
+            /** 「截屏给 Claude」：用户点了才发一次性截屏码，网关拿它去 priv 截屏（见 Priv.armShot） */
+            @android.webkit.JavascriptInterface public String privShot(String k, int delaySec) { if (!Env.bridgeOk(k)) return ""; return Priv.armShot(delaySec); }
             /** 回复底下的「转发」：把正文交给系统分享面板 */
             @android.webkit.JavascriptInterface public void shareText(String k, String text) { if (!Env.bridgeOk(k)) return;
                 if (text != null && !text.isEmpty()) ui.post(() -> shareTextNow(text));
@@ -1459,13 +1558,13 @@ public class MainActivity extends Activity {
             // 页面里的 alert / confirm / prompt：系统默认的对话框标题是「网址为 http://127.0.0.1 的网页显示」，
             // 换成不带标题、跟着界面外观的对话框；按钮文字用系统自带的（随系统语言）
             @Override public boolean onJsAlert(WebView v, String url, String msg, android.webkit.JsResult r) {
-                jsDialog(msg, false, null, r, null); return true;
+                jsDialog(fromPage(url, msg), false, null, r, null); return true;
             }
             @Override public boolean onJsConfirm(WebView v, String url, String msg, android.webkit.JsResult r) {
-                jsDialog(msg, true, null, r, null); return true;
+                jsDialog(fromPage(url, msg), true, null, r, null); return true;
             }
             @Override public boolean onJsPrompt(WebView v, String url, String msg, String def, android.webkit.JsPromptResult r) {
-                jsDialog(msg, true, def == null ? "" : def, r, r); return true;
+                jsDialog(fromPage(url, msg), true, def == null ? "" : def, r, r); return true;
             }
         });
         // 网关换了一个（重启、崩溃重拉）：它只认按新启动号派生的 Cookie，这里种上，界面的事件总线重连时就接上了（审查 S1）
@@ -1605,6 +1704,12 @@ public class MainActivity extends Activity {
     private boolean squatShown;
     private static String css(int c) { return String.format("#%06x", c & 0xffffff); }
 
+    /** 预览里的网页弹的对话框标明出处：别让它冒充 cccodroid 要密钥、要密码（审查 v0513b 低-22） */
+    private static String fromPage(String url, String msg) {
+        if (url == null || isOwnGateway(url)) return msg;
+        String h; try { h = Uri.parse(url).getHost(); } catch (Exception e) { h = null; }
+        return Tr.f("下面是预览中的网页（{0}）弹出的，不是 cccodroid 在问：", h == null ? "?" : h) + "\n\n" + msg;
+    }
     private void jsDialog(String msg, boolean withCancel, String def, android.webkit.JsResult r, android.webkit.JsPromptResult pr) {
         final android.widget.EditText in = def == null ? null : new android.widget.EditText(this);
         if (in != null) in.setText(def);
@@ -1655,6 +1760,7 @@ public class MainActivity extends Activity {
     private void startSaveAs(String path, String name, String mime) {
         File f = path == null ? null : new File(path);
         if (f == null || !f.isFile()) { savedJs(false, "missing"); return; }
+        try { Share.guard(this, f); } catch (Exception e) { savedJs(false, "forbidden"); return; }
         savePending = f;
         Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime)
@@ -1826,6 +1932,26 @@ public class MainActivity extends Activity {
     static boolean loopbackV4(String h) {
         long ip = ipv4(h);
         return ip >= 0 && ((ip >>> 24) == 127 || ip == 0);
+    }
+    /** HTML 预览不联网时为 true：界面 WebView 只许连本机 */
+    static volatile boolean pvOffline;
+    /** Service Worker 发的请求不经各个 WebView 的 WebViewClient，走全进程的这一个：不联网预览时同样只许连本机。
+     *  应用内浏览器里的网站照常用（pvOffline 只在查看器开着不联网预览时为 true） */
+    static void guardServiceWorkers() {
+        try {
+            android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
+                @Override public android.webkit.WebResourceResponse shouldInterceptRequest(android.webkit.WebResourceRequest req) {
+                    Uri u = req.getUrl();
+                    if (u != null && isUiHost(u.getHost())) return blocked();
+                    return pvOffline && u != null && !localHost(u.getHost()) ? blocked() : null;
+                }
+            });
+        } catch (Throwable ignored) {}
+    }
+    static boolean localHost(String h) {
+        if (h == null) return true;          // data: / blob: 之类没有主机，本来就不出网
+        h = h.toLowerCase(java.util.Locale.ROOT);
+        return h.equals("localhost") || h.equals("[::1]") || h.equals("::1") || loopbackV4(h) || isUiHost(h);
     }
     /** 是不是界面专用地址（Env.HOST = 127.0.0.2）：各种写法（2130706434、0x7f000002、127.2 …）浏览器都会规范成它，一并认 */
     static boolean isUiHost(String h) {

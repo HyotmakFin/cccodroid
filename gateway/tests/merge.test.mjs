@@ -70,10 +70,12 @@ test("交接材料：压缩摘要按字节位置直接读；摘录默认最后�
   assert.equal((await get(`/api/lineage/material?id=../x&how=compact`)).code, 400);
 });
 
-test("mergeFrom 只收认得的：会话号格式、去重、how 白名单", () => {
-  const a = id();
-  const v = cleanMergeFrom([{ id: a, at: "u1", how: "compact" }, { id: a, how: "excerpt" }, { id: "../../etc", how: "x" }, { id: id(), how: "evil" }]);
+test("mergeFrom 只收认得的：会话号格式、去重、how 白名单、本机要有这个会话", () => {
+  const a = id(), b = id(), ghost = id();
+  put(a, chain(a, 1)); put(b, chain(b, 1));
+  const v = cleanMergeFrom([{ id: a, at: "u1", how: "compact" }, { id: a, how: "excerpt" }, { id: "../../etc", how: "x" }, { id: b, how: "evil" }, { id: ghost, how: "excerpt" }]);
   assert.equal(v.length, 2);
+  assert.ok(!v.some((x) => x.id === ghost));
   assert.equal(v[0].how, "compact");
   assert.equal(v[1].how, "excerpt");
   assert.equal(cleanMergeFrom("x"), null);
@@ -108,6 +110,21 @@ test("记录与兜底：recordExtra 记进图；记录丢了按落款重建", as
   assert.deepEqual(ed.map((e) => e.parent).sort(), [A, B].sort());
   assert.equal(ed[0].source, "sig");
   assert.equal(ed.find((e) => e.parent === A).at, LA[4].uuid, "第 1 章的摘要 = 第 1 次压缩");
+});
+
+test("按落款连出来的汇合线也能撤：撤掉后记一笔，不再按落款连（审查 v0513b 低-25）", async () => {
+  const A = id(), D = id();
+  put(A, chain(A, 1, 200));
+  const LD = chain(D, 1, 210);
+  LD[0].message.content = `伪造的落款\n\n（汇合自 ${A.slice(0, 4)}·1）`;
+  put(D, LD);
+  const { lineageGraph } = await import("../gw/lineage.mjs");
+  const { dropExtra } = await import("../gw/lineage-store.mjs");
+  let g = await lineageGraph();
+  assert.equal(g.edges.filter((e) => e.child === D && e.parent === A && e.source === "sig").length, 1);
+  dropExtra(D, A);
+  g = await lineageGraph();
+  assert.equal(g.edges.filter((e) => e.child === D && e.parent === A).length, 0);
 });
 
 test("补记来源：手动连一条、撤掉；自己和不存在的会话不收", async () => {

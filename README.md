@@ -128,7 +128,7 @@ Versions with a suffix (such as `v0.2.0-rc1`) are pre-releases. In-app updates o
 (measured on RedMagic: frozen about 90 s after leaving the foreground), stopping any running task. When cccodroid detects a freeze during a running task, Settings tells you exactly where to fix it.
 RedMagic / ZTE: App info → App battery usage → Battery optimization → **Background running: Allow**, **Auto-start: Allow**.
 
-**Offline install**: put `devkit-cc.codroid.tar.gz` in `/sdcard/cccodroid/`; the first launch uses it instead of downloading.
+**Offline install**: download `devkit-cc.codroid.tar.gz` to the phone first, then on first launch choose "Choose a local file…" and pick it. Nothing else is downloaded, and the file is checked against the published releases before installing.
 
 **Versions**: v0.3.0 was the first stable release. Each minor series runs 21 releases (0.3.0–0.3.20, now 0.4.x); every release installs over the old one and keeps your data and installed tools.
 

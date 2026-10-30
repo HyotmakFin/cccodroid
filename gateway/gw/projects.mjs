@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { CFG, PATHS, log, tz } from "./config.mjs";
-import { NEXT, readBody, sendJson } from "./http.mjs";
+import { dec, NEXT, readBody, sendJson } from "./http.mjs";
 import { PEEK_CACHE, findSessionFile, listSessions } from "./sessions.mjs";
 import { trashSession } from "./sessionops.mjs";
 import { termEnv } from "./terminal.mjs";
@@ -186,7 +186,7 @@ export async function routeProjects(req, res, u, p) {
 
   const m = p.match(/^\/api\/projects\/([^/]+)(\/[a-z]+)?$/);
   if (!m) return NEXT;
-  const proj = projectById(decodeURIComponent(m[1]));
+  const proj = projectById(dec(m[1]));
   if (!proj) return sendJson(res, 404, { error: tz("项目不存在") });
   const sub = m[2] || "";
 
@@ -229,19 +229,33 @@ export async function routeProjects(req, res, u, p) {
     log(`📁 删除项目「${proj.name}」${withDir ? "（连目录）" : ""}`);
     return sendJson(res, 200, { ok: true });
   }
-  // 指令 = 项目目录里的 CLAUDE.md
+  // 指令 = 项目目录里的 CLAUDE.md。读写都不跟软链：克隆来的仓库可以把它做成指向密钥文件 / 设置文件的软链，
+  // 读出来就进了界面，保存就把那个文件盖掉（审查 v0513b 低-13）
   if (sub === "/instr") {
     const f = path.join(proj.path, "CLAUDE.md");
+    const NOFOLLOW = fs.constants.O_NOFOLLOW || 0;
+    let lst = null; try { lst = fs.lstatSync(f); } catch {}
+    if (lst && !lst.isFile()) return sendJson(res, 409, { message: tz("这个项目的 CLAUDE.md 不是普通文件（可能是软链接），不在这里读写") });
     if (req.method === "GET") {
       // 只有「文件不存在」才算空：没权限、读错了要报出来，前端据此只读，免得一保存把原文盖掉（审查 #52 E06）
-      try { return sendJson(res, 200, { text: fs.readFileSync(f, "utf8"), exists: true }); }
+      if (lst && lst.size > 4 << 20) return sendJson(res, 413, { message: tz("CLAUDE.md 太大了（超过 4 MB）") });
+      let fd;
+      try { fd = fs.openSync(f, fs.constants.O_RDONLY | NOFOLLOW); return sendJson(res, 200, { text: fs.readFileSync(fd, "utf8"), exists: true }); }
       catch (e) { return e.code === "ENOENT" ? sendJson(res, 200, { text: "", exists: false }) : sendJson(res, 500, { message: e.code || e.message }); }
+      finally { if (fd != null) fs.closeSync(fd); }
     }
     if (req.method === "PUT") {
       const b = await body();
       const text = String(b.text || "");
       if (!text.trim()) { try { fs.rmSync(f, { force: true }); } catch {} }
-      else fs.writeFileSync(f, text.endsWith("\n") ? text : text + "\n");
+      else {
+        let fd;
+        try {
+          fd = fs.openSync(f, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | NOFOLLOW, 0o644);
+          fs.writeFileSync(fd, text.endsWith("\n") ? text : text + "\n");
+        } catch (e) { return sendJson(res, e.code === "ELOOP" ? 409 : 500, { message: e.code || e.message }); }
+        finally { if (fd != null) fs.closeSync(fd); }
+      }
       return sendJson(res, 200, { ok: true });
     }
   }

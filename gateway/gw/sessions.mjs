@@ -281,6 +281,10 @@ export async function routeSessions(req, res, u, p) {
     // 请求体直接落盘、逐条解压写盘（gw/bigfile.mjs），内存不跟包大小走：1 GB 以上的会话也导得进。
     // 一次只导一个（审查 10-30 第九份 中3）；包上限是 zip32 的 4 GB，解出来的总量受剩余空间限制
     if (importBusy) { req.resume(); return sendJson(res, 409, { ok: false, message: tz("上一个导入还没完，等它结束再导") }); }
+    // 先按请求声明的大小看空间：包和解出来的都要落盘，不够就别开始写（审查 v0513b 低-5）
+    const want = Number(req.headers["content-length"]) || 0;
+    let free = Infinity; try { const st = fs.statfsSync(CFG.home); free = st.bavail * st.bsize; } catch {}
+    if (want && free < want * 2 + (512 << 20)) { req.resume(); return sendJson(res, 507, { ok: false, message: tz("存储空间不够了") }); }
     importBusy = true;
     const tmp = path.join(CFG.home, `.import-${Date.now()}.zip`);
     try {
@@ -292,8 +296,10 @@ export async function routeSessions(req, res, u, p) {
     finally { importBusy = false; fs.rmSync(tmp, { force: true }); }
   }
   if (p.startsWith("/api/session/")) {
-    const rest = decodeURIComponent(p.slice("/api/session/".length));
+    let rest;
+    try { rest = decodeURIComponent(p.slice("/api/session/".length)); } catch { return sendJson(res, 400, { error: "bad path" }); }
     const [id, action] = rest.split("/");
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id || "")) return sendJson(res, 400, { error: "bad session id" });
     const found = findSessionFile(id);
 
     if (req.method === "GET" && !action) {
@@ -393,6 +399,7 @@ export async function routeSessions(req, res, u, p) {
       const b = JSON.parse((await readBody(req)) || "{}");
       const name = String(b.title || "").trim().slice(0, 120);
       if (!name) return sendJson(res, 400, { error: "empty" });
+      if (!found) return sendJson(res, 404, { error: "not found" });      // 不存在的会话不往名字表里记（审查 v0513b 低-6）
       NAMES[id] = name; saveNames();
       return sendJson(res, 200, { ok: true, title: name });
     }

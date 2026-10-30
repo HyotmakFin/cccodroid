@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execFile } from "node:child_process";
+import net from "node:net";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { CFG, HERE, PREFIX, log, tz } from "./config.mjs";
+import { CFG, PREFIX, log, tz } from "./config.mjs";
 import { SETTINGS } from "./settings-store.mjs";
 import { SEED_FILE } from "./providers.mjs";
-import { claudeEnv } from "./claude.mjs";
 import { NEXT, fileKind, mimeOf, readBody, readBodyBuf, sendJson } from "./http.mjs";
 import { toFront } from "./local.mjs";
 import { bodyToFile } from "./bigfile.mjs";
@@ -39,6 +39,8 @@ function pathBlocked(real) {
     let rr; try { rr = fs.realpathSync(root); } catch { rr = root; }
     if (real === rr || real.startsWith(rr + path.sep)) return true;
   }
+  // /proc 底下的进程目录：同 uid 的进程（claude 子进程、网关自己）的 environ、cmdline、内存映射都读得到（审查 v0513b 低-14）
+  if (/^\/proc\/(self|thread-self|\d+)(\/|$)/.test(real)) return true;
   return SECRET_RE.test(real);
 }
 
@@ -62,6 +64,8 @@ export function safeFilePath(p) {
 
   let st; try { st = fs.statSync(real); } catch (e) { return { error: e.message }; }
   if (st.isDirectory()) return { error: "is a directory", status: 400 };
+  // 只交普通文件：/dev/zero 这类设备读不完，管道会一直挂着（/proc 里的伪文件 fstat 也报普通文件，上面按路径拦）
+  if (!st.isFile()) return { error: "not a regular file", status: 400 };
   return { file: real, size: st.size, mtime: st.mtimeMs };
 }
 
@@ -117,10 +121,10 @@ export function fileRoots() {
 // ── 截屏 ──────────────────────────────────────────────────────────────
 /** 整屏截图（PNG）。cccodroid：priv 的 stdout 是干净的二进制通道，直接收；
  *  开发端的 rish 会把输出随机拆到 stdout / stderr，二进制会坏 —— 先写到共享存储再读回来 */
-async function screencap() {
+async function screencap(shot) {
   let last = "";
   for (let i = 0; i < 2; i++) {
-    const r = await screencapOnce();
+    const r = await screencapOnce(shot);
     // 完整的 PNG 以 IEND 块收尾；只看开头的魔数会把截断的文件当成好的（界面上就是一张坏图）
     if (r.buf && r.buf.length > 64 && r.buf.readUInt32BE(0) === 0x89504e47 && r.buf.subarray(-8, -4).toString("latin1") === "IEND") return r.buf;
     last = `${r.buf ? r.buf.length : 0} B${r.code != null ? " rc=" + r.code : ""}${r.err ? " " + r.err : ""}`;
@@ -128,18 +132,41 @@ async function screencap() {
   }
   throw new Error(tz("截屏失败（Shizuku 可用吗？设置 → Shizuku）") + " · " + last);
 }
-function screencapOnce() {
+function screencapOnce(shot) {
   return new Promise((resolve) => {
     if (PREFIX) {
-      // 去掉 CCAPP_RUN：特权命令记录按这个标记认「Claude 发起的」，截屏是用户在界面上点的
-      const env = claudeEnv(); delete env.CCAPP_RUN;
-      const c = spawn(process.execPath, [path.join(process.env.CCAPP_BIN || HERE, "priv.mjs"), "screencap -p"], { env, stdio: ["ignore", "pipe", "pipe"] });
+      // 直接走 priv 的套接字（协议见 Priv.java / priv.mjs）：界面领来的一次性截屏码放在请求里，不进命令行和环境变量
       const out = [], err = [];
-      c.stdout.on("data", (d) => out.push(d));
-      c.stderr.on("data", (d) => err.push(d));
-      const t = setTimeout(() => c.kill("SIGKILL"), 20000);
-      c.on("close", (code) => { clearTimeout(t); resolve({ buf: Buffer.concat(out), code, err: Buffer.concat(err).toString().trim().slice(0, 160) }); });
-      c.on("error", (e) => { clearTimeout(t); resolve({ buf: null, err: e.message }); });
+      let buf = Buffer.alloc(0), code = null, got = 0;
+      const s = net.connect({ path: process.env.CCAPP_PRIV_SOCK || "/data/data/cc.codroid/files/.priv.sock" }, () => {
+        s.write(JSON.stringify({ op: "exec", argv: ["/system/bin/sh", "-c", "screencap -p"], cwd: "/", shot: String(shot || "") }) + "\n");
+        s.write(Buffer.from([0, 0, 0, 0, 0]));          // 没有 stdin：空帧
+      });
+      const t = setTimeout(() => s.destroy(), 20000);
+      // 帧：1 字节类型 + 4 字节长度 + 内容。没凑齐一帧的先攒着（攒在数组里，凑够了再合并，别每来一块就整个复制一遍）
+      let pend = [], pendLen = 0;
+      s.on("data", (d) => {
+        if ((got += d.length) > 64 << 20) { err.push(Buffer.from("too large")); return s.destroy(); }
+        pend.push(d); pendLen += d.length;
+        if (pendLen < 5) return;
+        if (pend.length > 1) { buf = Buffer.concat(pend, pendLen); pend = [buf]; } else buf = pend[0];
+        const need = buf.length >= 5 ? 5 + buf.readUInt32BE(1) : 5;
+        if (buf.length < need) return;
+        let off = 0;
+        while (buf.length - off >= 5) {
+          const type = buf[off], len = buf.readUInt32BE(off + 1);
+          if (buf.length - off < 5 + len) break;
+          const body = buf.subarray(off + 5, off + 5 + len);
+          off += 5 + len;
+          if (type === 1) out.push(body);
+          else if (type === 2 || type === 4) err.push(body);
+          else if (type === 3 && len === 4) code = body.readInt32BE(0);
+        }
+        const rest = buf.subarray(off);
+        pend = rest.length ? [rest] : []; pendLen = rest.length;
+      });
+      s.on("error", (e) => err.push(Buffer.from(e.message)));
+      s.on("close", () => { clearTimeout(t); resolve({ buf: Buffer.concat(out), code, err: Buffer.concat(err).toString().trim().slice(0, 160) }); });
       return;
     }
     const tmp = "/sdcard/Download/.ccapp-screen.png";
@@ -283,15 +310,20 @@ export async function routeFiles(req, res, u, p) {
   }
   // ── 截屏给 Claude：经 priv 以 shell 身份 screencap，存进 uploads 当附件。delay 秒后再截（先切到要截的应用），截完叫回前台 ──
   if (req.method === "POST" && p === "/api/screenshot") {
-    const b = JSON.parse((await readBody(req)) || "{}");
+    let b; try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     const delay = Math.max(0, Math.min(30, Number(b.delay) || 0));
     if (delay) await new Promise((r) => setTimeout(r, delay * 1000));
     let png;
-    try { png = await screencap(); } catch (e) { return sendJson(res, 500, { ok: false, message: e.message }); }
+    try { png = await screencap(typeof b.shot === "string" ? b.shot.slice(0, 64) : ""); } catch (e) { return sendJson(res, 500, { ok: false, message: e.message }); }
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-    const out = path.join(UPLOAD_DIR, `${stamp}-screen.png`);
-    fs.writeFileSync(out, png);
+    // 同一秒截两张别互相覆盖：wx 占名
+    let out = null;
+    for (let k = 1; !out && k < 100; k++) {
+      const f = path.join(UPLOAD_DIR, k === 1 ? `${stamp}-screen.png` : `${stamp}-screen-${k}.png`);
+      try { fs.writeFileSync(f, png, { flag: "wx" }); out = f; } catch (e) { if (e.code !== "EEXIST") return sendJson(res, 500, { ok: false, message: e.message }); }
+    }
+    if (!out) return sendJson(res, 500, { ok: false, message: "EEXIST" });
     log(`[screenshot] ${png.length}B → ${out}`);
     if (delay) toFront(tz("截好了")).catch(() => {});
     return sendJson(res, 200, { ok: true, path: out, name: path.basename(out), size: png.length, mime: "image/png", kind: "image" });

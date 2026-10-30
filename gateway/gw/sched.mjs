@@ -8,8 +8,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { CFG, LIVE, log, tz } from "./config.mjs";
-import { NEXT, readBody, sendJson } from "./http.mjs";
+import { dec, NEXT, readBody, sendJson } from "./http.mjs";
 import { END_HOOKS, enqueue } from "./queue.mjs";
+import { capList } from "./settings-store.mjs";
 import { RUNS } from "./runs.mjs";
 import { publish } from "./bus.mjs";
 import { NAMES, saveNames } from "./sessions.mjs";
@@ -204,7 +205,7 @@ async function fire(t, { reason = "due", attempt = 0, trial = false } = {}) {
   }
   const p = t.projectId ? projectById(t.projectId) : null;
   const perm = t.perm === "proj" ? { permissionMode: "acceptEdits" }
-    : t.perm === "custom" ? { permissionMode: "default", allowedTools: String(t.tools || "").split(/[,，\n]/).map((x) => x.trim()).filter(Boolean) }
+    : t.perm === "custom" ? { permissionMode: "default", allowedTools: capList(String(t.tools || "").split(/[,，\n]/).map((x) => x.trim()).filter(Boolean), 200, 512, 8192) }
     : { permissionMode: "default", disallowedTools: ["Edit", "Write", "MultiEdit", "NotebookEdit"] };
   let message = String(t.prompt || "").trim();
   if (t.carryLast && t.session !== "same") {
@@ -389,7 +390,7 @@ export async function routeSched(req, res, u, p) {
   }
   const m = p.match(/^\/api\/sched\/([^/]+)(\/[a-z]+)?$/);
   if (!m) return NEXT;
-  const t = byId(decodeURIComponent(m[1]));
+  const t = byId(dec(m[1]));
   if (!t) return sendJson(res, 404, { error: tz("任务不存在") });
   const sub = m[2] || "";
   if (!sub && req.method === "GET") return sendJson(res, 200, { task: summary(t), runs: RUNLOG.filter((r) => r.taskId === t.id).slice(-100).reverse().map(({ full, ...r }) => r), running: [...RUNNING.values()].some((x) => x.taskId === t.id) });

@@ -14,6 +14,7 @@ import { NEXT, readBody, sendJson } from "./http.mjs";
 import { neutralizeMarkers } from "./integrity.mjs";
 import { dropExtra, recordExtra } from "./lineage-store.mjs";
 import { lineageByShort, lineageFile, lineageRecord } from "./lineage.mjs";
+import { findSessionFile } from "./sessions.mjs";
 
 const SID = /^[0-9a-f-]{36}$/i;
 const TAIL0 = 4 << 20, TAIL_MAX = 32 << 20;   // 摘录从文件尾往回读：先 4 MB，轮数不够再翻倍，最多 32 MB
@@ -75,7 +76,8 @@ function compactAt(file, off) {
   let s = "";
   try {
     const chunks = [];
-    for (let pos = off, got = 0; got < 64 << 20; ) {
+    // 摘要一行通常几十 KB；最多读 8 MB（插话路径上同步读，读多了整个网关跟着卡，审查 v0513b 低-29）
+    for (let pos = off, got = 0; got < 8 << 20; ) {
       const buf = Buffer.alloc(1 << 20), n = fs.readSync(fd, buf, 0, buf.length, pos);
       if (!n) break;
       const i = buf.subarray(0, n).indexOf(10);
@@ -129,6 +131,8 @@ export function cleanMergeFrom(v) {
   for (const x of v.slice(0, 12)) {
     if (!x || !SID.test(String(x.id || ""))) continue;
     if (out.some((y) => y.id === x.id)) continue;
+    // 只认本机有的会话：别把指向不存在会话的边记进档案（审查 v0513b 低-28）。按文件查，不靠脉络索引（没打开过脉络页时它是空的）
+    if (!findSessionFile(String(x.id))) continue;
     out.push({ id: String(x.id), at: typeof x.at === "string" ? x.at.slice(0, 64) : null, how: ["compact", "excerpt", "summary", "manual"].includes(x.how) ? x.how : "excerpt" });
   }
   return out.length ? out : null;
@@ -140,7 +144,10 @@ export async function routeMerge(req, res, u, p) {
     let b; try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     const child = String(b.child || "");
     if (!SID.test(child) || !(await lineageRecord(child))) return sendJson(res, 404, { error: "not_found" });
-    if (b.drop) { dropExtra(child, String(b.drop)); return sendJson(res, 200, { ok: true }); }
+    if (b.drop) {
+      if (!SID.test(String(b.drop))) return sendJson(res, 400, { error: "bad id" });
+      dropExtra(child, String(b.drop)); return sendJson(res, 200, { ok: true });
+    }
     // 防环（规划书 §2.2）：来源不能是自己；汇合只连已存在的会话。补记不造新会话，不查后代 —— 画图时 family() 按集合走，不会死循环
     const add = cleanMergeFrom((Array.isArray(b.add) ? b.add : []).map((x) => ({ id: x, how: "manual" })))?.filter((x) => x.id !== child && lineageFile(x.id)) || [];
     if (!add.length) return sendJson(res, 400, { error: "nothing" });

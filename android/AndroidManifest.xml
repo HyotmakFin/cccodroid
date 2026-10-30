@@ -139,8 +139,8 @@
         <receiver android:name=".Events" android:exported="false" />
         <!-- 定时任务的系统闹钟：到点拉起网关。不导出 -->
         <receiver android:name=".SchedAlarm" android:exported="false" />
-        <!-- 系统广播：自更新装完、开机 -->
-        <receiver android:name=".SysEvents" android:exported="true">
+        <!-- 系统广播：自更新装完、开机。不导出：系统发的照样收得到，别的应用（连同经 Shizuku 的 shell）发不进来（审查 v0513b 低-17） -->
+        <receiver android:name=".SysEvents" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -134,8 +134,16 @@ final class Updater {
     SharedPreferences prefs() { return ctx.getSharedPreferences("upd", Context.MODE_PRIVATE); }
     boolean auto() { return prefs().getBoolean("auto", true); }
     /** stable / latest = 跟随官方渠道；pinned = 固定在 pinVer()，自动更新、检查更新都不动它（用户 10-22 定：不能强制绑最新） */
-    String channel() { return prefs().getString("channel", "stable"); }
-    String pinVer() { return prefs().getString("pin", ""); }
+    String channel() { String o = ovCh; return o != null ? o : prefs().getString("channel", "stable"); }
+    String pinVer() { String o = ovPin; return o != null ? o : prefs().getString("pin", ""); }
+    // 换渠道 / 固定版本在等用户确认降级时：新设置只放在内存里（见 set），确认了才写盘。
+    // 拒绝、出错、进程被杀，盘上都还是原来的设置（10-31 六轮核验：先写盘再回滚，挡不住并发请求和杀进程）
+    private volatile String ovCh, ovPin;
+    String latestClaude() { return claude.latest; }
+    // claude.latest 是哪个渠道查出来的：拿 stable / latest 判降级时，得是同一个渠道的结果才作数
+    private volatile String latestCh = "";
+    boolean switchingNow() { return switching.get(); }
+    boolean claudeInstalled() { refreshCurrent(); return !claude.current.isEmpty(); }
     boolean pinned() { return "pinned".equals(channel()) && !pinVer().isEmpty(); }
 
     // ── 安装包方案：targetSdk 28（默认，兼容最好）/ 36（系统不让装 28 时用）。同一包名、同一钥匙、同一版本号，互相覆盖安装数据都在 ──
@@ -192,23 +200,51 @@ final class Updater {
         return null;
     }
 
-    void set(JSONObject req) {
-        SharedPreferences.Editor e = prefs().edit();
-        if (req.has("auto")) e.putBoolean("auto", req.optBoolean("auto", true));
+    void set(JSONObject req) { set(req, "?"); }
+    // 换渠道那条线程还在跑（可能在等用户确认降级）：自动更新别插进来，也不接第二次换渠道
+    private final java.util.concurrent.atomic.AtomicBoolean switching = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** who：发起方（Priv.caller 认的，只作对话框里的参考） */
+    void set(JSONObject req, String who) {
+        if (req.has("auto")) prefs().edit().putBoolean("auto", req.optBoolean("auto", true)).apply();
         String ch = req.optString("channel", ""), pv = req.optString("version", "").trim();
         boolean switched = (ch.equals("stable") || ch.equals("latest")) && !ch.equals(channel());
+        String pin = pinVer();
         // 固定版本：换到 pinned、或换固定的版本号都算「明说要这一版」
         if (ch.equals("pinned") && pv.matches("\\d+\\.\\d+\\.\\d+[\\w.+-]*") && (!"pinned".equals(channel()) || !pv.equals(pinVer()))) {
-            e.putString("pin", pv); switched = true;
+            pin = pv; switched = true;
         }
-        if (switched) e.putString("channel", ch);
-        e.apply();
+        if (!switched) return;
+        // 同一时间只换一次：上一次还在等确认就不接新的
+        if (!switching.compareAndSet(false, true)) { Log.i("cccodroid", "上一次换渠道还没完，这次不接"); return; }
+        final String toCh = ch, toPin = pin;
         // 换渠道是用户明说要哪个版本：马上按新渠道查，版本对不上就直接换（切回 stable 也会换回 stable 的版本）
-        if (switched) new Thread(() -> {
+        new Thread(() -> {
+            boolean keep = false;
             try {
+                ovPin = toPin; ovCh = toCh;
                 checkClaude();
-                if ("available".equals(claude.state)) apply("claude", true);
-            } catch (Exception ex) { claude.set("error", Tr.t("连不上 downloads.claude.ai：") + ex.getMessage()); }
+                String to = claude.latest;
+                // 只按版本判，不看状态：「安装中」时状态不更新，以前借这个跳过确认直接写盘（10-31 七轮核验）
+                boolean down = claudeDowngrade(to);
+                // 换渠道 / 固定版本落到比已装的旧：和 upd_apply 指定旧版本一样要用户点头（10-31 四轮复核：这是降级的另一条路）
+                if (down && !Priv.confirm(Tr.f("把 Claude Code 降级到 {0}", to), who, "upd:" + to)) {
+                    Log.i("cccodroid", "没有允许降级到 " + to + "，设置不变");
+                } else {
+                    prefs().edit().putString("channel", toCh).putString("pin", toPin).commit();
+                    keep = true;
+                    ovCh = null; ovPin = null;
+                    if ("available".equals(claude.state)) apply("claude", true, to);   // 装的就是确认过的这一版
+                }
+            } catch (Exception ex) {
+                // 查不到版本（断网）：stable / latest 的选择照样记下（比已装的旧时 claudeOlder 会挡住自动更新）；固定版本不查网，到不了这里
+                if (!"pinned".equals(toCh)) { prefs().edit().putString("channel", toCh).commit(); keep = true; }
+                claude.set("error", Tr.t("连不上 downloads.claude.ai：") + ex.getMessage());
+            } finally {
+                ovCh = null; ovPin = null;
+                if (!keep) { try { checkClaude(); } catch (Exception ignored) {} }
+                switching.set(false);
+            }
         }, "upd-channel").start();
     }
 
@@ -404,6 +440,19 @@ final class Updater {
             if (best == null || cmpVer(tag.substring(7), best.substring(7)) > 0) best = tag;
         }
         if (best == null) { devkit.set("uptodate", ""); return; }
+        // 不往回装：比已装的、比本 APK 钉的旧，一律当没有新版。签名有效的旧清单照样验得过，
+        // 中间人只给一份旧版本的发布列表，就能把工具链退回有已知问题的旧版（审查 v0513b 低-21；APK 和 Claude Code 早就防了）
+        {
+            String floor = null;
+            JSONObject pin0 = devkitPin(ctx);
+            for (String f : new String[] { tagOf(installedDevkitBase()), pin0 != null ? pin0.optString("tag", "") : "" })
+                if (f != null && f.startsWith("devkit-") && (floor == null || cmpVer(f.substring(7), floor.substring(7)) > 0)) floor = f;
+            if (floor != null && cmpVer(best.substring(7), floor.substring(7)) < 0) {
+                Log.w(TAG, "发布列表里最新的工具包 " + best + " 比 " + floor + " 旧，不装");
+                devkit.set("uptodate", "");
+                return;
+            }
+        }
         devkit.latest = best;
         // 正在下、正在装、正在校验，或者已下好一份等着装：别动它的文件与哈希（文件名各版本相同，换了哈希就和落盘的那份对不上）
         String st0 = devkit.state;
@@ -549,9 +598,12 @@ final class Updater {
             } catch (Exception ex) { if (why.isEmpty()) why = ex.getMessage(); }
         }
         if (pinned()) {
-            claudeOlder = false;        // 固定版本是用户自己选的，旧也照装
             String pin = pinVer();
-            claude.latest = pin;
+            // 钉的版本比已装的旧：不自动装回去（10-31 八轮核验：钉住当前版本不用确认，之后一升级，自动更新就会悄悄退回来）。
+            // 用户确认过的降级在确认时当场就装了；之后要退回钉的版本，点安装会走降级确认
+            refreshCurrent();
+            claudeOlder = !claude.current.isEmpty() && cmpVer(pin, claude.current) < 0;
+            claude.latest = pin; latestCh = "pinned";
             if (env.claudeOff() && !env.claudeReady()) { if (!"installing".equals(claude.state)) claude.set("missing", ""); return; }
             if (!"installing".equals(claude.state)) {
                 String info = v != null && cmpVer(v, pin) != 0 ? Tr.f("已固定 {0} · stable 已到 {1}", pin, v) : Tr.f("已固定 {0}", pin);
@@ -561,7 +613,7 @@ final class Updater {
             return;
         }
         if (v == null) throw new IOException(why);
-        claude.latest = v;
+        claude.latest = v; latestCh = ch;
         // 用户在设置里卸了：只报「未安装」，不当成「有更新」（那样自动更新、换渠道都会把它装回去）
         if (env.claudeOff() && !env.claudeReady()) { if (!"installing".equals(claude.state)) claude.set("missing", ""); return; }
         // 已装的版本要和所选渠道的版本「一致」，而不只是「不比它旧」：
@@ -621,7 +673,11 @@ final class Updater {
     /** 自动模式的规则：见类注释 */
     private void autoApply() {
         boolean unmetered = !ctx.getSystemService(ConnectivityManager.class).isActiveNetworkMetered();
-        if ("available".equals(claude.state) && unmetered && !claudeHeld && !claudeOlder) apply("claude", false);
+        if ("available".equals(claude.state) && unmetered && !claudeHeld && !claudeOlder && !switching.get()) {
+            // 版本只读一次，装之前再按已装的现读比一遍：几个字段可能是两次检查交错写的，别凭拼起来的状态装回旧版（10-31 八轮核验）
+            String v = claude.latest;
+            if (!v.isEmpty() && !claudeDowngrade(v)) apply("claude", false, v);
+        }
         if ("available".equals(app.state)) apply("app", false);              // 几 MB，什么网都下
         else if ("ready".equals(app.state)) maybeSilentInstallApp();
         if ("available".equals(devkit.state) && unmetered) apply("devkit", false);
@@ -644,6 +700,17 @@ final class Updater {
     JSONObject apply(String id, boolean user) { return apply(id, user, ""); }
 
     /** version：只对 Claude Code 有用 —— stable / latest / 具体版本号；空 = 当前渠道查到的最新版 */
+    /** 指定的版本比已装的旧（降级）：经套接字谁都能发，降回有漏洞的旧版要用户点头（见 Priv「upd_apply」） */
+    boolean claudeDowngrade(String version) {
+        // 已装的版本现读：首装、终端里手动装过之后，内存里记的可能还是空的或旧的（10-31 八轮核验）
+        refreshCurrent();
+        String v = version == null ? "" : version.trim();
+        // 渠道名（stable / latest）：换到别的渠道、或者认不出这个渠道现在是哪一版，都按可能降级处理
+        if (v.equals("stable") || v.equals("latest"))
+            return !claude.current.isEmpty() && (!v.equals(channel()) || !v.equals(latestCh) || claude.latest.isEmpty() || claudeDowngrade(claude.latest));
+        return v.matches("\\d+\\.\\d+\\.\\d+[\\w.+-]*") && !claude.current.isEmpty() && cmpVer(v, claude.current) < 0;
+    }
+
     JSONObject apply(String id, boolean user, String version) {
         Item it = id.equals("app") ? app : id.equals("devkit") ? devkit : id.equals("claude") ? claude : null;
         JSONObject r = new JSONObject();

@@ -11,6 +11,8 @@ import { tz } from "./config.mjs";
 const CHUNK = 1 << 20;
 
 /** 逐行回调 fn(line, i)，返回 false 就停。最后一行没有换行符也照交；行号和 split("\n") 的一致 */
+// 单行上限：内存只跟最长的一行有关，这里给最长的一行也封个顶（没有换行的超大文件别整个读进来，审查 v0513b 低-5）
+const LINE_MAX = 256 << 20;
 export function forEachLine(file, fn) {
   const fd = fs.openSync(file, "r");
   try {
@@ -25,7 +27,7 @@ export function forEachLine(file, fn) {
         if (fn(line, i++) === false) return i;
         s = k + 1;
       }
-      if (s < n) { rest.push(Buffer.from(buf.subarray(s, n))); restLen += n - s; }
+      if (s < n) { rest.push(Buffer.from(buf.subarray(s, n))); restLen += n - s; if (restLen > LINE_MAX) throw new Error(tz("文件里有一行超过 {n} MB，处理不了", { n: LINE_MAX >> 20 })); }
     }
     fn(restLen ? Buffer.concat(rest).toString("utf8") : "", i++);
     return i;
@@ -34,7 +36,7 @@ export function forEachLine(file, fn) {
 
 /** 攒着写：write(line) 自动补换行，close() 落盘。整份不进内存 */
 export function lineWriter(file) {
-  const fd = fs.openSync(file, "w");
+  const fd = fs.openSync(file, "w", 0o600);      // 会话记录只给自己读（分叉出来的以前跟着 umask 是 0644，审查 v0513b 低-10）
   let parts = [], len = 0;
   const flush = () => { if (len) { fs.writeSync(fd, Buffer.concat(parts, len)); parts = []; len = 0; } };
   return {
@@ -65,6 +67,7 @@ export function lineMapper(fn) {
       let s = 0;
       for (let k = b.indexOf(10); k >= 0; k = b.indexOf(10, s)) { out.push(Buffer.from(fn(b.toString("utf8", s, k)) + "\n", "utf8")); s = k + 1; }
       rest = Buffer.from(b.subarray(s));
+      if (rest.length > LINE_MAX) return cb(new Error(tz("文件里有一行超过 {n} MB，处理不了", { n: LINE_MAX >> 20 })));
       cb(null, out.length ? Buffer.concat(out) : undefined);
     },
     flush(cb) { cb(null, rest.length ? Buffer.from(fn(rest.toString("utf8")), "utf8") : undefined); },

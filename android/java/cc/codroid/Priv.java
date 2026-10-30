@@ -244,17 +244,27 @@ final class Priv {
      * 编译器全是子进程，一次并行构建就可能被收割。另有电池白名单、后台运行限制、待机分组。
      * 这些都要 shell 权限才改得动，所以放在 Shizuku 后面，并且只在用户点了开关之后做。
      */
+    private static String[] keepAliveOn() {
+        String pkg = ctx.getPackageName();
+        return new String[]{
+            "device_config set_sync_disabled_for_tests persistent; device_config put activity_manager max_phantom_processes 2147483647",
+            "settings put global settings_enable_monitor_phantom_procs false",
+            "dumpsys deviceidle whitelist +" + pkg,
+            "cmd appops set " + pkg + " RUN_IN_BACKGROUND allow; cmd appops set " + pkg + " RUN_ANY_IN_BACKGROUND allow",
+            "am set-standby-bucket " + pkg + " active",
+        };
+    }
     static JSONObject keepAlive(boolean on) {
         JSONObject r = new JSONObject();
         prefs().edit().putBoolean("keepalive", on).apply();
         if (!granted()) { try { r.put("ok", false).put("message", Tr.t("Shizuku 未就绪或未授权")); } catch (Exception ignored) {} return r; }
-        String pkg = ctx.getPackageName();
+        String[] K = keepAliveOn();
         String[][] steps = on ? new String[][]{
-            {Tr.t("幽灵进程上限"), "device_config set_sync_disabled_for_tests persistent; device_config put activity_manager max_phantom_processes 2147483647"},
-            {Tr.t("关闭幽灵进程监控"), "settings put global settings_enable_monitor_phantom_procs false"},
-            {Tr.t("电池白名单"), "dumpsys deviceidle whitelist +" + pkg},
-            {Tr.t("允许后台运行"), "cmd appops set " + pkg + " RUN_IN_BACKGROUND allow; cmd appops set " + pkg + " RUN_ANY_IN_BACKGROUND allow"},
-            {Tr.t("待机分组设为活跃"), "am set-standby-bucket " + pkg + " active"},
+            {Tr.t("幽灵进程上限"), K[0]},
+            {Tr.t("关闭幽灵进程监控"), K[1]},
+            {Tr.t("电池白名单"), K[2]},
+            {Tr.t("允许后台运行"), K[3]},
+            {Tr.t("待机分组设为活跃"), K[4]},
         } : new String[][]{
             {Tr.t("恢复幽灵进程上限"), "device_config delete activity_manager max_phantom_processes; device_config set_sync_disabled_for_tests none"},
             {Tr.t("恢复幽灵进程监控"), "settings delete global settings_enable_monitor_phantom_procs"},
@@ -318,7 +328,17 @@ final class Priv {
                     resp = new JSONObject().put("ok", i != null);
                     break;
                 }
-                case "keepalive": resp = keepAlive(req.optBoolean("enable", true)); break;
+                case "keepalive": {
+                    // 打开要用户点头：会改全局的幽灵进程上限、把本应用加进电池白名单（10-31 复核：以前谁发一条都直接改）
+                    boolean on = req.optBoolean("enable", true);
+                    int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                    if (on && !prefs().getBoolean("keepalive", false) && !ask(Tr.t("打开后台保活增强：") + "\n" + String.join("\n", keepAliveOn()), caller(pid), "keepalive")) {
+                        resp = new JSONObject().put("ok", false).put("message", Tr.t("没有允许，保活增强没有打开"));
+                        break;
+                    }
+                    resp = keepAlive(on);
+                    break;
+                }
                 case "to_front": resp = new JSONObject().put("ok", true).put("via", toFront(ctx, req.optString("text"))); break;
                 case "freeze_ack": ctx.getSharedPreferences("bg", Context.MODE_PRIVATE).edit().clear().apply(); resp = status(); break;
                 case "open_app_settings": {      // 自启动、悬浮窗之类的开关都在应用详情页里
@@ -337,11 +357,31 @@ final class Priv {
                 // 更新（Updater）
                 case "upd_status": resp = Updater.get(ctx).status(); break;
                 case "upd_check": Updater.get(ctx).checkAsync(true); resp = Updater.get(ctx).status(); break;
-                case "upd_apply": resp = Updater.get(ctx).apply(req.optString("item"), true, req.optString("version", "")); break;
+                case "upd_apply": {
+                    String item = req.optString("item"), ver = req.optString("version", "");
+                    int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                    // 换渠道还没完（可能在等确认降级）：这时的版本信息是临时的，先不接装 Claude Code（10-31 七轮核验）
+                    // 没装的不存在降级（卸载后重装：界面改完设置紧接着就发这条）
+                    if ("claude".equals(item) && Updater.get(ctx).switchingNow() && Updater.get(ctx).claudeInstalled()) {
+                        resp = new JSONObject().put("ok", false).put("message", Tr.t("正在切换 Claude Code 的版本设置，稍后再试"));
+                        break;
+                    }
+                    // 不带版本号 = 装当前渠道查到的那一版：按那一版判（10-31 六轮核验）
+                    String chk = ver.trim().isEmpty() ? Updater.get(ctx).latestClaude() : ver;
+                    if ("claude".equals(item) && Updater.get(ctx).claudeDowngrade(chk)
+                        && !ask(Tr.f("把 Claude Code 降级到 {0}", chk), caller(pid), "upd:" + chk, false)) {
+                        resp = new JSONObject().put("ok", false).put("message", Tr.t("没有允许，Claude Code 没有降级"));
+                        break;
+                    }
+                    // 装的就是判过的这一版：别让 apply 再去读一次可能已被换掉的 claude.latest
+                    resp = Updater.get(ctx).apply(item, true, "claude".equals(item) && ver.trim().isEmpty() ? chk : ver);
+                    break;
+                }
                 case "upd_set": {
                     // 换安装包方案（28 / 36）：只能 36 的机器切 28 会被拒，原因原样交给界面弹出来
                     String no = req.has("flavor") ? Updater.get(ctx).setFlavor(req.optString("flavor")) : null;
-                    Updater.get(ctx).set(req);
+                    int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                    Updater.get(ctx).set(req, caller(pid));
                     resp = Updater.get(ctx).status();
                     if (no != null) resp.put("ok", false).put("refused", true).put("message", no);
                     break;
@@ -369,7 +409,18 @@ final class Priv {
                 }
                 case "usb_open": Usb.open(ctx, req, sock); return;   // 自己回复（fd 随回复走）
                 // 设备工具（device-mcp.mjs 调）与它的设置页
-                case "dev": resp = DeviceTools.call(ctx, req); break;
+                case "dev": {
+                    // 设备工具也记进特权命令记录：直连套接字的调用不经 Claude 那层权限确认，至少要留痕（10-31 三轮复核）
+                    long t0 = System.currentTimeMillis();
+                    int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                    String who = caller(pid), tool = req.optString("tool");
+                    // 读剪贴板：你从别的应用复制的密码、验证码都在里面，每次都要点头
+                    if ("clipboard_read".equals(tool) && !ask(Tr.t("设备工具：读取剪贴板"), who, "dev:clipboard_read", false)) {
+                        resp = new JSONObject().put("ok", false).put("message", Tr.t("用户没有允许读剪贴板（cccodroid 不在前台时也会直接拒绝）"));
+                    } else resp = DeviceTools.call(ctx, req);
+                    audit(t0, who, new JSONObject().put("argv", new JSONArray().put("[" + Tr.t("设备工具") + "] " + tool)), resp.optBoolean("ok", true) ? 0 : 1, System.currentTimeMillis() - t0);
+                    break;
+                }
                 case "dev_status": resp = DeviceTools.status(ctx); break;
                 case "dev_set": resp = DeviceTools.set(ctx, req); break;
                 case "a11y_settings":
@@ -378,11 +429,111 @@ final class Priv {
                     break;
                 default: resp = new JSONObject().put("ok", false).put("message", Tr.t("未知操作 ") + op);
             }
+            // 改状态的应用内操作也留痕（10-31 四轮复核：以前只有 exec 进特权命令记录）
+            if (op.startsWith("upd_") && !op.equals("upd_status") || op.startsWith("shz_") || op.equals("keepalive") || op.equals("dev_set")) {
+                int pid = 0; try { pid = sock.getPeerCredentials().getPid(); } catch (IOException ignored) {}
+                JSONObject r0 = new JSONObject(req.toString());
+                r0.remove("code");    // 配对码不进记录
+                audit(System.currentTimeMillis(), caller(pid), new JSONObject().put("argv", new JSONArray().put("[" + op + "] " + r0)), resp.optBoolean("ok", true) ? 0 : 1, 0);
+            }
             out.write((resp.toString() + "\n").getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (Throwable t) {
             Log.e(TAG, "处理请求出错", t);
         }
+    }
+
+    // ── 高风险命令要用户点头（审查 v0513b 中-3）──
+    // 套接字只认同一个 uid，可工具链里跑的一切（npm 的安装脚本、克隆来的 Makefile、模型跑的命令）都是这个 uid，
+    // 环境变量谁都能伪造，分不出是 Claude、用户在终端，还是混进来的脚本；发请求的一方完全控制 argv。
+    // 所以只有 PrivRules 逐词认得清的查看类命令直接跑，其余一律弹原生对话框问。
+    // 「不再问」只对一字不差的同一条命令生效（不然用户放行一条，混进来的脚本跟着搭车）；同一时间只问一条；
+    // 应用不在前台就直接拒绝（后台弹不出来，空等 60 秒还占线程）。问的时候设备工具不许动屏幕（见 DeviceTools.call），
+    // 免得自己把「允许」点了。
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> TRUST = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Object[]> ASKS = new java.util.concurrent.ConcurrentHashMap<>();
+    // 「截屏给 Claude」是用户在界面上点的：界面经原生桥（带口令，外面的脚本拿不到）领一个一次性截屏码，
+    // 网关直接经套接字把它连同请求递过来（不经命令行和环境变量，别的进程看不到）；码只放行 sh -c "screencap -p"，
+    // 25 秒＋延时内最多两次（失败会重试一次）
+    private static volatile String shotCode;
+    private static volatile long shotUntil;
+    private static final java.util.concurrent.atomic.AtomicInteger shotLeft = new java.util.concurrent.atomic.AtomicInteger();
+
+    static String armShot(int delaySec) {
+        byte[] b = new byte[16];
+        new java.security.SecureRandom().nextBytes(b);
+        StringBuilder sb = new StringBuilder();
+        for (byte x : b) sb.append(String.format("%02x", x & 0xff));
+        shotLeft.set(2);
+        shotUntil = System.currentTimeMillis() + (Math.max(0, Math.min(30, delaySec)) + 25) * 1000L;
+        return shotCode = sb.toString();
+    }
+
+    private static boolean shotArmed(String[] argv, String code) {
+        if (!(argv.length == 3 && "-c".equals(argv[1]) && "screencap -p".equals(argv[2]) && ("/system/bin/sh".equals(argv[0]) || "sh".equals(argv[0])))) return false;
+        String want = shotCode;
+        if (want == null || code == null || !java.security.MessageDigest.isEqual(want.getBytes(), code.getBytes())) return false;
+        return System.currentTimeMillis() < shotUntil && shotLeft.getAndDecrement() > 0;
+    }
+
+    static boolean asking() { return !ASKS.isEmpty(); }
+
+    private static boolean trustable(String[] argv, String cwd, JSONObject env) {
+        if (env != null || !"/".equals(cwd)) return false;
+        // 直接起某个程序（不是 sh -c）：程序本身就是文件，内容随时能换
+        if (!(argv.length == 3 && "-c".equals(argv[1]) && ("/system/bin/sh".equals(argv[0]) || "sh".equals(argv[0])))) return false;
+        for (int i = 1; i < argv.length; i++) if (argv[i].indexOf('/') >= 0) return false;
+        return true;
+    }
+
+    private static boolean foreground() {
+        android.app.ActivityManager.RunningAppProcessInfo i = new android.app.ActivityManager.RunningAppProcessInfo();
+        android.app.ActivityManager.getMyMemoryState(i);
+        return i.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
+    }
+
+    /** 弹原生对话框等用户回答；true = 允许 */
+    private static boolean ask(String cmd, String who, String key) { return ask(cmd, who, key, true); }
+
+    /** 别的模块要用户点头时用（只给「允许这一次」） */
+    static boolean confirm(String text, String who, String key) { return ask(text, who, key, false); }
+
+    /** trustable = false：只给「允许这一次」。命令里引用了文件（或工作目录不是根）时，信任的是文本不是文件内容，
+     *  别人把文件换掉再原样发一遍就搭上车了（10-31 三轮复核） */
+    private static boolean ask(String cmd, String who, String key, boolean trustable) {
+        Long t = trustable ? TRUST.get(key) : null;
+        if (t != null && System.currentTimeMillis() < t) return true;
+        // 命令整条摆出来（对话框正文能滚动）：截头截尾的话，危险的那段正好藏在省略的中间。太长的不问，直接拒
+        if (cmd.length() > 4000) return false;
+        String show = cmd;
+        String id = Long.toHexString(System.nanoTime()) + Integer.toHexString((int) (Math.random() * 0x7fffffff));
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        Object[] slot = { done, Boolean.FALSE, Boolean.FALSE };
+        synchronized (ASKS) {     // 「同一时间只问一条」：查和登记要一起做，不然同时来的两条都会弹
+            if (!ASKS.isEmpty() || !foreground()) return false;
+            ASKS.put(id, slot);
+        }
+        try {
+            ctx.startActivity(MainActivity.internal(ctx, MainActivity.ACTION_PRIV_OK).putExtra("id", id)
+                .putExtra("cmd", show).putExtra("who", who).putExtra("trust", trustable)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            done.await(60, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) { Log.w(TAG, "问不了用户", e); }
+        finally { ASKS.remove(id); MainActivity.dropPriv(id); }
+        if (trustable && Boolean.TRUE.equals(slot[2])) {
+            if (TRUST.size() > 64) TRUST.clear();
+            TRUST.put(key, System.currentTimeMillis() + 10 * 60_000L);
+        }
+        return Boolean.TRUE.equals(slot[1]);
+    }
+
+    /** 对话框的回答：how 0=拒绝 1=允许这一次 2=允许，这条命令 10 分钟内不再问 */
+    static void answer(String id, int how) {
+        Object[] slot = id == null ? null : ASKS.get(id);
+        if (slot == null) return;
+        slot[2] = how == 2;
+        slot[1] = how > 0;
+        ((java.util.concurrent.CountDownLatch) slot[0]).countDown();
     }
 
     /** 返回负责转发 stdin 的线程（它在客户端关闭时结束）；没起进程就返回 null */
@@ -406,6 +557,14 @@ final class Priv {
             envp = new String[e.length()];
             java.util.Iterator<String> it = e.keys();
             for (int i = 0; it.hasNext(); i++) { String k = it.next(); envp[i] = k + "=" + e.getString(k); }
+        }
+        if (PrivRules.risky(argv, envp != null, req.optString("cwd", "/")) && !(envp == null && shotArmed(argv, req.optString("shot", null)))
+            && !ask((argv.length >= 3 && "-c".equals(argv[1]) ? argv[2] : String.join(" ", argv)) + (e != null ? "\n\n[env] " + e : ""), who,
+                a + "\0" + req.optString("cwd", "/") + "\0" + e, trustable(argv, req.optString("cwd", "/"), e))) {
+            audit(t0, who, req, 126, 0);
+            frame(out, 4, Tr.t("这条特权命令要你在 cccodroid 里点「允许」才会执行（只有 dumpsys、pm list、settings get、logcat 这类查看命令不用问）。这次没有允许，没有执行。cccodroid 不在前台、或者已经有一条在等确认时，会直接拒绝。").getBytes(StandardCharsets.UTF_8));
+            frameExit(out, 126);
+            return null;
         }
         String dir = req.optString("cwd", "/");
         java.lang.Process p;

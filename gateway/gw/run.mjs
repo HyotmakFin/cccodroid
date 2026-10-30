@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
-import { SETTINGS } from "./settings-store.mjs";
+import { SETTINGS, capList } from "./settings-store.mjs";
 import { PERM_MODES, PROVIDER, billAfterRun, keyOf, noteTokens, providerById } from "./providers.mjs";
 import { ALIAS_SEEN, effortLevelsOf, fetchModels, isLoginMode, normEffort } from "./models.mjs";
 import { claudeCmd, claudeEnv, currentModelInfo, ensureBridge, settingsArgs } from "./claude.mjs";
@@ -188,9 +188,10 @@ export async function startRun(item) {
   // 密钥读取器也在这里（见 settingsArgs）
   argv.push(...settingsArgs(P));
   if (effort) argv.push("--effort", effort);
-  const allowed = [...(SETTINGS.allowedTools || []), ...(Array.isArray(item.allowedTools) ? item.allowedTools : [])];
+  // 设置和这一条各自有上限，合起来再按总长截一次（10-31 复核：两边都顶满能超 ARG_MAX，这一轮 spawn 直接 E2BIG）
+  const allowed = capList([...(SETTINGS.allowedTools || []), ...(Array.isArray(item.allowedTools) ? item.allowedTools : [])], 400, 512, 8192);
   if (allowed.length) argv.push("--allowedTools", allowed.join(","));
-  const disallowed = [...(SETTINGS.disallowedTools || []), ...(Array.isArray(item.disallowedTools) ? item.disallowedTools : [])];
+  const disallowed = capList([...(SETTINGS.disallowedTools || []), ...(Array.isArray(item.disallowedTools) ? item.disallowedTools : [])], 400, 512, 8192);
   if (disallowed.length) argv.push("--disallowedTools", disallowed.join(","));
 
   const dirs = new Set();
@@ -199,7 +200,8 @@ export async function startRun(item) {
   for (const d of SETTINGS.addDirs || []) if (fs.existsSync(d)) dirs.add(d);
   for (const d of item.addDirs || []) if (typeof d === "string" && fs.existsSync(d)) dirs.add(d);
   if (!P.local && onShared(cwd)) { const b = privateAgentsBase(cwd); try { fs.mkdirSync(b, { recursive: true }); dirs.add(b); } catch {} }
-  for (const d of dirs) argv.push("--add-dir", d);
+  let dirLen = 0;
+  for (const d of dirs) { if ((dirLen += d.length) > 24576) { log(`--add-dir 太多，从 ${d} 起没加`); break; } argv.push("--add-dir", d); }
 
   const isCmd = message.trim().startsWith("/");
   log(`▶ ${isCmd ? "命令" : "提问"} ${message.trim().slice(0, 60).replace(/\s+/g, " ")}  ${run.sessionId ? `(续 ${String(run.sessionId).slice(0, 8)})` : "(新会话)"}  [model=${model || "默认"} effort=${effort || "默认"} style=${SETTINGS.outputStyle || "默认"} perm=${permMode}]`);

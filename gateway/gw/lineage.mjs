@@ -79,6 +79,13 @@ async function refresh() {
   saveCache();
 }
 
+/** 会话记录被原地改写过（删消息、撤销删除）：扔掉它的索引，下次整份重扫。
+ *  不扔的话，改写后又聊得比原来长，增量扫描会当成纯追加，章节的字节位置全错（审查 v0513b 低-27） */
+export function lineageForget(sid) {
+  loadCache();
+  if (RECS.delete(sid)) { dirty = true; gen++; }
+}
+
 /** 并发请求共用一次刷新 */
 export function lineageRefresh() {
   if (!building) building = refresh().finally(() => { building = null; });
@@ -178,7 +185,7 @@ export async function lineageGraph() {
     if (!r.sig || (db.edges[r.id] && (db.edges[r.id].extra || []).length)) continue;
     for (const x of r.sig) {
       const pid = byShort.get(x.short);
-      if (!pid || pid === r.id || linked.has(r.id + ">" + pid)) continue;
+      if (!pid || pid === r.id || linked.has(r.id + ">" + pid) || (db.edges[r.id]?.nosig || []).includes(pid)) continue;
       const at = RECS.get(pid).compacts[x.n - 1]?.uuid || null;   // 第 n 章的摘要 = 第 n 次压缩；进行中的章没有，画到来源末端
       edges.push({ child: r.id, parent: pid, at, ts: tsAt(RECS.get(pid), at), kind: "merge", source: "sig", how: "", missing: false });
       linked.add(r.id + ">" + pid);

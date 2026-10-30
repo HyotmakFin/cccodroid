@@ -1932,7 +1932,7 @@ svg.ei{width:1.05em;height:1.05em;vertical-align:-.17em;fill:none;stroke:current
 #pages #tab-ext .idx-chip.on{border-color:var(--fg);color:var(--fg);background:var(--panel);box-shadow:inset 0 0 0 .5px var(--fg)}
 #pages #tab-ext .idx-chip.on span{color:var(--fg3)}
 #pages #tab-ext #comp-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;background:none;border:0;padding:0}
-#pages #tab-ext #comp-list > .item.ccard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+#pages #tab-ext #comp-list > .item.ccard{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
 #pages #tab-ext #comp-list > .item.ccard:hover{border-color:var(--accent-dim);box-shadow:0 2px 10px -4px var(--shadow)}
 #pages .ccard.dim{opacity:.55}
 #pages .cc-top{display:flex;gap:10px;align-items:flex-start}
@@ -1941,8 +1941,10 @@ svg.ei{width:1.05em;height:1.05em;vertical-align:-.17em;fill:none;stroke:current
 #pages .cc-top .grow{flex:1;min-width:0}
 #pages .vmark{color:var(--ok)}
 #pages .vmark svg.ei{width:17px;height:17px}
-#pages .cc-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px dashed var(--line);margin-top:auto}
-#pages .cc-btns{display:flex;gap:6px}
+/* 状态字长、按钮两个（重新安装 + 卸载）时卡片放不下：按钮整组折到下一行靠右，状态字也许折行，不许冲出卡片 */
+#pages .cc-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px dashed var(--line);margin-top:auto;min-width:0}
+#pages .cc-foot .sdot{white-space:normal;min-width:0}
+#pages .cc-btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-inline-start:auto;max-width:100%}
 #pages .ccard .it-more{margin:0}
 #pages .ccard .tiny{margin:0}
 

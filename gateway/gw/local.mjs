@@ -371,7 +371,7 @@ function modelFromUrl(raw) {
   if (u.protocol !== "https:") throw new Error(tz("只支持 https 链接"));
   // HuggingFace 的 blob 页面换成真正的下载地址
   if (/(^|\.)(huggingface\.co|hf-mirror\.com)$/.test(u.hostname)) u.pathname = u.pathname.replace("/blob/", "/resolve/");
-  const name = decodeURIComponent(u.pathname.split("/").pop() || "");
+  let name; try { name = decodeURIComponent(u.pathname.split("/").pop() || ""); } catch { throw new Error(tz("链接不对")); }
   if (!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,150}\.gguf$/i.test(name)) throw new Error(tz("链接要指向一个 .gguf 文件"));
   if (/-\d{5}-of-\d{5}\.gguf$/i.test(name)) throw new Error(tz("分卷模型（…-00001-of-0000N.gguf）不支持，请找单文件版本"));
   if (/^mmproj/i.test(name)) throw new Error(tz("mmproj 是多模态投影文件，不能单独对话"));

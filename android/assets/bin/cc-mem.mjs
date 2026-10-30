@@ -123,7 +123,7 @@ function autoProtected() {
     "echo @HOME; cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN | tail -1",
     "echo @IME; settings get secure default_input_method",
     "echo @A11Y; settings get secure enabled_accessibility_services",
-    "echo @WEBVIEW; dumpsys webviewupdate | grep -oE 'Current WebView package \\(name, version\\): \\([^,]+' | sed 's/.*(//'",
+    "echo @WEBVIEW; dumpsys webviewupdate | grep -oE 'Current WebView package \\(name, version\\): \\([^,]+'",
     "echo @VPN; dumpsys connectivity | grep -E 'Transports: VPN' | grep -oE 'OwnerUid: [0-9]+' | sort -u",
   ].join("; ")).out;
   let sec = "";
@@ -135,7 +135,7 @@ function autoProtected() {
     if (sec === "HOME") add(t.split("/")[0], "桌面");
     else if (sec === "IME") add(t.split("/")[0], "输入法");
     else if (sec === "A11Y") for (const s of t.split(":")) add(s.split("/")[0], "无障碍服务");
-    else if (sec === "WEBVIEW") add(t, "WebView 提供者");
+    else if (sec === "WEBVIEW") add(t.replace(/.*\(/, ""), "WebView 提供者");
     else if (sec === "VPN") { const m = t.match(/(\d+)/); if (m) vpnUids.push(m[1]); }
   }
   if (vpnUids.length) {
@@ -189,7 +189,10 @@ function plan() {
 /** 每个进程的 PSS（共享库按使用者均摊，加起来才不重复）。
  *  shell 身份读不到别人的 smaps_rollup，只能借 dumpsys meminfo 的汇总（约 2 秒） */
 function pssByPid() {
-  const r = priv("dumpsys meminfo | sed -n '/^Total PSS by process/,/^$/p'", 60000).out;
+  // 只要「Total PSS by process」那一段（特权命令白名单不收 sed，在这边截）
+  const all = priv("dumpsys meminfo", 60000).out;
+  const at = all.indexOf("Total PSS by process");
+  const r = at < 0 ? "" : all.slice(at).split(/\n\s*\n/)[0];
   const m = {};
   for (const x of r.matchAll(/([\d,]+)K: \S+ \(pid (\d+)/g)) m[x[2]] = Number(x[1].replace(/,/g, "")) * 1024;
   return m;

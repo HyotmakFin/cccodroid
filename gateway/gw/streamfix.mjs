@@ -14,14 +14,25 @@ import https from "node:https";
 import crypto from "node:crypto";
 import { log } from "./config.mjs";
 
-// key：每次启动随机，编进给 claude 的地址里。端口虽随机，但同机程序扫得到；没有它就当开放代理用（审查 H6）。
+// key：每次启动随机。地址里只放「通道号」= HMAC(key, 上游)，上游本身记在网关这张表里，不从地址里解。
+// 通道号会跟着 ANTHROPIC_BASE_URL 进 claude 的环境（模型跑一句 env 就看得到，还会进记录和导出包），
+// 所以它只能通到用户自己配的那一家，不能当开放代理用（审查 H6、v0513b 中-1）。也不替人加钥匙：认证头全由来请求的一方带。
 // 不拦回环目标：本地跑的 LiteLLM / llama-server 就是合法的自定义接口
 export const STREAMFIX = { port: 0, key: crypto.randomBytes(16).toString("hex") };
+const ROUTES = new Map();                              // 通道号 → 上游 URL（只会是配置过的自定义接口，量很小）
+const ROUTES_MAX = 256;                                // 满了挤掉最久没用过的（取用时挪到队尾），在跑的通道每个请求都会续上
 
-/** claude 的 ANTHROPIC_BASE_URL：上游地址编进路径，claude 往后补 /v1/messages */
+/** claude 的 ANTHROPIC_BASE_URL：换成本地通道，claude 往后补 /v1/messages */
 export function fixedBaseUrl(baseUrl) {
   if (!STREAMFIX.port || !/^https?:\/\//.test(baseUrl || "")) return baseUrl;
-  return `http://127.0.0.1:${STREAMFIX.port}/u/${STREAMFIX.key}/${Buffer.from(baseUrl).toString("base64url")}`;
+  let base;
+  try { base = new URL(baseUrl); } catch { return baseUrl; }
+  if (base.username || base.password) return baseUrl;  // 地址里带账号密码的不经我们（免得进环境、进记录）
+  const id = crypto.createHmac("sha256", STREAMFIX.key).update(base.href).digest("hex").slice(0, 32);
+  if (ROUTES.has(id)) ROUTES.delete(id);
+  else if (ROUTES.size >= ROUTES_MAX) ROUTES.delete(ROUTES.keys().next().value);
+  ROUTES.set(id, base);
+  return `http://127.0.0.1:${STREAMFIX.port}/u/${id}`;
 }
 
 /** SSE 修补状态机：feed 进上游原文，吐出要发给 claude 的文本；finish 在上游结束时调用，返回补的尾巴或 null（= 该断就断） */
@@ -90,12 +101,14 @@ export function sseRepairer() {
 }
 
 function handle(req, res) {
-  const m = /^\/u\/([0-9a-f]{32})\/([A-Za-z0-9_-]+)(\/.*)?$/.exec(req.url || "");
-  if (!m || !crypto.timingSafeEqual(Buffer.from(m[1]), Buffer.from(STREAMFIX.key))) { res.writeHead(404); res.end(); return; }
-  let base;
-  try { base = new URL(Buffer.from(m[2], "base64url").toString()); } catch {}
-  if (!base || !/^https?:$/.test(base.protocol)) { res.writeHead(404); res.end(); return; }
-  const target = new URL(base.href.replace(/\/+$/, "") + (m[3] || "/"));
+  const m = /^\/u\/([0-9a-f]{32})(\/.*)?$/.exec(req.url || "");
+  const base = m && ROUTES.get(m[1]);
+  if (base) { ROUTES.delete(m[1]); ROUTES.set(m[1], base); }
+  if (!base) { res.writeHead(404); res.end(); return; }
+  let target;
+  try { target = new URL(base.href.replace(/\/+$/, "") + (m[2] || "/")); } catch {}
+  // 拼出来的地址必须还在那一家（防 // 开头、反斜杠之类把主机换掉）
+  if (!target || target.origin !== base.origin || target.username || target.password) { res.writeHead(404); res.end(); return; }
   const isMsg = req.method === "POST" && /\/v1\/messages(\?|$)/.test(target.pathname + target.search);
   const headers = { ...req.headers, host: target.host };
   delete headers.connection; delete headers.cookie;   // 只有 claude 会来，用不着 Cookie；别把浏览器的带出去

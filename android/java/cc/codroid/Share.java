@@ -75,20 +75,41 @@ public final class Share extends ContentProvider {
         } catch (IOException e) { throw new FileNotFoundException(); }
     }
 
-    /** 不在允许目录里的文件（工作区、/sdcard 上的）：拷一份到 exports/shared 再分享，别的应用拿到的是这一份的只读授权 */
     /** 不往外分享的：本应用的令牌与厂商密钥配置（审查 10-29 第六份 低7），Claude 登录凭据、SSH/GPG 目录、私钥与证书库（v0.5.7 独立审查 L7） */
     static boolean secret(File f) {
         String nm = f.getName(), p = f.getPath();
         return nm.equals(".gateway-token") || nm.matches("ccapp-(providers|config|seed).*\\.json") || nm.equals("ccapp-key") || nm.equals("llama-api-key")
             || nm.equals(".credentials.json") || nm.matches("id_(rsa|dsa|ecdsa|ed25519)(_sk)?") || nm.matches("(?i).*\\.(pem|key|p12|pfx|jks|keystore)")
             || nm.equals(".netrc") || nm.equals(".git-credentials")
-            || p.matches(".*/\\.(ssh|gnupg|aws)/.*");
+            // Claude 的登录与设置（.claude.json 里有 OAuth 刷新令牌，settings.json 常放 ANTHROPIC_AUTH_TOKEN）、npm / pip 的令牌（审查 v0513b 低-19）
+            || nm.equals(".claude.json") || nm.matches("\\.claude\\.json\\.backup.*") || p.matches(".*/\\.claude/settings(\\.local)?\\.json")
+            || nm.equals(".npmrc") || nm.equals(".pypirc") || nm.equals("hosts.yml") && p.contains("/gh/")
+            // 其他常见的包管理 / 数据库 / 云凭据（10-31 复核）
+            || nm.equals(".yarnrc.yml") || nm.equals("pip.conf") || nm.equals(".pgpass") || nm.equals(".my.cnf") || nm.equals(".s3cfg") || nm.equals(".boto")
+            || nm.equals(".terraformrc") || nm.equals("credentials.tfrc.json") || p.matches(".*/\\.m2/settings(-security)?\\.xml") || p.matches(".*/\\.gradle/gradle\\.properties")
+            || p.matches(".*/\\.cargo/credentials(\\.toml)?")
+            || p.matches(".*/\\.(ssh|gnupg|aws|docker|kube|azure)/.*") || p.matches(".*/\\.config/gcloud/.*");
     }
 
+    /** 能不能交出本应用（分享、「保存到」）：凭据按真实路径拦（软链指过去的也算）；
+     *  私有目录里只交工作区和导出目录的，别的（配置、登录态、日志、会话记录）和网关 /api/file 一样不往外给（审查 v0513b 低-19） */
+    static void guard(Context c, File f) throws IOException {
+        File cf = f.getCanonicalFile();
+        if (secret(cf)) throw new IOException(Tr.t("这是凭据或私钥文件，不分享"));
+        File home = new Env(c).home.getCanonicalFile();
+        if (cf.getPath().startsWith(home.getPath() + "/")) {
+            String rel = cf.getPath().substring(home.getPath().length() + 1);
+            if (!rel.startsWith("workspace/") && !rel.startsWith("exports/")) throw new IOException(Tr.t("应用私有目录里的这个文件不分享"));
+            // 硬链接不改真实路径：工作区里一个硬链接就能指到凭据文件上（10-31 复核）。私有目录里正常的文件只有一个名字
+            try { if (android.system.Os.stat(cf.getPath()).st_nlink > 1) throw new IOException(Tr.t("这个文件有多个硬链接，不分享")); }
+            catch (android.system.ErrnoException ignored) {}
+        }
+    }
+
+    /** 不在允许目录里的文件（工作区、/sdcard 上的）：拷一份到 exports/shared 再分享，别的应用拿到的是这一份的只读授权 */
     static File shareable(Context c, File f) throws Exception {
         if (!f.isFile()) throw new FileNotFoundException(Tr.t("文件不存在：") + f);
-        // 凭据不往外给：按真实路径判（软链指过去的也拦），而且放在最前面——以前能直接给 URI 的文件先返回了，查不到这里
-        if (secret(f.getCanonicalFile())) throw new IOException(Tr.t("这是凭据或私钥文件，不分享"));
+        guard(c, f);
         if (uriFor(c, f) != null) return f;
         if (f.length() > 512L << 20) throw new IOException(Tr.t("文件超过 512 MB，不分享"));
         File dir = new File(new Env(c).home, "exports/shared");

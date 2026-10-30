@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings-store.mjs";
-import { PROVIDER, keyOf, modelsUrlOk, providerBrief, providerById } from "./providers.mjs";
+import { PROVIDER, fetchKeyed, keyOf, modelsUrlOk, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, fetchJsonCapped, sendJson } from "./http.mjs";
 import { localModels } from "./local.mjs";
 import { effectiveModel } from "./sessmodel.mjs";
@@ -204,7 +204,8 @@ async function fetchModelsOf(p, force) {
   if (isLoginMode(p)) return keep((p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS);
 
   const key = keyOf(p);
-  if (p.modelsUrl && ((key && modelsUrlOk(p)) || p.modelsAuth === "none")) {
+  // 不带密钥（modelsAuth:"none"）也一样要过 modelsUrlOk：配置能分享导入，不能让它拿网关当跳板，每轮去敲内网地址（v0513b 中-2）
+  if (p.modelsUrl && (key || p.modelsAuth === "none") && modelsUrlOk(p)) {
     try {
       const headers = {};
       if (key) {
@@ -215,7 +216,7 @@ async function fetchModelsOf(p, force) {
           headers.Authorization = `Bearer ${key}`;
         }
       }
-      const r = await fetch(p.modelsUrl, { headers, signal: AbortSignal.timeout(15000) });
+      const r = await fetchKeyed(p.modelsUrl, { headers, signal: AbortSignal.timeout(15000) });
       if (r.ok) {
         const list = withCatalog(mergeKnown(normalizeModels(await fetchJsonCapped(r)), p.fallbackModels), p);
         if (list.length) {

@@ -37,6 +37,7 @@ export function toolsHint() {
       "以及 curl、zip/unzip、xz、zstd 等常用命令。cc/c++ 即 clang。",
       "/tmp 不可用，临时文件写 $TMPDIR；/sdcard 不支持符号链接、不可执行。",
       "需要系统权限（pm/am/settings/dumpsys/screencap/logcat 等）时用 priv '<命令>'，经 Shizuku 以 shell 身份执行；priv --status 看是否可用。",
+      "只有查看类（dumpsys、pm list/path、settings get、getprop、logcat、am start/force-stop 等，不带变量、通配、子 shell）直接执行；其余（装卸应用、改设置、截屏、input 点按…）会弹窗等用户点允许，cccodroid 不在前台时直接拒绝（退出码 126）——被拒就告诉用户，别换写法重试。",
       "工具链出问题先跑 cccodroid-selftest（逐项检查编译器、Python、Node、Java、Git 等是否可用）。",
     ].join(" ");
   }

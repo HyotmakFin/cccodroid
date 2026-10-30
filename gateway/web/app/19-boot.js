@@ -86,7 +86,9 @@
     if (delay) toast(t("{n} 秒后截屏，现在可以切到要截的应用", { n: delay }));
     else await new Promise((r) => setTimeout(r, 450));
     try {
-      const j = await api("/api/screenshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delay }) });
+      // 截屏要以 shell 身份跑：先经原生桥领一次性截屏码（priv 对白名单外的命令会弹确认，后台时直接拒绝）
+      const shot = window.CCApp && CCApp.privShot ? String(CCApp.privShot(delay || 0) || "") : "";
+      const j = await api("/api/screenshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delay, shot }) });
       state.attachments.push(j);
       renderAttachments();
       toast(t("已附加截屏"));

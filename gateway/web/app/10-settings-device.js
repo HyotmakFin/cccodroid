@@ -83,7 +83,7 @@
       se.textContent = t("这次开机系统没通知 cccodroid（被系统的「自启动」管理拦了），所以开机没能自动激活；打开 cccodroid 时会补上。") +
         t("想开机就激活：在应用详情里允许 cccodroid 自启动 / 后台启动，下次开机生效。");
       $("priv-actions").insertAdjacentHTML("beforeend", `<button class="btn sm ghost" data-act="appsettings">${t("去允许自启动")}</button>` +
-        (st.bootAt ? `<button class="btn sm ghost" data-act="bootack" data-boot="${st.bootAt}">${t("已允许，下次开机再看")}</button>` : ""));
+        (st.bootAt ? `<button class="btn sm ghost" data-act="bootack" data-boot="${esc(st.bootAt)}">${t("已允许，下次开机再看")}</button>` : ""));
     }
     if (st.dev) {                                     // 开发端：Shizuku 由它自己的应用管理，这里只报实测状态
       $("priv-actions").innerHTML = "";
@@ -120,7 +120,7 @@
         r.items.map((x) => {
           const d = new Date(x.t);
           const when = `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
-          return `<div class="audit-row${x.rc ? " bad" : ""}"><span class="audit-meta">${when} · ${esc(privBy(x.by))} · rc=${x.rc}${x.ms >= 1000 ? " · " + (x.ms / 1000).toFixed(1) + "s" : ""}</span><code>${esc(x.cmd)}</code></div>`;
+          return `<div class="audit-row${x.rc ? " bad" : ""}"><span class="audit-meta">${when} · ${esc(privBy(x.by))} · rc=${+x.rc || 0}${x.ms >= 1000 ? " · " + (x.ms / 1000).toFixed(1) + "s" : ""}</span><code>${esc(x.cmd)}</code></div>`;
         }).join("");
     } catch (e) { box.textContent = e.message; }
   }
@@ -217,7 +217,7 @@
         ? `<button class="btn sm ghost" data-item="devkit" data-act="local" title="${esc(t("选一个已经下好的工具包文件来安装"))}">${t("本地文件…")}</button>` : "";
       // 卸载：工具包回到首装（重选来源和模块）、Claude Code 重新下载；外壳做，老外壳没有这个接口就不显示
       const unBtn = (it.id === "devkit" || it.id === "claude") && it.current && !busy && window.CCApp && CCApp.uninstall
-        ? `<button class="btn sm ghost danger" data-item="${it.id}" data-act="uninstall">${t("卸载")}</button>` : "";
+        ? `<button class="btn sm ghost danger" data-item="${esc(it.id)}" data-act="uninstall">${t("卸载")}</button>` : "";
       const verBtn = it.id === "claude" && it.current && !busy
         ? `<button class="btn sm ghost" data-item="claude" data-act="versions">${t("版本…")}</button>` : "";
       return `<div class="row-actions" style="justify-content:space-between">
@@ -382,10 +382,11 @@
   const devBack = () => loadDev().then((ok) => { if (!ok && lastDev) devRender(lastDev); });
   const devSet = (body) => post("/api/app/dev_set", body)
     .then((st) => { if (!st || st.ok === false || !Array.isArray(st.tools)) { toast((st && st.message) || t("保存失败"), true); return devBack(); } lastDev = st; devRender(st);
-      // 第一次开读屏要在原生对话框里点头（DeviceTools.set）：提示一下，点完把状态拉回来
-      if (st.message && body.a11y && st.a11y?.mode === "off") {
+      // 打开设备工具、切读屏模式都要在原生对话框里点头（DeviceTools.set）：提示一下，点完把状态拉回来
+      if (st.message && (body.a11y || body.on === true)) {
         toast(st.message);
-        const iv = setInterval(() => loadDev().then(() => { if (lastDev?.a11y?.mode !== "off") clearInterval(iv); }), 1500);
+        const was = JSON.stringify([st.on, st.a11y?.mode]);
+        const iv = setInterval(() => loadDev().then(() => { if (JSON.stringify([lastDev?.on, lastDev?.a11y?.mode]) !== was) clearInterval(iv); }), 1500);
         setTimeout(() => clearInterval(iv), 60000);
       }
     })

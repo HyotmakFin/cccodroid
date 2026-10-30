@@ -7,6 +7,7 @@ import { ensureShell, killTree } from "./claude.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { safeFilePath } from "./files.mjs";
 import { termEnv } from "./terminal.mjs";
+const OFFICE_ENV_DENY = /^(ANTHROPIC_|OPENAI_|GH_|GITHUB_|GITLAB_|GITEE_|AWS_|AZURE_|GOOGLE_|GCP_|HF_|HUGGING|NPM_|DEEPSEEK_|MOONSHOT_|DASHSCOPE_|ZHIPU|ARK_|XAI_|OPENROUTER_|CLAUDE_CODE_OAUTH)|_(KEY|KEYS|TOKEN|TOKENS|SECRET|SECRETS|PASSWORD|PASSWD|PWD|PASS|PASSPHRASE|AUTH|CREDENTIAL|CREDENTIALS|COOKIE|SESSION)(_FILE)?$|^(PASSWORD|PASSWD|TOKEN|SECRET|API_KEY|APIKEY)$/i;
 
 // ── Office 文档：docx / xlsx 前端自己渲染；ppt / pptx / doc / odt… 交给 LibreOffice 转成 PDF 再看 ──
 // LibreOffice 不在工具包里（装好约 830 MB），第一次要看时由用户点一下用 pkg 装。
@@ -68,7 +69,8 @@ function officeConvert(file, key, out) {
     // 不让它顺手碰到真 home 里的令牌和配置；指向密钥、令牌的环境变量一个不给。字体缓存放 office 自己的目录，免得每次重建
     const env = { ...termEnv(), FONTCONFIG_FILE: officeFonts(), SAL_USE_VCLPLUGIN: "svp", HOME: work, TMPDIR: work, XDG_CACHE_HOME: path.join(OFFICE_DIR, "cache"), XDG_CONFIG_HOME: path.join(work, ".config") };
     // CCAPP_LD / CCAPP_SELF_EXE / CCAPP_GLIBC_* 是 exec 垫片要的（36 版靠它起程序），别整个前缀删
-    for (const k of Object.keys(env)) if (/^(ANTHROPIC_|OPENAI_|GH_|GITHUB_)|_(KEY|TOKEN|SECRET)(_FILE)?$/.test(k)) delete env[k];
+    // 名字像凭据的都删：前缀按常见厂商 / 平台，后缀按 KEY、TOKEN、密码一类（以前漏了 *_PASSWORD、GITLAB_* 等，审查 v0513b 低-15）
+    for (const k of Object.keys(env)) if (OFFICE_ENV_DENY.test(k)) delete env[k];
     const args = ["-env:UserInstallation=file://" + path.join(OFFICE_DIR, "profile"), "--headless", "--norestore", "--nologo",
       "--convert-to", "pdf", "--outdir", work, src];
     const nice = path.join(PREFIX, "bin", "nice");

@@ -457,7 +457,7 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   window.__ccSaved = guardHook("__ccSaved", (ok, msg) => {
     if (ok) return toast(t("已保存：{name}", { name: msg }));
     if (msg === "cancel") return;
-    toast(t("保存失败：{msg}", { msg: msg === "missing" ? t("文件不存在") : msg === "nopicker" ? t("系统里没有可用的文件面板") : msg }), true);
+    toast(t("保存失败：{msg}", { msg: msg === "missing" ? t("文件不存在") : msg === "nopicker" ? t("系统里没有可用的文件面板") : msg === "forbidden" ? t("这个文件不能导出") : msg }), true);
   });
   // 页面里所有指向 /api/file 的下载链接（文件浏览器的 ⤓、查看器的「下载」）：WebView 自己不会处理下载
   document.addEventListener("click", (e) => {
@@ -630,14 +630,16 @@ if (/[?&](t|k)=/.test(location.search)) history.replaceState(null, "", location.
   const WROTE = new Map();
   function noteWrote(name, input) {
     const p = input && (input.file_path || input.notebook_path);
-    if (!/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(name) || !/^\//.test(p || "")) return;
+    // 路径是模型给的：带引号、尖括号这类的不登记（正常文件名不会有，登记了还要进 data-path 属性）
+    if (!/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(name) || typeof p !== "string" || !/^\//.test(p) || /["'<>&`\u0000-\u001f]/.test(p)) return;
     const parts = p.split("/").filter(Boolean);
     for (let i = parts.length - 1; i >= Math.max(1, parts.length - 4); i--) {
       const k = parts.slice(i).join("/");
       WROTE.set(k, WROTE.has(k) && WROTE.get(k) !== p ? null : p);
     }
   }
-  const wroteOf = (s) => (WROTE.size && !mdImg && WROTE.get(String(s).replace(/^\.\//, ""))) || null;
+  // 取出来就是转义过的：两个调用处都直接拼进 data-path 属性
+  const wroteOf = (s) => { const w = WROTE.size && !mdImg && WROTE.get(String(s).replace(/^\.\//, "")); return w ? esc(w) : null; };
   const WROTE_RE = /(^|[\s(（:：,，、;*“])((?:\.\/)?[\w.\-\u4e00-\u9fff]+(?:\/[\w.\-\u4e00-\u9fff]+)*\.[A-Za-z0-9]{1,8})(?=$|[\s)）:：,，、;*”。！？!?&]|\.(?:\s|$))/g;
   const pathLink = (p, line, label) =>
     `<a class="fpath" data-path="${p}" href="#" title="${t("在查看器中打开")}">${label || p + (line || "")}</a>`;

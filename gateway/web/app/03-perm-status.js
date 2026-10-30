@@ -257,11 +257,11 @@
       const el = g.setAt ? fmtDur(Date.now() - g.setAt) : "";
       html += `<div class="rs-goal"><div class="rs-row"><span class="rs-ico">${uiI("target")}</span>
         <span class="rs-txt">${t("目标")} · ${esc(g.condition)}</span>
-        <span class="rs-meta">${g.checks ? t("已检查 {n} 次", { n: g.checks }) : ""}${g.checks && el ? " · " : ""}${el ? `<span class="rs-el" aria-hidden="true">${t("已用 {d}", { d: el })}</span>` : ""}</span>
+        <span class="rs-meta">${g.checks ? t("已检查 {n} 次", { n: +g.checks || 0 }) : ""}${g.checks && el ? " · " : ""}${el ? `<span class="rs-el" aria-hidden="true">${t("已用 {d}", { d: el })}</span>` : ""}</span>
         <button class="rs-goal-stop">${t("放弃")}</button></div>
         ${g.reason ? `<div class="rs-sub">${t("还差：")}${esc(g.reason)}</div>` : ""}</div>`;
     } else if (g && g.done) {
-      const bits = [g.iterations != null ? t("{n} 轮", { n: g.iterations }) : "", g.durationMs != null ? fmtDur(g.durationMs) : "", g.tokens != null ? g.tokens.toLocaleString() + " tokens" : ""].filter(Boolean).join(" · ");
+      const bits = [g.iterations != null ? t("{n} 轮", { n: +g.iterations || 0 }) : "", g.durationMs != null ? fmtDur(+g.durationMs || 0) : "", g.tokens != null ? (+g.tokens || 0).toLocaleString() + " tokens" : ""].filter(Boolean).join(" · ");
       html += `<div class="rs-goal ${g.met ? "ok" : "bad"}"><div class="rs-row"><span class="rs-ico">${uiI(g.met ? "check" : "x")}</span>
         <span class="rs-txt">${g.met ? t("目标达成") : t("目标无法达成")} · ${esc(g.condition)}</span>
         <span class="rs-meta">${g.met ? bits : ""}</span><button class="rs-x" aria-label="${t("关闭")}">${uiI("x")}</button></div>
@@ -540,7 +540,7 @@
       const list = files.slice(0, 8).map((f) => `<li title="${esc(f)}"><span class="mono">${esc(f.split("/").pop())}</span> <span class="rw-dir">${esc(f.replace(/\/[^/]*$/, ""))}</span></li>`).join("") +
         (files.length > 8 ? `<li>${esc(t("还有 {n} 个", { n: files.length - 8 }))}</li>` : "");
       const what = files.length
-        ? `<p>${esc(t("会撤销 Claude 在这之后对 {n} 个文件的修改", { n: files.length }))} <span class="rw-stat">+${d.insertions || 0} −${d.deletions || 0}</span></p><ul class="rw-files">${list}</ul>`
+        ? `<p>${esc(t("会撤销 Claude 在这之后对 {n} 个文件的修改", { n: files.length }))} <span class="rw-stat">+${+d.insertions || 0} −${+d.deletions || 0}</span></p><ul class="rw-files">${list}</ul>`
         : `<p>${esc(d.canRewind ? t("这之后 Claude 没有用编辑工具改过文件。") : t("这之后的文件改动没有留底（这个版本之前的消息不支持），只能回退对话。"))}</p>`;
       ov.innerHTML = `<div class="rw-dlg" role="dialog" aria-modal="true" aria-labelledby="rw-title">
         <h3 id="rw-title">${esc(t("回退到这条消息之前"))}</h3>${what}

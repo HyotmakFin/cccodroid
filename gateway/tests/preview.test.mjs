@@ -31,3 +31,33 @@ test("预览凭证：页面资源照常，点路径和私钥不交", async () =>
   assert.equal(await code(".well-known/a.json"), 200);
   for (const rel of [".env", ".git/config", "certs/server.key", "id_ed25519", "assets/../.env"]) assert.equal(await code(rel), 403, rel);
 });
+
+test("默认断网：带 CSP 和回报地址，拦下的外站记下来；点「联网」后不再带 CSP（审查 v0513b 中-5）", async () => {
+  const api = (b) => fetch(`http://127.0.0.1:${gw.address().port}/api/preview`, { method: "POST", body: JSON.stringify(b) }).then((r) => r.json());
+  const r = await api({ path: path.join(site, "index.html") });
+  assert.equal(r.net, false);
+  const cap = r.url.match(/\/([0-9a-f]{24})\//)[1];
+  const csp = (await fetch(r.url)).headers.get("content-security-policy") || "";
+  assert.match(csp, /connect-src 'self'/);
+  assert.match(csp, /form-action 'self'/);
+  assert.match(csp, new RegExp(`report-uri /__cc/csp/${cap}$`));
+  assert.ok(!/default-src[^;]*\*/.test(csp), "default-src 不能放开");
+  const origin = new URL(r.url).origin;
+  const rep = await fetch(`${origin}/__cc/csp/${cap}`, { method: "POST", headers: { "content-type": "application/csp-report" }, body: JSON.stringify({ "csp-report": { "blocked-uri": "https://evil.example/x?d=1" } }) });
+  assert.equal(rep.status, 204);
+  // 别人的凭证、乱写的报告不出错也不记
+  assert.equal((await fetch(`${origin}/__cc/csp/${"0".repeat(24)}`, { method: "POST", body: "{}" })).status, 204);
+  assert.equal((await fetch(`${origin}/__cc/csp/${cap}`, { method: "POST", body: "not json" })).status, 204);
+  const st = await (await fetch(`http://127.0.0.1:${gw.address().port}/api/preview/state?cap=${cap}`)).json();
+  assert.deepEqual(st, { net: false, blocked: ["evil.example"] });
+  // 打开联网：同一凭证、不带 CSP、拦截记录清空
+  const r2 = await api({ path: path.join(site, "index.html"), net: true });
+  assert.equal(r2.url, r.url);
+  assert.equal(r2.net, true);
+  assert.equal((await fetch(r.url)).headers.get("content-security-policy"), null);
+  assert.deepEqual(await (await fetch(`http://127.0.0.1:${gw.address().port}/api/preview/state?cap=${cap}`)).json(), { net: true, blocked: [] });
+  // 不传 net 的刷新沿用上次的选择
+  assert.equal((await api({ path: path.join(site, "index.html") })).net, true);
+  await api({ path: path.join(site, "index.html"), net: false });
+  assert.match((await fetch(r.url)).headers.get("content-security-policy") || "", /connect-src 'self'/);
+});

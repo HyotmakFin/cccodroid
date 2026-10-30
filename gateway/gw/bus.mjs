@@ -13,6 +13,8 @@ import { flushPend, snapshot } from "./queue.mjs";
 //   - 回来看不到正在跑的那一轮，只能等它（已经被杀的）结束；
 //   - 排队在前端内存里，一刷新就丢。
 export const BOOT = Date.now().toString(36);
+const REPLAY_MAX = 64 << 20;      // 补发期间排队的上限
+const CLIENTS_MAX = 32;
 const BUS = { seq: 0, ring: [], bytes: 0, clients: new Set() };
 const RING_MAX = 4000;
 // 条数之外再按字节封顶：一条 Write / Edit 的入参可能几 MB，4000 条全是这种就是几个 GB（审查 10-29 L1）。
@@ -39,6 +41,11 @@ export function publish(ev) {
 }
 function busWrite(res, line) {
   try {
+    if (res.__q) {                    // 还在补发：先排队；排太多说明对端根本不收，断掉让它重连
+      res.__q.push(line); res.__qb = (res.__qb || 0) + line.length;
+      if (res.__qb > REPLAY_MAX) { BUS.clients.delete(res); res.destroy(); }
+      return;
+    }
     // 订阅者读得太慢（WebView 在后台被冻住）：别让它把网关内存撑爆，断掉让它重连续传
     if (res.writableLength > 8 * 1024 * 1024) { BUS.clients.delete(res); res.destroy(); return; }
     res.write(line);
@@ -64,17 +71,29 @@ export async function routeBus(req, res, u, p) {
     for (const r of RUNS.values()) flushPend(r);
     const first = BUS.ring[0];
     const resume = since >= 0 && since <= BUS.seq && (since === BUS.seq || (first && first.seq <= since + 1));
-    let out = "retry: 1500\n\n";
-    out += `data: ${JSON.stringify({ type: "hello", boot: BOOT, resume, uiTag: uiTag(), ...snapshot() })}\n\n`;
+    // 要补发的先按条取成快照（这一刻的样子；之后的增量走下面的队列），再按对端的接收速度逐条写：
+    // 以前拼成一整个字符串一次写出，整轮重放几十 MB 时就是双份内存，对端不收还全堆在缓冲里（审查 v0513b 低-4）
+    const lines = ["retry: 1500\n\n" + `data: ${JSON.stringify({ type: "hello", boot: BOOT, resume, uiTag: uiTag(), ...snapshot() })}\n\n`];
     if (resume) {
-      for (const r of BUS.ring) if (r.seq > since) out += r.line;
+      for (const r of BUS.ring) if (r.seq > since) lines.push(r.line);
     } else {
       // 续不上（网关重启过 / 断得太久）：把正在跑的每一轮从头重放（前端按会话自己认领）
-      for (const r of runList().sort((a, b) => a.startedAt - b.startedAt)) for (const ev of r.log) out += `data: ${JSON.stringify(ev)}\n\n`;
+      for (const r of runList().sort((a, b) => a.startedAt - b.startedAt)) for (const ev of r.log) lines.push(`data: ${JSON.stringify(ev)}\n\n`);
     }
-    out += `id: ${BOOT}.${BUS.seq}\ndata: {"type":"sync"}\n\n`;
-    res.write(out);
+    lines.push(`id: ${BOOT}.${BUS.seq}\ndata: {"type":"sync"}\n\n`);
+    // 同时连着的事件流有上限：一直开新连接不关的，最早那条让位
+    if (BUS.clients.size >= CLIENTS_MAX) { const old = BUS.clients.values().next().value; BUS.clients.delete(old); try { old.destroy(); } catch {} }
+    res.__q = [];                     // 补发期间新来的事件先排在这里，补完接着发，顺序不乱
     BUS.clients.add(res);
+    (async () => {
+      for (let i = 0; i < lines.length; i++) {
+        if (res.destroyed) return;
+        const ok = res.write(lines[i]); lines[i] = null;
+        if (!ok) await new Promise((r) => { res.once("drain", r); res.once("close", r); });
+      }
+      const q = res.__q; res.__q = null;
+      if (!res.destroyed && q) for (const l of q) res.write(l);
+    })().catch(() => { BUS.clients.delete(res); try { res.destroy(); } catch {} });
     req.on("close", () => BUS.clients.delete(res));
     return;
   }

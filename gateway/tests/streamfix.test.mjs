@@ -88,3 +88,18 @@ test("端到端：经本地转发，上游断线的流被补全；非流式请�
   assert.equal(await r2.text(), '{"data":[]}');
   up.close(); STREAMFIX.server.close();
 });
+
+test("通道网址里不带上游地址，不认识的通道号 404，带账号密码的不经通道（审查 v0513b 低）", async () => {
+  STREAMFIX.server = null; STREAMFIX.port = 0;     // 上一个测试把通道关了：重起一个
+  startStreamFix();
+  while (!STREAMFIX.port) await new Promise((r) => setTimeout(r, 10));
+  const b = fixedBaseUrl("https://relay.example.com/anthropic");
+  assert.match(b, new RegExp(`^http://127\\.0\\.0\\.1:${STREAMFIX.port}/u/[0-9a-f]{32}$`));
+  assert.ok(!b.includes("relay.example.com"));
+  assert.equal(fixedBaseUrl("https://relay.example.com/anthropic"), b, "同一家同一通道");
+  assert.notEqual(fixedBaseUrl("https://relay.example.com/other"), b);
+  assert.equal(fixedBaseUrl("https://u:p@relay.example.com/x"), "https://u:p@relay.example.com/x");
+  for (const p of [`/u/${"0".repeat(32)}/v1/messages`, "/u/zz/v1/messages", "/http://evil.example/v1/messages", "/"])
+    assert.equal((await fetch(`http://127.0.0.1:${STREAMFIX.port}${p}`, { method: "POST", body: "{}" })).status, 404, p);
+  STREAMFIX.server.close();
+});

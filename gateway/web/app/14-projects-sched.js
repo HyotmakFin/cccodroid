@@ -1,5 +1,7 @@
   // 0.3.16：项目 / 定时任务也能指定接口；别家的模型清单按需拉一次，缓存在 PJ.pm
   PJ.pm = {};
+  // 项目颜色只认 #rrggbb：网关存的时候已经卡过，这里再卡一道，别让旧数据或手改的文件把别的东西塞进 style（审查 v0513b 低-34）
+  const pjCol = (c) => (/^#[0-9a-f]{6}$/i.test(c) ? c : "currentColor");
   function provModelsOf(id) {
     if (!id || id === globalProv()) return Promise.resolve(MODELS);
     if (PJ.pm[id]) return Promise.resolve(PJ.pm[id]);
@@ -29,7 +31,7 @@
     setOv("");
     setPageSub("projects", t("{n} 个", { n: PJ.list.length }));
     const card = (p) => `<button class="pj-card" data-pj="${esc(p.id)}">
-        <span class="pj-ct"><span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span><b>${esc(p.name)}</b></span>
+        <span class="pj-ct"><span class="pj-fold" style="color:${pjCol(p.color)}">${pi("folder")}</span><b>${esc(p.name)}</b></span>
         <span class="mono muted pj-path">\u200e${esc(p.path)}\u200e</span>
         <span class="muted pj-meta">${esc(t("{n} 个对话", { n: p.sessions || 0 }))} · ${esc(relTime(p.lastAt || p.created))}${p.exists === false ? ` · <span class="pj-gone">${esc(t("目录不在了"))}</span>` : ""}</span></button>`;
     box.innerHTML = pageHead(esc(t("项目")), `<button class="btn sm pj-primary" data-a="new">${pi("plus")}${esc(t("新建项目"))}</button>`) +
@@ -76,7 +78,7 @@
     const permSel = `<select data-def="perm">${opt("", follow, p.perm)}${["default", "acceptEdits", "plan", "auto", "dontAsk"].map((k) => opt(k, t(PERM_SHORT[k]), p.perm)).join("")}</select>`;
     const tasks = ((SC.data && SC.data.tasks) || []).filter((x) => x.projectId === id);
     const files = d.files || [];
-    box.innerHTML = pageHead(`<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}`,
+    box.innerHTML = pageHead(`<span class="pj-fold" style="color:${pjCol(p.color)}">${pi("folder")}</span>${esc(p.name)}`,
         `<button class="btn sm pj-primary" data-a="chat">${pi("plus")}${esc(t("新对话"))}</button>${kebabBtn("pmenu")}`, true) +
       `<div class="mono muted pj-dpath">${esc(p.path)}${p.exists === false ? ` · <span class="pj-gone">${esc(t("目录不在了"))}</span>` : ""}</div>` +
       `<div class="pj-sec"><span class="grow">${esc(t("对话"))}（${d.sessions.length}）</span></div>
@@ -154,7 +156,7 @@
   function projMenu(p, anchor) {
     popMenu(anchor, [
       { label: t("重命名"), icon: PI.edit, fn: async () => { const n = prompt(t("项目名称"), p.name); if (!n || !n.trim()) return; try { await jsend("/api/projects/" + encodeURIComponent(p.id), { name: n.trim() }, "PATCH"); PJ.detail = null; await loadProjects(); renderProjects(); } catch (e) { toast(e.message, true); } } },
-      { label: t("换颜色"), icon: PI.palette, fn: () => popMenu(anchor, PJ.colors.map((c) => ({ label: c, icon: `<circle cx="12" cy="12" r="7" fill="${esc(c)}" stroke="none"/>`, fn: async () => { try { await jsend("/api/projects/" + encodeURIComponent(p.id), { color: c }, "PATCH"); PJ.detail = null; await loadProjects(); renderProjects(); } catch (e) { toast(e.message, true); } } }))) },
+      { label: t("换颜色"), icon: PI.palette, fn: () => popMenu(anchor, PJ.colors.map((c) => ({ label: c, icon: `<circle cx="12" cy="12" r="7" fill="${pjCol(c)}" stroke="none"/>`, fn: async () => { try { await jsend("/api/projects/" + encodeURIComponent(p.id), { color: c }, "PATCH"); PJ.detail = null; await loadProjects(); renderProjects(); } catch (e) { toast(e.message, true); } } }))) },
       { label: t("在文件浏览器打开目录"), icon: PI.folder, fn: () => openFiles(p.path) },
       { label: t("在终端打开这个目录"), icon: PI.term, fn: () => openTermAt(p.path) },
       "hr",
@@ -259,7 +261,7 @@
     el.classList.toggle("hidden", !p && !wel);
     el.classList.toggle("empty", !p);
     const CHEV = '<svg class="pj-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
-    if (p) el.innerHTML = `<span class="pj-fold" style="color:${esc(p.color)}">${pi("folder")}</span>${esc(p.name)}${wel ? CHEV : ""}`;
+    if (p) el.innerHTML = `<span class="pj-fold" style="color:${pjCol(p.color)}">${pi("folder")}</span>${esc(p.name)}${wel ? CHEV : ""}`;
     else if (wel) el.innerHTML = `<span class="pj-fold">${pi("folder")}</span>${esc(t("项目"))}${CHEV}`;
   }
   $("proj-chip")?.addEventListener("click", (e) => {

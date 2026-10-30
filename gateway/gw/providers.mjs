@@ -390,8 +390,31 @@ function upsertProvider(id, b) {
 export function modelsUrlOk(p) {
   try {
     const m = new URL(p.modelsUrl), b = new URL(p.baseUrl);
-    return m.protocol === "https:" && m.hostname.toLowerCase().replace(/\.$/, "") === b.hostname.toLowerCase().replace(/\.$/, "");
+    const h = m.hostname.toLowerCase().replace(/\.$/, "");
+    if (h !== b.hostname.toLowerCase().replace(/\.$/, "")) return false;
+    // 本机跑的 llama-server / LiteLLM 多半是 http：回环地址出不了本机，https 要求没有意义（10-31 三轮复核）
+    const loop = h === "localhost" || h === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(h);
+    return m.protocol === "https:" || (loop && m.protocol === "http:");
   } catch { return false; }
+}
+
+/** 带密钥的请求：不跟着跳到别的主机（x-api-key 这类自定义头 fetch 跨站跳转时不会替你剥掉）。
+ *  同源的跳转最多跟 3 次；非 GET 只跟 307 / 308（方法和请求体原样保留，301/302/303 会被改成 GET）。跳到别处就当失败 */
+export async function fetchKeyed(url, opts = {}) {
+  let u = new URL(url);
+  for (let i = 0; ; i++) {
+    const r = await fetch(u, { ...opts, redirect: "manual" });
+    if (r.status < 300 || r.status >= 400 || r.status === 304) return r;
+    const loc = r.headers.get("location");
+    let n = null;
+    try { n = loc ? new URL(loc, u) : null; } catch {}
+    if (!n || n.origin !== u.origin || i >= 3 || (opts.method && opts.method !== "GET" && r.status !== 307 && r.status !== 308)) {
+      try { await r.body?.cancel(); } catch {}
+      throw new Error(`HTTP ${r.status} redirect refused`);
+    }
+    try { await r.body?.cancel(); } catch {}
+    u = n;
+  }
 }
 
 /** 验密钥：有模型清单接口就拉清单（不花钱）；没有就发一条 max_tokens=1 的消息 */
@@ -408,10 +431,10 @@ async function testProvider(id) {
     let r, how;
     if (v.modelsUrl && modelsUrlOk(v)) {
       how = "模型清单";
-      r = await fetch(v.modelsUrl, { headers: auth, signal: AbortSignal.timeout(15000) });
+      r = await fetchKeyed(v.modelsUrl, { headers: auth, signal: AbortSignal.timeout(15000) });
     } else {
       how = "试发一条消息";
-      r = await fetch(v.baseUrl.replace(/\/+$/, "") + "/v1/messages", {
+      r = await fetchKeyed(v.baseUrl.replace(/\/+$/, "") + "/v1/messages", {
         method: "POST", headers: { ...auth, "content-type": "application/json" }, signal: AbortSignal.timeout(30000),
         body: JSON.stringify({ model: v.defaultModel || "x", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
       });
@@ -602,7 +625,8 @@ function loadApiKey(p) {
   //    于是切到官方账户时被注成 ANTHROPIC_API_KEY（它优先级高于登录态），
   //    拿 DeepSeek 钥匙打 api.anthropic.com，全网 401。
   if (p && p.explicit) {
-    if (p.apiKeyEnv && process.env[p.apiKeyEnv]) return String(process.env[p.apiKeyEnv]).trim();
+    // apiKeyEnv 只认内置厂商的（地址是我们定的）；自定义接口的配置能分享导入，填个别的变量名就把网关环境里的值送去它的地址（v0513b 低-1）
+    if (p.apiKeyEnv && !p.custom && /^[A-Z][A-Z0-9_]{0,63}$/.test(p.apiKeyEnv) && process.env[p.apiKeyEnv]) return String(process.env[p.apiKeyEnv]).trim();
     return null;                     // 不注入 = 登录态原样透传
   }
 

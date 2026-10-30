@@ -679,7 +679,7 @@
     const proj = String(d.dir || "").split("/").pop() || d.dir;
     const SC = { user: t("所有项目"), project: t("本项目（{name}）", { name: proj }), local: t("本项目·只在本机") };
     $("hook-scope").innerHTML = d.scopes.map((s) =>
-      `<button class="idx-chip${s.scope === HK.scope ? " on" : ""}" data-hscope="${s.scope}">${esc(SC[s.scope])}<span>${hkFlat(s).length}</span></button>`).join("");
+      `<button class="idx-chip${s.scope === HK.scope ? " on" : ""}" data-hscope="${esc(s.scope)}">${esc(SC[s.scope])}<span>${hkFlat(s).length}</span></button>`).join("");
     const sc = hkScopeData();
     const user = d.scopes.find((s) => s.scope === "user");
     const SCD = {
@@ -710,7 +710,7 @@
         <div class="hk-out"></div></div>`;
     }).join("") || `<div class="tiny">${t("这里还没有规则。下面「常用规则」点一下就能加。")}</div>`;
     $("hook-recipes").innerHTML = HK_RECIPES.map((r) => extItem(esc(t(r.title)), `<span>${esc(hkEvName(r.event))}</span>`,
-      `<button data-hk="recipe" data-id="${r.id}">${t("添加…")}</button>`, `<div class="tiny ext-desc">${esc(t(r.desc))}</div>`)).join("");
+      `<button data-hk="recipe" data-id="${esc(r.id)}">${t("添加…")}</button>`, `<div class="tiny ext-desc">${esc(t(r.desc))}</div>`)).join("");
     if (!items.length && !HK.edit && !HK.recipe) $("hook-recipes-box").open = true;
   }
 
@@ -726,8 +726,8 @@
     f.innerHTML = `
       ${r ? `<div class="hk-rtitle">${esc(t(r.title))}</div><div class="tiny">${esc(t(r.desc))}</div>` : ""}
       <label class="tiny">${t("什么时候跑")}</label>
-      <select data-f="event">${main.map((e) => `<option value="${e}">${esc(hkEvName(e))} · ${e}</option>`).join("")}
-        ${more.length ? `<optgroup label="${esc(t("其他（进阶）"))}">${more.map((e) => `<option value="${e}">${e}</option>`).join("")}</optgroup>` : ""}</select>
+      <select data-f="event">${main.map((e) => `<option value="${esc(e)}">${esc(hkEvName(e))} · ${esc(e)}</option>`).join("")}
+        ${more.length ? `<optgroup label="${esc(t("其他（进阶）"))}">${more.map((e) => `<option value="${esc(e)}">${esc(e)}</option>`).join("")}</optgroup>` : ""}</select>
       <div class="tiny hk-evdesc"></div>
       <div class="hk-match"><label class="tiny hk-mlabel"></label>
         <input data-f="matcher" autocomplete="off" spellcheck="false" placeholder="${esc(t("留空 = 全部"))}">
@@ -1186,7 +1186,7 @@
     $("ext-c-count").textContent = d.scopes.reduce((a, s) => a + s.items.length, 0);
     const proj = String(d.workspace || "").split("/").pop() || d.workspace;
     const SC = { user: t("所有项目"), project: t("本项目（{name}）", { name: proj }) };
-    $("cmd-scope").innerHTML = d.scopes.map((s) => `<button class="idx-chip${s.scope === UC.scope ? " on" : ""}" data-cscope="${s.scope}">${esc(SC[s.scope])}<span>${s.items.length}</span></button>`).join("");
+    $("cmd-scope").innerHTML = d.scopes.map((s) => `<button class="idx-chip${s.scope === UC.scope ? " on" : ""}" data-cscope="${esc(s.scope)}">${esc(SC[s.scope])}<span>${+s.items.length || 0}</span></button>`).join("");
     const sc = ucScope();
     if (!sc) return;
     if (sc.error) { $("ext-cmds").innerHTML = `<div class="tiny warn">${esc(sc.error)}</div>`; return; }

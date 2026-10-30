@@ -194,6 +194,9 @@ test("日志脱敏：常见密钥格式只留前几位", () => {
   const s = noCred("err sk-ant-api03-abcdefghijklmnop Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.x.y ghp_ABCDEFGH12345 x-api-key: 0123456789abcdef https://u:p@h/x?key=zzz");
   for (const bad of ["abcdefghijklmnop", "eyJhbGciOiJIUzI1NiJ9", "ABCDEFGH12345", "0123456789abcdef", "u:p@", "zzz"]) assert.ok(!s.includes(bad), bad + " :: " + s);
   assert.equal(noCred("普通一行 skip-list 完成 ok"), "普通一行 skip-list 完成 ok");
+  // GLM 的 id.secret（10-31 复核：短 id 的没遮住）
+  for (const k of ["1823456789.abcdefghijklmnopqrstuvwx", "abcdef0123456789abcdef0123456789.AbCdEfGhIjKlMnOp"]) assert.ok(!noCred("key " + k).includes(k.split(".")[1]), k);
+  assert.equal(noCred("读 index.html 和 v0.5.13.tar"), "读 index.html 和 v0.5.13.tar");
 });
 
 // 模型清单地址带密钥前先核站点
@@ -206,4 +209,9 @@ test("模型清单地址：同主机 / 同站点 + https 才带密钥去问", ()
   assert.equal(ok("https://api.deepseek.com/anthropic", "https://evil.example/models"), false);
   assert.equal(ok("https://api.deepseek.com/anthropic", "http://api.deepseek.com/models"), false);
   assert.equal(ok("https://api.deepseek.com", "not a url"), false);
+  // 本机的 http 接口（llama-server / LiteLLM）：回环地址才放 http，主机仍要一致
+  assert.equal(ok("http://127.0.0.1:8080", "http://127.0.0.1:8080/v1/models"), true);
+  assert.equal(ok("http://localhost:4000/anthropic", "http://localhost:4000/v1/models"), true);
+  assert.equal(ok("http://127.0.0.1:8080", "http://192.168.1.2:8080/v1/models"), false);
+  assert.equal(ok("http://192.168.1.2:8080", "http://192.168.1.2:8080/v1/models"), false);
 });

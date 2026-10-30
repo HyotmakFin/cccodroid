@@ -10,6 +10,7 @@ import { NEXT, readBody, sendJson } from "./http.mjs";
 import { termEnv } from "./terminal.mjs";
 import { sha256File } from "./components.mjs";
 import { SKILLS_DIR } from "./extensions.mjs";
+import { archiveProblem, parseTarListing, zipEntries } from "./archive-check.mjs";
 
 // ── 自定义组件：用户自己导入的 Linux arm64 程序（不经市场，来源由用户负责） ─────────────────
 // 放在 ~/.cccodroid/custom/<id>/（app/ 原样解开的程序，deps/ 自动补的 glibc 库），不进 $PREFIX：换工具包不会被冲掉。
@@ -35,6 +36,8 @@ function elfInfo(file) {
     const info = { arch: ELF_ARCH[h.readUInt16LE(18)] || "machine-" + h.readUInt16LE(18), bits: h[4] === 2 ? 64 : 32, type: h.readUInt16LE(16), interp: "", needed: [], soname: "", glibc: "" };
     if (info.bits !== 64 || h[5] !== 1) return info;
     const phoff = Number(h.readBigUInt64LE(32)), phsz = h.readUInt16LE(54), phnum = h.readUInt16LE(56);
+    // 程序头表的大小是文件自己报的：64 位的每项固定 56 字节，项数正常也就几十（最多 0xffff×0xffff ≈ 4 GB，审查 v0513b 低-12）
+    if (phsz !== 56 || phnum > 1024) return info;
     const ph = Buffer.alloc(phsz * phnum); fs.readSync(fd, ph, 0, ph.length, phoff);
     const loads = []; let dyn = null;
     for (let i = 0; i < phnum; i++) {
@@ -164,6 +167,18 @@ async function customAnalyze(src) {
     const n = await unpackedSize(sp, isZip);
     if (n == null) return fail(tz("读不出压缩包的目录，可能已损坏"));
     if (n > UNPACK_MAX) return fail(tz("解开后有 {n} MB，超过 {max} MB 的上限", { n: Math.round(n / 1048576), max: UNPACK_MAX >> 20 }));
+    // 解之前按目录查：有条目要经过包里的软链、或者路径跳出包外的，整包不解（见 archive-check.mjs）
+    let entries;
+    try {
+      if (isZip) entries = zipEntries(sp);
+      else {
+        const r = await runP(path.join(PREFIX, "bin", "tar"), ["-tv", "--quoting-style=c", "-f", sp], { maxBuffer: 64 << 20 });
+        if (r.code) return fail(tz("读不出压缩包的目录，可能已损坏"));
+        entries = parseTarListing(r.out);
+      }
+    } catch { return fail(tz("读不出压缩包的目录，可能已损坏")); }
+    const bad = archiveProblem(entries);
+    if (bad) return fail(tz("这个压缩包里有条目会写到包外面（{p}），为安全起见不解开", { p: String(bad.name).slice(0, 200) }));
   }
   if (isTar) {
     const r = await runP(path.join(PREFIX, "bin", "tar"), ["-xf", sp, "-C", x, "--no-same-owner"]);

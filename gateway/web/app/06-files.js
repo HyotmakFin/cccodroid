@@ -130,7 +130,7 @@
       } catch (err) { body = '<div class="tiny">' + t("读取失败") + (err && err.message ? "：" + esc(err.message) : "") + '</div>'; }
       if (seq !== fsPrevSeq) return;
     } else {
-      body = `<div class="tiny">${e.kind} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;
+      body = `<div class="tiny">${esc(e.kind)} · ${fmtSize(e.size)} · ${t("无可内嵌预览")}</div>`;
     }
 
     box.innerHTML =

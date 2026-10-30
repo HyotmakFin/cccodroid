@@ -105,7 +105,13 @@ export function denyReason(req, u) {
   if (!ALLOWED_HOSTS.has(String(req.headers.host || "").toLowerCase())) return 421;
   const origin = req.headers.origin;
   if (origin !== undefined && !ALLOWED_ORIGINS.has(String(origin).toLowerCase())) return 403;
-  if (!u.pathname.startsWith("/api/")) return null;          // 静态页面与资源不含秘密
+  // 静态页面与资源不含秘密，照旧放行；但只有带着凭据来的才记成「自己人」（连接槽快满时不挤它，见 server.mjs guardSlots）
+  if (!u.pathname.startsWith("/api/")) {
+    const site = req.headers["sec-fetch-site"];
+    if (tokenOk(String(req.headers["x-cc-token"] || "")) || ((!site || site === "same-origin" || site === "none") && cookieHostOk(req) && sessionOk(cookieToken(req)))) req.ccAuthed = 1;
+    return null;
+  }
+  req.ccAuthed = 1;    // 下面任何一路放行都是带凭据的；不放行时这个标记用不上
   if (tokenOk(String(req.headers["x-cc-token"] || ""))) return null;
   if (req.headers["x-cc-sig"]) {
     const body = String(req.headers["x-cc-body"] || EMPTY_SHA);

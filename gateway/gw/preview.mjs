@@ -22,6 +22,12 @@ const CAP_IDLE = 3600e3;
 // 预览页的脚本能读到它所在目录树里的文件，所以这些一概不交：以点开头的路径（.env、.git、.npmrc…）、私钥证书一类
 const PREVIEW_DENY = /(^|\/)\.(?!well-known(\/|$))|\.(pem|key|p12|pfx|jks|keystore|kdbx|gpg|asc)$|(^|\/)id_[a-z0-9]+(\.pub)?$/i;
 const PREVIEW = { server: null, port: 0, starting: null, caps: new Map() };
+// 不联网（默认）：预览页能读到它所在目录树里的文件，没有外发通道这些才出不去（审查 v0513b 中-5）。
+// 脚本照常跑（内联、eval 都许），资源只许从本机预览服务来；被拦的地址经 report-uri 报回来，查看器提示可以一键允许联网。
+// 页面把自己跳到外站这种 CSP 管不了，由壳在原生层拦（MainActivity.pvOffline）
+const PV_CSP = (cap) => "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; form-action 'self'; base-uri 'self'; "
+  + `frame-src 'self' data: blob:; worker-src 'self' blob:; report-uri /__cc/csp/${cap}`;
+const BLOCKED_MAX = 20;
 function previewStart() {
   if (PREVIEW.port) return Promise.resolve(PREVIEW.port);
   if (PREVIEW.starting) return PREVIEW.starting;
@@ -29,6 +35,8 @@ function previewStart() {
     const srv = http.createServer(previewServe);
     srv.on("error", (e) => { PREVIEW.starting = null; reject(e); });
     srv.unref();   // 网关有主服务撑着；单测里别让它拖住进程
+    // 预览只收 GET 和很小的 CSP 报告：请求头 20 秒、整个请求 60 秒内收完，慢连接别一直挂着
+    srv.headersTimeout = 20e3; srv.requestTimeout = 60e3;
     srv.listen(0, "127.0.0.1", () => { PREVIEW.server = srv; PREVIEW.port = srv.address().port; resolve(PREVIEW.port); });
   });
   return PREVIEW.starting;
@@ -45,7 +53,7 @@ function isBroad(d, set) {
   if (set.has(d) || STORAGE_ROOT.test(d) || STORAGE_ROOT.test(path.dirname(d))) return true;
   return d.split("/").filter(Boolean).length <= 1;
 }
-async function previewGrant(p) {
+async function previewGrant(p, net) {
   const r = safeFilePath(p);
   if (r.error) return r;
   const port = await previewStart();
@@ -65,16 +73,36 @@ async function previewGrant(p) {
   const key = root + "\0" + only;
   let cap = [...PREVIEW.caps].find(([, v]) => v.key === key)?.[0];   // 同一目录复用，刷新不换网址
   if (!cap) { cap = crypto.randomBytes(12).toString("hex"); if (PREVIEW.caps.size >= 200) PREVIEW.caps.delete(PREVIEW.caps.keys().next().value); }
-  PREVIEW.caps.set(cap, { root, bases, only, key, exp: now + CAP_IDLE });
-  return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime };
+  const old = PREVIEW.caps.get(cap);
+  const g = { root, bases, only, key, exp: now + CAP_IDLE, net: typeof net === "boolean" ? net : !!(old && old.net), blocked: (old && old.blocked) || new Set(), dt: old && old.dt };
+  if (net === true) g.blocked.clear();
+  PREVIEW.caps.set(cap, g);
+  return { url: `http://localhost:${port}/${cap}/${path.basename(r.file).split("/").map(encodeURIComponent).join("/")}`, mtime: r.mtime, net: g.net };
 }
 function previewServe(req, res) {
   // 网址里带着能力令牌：页面里点外链时别把它当 Referer 带出去（审查 v0.5.7 L2）。setHeader 先放，下面各处 writeHead 都会带上
   res.setHeader("referrer-policy", "no-referrer");
   const fail = (code, msg) => { res.writeHead(code, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }); res.end(msg); };
-  if (req.method !== "GET" && req.method !== "HEAD") return fail(405, "read only");
   const host = String(req.headers.host || "").toLowerCase();
   if (host !== `localhost:${PREVIEW.port}` && host !== `127.0.0.1:${PREVIEW.port}`) return fail(421, "bad host");
+  // CSP 违规报告：记下被拦的外网主机（只记主机名，最多 BLOCKED_MAX 个），查看器据此提示
+  const rep = req.method === "POST" && /^\/__cc\/csp\/([0-9a-f]{24})$/.exec(String(req.url || "").split("?")[0]);
+  if (rep) {
+    const g = PREVIEW.caps.get(rep[1]);
+    let n = 0, body = "";
+    req.setEncoding("utf8");
+    req.on("data", (c) => { n += c.length; if (n <= 16384) body += c; else req.destroy(); });
+    req.on("end", () => {
+      try {
+        const j = JSON.parse(body), r0 = j["csp-report"] || (Array.isArray(j) ? (j[0] || {}).body : j.body) || {};
+        const h = new URL(String(r0["blocked-uri"] || r0.blockedURL || "")).host;
+        if (g && h && h.length <= 253 && g.blocked.size < BLOCKED_MAX) g.blocked.add(h);
+      } catch {}
+      res.writeHead(204); res.end();
+    });
+    return;
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") return fail(405, "read only");
   let pathname, query;
   try { const u = new URL(req.url, "http://localhost"); pathname = decodeURIComponent(u.pathname); query = u.searchParams; } catch { return fail(400, "bad path"); }
   // 开发者工具（Eruda，MIT，随包内置）：本体从包里吐，不走网络；凭证随机，不会和 __cc 撞
@@ -95,6 +123,7 @@ function previewServe(req, res) {
   const g = PREVIEW.caps.get(cap);
   if (g.exp < Date.now()) { PREVIEW.caps.delete(cap); return fail(404, "preview expired — reopen the file"); }
   g.exp = Date.now() + CAP_IDLE;
+  if (!g.net) res.setHeader("content-security-policy", PV_CSP(cap));
   // 在 base 下找 rel：字面路径和解析过符号链接的真实路径都得在 base 里
   const lookup = (base) => {
     let full = path.resolve(base, ...rel);
@@ -156,8 +185,13 @@ export async function routePreview(req, res, u, p) {
   // ── 回复里的路径被点了：先问一下是什么（文件 / 目录 / 不存在），前端再决定开查看器还是文件面板 ──
   if (req.method === "POST" && p === "/api/preview") {
     const b = JSON.parse((await readBody(req)) || "{}");
-    const r = await previewGrant(b.path);
+    const r = await previewGrant(b.path, typeof b.net === "boolean" ? b.net : undefined);
     return sendJson(res, r.error ? r.status || 404 : 200, r);
+  }
+  // 查看器问：这个预览联网没有、拦下过哪些外网主机
+  if (req.method === "GET" && p === "/api/preview/state") {
+    const g = PREVIEW.caps.get(String(u.searchParams.get("cap") || ""));
+    return sendJson(res, 200, g ? { net: !!g.net, blocked: [...g.blocked] } : { gone: true });
   }
   return NEXT;
 }

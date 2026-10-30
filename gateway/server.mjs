@@ -113,6 +113,7 @@ const server = http.createServer(async (req, res) => {
     req.resume();
     return sendJson(res, deny, { error: deny === 421 ? "bad host" : "forbidden" });
   }
+  if (req.socket && req.ccAuthed) req.socket.__cc = 1;      // 带凭据过了鉴权：连接槽快满时不挤它（见 guardSlots）；/ 这类不要凭据的页面不算
   // App 核身份用（见 access.mjs 的 proof）：不要令牌，回的东西没有令牌算不出来
   if (req.method === "GET" && p === "/__proof") {
     const r = proof(u.searchParams.get("n"), localAddr(req));
@@ -171,6 +172,18 @@ uiServer.on("listening", () => { if (uiRetryLogged) log(`界面地址 ${UI_HOST}
 // 慢速请求占着连接不放（审查 10-30 第九份 中4）：请求头 20 秒、整个请求 10 分钟内收完（上传走本机回环，够用），
 // 同时最多 256 个连接。事件总线是长回应，不受 requestTimeout 管
 for (const s of [server, uiServer]) { s.headersTimeout = 20e3; s.requestTimeout = 600e3; s.maxConnections = 256; }
+// 槽位快满时先挤掉没过鉴权的：本机任何应用都连得上回环地址，开一堆慢连接占着，App 自己的请求就进不来（审查 v0513b 低-8）。
+// 过了鉴权的连接（App、终端里的工具）不动；新来的连接挤掉最早那条还没过鉴权的
+function guardSlots(srv) {
+  const socks = new Set();
+  srv.on("connection", (s) => {
+    socks.add(s); s.on("close", () => socks.delete(s));
+    if (socks.size > 200) for (const o of socks) if (!o.__cc && o !== s) { o.destroy(); break; }
+  });
+}
+guardSlots(server); guardSlots(uiServer);
+// 主地址被占（EADDRINUSE 之类）：记一笔再退出，GatewayService 会重拉；以前没挂监听，直接抛成未捕获异常、日志里什么都没有（审查 v0513b 低-9）
+server.on("error", (e) => { log(`⚠️ 主地址 127.0.0.1:${CFG.port} 监听失败：${e.code || e.message}，退出等重拉`); setTimeout(() => process.exit(1), 200); });
 uiServer.listen(CFG.port, UI_HOST);
 server.listen(CFG.port, "127.0.0.1", () => {
   log(`claude-apk 网关 v3 已启动  http://127.0.0.1:${CFG.port}`);

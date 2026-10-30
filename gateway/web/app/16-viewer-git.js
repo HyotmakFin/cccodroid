@@ -125,7 +125,7 @@
         <span style="flex:1"></span><span>${t("点文件看改了哪几行")}</span></div>
       ${s.files.map((f, i) => `<div class="git-row" data-i="${i}">
         <input type="checkbox" data-ck="${i}" ${GIT.sel.has(f.path) ? "checked" : ""}>
-        <span class="gs gs-${f.kind}" title="${esc(gsTitle(f.kind))}">${GS[f.kind] || "?"}</span>
+        <span class="gs gs-${esc(f.kind)}" title="${esc(gsTitle(f.kind))}">${Object.hasOwn(GS, f.kind) ? GS[f.kind] : "?"}</span>
         <span class="gp" data-open="${i}">${gbdi(f.orig ? f.orig + " → " + f.path : f.path)}</span>
         ${gnum(f)}
         <button class="btn ghost sm" data-undo="${i}" title="${esc(t("把这个文件改回上次提交时的样子"))}">${t("撤销")}</button>
@@ -441,6 +441,7 @@
       return vwHtml();
     }
     if (a === "reload") return vwHtmlReload();
+    if (a === "pvnet") return pvSetNet(!(VW.pv && VW.pv.net));
     if (a === "pick") {
       const fr = $("vw-body").querySelector(".vw-html"); if (!fr || !fr.contentWindow) return;
       VW.picking = !VW.picking; vwRenderActs();
@@ -449,7 +450,13 @@
       return;
     }
     if (a === "devtools") { VW.picking = false; try { localStorage.setItem("cc.pvDevtools", pvDevtools() ? "0" : "1"); } catch {} vwRenderActs(); return vwHtmlReload(); }
-    if (a === "openweb") { if (VW.pv) openWeb(VW.pv.url); return; }
+    if (a === "openweb") {
+      if (!VW.pv) return;
+      // 浏览器里没有查看器那层「不联网」拦截（整页跳外站拦不住）：没开联网的先问一句（10-31 复核）
+      if (!VW.pv.net && !confirm(t("在浏览器里打开就没有「不联网」的保护了：网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页这样做。"))) return;
+      openWeb(VW.pv.url);
+      return;
+    }
     if (a === "gitdiff") return vwShowDiff();
     if (a === "aspdf") return vwOffice();
     if (a === "native") { closeViewerPdf(); return VW.kind === "docx" ? vwDocx() : vwSheet(); }
@@ -560,7 +567,7 @@
     const acts = [];
     if (isMd(VW.path)) acts.push(VW.mode === "md" ? [t("编辑"), "edit"] : [t("预览"), "md"]);
     if (isHtml(VW.path)) {
-      if (VW.mode === "html") { vwActs([[t("源码"), "edit"], [t("刷新"), "reload"], [t("开发者工具"), "devtools", pvDevtools()], ...(pvDevtools() ? [[t("选取元素"), "pick", VW.picking]] : []), [t("在浏览器打开"), "openweb"]]); return; }
+      if (VW.mode === "html") { vwActs([[t("源码"), "edit"], [t("刷新"), "reload"], [VW.pv && VW.pv.blocked && !VW.pv.net ? t("联网") + " •" : t("联网"), "pvnet", !!(VW.pv && VW.pv.net)], [t("开发者工具"), "devtools", pvDevtools()], ...(pvDevtools() ? [[t("选取元素"), "pick", VW.picking]] : []), [t("在浏览器打开"), "openweb"]]); return; }
       acts.push([t("预览"), "html"]);
     }
     if (VW.mode === "edit") {
@@ -718,12 +725,15 @@
     try { r = await post("/api/preview", { path: p }); }
     catch (e) { if (p === VW.path) $("vw-body").innerHTML = `<div class="vw-empty">${t("预览打不开")}: ${esc(e.message)}</div>`; return; }
     if (p !== VW.path || VW.mode !== "html") return;
-    VW.pv = { url: r.url, mtime: r.mtime };
+    VW.pv = { url: r.url, mtime: r.mtime, net: !!r.net, cap: new URL(r.url).pathname.split("/")[1], blocked: 0 };
+    pvNative();
+    vwRenderActs();
     $("vw-body").innerHTML = `<iframe class="vw-html" src="${esc(pvSrc())}" sandbox="allow-scripts allow-same-origin allow-modals allow-downloads allow-pointer-lock" allow="autoplay; fullscreen" referrerpolicy="same-origin"></iframe>`;
     // Claude 一边改、你一边看：每 1.5 秒看一眼修改时间，变了就重新载入
     VW.pvTimer = setInterval(async () => {
       if (viewerEl.classList.contains("hidden") || VW.mode !== "html" || VW.path !== p) return vwHtmlStop();
       if (document.hidden) return;
+      if (VW.pv && !VW.pv.net) pvBlockedCheck();
       let s; try { s = await api("/api/file/stat?path=" + encodeURIComponent(p)); } catch { return; }
       if (VW.pv && s && s.mtime && s.mtime !== VW.pv.mtime) { VW.pv.mtime = s.mtime; VW.size = s.size; $("vw-info").textContent = fmtSize(s.size); vwHtmlReload(); }
     }, 1500);
@@ -743,7 +753,7 @@
     if (!fr || e.source !== fr.contentWindow || !VW.pv || !d || typeof d !== "object") return;
     try { if (e.origin !== new URL(VW.pv.url).origin) return; } catch { return; }
     if (d.cc === "pickoff") { VW.picking = false; vwRenderActs(); return; }
-    if (d.cc !== "picked") return;
+    if (d.cc !== "picked" || !VW.picking) return;      // 没在选取时递来的一概不收（审查 v0513b 低-32）
     VW.picking = false; vwRenderActs();
     pickInsert("@" + VW.path, d);
   });
@@ -765,7 +775,34 @@
     const f = $("vw-body").querySelector(".vw-html");
     if (f && VW.pv) f.src = pvSrc(true);
   }
-  function vwHtmlStop() { clearInterval(VW.pvTimer); VW.pvTimer = 0; VW.pv = null; }
+  // 不再显示预览：iframe 一并拆掉（藏起来的页面脚本还在跑），壳里的「只许连本机」也撤掉
+  function vwHtmlStop() {
+    clearInterval(VW.pvTimer); VW.pvTimer = 0; VW.pv = null;
+    $("vw-body").querySelector(".vw-html")?.remove();
+    pvNative();
+  }
+  // 不联网（默认）：预览页能读它所在文件夹里的文件，网关给它加了只许连本机的 CSP，壳也在原生层拦外网（审查 v0513b 中-5）
+  function pvNative() { try { window.CCApp && CCApp.previewNet && CCApp.previewNet(!!(VW.pv && !VW.pv.net)); } catch {} }
+  async function pvBlockedCheck() {
+    const pv = VW.pv;
+    let s; try { s = await api("/api/preview/state?cap=" + encodeURIComponent(pv.cap)); } catch { return; }
+    if (VW.pv !== pv || !s || !Array.isArray(s.blocked) || s.blocked.length <= pv.blocked) return;
+    const first = !pv.blocked;
+    pv.blocked = s.blocked.length;
+    vwRenderActs();
+    if (first) toast(t("这个网页想连外网（{hosts}），已拦下。需要的话点上面的「联网」", { hosts: s.blocked.slice(0, 3).join("、") + (s.blocked.length > 3 ? "…" : "") }));
+  }
+  async function pvSetNet(on) {
+    const pv = VW.pv, p = VW.path;
+    if (!pv) return;
+    if (on && !confirm(t("允许这个网页连外网？\n\n联网后，网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页打开。"))) return;
+    let r; try { r = await post("/api/preview", { path: p, net: !!on }); } catch (e) { return toast(e.message); }
+    if (VW.pv !== pv) return;
+    pv.net = !!r.net; pv.blocked = 0;
+    pvNative();
+    vwRenderActs();
+    vwHtmlReload();
+  }
 
   function vwRenderText(mode) {
     vwDropEd();

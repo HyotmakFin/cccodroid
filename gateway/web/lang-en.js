@@ -2494,5 +2494,16 @@ window.I18N_DICT.en = {
   "存在 {dir}，有存储权限的应用都能读到": "Saved in {dir}. Any app with storage access can read it.",
   "存在应用私有目录里，别的应用读不到": "Saved in the app's private folder. Other apps can't read it.",
   "这个会话补记的来源已经满了（最多 {n} 个）": "This session already has the maximum number of added sources ({n}).",
-  "汇合的第一条没发出去（切到了别的会话），已经复制，可以粘贴到新对话里": "The merge message wasn't sent because you switched sessions. It's copied, so you can paste it into a new chat."
+  "汇合的第一条没发出去（切到了别的会话），已经复制，可以粘贴到新对话里": "The merge message wasn't sent because you switched sessions. It's copied, so you can paste it into a new chat.",
+  "允许这个网页连外网？\n\n联网后，网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页打开。": "Let this page connect to the internet?\n\nOnce online, scripts on the page can send files from its folder elsewhere. Only allow pages you trust.",
+  "联网": "Online",
+  "这个文件不能导出": "This file can't be exported",
+  "这个网页想连外网（{hosts}），已拦下。需要的话点上面的「联网」": "This page tried to reach the internet ({hosts}) and was blocked. Tap “Online” above if it needs to.",
+  "CLAUDE.md 太大了（超过 4 MB）": "CLAUDE.md is too large (over 4 MB)",
+  "文件里有一行超过 {n} MB，处理不了": "A line in the file is over {n} MB and can't be processed",
+  "这个压缩包里有条目会写到包外面（{p}），为安全起见不解开": "An entry in this archive would be written outside it ({p}), so it wasn't extracted for safety",
+  "这个项目的 CLAUDE.md 不是普通文件（可能是软链接），不在这里读写": "This project's CLAUDE.md isn't a regular file (maybe a symlink), so it isn't read or written here",
+  "这条消息太长了（超过 200 万字），改成文件发吧。": "This message is too long (over 2,000,000 characters). Send it as a file instead.",
+  "导出目录里同名文件太多了": "Too many files with the same name in the export folder",
+  "在浏览器里打开就没有「不联网」的保护了：网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页这样做。": "Opening it in the browser drops the “Offline” protection: scripts on the page can send files from its folder elsewhere. Only do this for pages you trust."
 };

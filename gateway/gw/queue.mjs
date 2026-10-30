@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CFG, LIVE, LAST_LANG, log, tr, tz } from "./config.mjs";
-import { SETTINGS, saveSettings } from "./settings-store.mjs";
+import { SETTINGS, saveSettings, capList } from "./settings-store.mjs";
 import { PERM_MODES, PROVIDER, keyOf, providerById } from "./providers.mjs";
 import { sessProvider } from "./sessmodel.mjs";
 import { isLoginMode } from "./models.mjs";
@@ -264,6 +264,10 @@ export function pump() {
   }
 }
 
+const MSG_MAX = 2000000;                        // 字（UTF-16 码元）：两百万字早超过任何模型的上下文
+const SID_OK = /^[A-Za-z0-9_-]{1,80}$/;
+/** 字符串数组：只留字符串，条数、每条长度、总长都有上限（总长见 settings-store 的 capList） */
+export const strList = (a, n, len, total) => capList(a, n, len, total);
 export function enqueue(body) {
   const item = {
     id: newRunId(),
@@ -271,12 +275,12 @@ export function enqueue(body) {
     sessionId: body.sessionId ? String(body.sessionId) : null,
     follow: body.follow ? String(body.follow) : null,
     cid: body.cid ? String(body.cid).slice(0, 64) : null,   // 前端自己的消息号：SSE 可能比 POST 的响应先到
-    model: body.model || null,
+    model: typeof body.model === "string" ? body.model.slice(0, 200) : null,
     // 新会话（还没会话号）在输入栏面板里选的模型 / 思考强度：跑起来拿到会话号时记成这个会话自己的（gw/sessmodel.mjs）
     pin: !body.sessionId && body.pin && typeof body.pin === "object" ? Object.fromEntries(["model", "effort", "provider"].filter((k) => typeof body.pin[k] === "string").map((k) => [k, body.pin[k].slice(0, 200)])) : null,
-    permissionMode: body.permissionMode || null,
-    addDirs: Array.isArray(body.addDirs) ? body.addDirs : [],
-    projectId: body.projectId ? String(body.projectId) : null,
+    permissionMode: typeof body.permissionMode === "string" ? body.permissionMode.slice(0, 40) : null,
+    addDirs: strList(body.addDirs, 64, 4096, 16384),
+    projectId: body.projectId ? String(body.projectId).slice(0, 100) : null,
     // 汇合（脉络阶段 2）：新会话第一条带来的来源，拿到会话号时记进 ccapp-lineage.json
     mergeFrom: !body.sessionId && !body.follow ? cleanMergeFrom(body.mergeFrom) : null,
     at: Date.now(),
@@ -324,6 +328,9 @@ export async function routeQueue(req, res, u, p) {
       });
     }
     if (QUEUE.length >= 50) return sendJson(res, 429, { error: "queue_full", message: tz("排队的消息太多了。") });
+    // 字段都有上限（审查 v0513b 低-3）：排队 50 条 × 不限长的正文能把内存吃满；会话号这类直接进 claude 的参数
+    if (String(b.message).length > MSG_MAX) return sendJson(res, 413, { error: "too_long", message: tz("这条消息太长了（超过 200 万字），改成文件发吧。") });
+    for (const k of ["sessionId", "follow"]) if (b[k] != null && b[k] !== "" && !SID_OK.test(String(b[k]))) return sendJson(res, 400, { error: "bad " + k });
     const item = enqueue({ ...b, internal: false, auto: undefined });   // auto（空闲压缩轮）也只许网关自己设（审查 10-30 第九份 后端低8）
     return sendJson(res, 200, { ok: true, id: item.id, injected: !!item.injected, started: RUNS.has(item.id) });
   }
@@ -333,7 +340,7 @@ export async function routeQueue(req, res, u, p) {
     return sendJson(res, 200, { ok: true });
   }
   if (req.method === "POST" && p.startsWith("/api/queue/")) {
-    const b = JSON.parse((await readBody(req)) || "{}");
+    let b; try { b = JSON.parse((await readBody(req)) || "{}"); } catch { return sendJson(res, 400, { error: "bad json" }); }
     const act = p.slice("/api/queue/".length);
     const i = QUEUE.findIndex((q) => q.id === b.id);
     if (act === "clear") {
@@ -349,6 +356,7 @@ export async function routeQueue(req, res, u, p) {
       if (!(lr && tryInject(lr, it))) QUEUE.unshift(it);
     } else if (act === "edit") {
       const t = String(b.text || "").trim();
+      if (t.length > MSG_MAX) return sendJson(res, 413, { error: "too_long", message: tz("这条消息太长了（超过 200 万字），改成文件发吧。") });
       if (!t) QUEUE.splice(i, 1); else QUEUE[i].message = t;
     } else return sendJson(res, 404, { error: "unknown action" });
     publishState();

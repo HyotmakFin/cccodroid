@@ -70,6 +70,10 @@ export const noCred = (s) => s.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi,
   // 长得像密钥的串：claude 的 stderr、厂商报错原文都会进日志（审查 10-30 第九份 后端低7）
   .replace(/\b(sk-(?:ant-)?[A-Za-z0-9_-]{4})[A-Za-z0-9_-]{8,}/g, "$1***")
   .replace(/\b(gh[pousr]_)[A-Za-z0-9]{8,}/g, "$1***")
+  // 其他常见前缀：MiMo Token Plan（tp-）、xAI、Hugging Face、GitLab、Google（审查 v0513b 低-2）
+  .replace(/\b(tp-|xai-|hf_|glpat-|AIza)([A-Za-z0-9_-]{4})[A-Za-z0-9_-]{8,}/g, "$1$2***")
+  // 智谱 GLM 这类「id.secret」：点两边都是长串、左边带数字
+  .replace(/\b((?=[A-Za-z]*\d)[A-Za-z0-9]{4})[A-Za-z0-9]{2,}\.[A-Za-z0-9]{10,}\b/g, "$1***")
   .replace(/\b(Bearer\s+)[A-Za-z0-9._~+\/-]{8,}=*/gi, "$1***")
   .replace(/(x-api-key["']?\s*[:=]\s*["']?)[^\s"',}]{8,}/gi, "$1***");
 // 日志有上限（审查 10-30 第九份 高3）：超过 4 MB 挪成 gateway.log.1（只留一份旧的），单行截到 4000 字，

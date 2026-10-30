@@ -2457,3 +2457,14 @@
 2457	Enregistré dans le dossier privé de l’app. Les autres apps ne peuvent pas le lire.
 2458	Cette session a déjà le nombre maximal de sources ajoutées ({n}).
 2459	Le message de fusion n’a pas été envoyé, car vous avez changé de session. Il est copié : collez-le dans une nouvelle conversation.
+2460	Autoriser cette page à se connecter à Internet ?\n\nUne fois en ligne, les scripts de la page peuvent envoyer ailleurs les fichiers de son dossier. N'autorisez que les pages de confiance.
+2461	Réseau
+2462	Ce fichier ne peut pas être exporté
+2463	Cette page a tenté d'accéder à Internet ({hosts}) et a été bloquée. Touchez « Réseau » ci-dessus si nécessaire.
+2464	CLAUDE.md est trop volumineux (plus de 4 Mo)
+2465	Une ligne du fichier dépasse {n} Mo et ne peut pas être traitée
+2466	Une entrée de cette archive serait écrite en dehors ({p}) ; par sécurité, elle n'a pas été extraite
+2467	Le CLAUDE.md de ce projet n'est pas un fichier ordinaire (peut-être un lien symbolique) ; il n'est ni lu ni écrit ici
+2468	Ce message est trop long (plus de 2 000 000 caractères). Envoyez-le plutôt en fichier.
+2469	Trop de fichiers portant le même nom dans le dossier d'export
+2470	L'ouvrir dans le navigateur retire la protection « Hors ligne » : les scripts de la page peuvent envoyer ailleurs les fichiers de son dossier. Ne le faites que pour des pages de confiance.

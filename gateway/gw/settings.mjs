@@ -6,7 +6,7 @@ import { setBridgeUpstream } from "./claude.mjs";
 import { MAX_PARALLEL_CAP, RUNS, maxParallel } from "./runs.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
 import { customRefresh } from "./custom.mjs";
-import { idleDisarmAll, publishState, pump, setPermMode } from "./queue.mjs";
+import { idleDisarmAll, publishState, pump, setPermMode, strList } from "./queue.mjs";
 
 export { SETTINGS, saveSettings } from "./settings-store.mjs";
 import { SETTINGS, saveSettings } from "./settings-store.mjs";
@@ -84,9 +84,10 @@ export async function routeSettings(req, res, u, p) {
       // 权限模式只收 claude 认的值；正在跑的那一轮也当场切过去
       if ("permissionMode" in b && b.permissionMode !== SETTINGS.permissionMode) setPermMode(String(b.permissionMode || "default"));
       if (b.permNotice === false) SETTINGS.permNotice = false;
-      if (Array.isArray(b.addDirs)) SETTINGS.addDirs = b.addDirs.filter((d) => typeof d === "string");
-      if (Array.isArray(b.allowedTools)) SETTINGS.allowedTools = b.allowedTools;
-      if (Array.isArray(b.disallowedTools)) SETTINGS.disallowedTools = b.disallowedTools;
+      // 条数、长度都有上限：每一轮都要拼进 claude 的命令行，塞几万条会 E2BIG，claude 再也起不来、重启也好不了（审查 v0513b 低-3）
+      if (Array.isArray(b.addDirs)) SETTINGS.addDirs = strList(b.addDirs, 64, 4096, 16384);
+      if (Array.isArray(b.allowedTools)) SETTINGS.allowedTools = strList(b.allowedTools, 200, 512, 8192);
+      if (Array.isArray(b.disallowedTools)) SETTINGS.disallowedTools = strList(b.disallowedTools, 200, 512, 8192);
       if (b.memGuard && typeof b.memGuard === "object") {
         const g = SETTINGS.memGuard || {};
         SETTINGS.memGuard = {

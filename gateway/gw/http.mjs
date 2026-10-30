@@ -182,3 +182,5 @@ export function readBody(req) {
 
 // 路由函数没认领这个请求时返回它，交给下一个
 export const NEXT = Symbol("next");
+/** 解网址里的一段：畸形的 %xx 返回空串（不抛 URIError 成 500，审查 v0513b 低-6） */
+export const dec = (s) => { try { return decodeURIComponent(s); } catch { return ""; } };

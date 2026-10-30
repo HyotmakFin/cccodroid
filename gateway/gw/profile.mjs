@@ -190,7 +190,17 @@ export async function turnDetail(id, from, to) {
   if (ch.error || !ch.turns.some((u) => u.off === from && to <= u.end)) return { error: "bad_range" };
   const key = `t:${id}:${from}:${to}`;
   if (CACHE.has(key)) return remember(key, CACHE.get(key));
-
+  // 没缓存的大轮一次只读一个：一轮最多 RANGE_MAX，几个请求同时来就是几倍的读盘和解析（审查 v0513b 低-30）
+  const prev = TD_LOCK;
+  let release; TD_LOCK = new Promise((r) => (release = r));
+  try {
+    await prev;
+    if (CACHE.has(key)) return remember(key, CACHE.get(key));
+    return await turnDetailRead(id, file, from, to, key);
+  } finally { release(); }
+}
+let TD_LOCK = Promise.resolve();
+async function turnDetailRead(id, file, from, to, key) {
   const main = [], open = new Map(), agentCalls = [];
   let t0 = 0, t1 = 0, q = "", more = 0;
   await rangeLines(file, from, to, (b) => {

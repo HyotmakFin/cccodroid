@@ -154,9 +154,10 @@
   const profName = () => profile().name || (acctEmail ? acctEmail.split("@")[0] : "") || "cccodroid";
   function paintAv(el, p) {
     p = p || profile();
-    el.style.backgroundImage = p.av ? `url("${p.av}")` : "";
-    el.classList.toggle("img", !!p.av);
-    el.textContent = p.av ? "" : (profName().trim()[0] || "C").toUpperCase();
+    const av = typeof p.av === "string" && /^data:image\/[a-z+.-]+;base64,[A-Za-z0-9+\/=]+$/.test(p.av) ? p.av : "";   // 只认本机存的 data: 图片
+    el.style.backgroundImage = av ? `url("${av}")` : "";
+    el.classList.toggle("img", !!av);
+    el.textContent = av ? "" : (profName().trim()[0] || "C").toUpperCase();
   }
   function saveProfile(patch) {
     const p = Object.assign(profile(), patch);

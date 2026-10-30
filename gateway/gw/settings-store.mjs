@@ -36,12 +36,29 @@ export const SETTINGS = {
   localMode: "chat",
 };
 
+/** 字符串数组：只留字符串，条数、每条长度、总长（字）都有上限 */
+export function capList(a, n, len, total = Infinity) {
+  const out = [];
+  let sum = 0;
+  for (const x of Array.isArray(a) ? a : []) {
+    if (typeof x !== "string" || x.length > len) continue;
+    if (out.length >= n || sum + x.length > total) break;
+    out.push(x); sum += x.length;
+  }
+  return out;
+}
 function loadSettings() {
   let had = false;
   try {
     Object.assign(SETTINGS, JSON.parse(fs.readFileSync(PATHS.settings, "utf8")));
     had = true;
   } catch {}
+  // 旧版没限过：已经存进去的超长列表在这里截住，别让它每一轮把 claude 的命令行撑爆（审查 v0513b 低-3）
+  // 条数、每条长度之外还要管总长：64×4096 加上工具名单能超过 ARG_MAX（128 KB），每轮 spawn 都 E2BIG（10-31 复核）
+  const cap = (a, n, len, total) => (Array.isArray(a) ? capList(a, n, len, total) : a);
+  SETTINGS.addDirs = cap(SETTINGS.addDirs, 64, 4096, 16384) || [];
+  if (SETTINGS.allowedTools) SETTINGS.allowedTools = cap(SETTINGS.allowedTools, 200, 512, 8192);
+  if (SETTINGS.disallowedTools) SETTINGS.disallowedTools = cap(SETTINGS.disallowedTools, 200, 512, 8192);
   // 权限模式一次性迁移：以前界面没法点「允许」，默认只能全部放行。设置里的 bypassPermissions
   // 分不清是用户选的还是当年的默认值 —— 一律改回逐项确认，界面给一条可关的提示；之后再选回去就尊重用户。
   // manual 是旧下拉里的无效值（claude 不认），同样改掉。

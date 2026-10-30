@@ -77,10 +77,21 @@ test("项目指令：读不了（不是「没有」）报 500，不当成空的�
   const id = (await r.json()).project.id;
   let g = await (await go(`/api/projects/${id}/instr`)).json();
   assert.deepEqual(g, { text: "", exists: false });
-  fs.mkdirSync(path.join(dir, "CLAUDE.md"));     // 读它会 EISDIR：和没权限一样是「读不了」
+  fs.mkdirSync(path.join(dir, "CLAUDE.md"));     // 不是普通文件：和没权限一样是「读不了」（v0513b 起不跟软链、不读目录，报 409）
   const bad = await go(`/api/projects/${id}/instr`);
-  assert.equal(bad.status, 500);
+  assert.ok(bad.status >= 400 && bad.status !== 404, String(bad.status));
   fs.rmdirSync(path.join(dir, "CLAUDE.md"));
+  // 软链：读不出它指向的文件，保存也不会写穿过去（审查 v0513b 低-13）
+  const target = path.join(process.env.CCAPP_HOME, "secret-target.json");
+  fs.writeFileSync(target, "{\"k\":\"v\"}");
+  fs.symlinkSync(target, path.join(dir, "CLAUDE.md"));
+  const viaLink = await go(`/api/projects/${id}/instr`);
+  assert.equal(viaLink.status, 409);
+  assert.ok(!(await viaLink.text()).includes("\"k\""));
+  const put = await go(`/api/projects/${id}/instr`, { method: "PUT", body: JSON.stringify({ text: "盖掉" }) });
+  assert.equal(put.status, 409);
+  assert.equal(fs.readFileSync(target, "utf8"), "{\"k\":\"v\"}");
+  fs.rmSync(path.join(dir, "CLAUDE.md"));
   fs.writeFileSync(path.join(dir, "CLAUDE.md"), "规矩\n");
   g = await (await go(`/api/projects/${id}/instr`)).json();
   assert.equal(g.text, "规矩\n");

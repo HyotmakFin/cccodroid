@@ -55,9 +55,12 @@ export function recordExtra(child, list) {
 
 /** 去掉一条附加父（补记错了） */
 export function dropExtra(child, id) {
-  const db = lineageDb(), cur = db.edges[child];
-  if (!cur || !cur.extra) return;
-  cur.extra = cur.extra.filter((x) => x.id !== id);
+  if (!child || !id) return;
+  const db = lineageDb(), cur = db.edges[child] || (db.edges[child] = {});
+  if (cur.extra) cur.extra = cur.extra.filter((x) => x.id !== id);
+  // 同时记一笔「别按落款连它」：落款在会话正文里删不掉，导进来的记录、伪造的落款都能凭空连出汇合线（审查 v0513b 低-25）
+  const no = new Set(cur.nosig || []); no.add(id);
+  cur.nosig = [...no].slice(-EXTRA_MAX);
   save();
 }
 

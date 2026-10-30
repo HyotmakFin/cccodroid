@@ -69,7 +69,9 @@ export function validateTitle(raw, lang) {
 }
 
 const STATUS = { 进行中: "ongoing", 已完成: "done", 完成: "done", 搁置: "paused", 暂停: "paused", ongoing: "ongoing", done: "done", paused: "paused" };
-export const normStatus = (s) => (s == null || s === "" ? null : STATUS[String(s).trim().toLowerCase()] || STATUS[String(s).trim()] || undefined);
+// 只查表自己的键：「constructor」「__proto__」这类原型上的名字不算（审查 v0513b 低-26）
+const own = (k) => (Object.hasOwn(STATUS, k) ? STATUS[k] : undefined);
+export const normStatus = (s) => (s == null || s === "" ? null : own(String(s).trim().toLowerCase()) || own(String(s).trim()) || undefined);
 
 export const archiveNo = (sid, n) => `${String(sid).slice(0, 4)}·${n}`;
 

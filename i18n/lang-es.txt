@@ -2457,3 +2457,14 @@
 2457	Guardado en la carpeta privada de la app. Otras apps no pueden leerlo.
 2458	Esta sesión ya tiene el máximo de fuentes añadidas ({n}).
 2459	El mensaje de fusión no se envió porque cambiaste de sesión. Está copiado; pégalo en una conversación nueva.
+2460	¿Permitir que esta página se conecte a Internet?\n\nCon conexión, los scripts de la página pueden enviar a otro sitio los archivos de su carpeta. Permítelo solo en páginas de confianza.
+2461	Red
+2462	Este archivo no se puede exportar
+2463	Esta página intentó conectarse a Internet ({hosts}) y se bloqueó. Toca «Red» arriba si lo necesita.
+2464	CLAUDE.md es demasiado grande (más de 4 MB)
+2465	Una línea del archivo supera {n} MB y no se puede procesar
+2466	Una entrada de este archivo se escribiría fuera de él ({p}); por seguridad no se extrajo
+2467	El CLAUDE.md de este proyecto no es un archivo normal (quizá un enlace simbólico); aquí no se lee ni se escribe
+2468	Este mensaje es demasiado largo (más de 2.000.000 caracteres). Envíalo como archivo.
+2469	Hay demasiados archivos con el mismo nombre en la carpeta de exportación
+2470	Abrirla en el navegador quita la protección «Sin conexión»: los scripts de la página pueden enviar a otro sitio los archivos de su carpeta. Hazlo solo con páginas de confianza.

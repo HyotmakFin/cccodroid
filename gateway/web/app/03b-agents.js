@@ -153,7 +153,7 @@
         const line2 = a.status === "running" ? a.now : a.why;
         const links = [a.brief ? `<a class="fpath agr-f" href="#" data-path="${esc(a.brief)}">${esc(t("交代"))}</a>` : "",
                        a.report ? `<a class="fpath agr-f" href="#" data-path="${esc(a.report)}">${esc(t("汇报"))}</a>` : ""].join("");
-        return `<div class="agr ${a.status}" data-id="${esc(a.id)}" style="--d:${Math.min(4, (a.depth || 1) - 1)}">` +
+        return `<div class="agr ${esc(a.status)}" data-id="${esc(a.id)}" style="--d:${Math.min(4, (a.depth || 1) - 1)}">` +
           `<div class="agr-1"><span class="agr-dot"></span><span class="agr-n">${esc(a.name)}</span><span class="agr-c">${esc(meta)}</span></div>` +
           (line2 || links ? `<div class="agr-2"><span class="agr-m">${esc(line2 || "")}</span>${links}</div>` : "") + `</div>`;
       }).join("");
