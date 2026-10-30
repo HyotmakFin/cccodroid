@@ -2460,5 +2460,13 @@ window.I18N_DICT.en = {
   "（带附件）": "(with attachments)",
   "没调用工具。": "No tools called.",
   "剖面": "Drill down",
-  "看这个会话一轮轮是怎么跑下来的": "See how this session ran, turn by turn"
+  "看这个会话一轮轮是怎么跑下来的": "See how this session ran, turn by turn",
+  "导出这张图": "Export this map",
+  "图片（PNG）": "Image (PNG)",
+  "矢量图（SVG）": "Vector (SVG)",
+  "能拖能点的网页（HTML）": "Interactive web page (HTML)",
+  "图上还没有会话": "There are no sessions on the map yet",
+  "导出失败：{e}": "Export failed: {e}",
+  "图片没画出来": "The image couldn't be drawn",
+  "已导出：{name}": "Exported: {name}"
 };

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { chapterProfile, routeProfile, turnDetail } from "../gw/profile.mjs";
+import { chapterProfile, routeProfile, saveExport, turnDetail } from "../gw/profile.mjs";
 
 const id = () => crypto.randomUUID();
 const T0 = Date.parse("2026-10-21T00:00:00Z");
@@ -87,4 +87,15 @@ test("接口：会话号要合规，找不到给 404", async () => {
   const r = await run("/api/lineage/profile?id=" + S + "&ch=1");
   assert.equal(r.code, 200);
   assert.equal(r.body.turns.length, 2);
+});
+
+test("导出落盘：只认 cccodroid-lineage-*.svg/png/html，内容要对得上格式", () => {
+  const ok = saveExport("cccodroid-lineage-20261030-2300.svg", '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+  assert.equal(ok.ok, true);
+  assert.equal(fs.readFileSync(ok.file, "utf8").slice(0, 4), "<svg");
+  assert.equal(saveExport("../x.svg", "<svg/>").error, "bad_name");
+  assert.equal(saveExport("cccodroid-lineage-a.svg", "<script>").error, "bad_svg");
+  assert.equal(saveExport("cccodroid-lineage-a.html", "<html>").error, "bad_html");
+  assert.equal(saveExport("cccodroid-lineage-a.png", Buffer.from("not a png at all, really not, padding padding padding padding padding padding padding padding padding").toString("base64")).error, "bad_png");
+  assert.equal(saveExport("cccodroid-lineage-a.html", "<!doctype html><p>x").ok, true);
 });

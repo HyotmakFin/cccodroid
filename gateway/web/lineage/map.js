@@ -148,11 +148,10 @@
     function bandName(key) { const b = (st.model.bands || []).find((x) => x.key === key); return b ? b.name : key; }
 
     // ── 画（平板）──
-    function paint() {
-      const AX = st.AX = buildAxis(st.k), L = st.L = layout(), BY = st.BY, PK = st.pick, sel = PK ? null : st.sel, fam = sel ? family(sel) : null;
-      const W = st.W = AX.width, H = st.H = L.height;
-      // 时间轴底色按整张图宽铺：原先 right:0 只有画布宽，往左拖到头时右边露出一截没底色的空白
-      layer.axis.style.width = Math.max(W, cv.clientWidth) + "px";
+    /** 画面的 SVG 片段（paint 上屏、snapshot 导出共用）：k 缩放、PK 多选、sel 选中 */
+    function scene(k, PK, sel) {
+      const AX = st.AX = buildAxis(k), L = st.L = layout(), BY = st.BY, fam = sel ? family(sel) : null;
+      const W = AX.width, H = L.height;
       const g = [], ax = [], lines = [], labels = [], hits = [], sts = [];
       for (const [ms, x] of AX.ticks) {
         g.push(`<line x1="${x}" y1="30" x2="${x}" y2="${H}" class="lm-grid"/>`);
@@ -238,6 +237,14 @@
         // 点按热区：比线粗得多的透明描边 + 标题那一块
         hits.push(`<line data-id="${esc(s.id)}" x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="transparent" stroke-width="22"/><rect data-id="${esc(s.id)}" x="${x0 - 4}" y="${y - 26}" width="${Math.max(x1 - x0, textW(clip(s.title)) + 8)}" height="22" fill="transparent"/>`);
       }
+      return { W, H, L, g, ax, lines, labels, hits, sts };
+    }
+    function paint() {
+      const PK = st.pick, sel = PK ? null : st.sel;
+      const { W, H, L, g, ax, lines, labels, hits, sts } = scene(st.k, PK, sel);
+      st.W = W; st.H = H;
+      // 时间轴底色按整张图宽铺：原先 right:0 只有画布宽，往左拖到头时右边露出一截没底色的空白
+      layer.axis.style.width = Math.max(W, cv.clientWidth) + "px";
       layer.main.innerHTML = `<svg width="${W}" height="${H}">${g.join("")}${lines.join("")}${labels.join("")}${hits.join("")}${sts.join("")}</svg>`;
       layer.axis.innerHTML = `<svg width="${W}" height="30">${ax.join("")}</svg>`;
       layer.band.innerHTML = L.bandY.map((b) => `<div style="top:${b.y + 4}px">${esc(bandName(b.key))}</div>`).join("");
@@ -245,6 +252,35 @@
       root.classList.toggle("picking", !!PK);
       st.sticky = layer.main.querySelectorAll ? [...layer.main.querySelectorAll("text[data-sx]")].map((el) => ({ el, sx: +el.dataset.sx, ex: +el.dataset.ex, w: +el.dataset.w, x: +el.dataset.sx })) : [];
       place();
+    }
+
+    // ── 导出（规划书 §4 阶段 4）：整张图（不带选中、不带热区）画成独立的 SVG。
+    // 颜色、字号这些靠样式表给的东西，先在页面里离屏摆一份读出计算后的值，逐个写进元素自己的 style —— 拿出去单独打开也是这个样子
+    function snapshot(o = {}) {
+      if (!st.model || !st.vis.length) return null;
+      const keep = { AX: st.AX, L: st.L };
+      const S = scene(st.mode === "map" ? st.k : 1, null, null);
+      st.AX = keep.AX; st.L = keep.L;
+      const box = document.createElement("div");
+      box.className = "lm-canvas";
+      box.style.cssText = "position:absolute;left:-200000px;top:0;visibility:hidden;display:block;pointer-events:none";
+      box.innerHTML = `<div class="lm-main"><svg>${S.g.join("")}${S.lines.join("")}${S.labels.join("")}</svg></div><div class="lm-axis"><svg>${S.ax.join("")}</svg></div><div class="lm-band">${S.L.bandY.map((b) => `<div>${esc(bandName(b.key))}</div>`).join("")}</div>`;
+      root.appendChild(box);
+      try {
+        const PROPS = ["fill", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "paint-order", "opacity", "font-family", "font-size", "font-weight", "letter-spacing"];
+        for (const el of box.querySelectorAll("svg *")) {
+          const cs = getComputedStyle(el);
+          el.setAttribute("style", PROPS.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(";"));
+          el.removeAttribute("class"); el.removeAttribute("data-sx"); el.removeAttribute("data-ex"); el.removeAttribute("data-w");
+        }
+        const ser = new XMLSerializer(), inner = (sel) => [...box.querySelector(sel).childNodes].map((n) => ser.serializeToString(n)).join("");
+        const bcs = getComputedStyle(box.querySelector(".lm-band > div") || box);
+        const bg = o.bg || getComputedStyle(document.body).backgroundColor || "#fff", FOOT = o.foot ? 34 : 0;
+        const bands = S.L.bandY.map((b) => `<text x="14" y="${b.y + 18}" style="fill:${bcs.color};font-family:${bcs.fontFamily.replace(/"/g, "'")};font-size:${bcs.fontSize};font-weight:${bcs.fontWeight}">${esc(bandName(b.key))}</text>`).join("");
+        const foot = o.foot ? `<text x="14" y="${S.H + 22}" style="fill:${bcs.color};font-family:${bcs.fontFamily.replace(/"/g, "'")};font-size:12px">${esc(o.foot)}</text>` : "";
+        const W = S.W, H = S.H + FOOT;
+        return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${inner(".lm-main svg").replace(/<animate\b[^>]*\/>/g, "")}${inner(".lm-axis svg")}${bands}${foot}</svg>` };
+      } finally { box.remove(); }
     }
 
     // ── 卡片 ──
@@ -513,6 +549,7 @@
           clearTimeout(st.moT); st.moT = setTimeout(() => root.classList.remove("mo-pick"), 1200);
         }
       },
+      snapshot,
       state: () => ({ pick: st.pick ? [...st.pick.set] : null, sel: st.sel, k: st.k, tx: st.tx, ty: st.ty, mode: st.mode, W: st.W, H: st.H, n: st.vis.length }),
       destroy() { if (ro) ro.disconnect(); cancelAnimationFrame(st.raf); root.innerHTML = ""; root.classList.remove("lmap", "tree"); },
     };

@@ -1,11 +1,14 @@
 // 脉络 · 剖面（规划书 §4 阶段 3）：钻进一个会话看它是怎么一轮轮跑下来的。
 //   GET /api/lineage/profile?id=&ch=n     第 n 章的每一轮：起止、工具调用数、子代理数、出错数；这一轮里长出去的分叉 / 回退 / 汇合
+//   POST /api/lineage/export { name, data }  导出（阶段 4）：前端画好的 SVG / PNG / 单文件网页落到导出目录，再交给「保存到」/ 分享
 //   GET /api/lineage/turn?id=&from=&to=   一轮的细节（from/to 是上一个接口给的字节位置）：主会话每次工具调用的起止，
 //                                         子代理各自的起止与里面的工具调用（subagents/agent-*.jsonl，套娃的也带上）
 // 章有字节位置（扫描时记下的压缩摘要 off），按章分段读，不从头翻；巨型工具结果那种超长行不解析，只摘时间戳和出错标记。
 // 会话记录一个字节都不改。
 import fs from "node:fs";
-import { NEXT, sendJson } from "./http.mjs";
+import path from "node:path";
+import { CFG } from "./config.mjs";
+import { NEXT, readBodyBuf, sendJson } from "./http.mjs";
 import { lineageFile, lineageGraph, lineageRecord } from "./lineage.mjs";
 import { agentFilesOf } from "./transcript.mjs";
 
@@ -226,7 +229,36 @@ export async function turnDetail(id, from, to) {
   return remember(key, { id, from, to, q: one(q), t0, t1, main, more, agents });
 }
 
+/** 导出文件落盘：和用量月报同一个导出目录（共享存储有就放那儿，用户在文件管理里找得到） */
+const EXPORT_MAX = 48 << 20;
+export function saveExport(name, data) {
+  const m = /^cccodroid-lineage-[\w.-]{1,80}\.(svg|png|html)$/.exec(String(name || ""));
+  if (!m || name.includes("..")) return { error: "bad_name" };
+  let buf;
+  if (m[1] === "png") {
+    buf = Buffer.from(String(data || ""), "base64");
+    if (buf.length < 100 || buf.readUInt32BE(0) !== 0x89504e47) return { error: "bad_png" };
+  } else {
+    const t = String(data || "");
+    if (m[1] === "svg" ? !t.startsWith("<svg") : !/^<!doctype html>/i.test(t)) return { error: "bad_" + m[1] };
+    buf = Buffer.from(t, "utf8");
+  }
+  if (buf.length > EXPORT_MAX) return { error: "too_big" };
+  const base = process.env.CCAPP_SHARED && fs.existsSync(process.env.CCAPP_SHARED) ? process.env.CCAPP_SHARED : CFG.home;
+  const dir = path.join(base, "exports");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, buf);
+  return { ok: true, file };
+}
+
 export async function routeProfile(req, res, u, p) {
+  if (p === "/api/lineage/export") {
+    if (req.method !== "POST") return sendJson(res, 405, { error: "method" });
+    let b; try { b = JSON.parse((await readBodyBuf(req, Math.ceil(EXPORT_MAX * 1.4) + 4096)).toString("utf8") || "{}"); } catch { return sendJson(res, 400, { error: "bad_json" }); }
+    const r = saveExport(b.name, b.data);
+    return sendJson(res, r.error ? 400 : 200, r);
+  }
   if (p !== "/api/lineage/profile" && p !== "/api/lineage/turn") return NEXT;
   if (req.method !== "GET") return sendJson(res, 405, { error: "method" });
   const id = u.searchParams.get("id") || "";

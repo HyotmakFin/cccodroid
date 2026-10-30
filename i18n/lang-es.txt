@@ -2423,3 +2423,11 @@
 2423	No se llamó a ninguna herramienta.
 2424	Detalle
 2425	Ver cómo transcurrió esta sesión, turno a turno
+2426	Exportar este mapa
+2427	Imagen (PNG)
+2428	Vectorial (SVG)
+2429	Página web interactiva (HTML)
+2430	Aún no hay sesiones en el mapa
+2431	Error al exportar: {e}
+2432	No se pudo dibujar la imagen
+2433	Exportado: {name}

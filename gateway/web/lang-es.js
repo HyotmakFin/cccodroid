@@ -2426,4 +2426,12 @@ window.I18N_DICT["es"] = {
   "没调用工具。": "No se llamó a ninguna herramienta.",
   "剖面": "Detalle",
   "看这个会话一轮轮是怎么跑下来的": "Ver cómo transcurrió esta sesión, turno a turno",
+  "导出这张图": "Exportar este mapa",
+  "图片（PNG）": "Imagen (PNG)",
+  "矢量图（SVG）": "Vectorial (SVG)",
+  "能拖能点的网页（HTML）": "Página web interactiva (HTML)",
+  "图上还没有会话": "Aún no hay sesiones en el mapa",
+  "导出失败：{e}": "Error al exportar: {e}",
+  "图片没画出来": "No se pudo dibujar la imagen",
+  "已导出：{name}": "Exportado: {name}",
 };

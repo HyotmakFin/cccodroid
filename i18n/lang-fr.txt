@@ -2423,3 +2423,11 @@
 2423	Aucun outil appelé.
 2424	Détail
 2425	Voir le déroulé de cette session, tour par tour
+2426	Exporter cette carte
+2427	Image (PNG)
+2428	Vectoriel (SVG)
+2429	Page web interactive (HTML)
+2430	Aucune session sur la carte pour l'instant
+2431	Échec de l'export : {e}
+2432	Impossible de dessiner l'image
+2433	Exporté : {name}
