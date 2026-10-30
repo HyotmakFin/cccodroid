@@ -98,6 +98,12 @@ Some third-party API setups translate Anthropic requests to the OpenAI format an
 
 **Workaround:** from 0.5.8 the custom provider card has "Send images inside the message (compatibility)". With it on, each attached image is also put directly in the user message (a spot every setup handles); the `@path` route still works alongside it. Large images are shrunk to 1568 px on the long edge first; large images in mid-turn follow-ups are not shrunk and only go through Read. You don't need it with Anthropic or a provider's own API.
 
+## 8. Stuck on "Waiting for gateway…" after launch (investigating)
+
+One user hit this on a Samsung tablet (One UI, Android 16): the launch screen stayed on "Waiting for gateway…" for two to three minutes before the app opened. The diagnostics showed the gateway starting normally every time, with no errors. The phone happened to be offline at the time, and the root cause isn't known yet.
+
+**Workaround:** update to the latest version first. If it gets stuck there, give it a minute or two instead of swiping the app away and reopening it, since every restart begins the wait from scratch. Once it opens, send a diagnostics bundle from Settings → Troubleshooting.
+
 ## For developers: tests can create fake bugs
 
 Item 1 is tied to automated testing (item 2 has been confirmed not to be). Before fixing a problem like this, make sure it **also happens with no tests running**:
