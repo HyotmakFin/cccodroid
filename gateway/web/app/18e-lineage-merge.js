@@ -48,7 +48,7 @@
   // 卡片「更多…」：从这里分叉、补记来源、撤掉补错的来源
   function linMore(id, el) { popMenu(el, linMoreItems(id)); }
   /** 手机缩进树没有卡片：这几项和「汇合…」接在会话的脉络弹层后面 */
-  function linTreeItems(id) { return ["hr", { label: t("汇合…"), icon: SM.lineage, fn: () => linPickStart("merge", [id]) }, ...linMoreItems(id)]; }
+  function linTreeItems(id) { return ["hr", { label: t("剖面"), icon: SM.lineage, fn: () => linProfOpen(id) }, { label: t("汇合…"), icon: SM.lineage, fn: () => linPickStart("merge", [id]) }, ...linMoreItems(id)]; }
   function linMoreItems(id) {
     const node = LIN.g && LIN.g.nodes.find((x) => x.id === id);
     const name = (x) => { const n = LIN.g.nodes.find((y) => y.id === x); return ((n && n.title) || x.slice(0, 8)).slice(0, 20); };

@@ -2387,3 +2387,39 @@
 2387	Cette session ne contient encore aucun message de votre part : impossible de la bifurquer.
 2388	Impossible de lire le répertoire de l'archive ; elle est peut-être endommagée
 2389	Une fois décompressé, il fait {n} Mo, au-delà de la limite de {max} Mo
+2390	Tour {n}
+2391	Fermer le détail
+2392	Lecture du chapitre…
+2393	Lecture impossible : {e}
+2394	Retour arrière vers
+2395	Fusionné dans
+2396	Bifurqué vers
+2397	Ce chapitre n'existe pas
+2398	Ce chapitre n'a pas encore de tour complet.
+2399	Actif pendant {d}
+2400	{n} appels d'outils
+2401	{n} sous-agents
+2402	{n} erreurs
+2403	chapitre en cours
+2404	{d} plus tard
+2405	Outils {n}
+2406	Réponse directe
+2407	Sous-agents {n}
+2408	Erreurs {n}
+2409	(suite du tour du chapitre précédent)
+2410	Trop de tours dans ce chapitre : seuls les {n} premiers sont listés.
+2411	Cette session est dans la corbeille
+2412	Lecture du tour…
+2413	Réflexion avant l'appel
+2414	Outil en cours
+2415	Voir ce tour dans la conversation
+2416	Fin non enregistrée
+2417	{n} étapes en erreur
+2418	arrière-plan
+2419	Aucun outil appelé dans ce tour : réponse directe.
+2420	{n} autres appels d'outils non listés.
+2421	Réflexion {a} · exécution {b}
+2422	(avec pièces jointes)
+2423	Aucun outil appelé.
+2424	Détail
+2425	Voir le déroulé de cette session, tour par tour

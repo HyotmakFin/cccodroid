@@ -452,6 +452,7 @@
       ["popup", hidePopup],
       ["sheet", () => MO.hide($("sheet"), "mo-out-sheet")],
       ["drawer", closeDrawer],
+      ["lin-prof", linProfBack],        // 脉络的剖面：一轮 → 一章 → 钻进来之前的会话 → 收起，再往下才关整页
       // 项目 / 定时任务的详情：先回列表，再关整页
       ["pages", () => { if (curPage === "projects" && PJ.cur) { PJ.cur = null; PJ.detail = null; renderProjects(); } else if (curPage === "sched" && SC.cur) { SC.cur = null; SC.detail = null; renderSched(); } else closePage(); }],
     ];

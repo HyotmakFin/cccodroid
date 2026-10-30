@@ -8,7 +8,7 @@
     LIN.map = CCLineageMap.create($("lin-map"), {
       t, locale: I18N.lang, misc: LIN.misc, band: LIN.band,
       acts: (s) => s.trashed ? [{ act: "restore", label: t("恢复"), pri: true }]
-        : [{ act: "open", label: t("打开"), pri: true }, { act: "menu", label: t("章节与题名") }, { act: "merge", label: t("汇合…"), title: t("把几个会话的思路合进一个新会话") }, { act: "more", label: t("更多…") }],
+        : [{ act: "open", label: t("打开"), pri: true }, { act: "prof", label: t("剖面"), title: t("看这个会话一轮轮是怎么跑下来的") }, { act: "menu", label: t("章节与题名") }, { act: "merge", label: t("汇合…"), title: t("把几个会话的思路合进一个新会话") }, { act: "more", label: t("更多…") }],
       onAct: linAct,
     });
     return LIN.map;
@@ -16,6 +16,7 @@
   function linAct(act, arg, el, sel) {
     if (act === "open" && arg && arg !== sel) return openSession(arg);   // 定时任务卡片里点某一次
     if (act === "open") return openSession(sel);
+    if (act === "prof") return linProfOpen(sel);   // 18f-lineage-profile.js
     if (act === "merge") return linPickStart("merge", [sel]);   // 18e-lineage-merge.js
     if (act === "more") return linMore(sel, el);
     if (act === "chapter") {

@@ -2387,3 +2387,39 @@
 2387	Esta sesión aún no tiene mensajes tuyos, así que no se puede bifurcar.
 2388	No se puede leer el directorio del archivo comprimido; puede estar dañado
 2389	Descomprimido ocupa {n} MB, más que el límite de {max} MB
+2390	Turno {n}
+2391	Cerrar el detalle
+2392	Leyendo este capítulo…
+2393	No se pudo leer: {e}
+2394	Retroceso a
+2395	Fusionado en
+2396	Bifurcado a
+2397	No existe ese capítulo
+2398	Este capítulo aún no tiene ningún turno completo.
+2399	Trabajando {d}
+2400	{n} llamadas a herramientas
+2401	{n} subagentes
+2402	{n} errores
+2403	capítulo en curso
+2404	{d} después
+2405	Herramientas {n}
+2406	Respuesta directa
+2407	Subagentes {n}
+2408	Errores {n}
+2409	(continúa el turno del capítulo anterior)
+2410	Este capítulo tiene demasiados turnos; solo se muestran los primeros {n}.
+2411	Esta sesión está en la papelera
+2412	Leyendo este turno…
+2413	Pensando antes de la llamada
+2414	Herramienta en marcha
+2415	Ver este turno en la conversación
+2416	Sin registro de fin
+2417	{n} pasos fallaron
+2418	segundo plano
+2419	En este turno no se usaron herramientas; se respondió directamente.
+2420	Otras {n} llamadas a herramientas no se muestran.
+2421	Pensó {a} · ejecutó {b}
+2422	(con adjuntos)
+2423	No se llamó a ninguna herramienta.
+2424	Detalle
+2425	Ver cómo transcurrió esta sesión, turno a turno
