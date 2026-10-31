@@ -118,6 +118,8 @@ function recoverRunMark() {
   for (const q of Array.isArray(m.queue) ? m.queue : []) {
     if (!q || !q.id || typeof q.message !== "string") continue;
     if (!q.sessionId && q.follow && RUN_SESSIONS.get(q.follow)) q.sessionId = RUN_SESSIONS.get(q.follow);
+    // 会话已经删了（进了回收站）：这条再也看不到、点不了 ⚡，留着只会让 queued 一直不为 0，工具包更新永远等「任务结束」（群友 10-31）
+    if (q.sessionId && !findSessionFile(q.sessionId)) { log(`  会话 ${q.sessionId} 已不在，丢掉它排着的一条消息`); continue; }
     QUEUE.push({ ...q, held: true, intr: true });   // intr：前端据此说「被系统中断」而不是「点了停止」
   }
   if (QUEUE.length) { log(`  排队的 ${QUEUE.length} 条消息已放回队列（挂起，等用户点 ⚡）`); saveRunMark(); }

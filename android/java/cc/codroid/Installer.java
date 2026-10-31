@@ -94,40 +94,167 @@ final class Installer {
             part.delete(); seg.delete();
             write(tag, id + "\n");
         }
-        // 换源队列：备用地址依次排上，最后兜底 GitHub 地址经 gh-proxy.com 加速（第三方，内容照样按 sha256 把关）
-        java.util.ArrayDeque<String> left = new java.util.ArrayDeque<>();
+        // 候选来源：主地址、备用地址，最后是 GitHub 地址经 gh-proxy.com 加速（第三方，内容照样按 sha256 把关）。
+        // 主地址和备用地址不再按写死的顺序排：先各要一小段测速，谁快谁当主，其余按快慢备用（群友 10-31：不开代理时 GitHub 卡住，镜像却通）。
+        // gh-proxy 不参与测速、始终垫底：第三方，前面的都不行才去碰它
+        java.util.List<String> cands = new java.util.ArrayList<>();
+        cands.add(url);
         String proxy = ghProxy(url);
-        for (String a : alts) if (a != null && !a.equals(url) && !left.contains(a)) { left.add(a); if (proxy == null) proxy = ghProxy(a); }
-        if (proxy != null && !proxy.equals(url)) left.add(proxy);
-        for (int attempt = 1, onUrl = 1; size <= 0 || part.length() < size || seg.isFile(); attempt++, onUrl++) {
-            try { if (size >= 2 * MIN_SEG && (seg.isFile() || rangeOk(url))) fetchSegmented(url, part, seg, size); else { fetchRange(url, part, size); if (size <= 0) break; } }
-            catch (IOException e) {
-                String next = left.peek();
-                if (next != null && onUrl >= 2) {      // 依次换，不回头
-                    ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(next)));
-                    url = left.poll(); onUrl = 0;
-                    continue;
-                }
-                // 慢但没断、又没别的来源可换：不算失败次数，接着续传（已下的不丢）——总比报错强
-                if (e instanceof SlowException) {
-                    attempt--;
-                    ui.step("  " + (next != null ? Tr.f("{0} 很慢（{1}），再试一次，还慢就换来源…", host(url), e.getMessage())
-                        : Tr.f("{0} 很慢（{1}），没有别的来源可换，接着下…", host(url), e.getMessage())));
-                    continue;
-                }
-                if (attempt >= 8) throw e;
-                ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
-                try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
-            }
+        for (String a : alts) if (a != null && !cands.contains(a)) { cands.add(a); if (proxy == null) proxy = ghProxy(a); }
+        if (cands.size() > 1 && (hostRank != null || size >= PROBE * 4)) {
+            if (hostRank == null) ui.step("  " + Tr.t("测速中…"));
+            cands = rank(cands, size);
         }
-        if (sha != null) {
+        if (proxy != null && !cands.contains(proxy)) cands.add(proxy);
+        // 这个 Installer 里给过校验不对的文件的主机：往后的文件（工具包按模块连着下）不再先找它，只留作最后的兜底
+        java.util.List<String> good = new java.util.ArrayList<>(), shunned = new java.util.ArrayList<>();
+        for (String c : cands) (badHosts.contains(host(c)) ? shunned : good).add(c);
+        if (!good.isEmpty()) { good.addAll(shunned); cands = good; }
+        url = cands.get(0);
+        if (cands.size() > 1) ui.step("  " + Tr.t("下载来源：") + host(url));
+        java.util.ArrayDeque<String> left = new java.util.ArrayDeque<>(cands.subList(1, cands.size()));
+        java.util.Set<String> tried = new java.util.HashSet<>();
+        tried.add(url);
+        for (int attempt = 1; ; ) {
+            for (; size <= 0 || part.length() < size || seg.isFile(); attempt++) {
+                try { if (size >= 2 * MIN_SEG && (seg.isFile() || rangeOk(url))) fetchSegmented(url, part, seg, size); else { fetchRange(url, part, size); if (size <= 0) break; } }
+                catch (IOException e) {
+                    String next = left.peek();
+                    if (next != null && attempt < 12) {      // 出一次错就换下一个，换下来的排到队尾，轮着来
+                        ui.step("  " + Tr.f("{0} 下载不顺（{1}），改从 {2} 续传…", host(url), e.getMessage(), host(next)));
+                        left.add(url);
+                        url = left.poll();
+                        // 一圈都试过了还不行：多半是网断了，歇一会儿再轮
+                        if (!tried.add(url)) try { Thread.sleep(Math.min(attempt * 2000L, 20000L)); } catch (InterruptedException ie) { throw new IOException(ie); }
+                        continue;
+                    }
+                    if (next != null) throw e;
+                    // 慢但没断、又没别的来源可换：不算失败次数，接着续传（已下的不丢）——总比报错强
+                    if (e instanceof SlowException) {
+                        attempt--;
+                        ui.step("  " + Tr.f("{0} 很慢（{1}），没有别的来源可换，接着下…", host(url), e.getMessage()));
+                        continue;
+                    }
+                    if (attempt >= 8) throw e;
+                    ui.step("  " + Tr.f("网络中断（{0}），{1} 秒后续传…", e.getMessage(), attempt * 3));
+                    try { Thread.sleep(attempt * 3000L); } catch (InterruptedException ie) { throw new IOException(ie); }
+                }
+            }
+            if (sha == null) break;
             String got = sha256(part);
-            if (!sha.equals(got)) { part.delete(); seg.delete(); throw new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12))); }
+            if (sha.equals(got)) break;
+            part.delete(); seg.delete();
+            IOException bad = new IOException(Tr.f("sha256 不符（期望 {0}…，实得 {1}…）", sha.substring(0, 12), got.substring(0, 12)));
+            // 大小对、内容不对：这一份是谁给的说不准（中途可能换过源），至少当前这个不再用；换下一个从头下，都换完了才报错。
+            // 坏来源装不进去这一点不变，只是别让它把重试也吃死
+            String next = left.poll();
+            if (next == null || attempt >= 12) throw bad;
+            ui.step("  " + Tr.f("{0} 下来的文件校验不对，改从 {1} 重下…", host(url), host(next)));
+            badHosts.add(host(url));
+            url = next;
+            attempt++;
         }
         done.delete();
         if (!part.renameTo(done)) throw new IOException(Tr.t("换名失败: ") + part);
         tag.delete();
+        lastHost = host(url);
         return done;
+    }
+
+    private final java.util.Set<String> badHosts = new java.util.HashSet<>();
+
+    /** 最近一次 download 最后是从哪台主机下完的（更新页写明来源） */
+    String lastHost;
+
+    // ── 来源测速 ──
+    // 每个来源同时要头 256 KB，按收完的用时排；第一个测完后最多再等 3 秒，没测完的排在测完的后面。
+    // 连不上的排到最后（可能只是一时不通，留作兜底）；回的总大小对不上的直接剔除（指错了文件）。
+    // 同一个 Installer 下多个文件（工具包按模块下）只测第一次，后面照这个名次排
+    static final int PROBE = 256 << 10;
+    private java.util.List<String> hostRank;
+
+    private java.util.List<String> rank(java.util.List<String> cands, long size) {
+        if (hostRank != null) {
+            java.util.List<String> r = new java.util.ArrayList<>(cands);
+            java.util.Collections.sort(r, (a, b) -> Integer.compare(rankOf(a), rankOf(b)));     // 稳定排序：没测过的主机保持原顺序排在后面
+            return r;
+        }
+        final int n = cands.size();
+        final long[] ms = new long[n];
+        final boolean[] fin = new boolean[n];
+        final Object lk = new Object();
+        for (int i = 0; i < n; i++) {
+            final int k = i;
+            Thread t = new Thread(() -> {
+                long v = probe(cands.get(k), size);
+                synchronized (lk) { ms[k] = v; fin[k] = true; lk.notifyAll(); }
+            }, "probe-" + i);
+            t.setDaemon(true);
+            t.start();
+        }
+        long t0 = System.currentTimeMillis(), firstOk = 0;
+        synchronized (lk) {
+            for (;;) {
+                boolean all = true;
+                for (int i = 0; i < n; i++) { all &= fin[i]; if (fin[i] && ms[i] > 0 && firstOk == 0) firstOk = System.currentTimeMillis(); }
+                long now = System.currentTimeMillis();
+                if (all || now - t0 >= 15000 || firstOk > 0 && now - firstOk >= 3000) break;
+                try { lk.wait(250); } catch (InterruptedException e) { break; }
+            }
+            java.util.List<Integer> ok = new java.util.ArrayList<>(), pending = new java.util.ArrayList<>(), down = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                if (!fin[i]) pending.add(i);
+                else if (ms[i] > 0) ok.add(i);
+                else if (ms[i] == -1) down.add(i);         // -2 大小不符：剔除
+            }
+            java.util.Collections.sort(ok, (a, b) -> Long.compare(ms[a], ms[b]));
+            java.util.List<String> r = new java.util.ArrayList<>();
+            StringBuilder log = new StringBuilder();
+            for (java.util.List<Integer> g : java.util.Arrays.asList(ok, pending, down)) for (int i : g) r.add(cands.get(i));
+            for (int i = 0; i < n; i++) log.append(host(cands.get(i))).append('=').append(!fin[i] ? "?" : ms[i] > 0 ? (ms[i] % NO_RANGE) + (ms[i] >= NO_RANGE ? "ms/no-range" : "ms") : ms[i] == -1 ? "down" : "mismatch").append(' ');
+            android.util.Log.i("Installer", "来源测速 " + log.toString().trim());
+            if (r.isEmpty()) return cands;      // 全都对不上大小：多半是清单写错了，按原顺序下，最后由 sha256 说话
+            if (!ok.isEmpty()) { hostRank = new java.util.ArrayList<>(); for (String u : r) hostRank.add(host(u)); }
+            return r;
+        }
+    }
+
+    private int rankOf(String url) {
+        int i = hostRank.indexOf(host(url));
+        return i < 0 ? hostRank.size() : i;
+    }
+
+    static final long NO_RANGE = 1_000_000;
+
+    /** 要头 PROBE 字节，返回收完的毫秒数（至少 1，不认 Range 的另加 NO_RANGE）；连不上/出错 -1；总大小与清单不符 -2 */
+    static long probe(String url, long size) {
+        long t0 = System.currentTimeMillis();
+        HttpURLConnection c = null;
+        try {
+            c = open(url);
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(10000);
+            c.setRequestProperty("Range", "bytes=0-" + (PROBE - 1));
+            int code = code(c, url);
+            if (code == 206) {
+                String cr = c.getHeaderField("Content-Range");
+                int slash = cr == null ? -1 : cr.lastIndexOf('/');
+                if (size > 0 && slash >= 0 && !"*".equals(cr.substring(slash + 1).trim()) && Long.parseLong(cr.substring(slash + 1).trim()) != size) return -2;
+            } else if (code == 200) {
+                long len = c.getContentLengthLong();
+                if (size > 0 && len >= 0 && len != size) return -2;
+            } else return -1;
+            long want = size > 0 ? Math.min(PROBE, size) : PROBE, got = 0;
+            byte[] buf = new byte[1 << 15];
+            try (InputStream in = c.getInputStream()) {
+                for (int r; got < want && (r = in.read(buf)) > 0; ) got += r;
+            }
+            if (got < want) return -1;
+            // 不认 Range 的（回 200）排在认的后面：大文件分段下、续传都用不了它，轮到它就得从头来
+            return Math.max(1, System.currentTimeMillis() - t0) + (code == 200 ? NO_RANGE : 0);
+        } catch (IOException | RuntimeException e) {
+            return -1;
+        } finally { if (c != null) c.disconnect(); }
     }
 
     static byte[] httpGetSmall(String url) throws IOException {
@@ -265,6 +392,8 @@ final class Installer {
                 }
             }
             ui.bytes(have, size);
+            // 对面干脆利落地提前关了连接：当作出错，好走重试/换源的计数，别无声无息地一遍遍重连
+            if (size > 0 && have < size) throw new IOException(Tr.t("连接提前结束"));
         } finally { c.disconnect(); }
     }
 

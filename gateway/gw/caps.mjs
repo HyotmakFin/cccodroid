@@ -114,7 +114,9 @@ export async function routeCaps(req, res, u, p) {
       version: "3.0.0",
       busy: RUNS.size > 0,
       running: RUNS.size,
-      queued: QUEUE.length,
+      // 挂起的（点了停止、被系统中断的）不会自己发出去，不算「有活要干」：外壳据 queued 判断能不能换工具包
+      queued: QUEUE.filter((q) => !q.held).length,
+      held: QUEUE.filter((q) => q.held).length,
       safeMode: safeMode(),
       hasLedger: !!process.env.CCAPP_LEDGER,
       uiTag: uiTag(),

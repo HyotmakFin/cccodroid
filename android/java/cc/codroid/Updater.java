@@ -370,16 +370,15 @@ final class Updater {
     private void check(boolean manual) {
         lastError = "";
         refreshCurrent();
-        JSONArray rels = null;
+        String[] ghErr = new String[1];
+        JSONArray[] lists = fetchLists(ghErr);
+        JSONArray rels = lists[0];
         boolean mirror = false;
-        try { rels = new JSONArray(new String(Installer.httpGetSmall(feed()), StandardCharsets.UTF_8)); }
-        catch (Exception e) {
-            lastError = Tr.t("连不上 GitHub：") + e.getMessage();
+        if (rels == null) {
+            lastError = Tr.t("连不上 GitHub：") + ghErr[0];
+            rels = lists[1];
+            mirror = rels != null;
             // GitHub 不通：应用本身改看镜像的发布列表；工具包没有镜像，如实说查不了（别报成"已是最新"）
-            for (String m : new String[]{ MIRROR, DL }) {
-                try { rels = new JSONArray(new String(Installer.httpGetSmall(m + "/dl/releases.json"), StandardCharsets.UTF_8)); mirror = true; break; }
-                catch (Exception e2) { /* 换下一条 */ }
-            }
             if (rels == null) app.set("error", lastError);
             if (pinnedInstalled()) devkit.set("uptodate", Tr.t("已是本应用配套的版本（GitHub 连不上，暂时查不了更新的）"));
             else devkit.set("error", lastError);
@@ -398,6 +397,58 @@ final class Updater {
         releaseApp();         // 工具包停在"已下载"没去装（比如有任务在跑）时，别让 APK 一直等着
     }
 
+    /**
+     * 发布列表三条线同时问：GitHub（App + 工具包）、cccodroid.net 与 dl.cccodroid.net（只有 App，由 GitHub 定时生成）。
+     * 以前先等 GitHub 连接 20 秒 + 读 60 秒超时才看镜像，不开代理的网络里一次检查要卡一分多钟（群友 10-31）。
+     * GitHub 通了就用它（镜像可能晚几分钟）；GitHub 报错立刻看镜像；GitHub 一直挂着，最多等它 15 秒，镜像有了就先用镜像。
+     * 返回 {GitHub 的列表, 镜像的列表}，没取到的是 null
+     */
+    private JSONArray[] fetchLists(String[] ghErr) {
+        final String[] urls = { feed(), MIRROR + "/dl/releases.json", DL + "/dl/releases.json" };
+        final JSONArray[] got = new JSONArray[3];
+        final String[] err = new String[3];
+        final boolean[] fin = new boolean[3];
+        final Object lk = new Object();
+        for (int i = 0; i < 3; i++) {
+            final int k = i;
+            Thread t = new Thread(() -> {
+                JSONArray a = null; String e = null;
+                try { a = new JSONArray(new String(Installer.httpGetSmall(urls[k]), StandardCharsets.UTF_8)); }
+                catch (Exception x) { e = String.valueOf(x.getMessage()); }
+                synchronized (lk) { got[k] = a; err[k] = e; fin[k] = true; lk.notifyAll(); }
+            }, "upd-feed-" + i);
+            t.setDaemon(true);
+            t.start();
+        }
+        long t0 = System.currentTimeMillis();
+        synchronized (lk) {
+            for (;;) {
+                long el = System.currentTimeMillis() - t0;
+                boolean mirOk = got[1] != null || got[2] != null, mirDone = mirOk || fin[1] && fin[2];
+                // GitHub 通了就用；GitHub 失败且镜像都有结果了就收；GitHub 挂过 15 秒、镜像确实拿到了列表才不等它。
+                // 镜像都不通时得接着等 GitHub（慢但能通的梯子），不能 15 秒就放弃
+                if (got[0] != null || fin[0] && mirDone || el >= 15000 && mirOk || el >= 90000) break;
+                try { lk.wait(250); } catch (InterruptedException e) { break; }
+            }
+            ghErr[0] = fin[0] ? err[0] : Tr.t("超时");
+            JSONArray mir = got[1];
+            if (mir == null || got[2] != null && cmpVer(latestApp(got[2]), latestApp(mir)) > 0) mir = got[2];
+            Log.i(TAG, "发布列表：GitHub " + (got[0] != null ? "通" : fin[0] ? "不通" : "未回") + "，镜像 " + (got[1] != null ? "通" : "-") + "/" + (got[2] != null ? "通" : "-"));
+            return new JSONArray[]{ got[0], mir };
+        }
+    }
+
+    /** 列表里最新的 App 版本号（不带 v），没有返回 "0" */
+    static String latestApp(JSONArray rels) {
+        for (int i = 0; i < rels.length(); i++) {
+            JSONObject r = rels.optJSONObject(i);
+            if (r == null) continue;
+            String tag = r.optString("tag_name");
+            if (!r.optBoolean("draft") && tag.matches("v\\d+(\\.\\d+)*")) return tag.substring(1);
+        }
+        return "0";
+    }
+
     private void checkApp(JSONArray rels) throws Exception {
         for (int i = 0; i < rels.length(); i++) {
             JSONObject r = rels.getJSONObject(i);
@@ -414,7 +465,9 @@ final class Updater {
                 JSONObject a = as.getJSONObject(k);
                 if (!a.optString("name").equals(name)) continue;
                 app.url = a.getString("browser_download_url");
-                app.alt = app.url.startsWith(MIRROR + "/") ? null : MIRROR + "/dl/" + tag + "/" + name;
+                // 三处都是同一份文件，谁先谁后由下载前测速定（Installer.rank），这里只管都列上
+                String gh = "https://github.com/" + REPO + "/releases/download/" + tag + "/" + name;
+                app.alt = app.url.equals(gh) ? MIRROR + "/dl/" + tag + "/" + name : gh;
                 app.alt2 = DL + "/dl/" + tag + "/" + name;
                 app.size = a.optLong("size");
                 String d = a.optString("digest", "");
@@ -747,12 +800,13 @@ final class Updater {
 
     private Installer installer(Item it) {
         return new Installer(env, new Installer.Progress() {
-            public void step(String m) { Log.i(TAG, it.id + ": " + m); if (m.startsWith("  网络中断")) it.message = m.trim(); }
+            public void step(String m) { Log.i(TAG, it.id + ": " + m); if (m.startsWith("  ")) it.message = m.trim(); }
             public void bytes(long d, long t) { it.done = d; it.total = t; }
         });
     }
 
     private void download(Item it, boolean user) {
+        String via = null;
         it.set("downloading", "");
         it.done = 0; it.total = it.size;
         try {
@@ -762,7 +816,7 @@ final class Updater {
                 if (free < need) throw new IOException(String.format(java.util.Locale.ROOT, Tr.t("空间不够：需要约 %.1f GB，只剩 %.1f GB"), need / 1e9, free / 1e9));
             }
             if (it == devkit && it.modules != null) downloadModules(it);
-            else installer(it).download(it.url, new String[]{ it.alt, it.alt2 }, it.file, it.size, it.sha);
+            else { Installer ins = installer(it); ins.download(it.url, new String[]{ it.alt, it.alt2 }, it.file, it.size, it.sha); via = ins.lastHost; }
             if (it == app) checkApkSigner(it.file);
             if (it == devkit) {
                 JSONObject st = new JSONObject().put("file", it.file.getPath())
@@ -770,7 +824,7 @@ final class Updater {
                 if (it.modules != null) st.put("modSha", it.modSha).put("moduleIds", new JSONArray(it.moduleIds));
                 prefs().edit().putString("devkitStaged", st.toString()).apply();
             }
-            it.set("ready", "");
+            it.set("ready", via != null ? Tr.f("从 {0} 下载", via) : "");
             if (it == app) { if (user) installApp(); else maybeSilentInstallApp(); }
             else if (user) startDevkitApply();
             else { notifyReady(it); releaseApp(); }
@@ -786,7 +840,7 @@ final class Updater {
         JSONObject mj = new JSONObject(new String(it.modules, StandardCharsets.UTF_8));
         long[] before = {0};
         Installer ins = new Installer(env, new Installer.Progress() {
-            public void step(String m) { Log.i(TAG, "devkit: " + m); if (m.startsWith("  网络中断")) it.message = m.trim(); }
+            public void step(String m) { Log.i(TAG, "devkit: " + m); if (m.startsWith("  ")) it.message = m.trim(); }
             public void bytes(long d, long t) { it.done = before[0] + d; it.total = it.size; }
         });
         for (JSONObject m : Installer.moduleOrder(mj, it.moduleIds)) {
