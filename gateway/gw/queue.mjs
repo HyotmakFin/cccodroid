@@ -150,7 +150,9 @@ function record(run, ev) {
   if (last && last.type === ev.type && (ev.type === "delta" || ev.type === "thinking_delta")) last.text += ev.text;
   else if (last && last.type === "usage" && ev.type === "usage") run.log[run.log.length - 1] = { ...ev };
   else if (last && last.type === "phase" && ev.type === "phase") run.log[run.log.length - 1] = { ...ev };
-  else run.log.push({ ...ev });
+  // 本轮输出 token 每秒一条，夹在增量中间合并不到：只留一条、原地改成最新的数（重放只要最后的值）
+  else if (ev.type === "run_tokens" && run.tokAt != null && run.log[run.tokAt]?.type === "run_tokens") run.log[run.tokAt] = { ...ev };
+  else { if (ev.type === "run_tokens") run.tokAt = run.log.length; run.log.push({ ...ev }); }
 }
 
 /** 一轮结束时要知道的模块（定时任务记运行记录）在这里挂；钩子出错不影响收尾 */

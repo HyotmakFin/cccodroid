@@ -86,7 +86,8 @@ export function usageMeter(ctx) {
       for (const line of text.slice(0, end).split("\n")) {
         if (!line.includes('"usage"') || !line.includes('"assistant"')) continue;
         let e; try { e = JSON.parse(line); } catch { continue; }
-        if (e.type !== "assistant" || !e.message?.id || !(Date.parse(e.timestamp) >= t0 - 5000)) continue;
+        // 消息按时间归轮：本轮开始之后写的才算（以前放宽 5 秒，上一轮收尾慢的子代理会被下一轮再算一遍）
+        if (e.type !== "assistant" || !e.message?.id || !(Date.parse(e.timestamp) >= t0)) continue;
         bump(e.message.id, e.message.usage, e.message.model, false);
       }
     }

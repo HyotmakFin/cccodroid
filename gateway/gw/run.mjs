@@ -271,7 +271,21 @@ export async function startRun(item) {
   run.replays = 0;
   run.usageTools = new Set();   // 使用统计：本轮见过的工具调用（流式会重复报同一个）
   let subDir = null;
+  // 本轮输出了多少 token（主会话 + 子代理，按请求去重，口径同使用统计）：边跑边推给底栏，收尾也报这个数。
+  // 一秒最多推一次，推的事件进本轮记录，切走再切回来补发时也接得上
+  run.outTok = 0;
+  let outTimer = null, outSent = 0;
+  const outEmit = () => {
+    outTimer = null;
+    if (run.ended || run.outTok === outSent) return;
+    outSent = run.outTok;
+    emit({ type: "run_tokens", out: run.outTok });
+  };
   run.meter = usageMeter({ sid: () => run.sessionId, model: () => run.usageModel, start: Date.now(),   // token 边跑边记（见 usage.mjs）
+    add: (d, sid, model) => {
+      usageAdd(d, sid, model);   // 使用统计关着时它自己不记，这里的累计照算
+      if (d.o > 0) { run.outTok += d.o; if (!outTimer) { outTimer = setTimeout(outEmit, 1000); outTimer.unref?.(); } }
+    },
     subDir: () => subDir || (subDir = sfile()?.replace(/\.jsonl$/, "/subagents") || null) });
   run.paths = pathWatch();      // 本轮写过的文件、回复里有没有写全路径（收尾时核对，见 pathnote.mjs）
   run.inject = (item) => {
@@ -503,7 +517,7 @@ export async function startRun(item) {
     const ms = Date.now() - t0;
     if (run.aborted) {
       log(`⏹ 已中断 (${ms}ms)`);
-      return endRun(run, { durationMs: ms });
+      return endRun(run, { durationMs: ms, ...(run.outTok ? { usage: { output_tokens: run.outTok } } : {}) });
     }
     if (lastResult) {
       const localCmd = lastResult.local_command || null;
@@ -520,7 +534,8 @@ export async function startRun(item) {
         costUsd: P.nativeModels ? Number(lastResult.total_cost_usd || 0) : 0,
         usage: lastResult.usage
           ? {
-              output_tokens: lastResult.usage.output_tokens || 0,
+              // 算上子代理（result.usage 只有主会话）；流里一条都没记到时退回 result 的数
+              output_tokens: run.outTok || lastResult.usage.output_tokens || 0,
               context_tokens: flags.contextTokens || 0,   // 真实占用（累计和不算）
               context_window: contextWindowOf(lastResult, P, model || undefined),
             }

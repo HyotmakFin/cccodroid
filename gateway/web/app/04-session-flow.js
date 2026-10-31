@@ -1,3 +1,33 @@
+  // ── 底栏这一轮的用量：跑着时实时（用时 · 已输出 token，token 由网关每秒最多推一次），结束定格成
+  // 「用时 · ↓token · 金额」；每个会话记住最后一轮，切走再回来还在（以前跑着时挂的是上一轮的数，切会话就没了）
+  const STAT_KEY = "cc.turnStat";
+  let statLast = {}, statIv = 0, statRun = null;
+  try { statLast = JSON.parse(localStorage.getItem(STAT_KEY) || "{}") || {}; } catch {}
+  function statPaint() {
+    const rv = runViews.get(statRun);
+    if (!rv) return statStop();
+    statEl.textContent = [fmtDur(Date.now() - (rv.startedAt || Date.now())), rv.out ? "↓" + fmtTok(rv.out) + " tok" : ""].filter(Boolean).join(" · ");
+  }
+  /** 一轮结束时定格的那串；什么都没有（启动失败、起进程前就停了）返回空，别拿它顶掉上一轮的数 */
+  function statBits(ev, out) {
+    const bits = [];
+    if (ev.durationMs) bits.push(fmtDur(ev.durationMs, true));
+    out = ev.usage?.output_tokens || out;
+    if (out) bits.push("↓" + fmtTok(out) + " tok");
+    if (ev.costUsd) bits.push("$" + ev.costUsd.toFixed(4));
+    return bits.join(" · ");
+  }
+  function statLive(runId) { statStop(); statRun = runId; statIv = setInterval(statPaint, 1000); statPaint(); }
+  function statStop() { clearInterval(statIv); statIv = 0; statRun = null; }
+  function statSave(sid, text) {
+    if (!sid) return;
+    delete statLast[sid];
+    statLast[sid] = text;
+    const ks = Object.keys(statLast);
+    for (const k of ks.slice(0, Math.max(0, ks.length - 50))) delete statLast[k];   // 只留最近 50 个会话
+    try { localStorage.setItem(STAT_KEY, JSON.stringify(statLast)); } catch {}
+  }
+
   // ── 上下文用量 ────────────────────────────────────────────────────
   function fmtTok(n) {
     n = Number(n) || 0;
@@ -82,7 +112,8 @@
     agReset();
     olderEl.classList.add("hidden");
     syncWindow();
-    statEl.textContent = "";
+    statStop();
+    statEl.textContent = statLast[view.sessionId] || "";   // 正在跑的话，补发的 run_start 会接着转成实时
     pickViewRun();                     // 换了会话：「本会话在不在跑」要重新算
     renderQueue();                     // 排队条也换成这个会话的：不然看着是 A 的，点清除却删 B 的（审查 #51 第2项）
     paintProjChip();
@@ -548,7 +579,8 @@
         const timer = RunTimer(ev.startedAt);
         timer.attach(av);
         av.phase({ phase: "connect" });
-        runViews.set(ev.runId, { av, startedAt: ev.startedAt, timer });
+        runViews.set(ev.runId, { av, startedAt: ev.startedAt, timer, out: 0 });
+        statLive(ev.runId);
         scrollDown(true);
         return;
       }
@@ -609,6 +641,7 @@
     const av = rv.av;
     switch (ev.type) {
       case "usage":          if (ev.contextTokens) updateCtx(ev.contextTokens, state.ctxTotal); break;
+      case "run_tokens":     rv.out = +ev.out || 0; if (statRun === ev.runId) statPaint(); break;
       case "delta":          av.delta(ev.text); break;
       case "assistant_text": av.text(ev.text); break;
       case "thinking_delta": av.thinkDelta(ev.text); break;
@@ -697,9 +730,12 @@
       }, 300);
     }
     const rv = runViews.get(ev.runId);
-    if (!rv) { if (belongs(ev)) loadSessions(); return; }
+    // 不在当前视图里画的一轮（别的会话在后台跑完）：数照样按会话记下，切过去就能看到
+    if (!rv) { if (!ev.localCommand && ev.sessionId) { const st = statBits(ev); if (st) statSave(ev.sessionId, st); } if (belongs(ev)) loadSessions(); return; }
     const av = rv.av;
     rv.timer?.stop();
+    // 实时那份先停；本地命令（/context 等）不算一轮，底栏回到上一轮的数，普通一轮下面再定格
+    if (statRun === ev.runId) { statStop(); statEl.textContent = statLast[view.sessionId || ev.sessionId] || ""; }
     for (const [id, it] of PERMS) if (it.runId === ev.runId && !it.done) permDone(id, "stopped");
     if (ev.sessionId && !view.sessionId && view.runIds.has(ev.runId)) { view.sessionId = ev.sessionId; adoptPendingModel(); saveUiState(); }
     if (ev.usage?.context_tokens) updateCtx(ev.usage.context_tokens, ev.usage.context_window || state.ctxTotal);
@@ -716,11 +752,8 @@
     } else {
       av.finish(ev.aborted);
       if (ev.aborted) { av.note(t("已中断")); agStopAll(ev.at); }
-      const bits = [];
-      if (ev.durationMs) bits.push((ev.durationMs / 1000).toFixed(1) + "s");
-      if (ev.usage?.output_tokens) bits.push("↓" + ev.usage.output_tokens + " tok");
-      if (ev.costUsd) bits.push("$" + ev.costUsd.toFixed(4));
-      statEl.textContent = bits.join(" · ");
+      const st = statBits(ev, rv.out);
+      if (st) { statEl.textContent = st; statSave(view.sessionId || ev.sessionId, st); }
     }
     // 普通一轮出错网关给的是 isError（启动失败才是 failed），两个都要认（审查 #51 第3项）
     if (ev.failed || ev.isError) setStatus(t("失败"), "err");
