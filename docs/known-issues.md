@@ -51,7 +51,7 @@ If everything works, please tell us too: open a GitHub issue with the [Device re
 
 ### On every device
 
-- **Android version**: the minimum is Android 8.0; only 14 and 15 have actually been tested.
+- **Android version**: the minimum is Android 8.0; 14, 15 and 16 have actually been tested.
 - **Background**: the app keeps a foreground service running (the notification), which is enough for stock Android's background limits. **It does not stop vendors' own freezers and cleaners.** While frozen, the gateway and any running task stop completely and resume when you come back. If the app notices it was frozen, Settings shows a notice with the steps for your brand.
 - **Most GPU components are Snapdragon-only**: the two Snapdragon GPU drivers, GPU benchmarks and clvk need Qualcomm Adreno's `/dev/kgsl-3d0`. Since 0.3.3, devices with a Mali GPU (MediaTek Dimensity and others) can install `gpu-driver-mali`, which uses the vendor's own Vulkan driver; it has been tested on a Redmi K70 Ultra and a vivo V2502A ([#14](https://github.com/greyoak111/cccodroid/issues/14)). On Samsung Exynos and Huawei Kirin devices the extensions page marks them "Snapdragon only" and they can't be installed. Components that can use the GPU, like Blender and llama.cpp, still install where no matching driver exists and fall back to the CPU, just slower. Reports from people with those devices help a lot.
 
@@ -70,9 +70,12 @@ The main development device; every feature has been tested on it. No vendor free
 
 Known for aggressive background killing. App info → **Battery saver: No restrictions**, turn **Autostart** on, and lock the cccodroid card in the recents screen so "clear all" doesn't kill it.
 
-### OPPO / OnePlus / realme (ColorOS / OxygenOS / realme UI) · not tested
+### OPPO / OnePlus / realme (ColorOS / OxygenOS / realme UI) · tested
 
-App info → Battery usage → **Allow background activity** and **Allow auto launch**. Locking the recents card is a good idea here too.
+On a OnePlus Ace 5 (ColorOS 16, Android 16), first install with the devkit download, chatting, the terminal, optional components, and split screen / landscape all work ([#61](https://github.com/greyoak111/cccodroid/issues/61)).
+
+- **The app gets killed in the background sooner or later.** That comes from ColorOS scheduling, and the foreground service can't stop it. The reporter keeps it alive with a third-party keep-alive module.
+- Still worth doing: App info → Battery usage → **Allow background activity** and **Allow auto launch**, and lock the recents card.
 
 ### vivo / iQOO (OriginOS / Funtouch OS) · not tested
 
