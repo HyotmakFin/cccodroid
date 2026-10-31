@@ -51,17 +51,23 @@ export function guardRegistryFlock(t, fixture, { missing = false } = {}) {
 
 export function installRegistryFlock(prefix, home, temporary) {
   const fixture = registryFlockFixture(prefix, home, temporary);
-  const source = `#!${process.execPath}
-const fs=require('node:fs'),path=require('node:path');
-const tool=__filename,args=process.argv.slice(2),control=JSON.parse(fs.readFileSync(tool+'.fixture.json','utf8'));
-let lock='',regular=false;
-try{lock=fs.readlinkSync('/proc/self/fd/3');regular=fs.fstatSync(3).isFile();}catch{}
-fs.appendFileSync(tool+'.fixture.calls',JSON.stringify({args,mode:control.mode,lock,regular})+'\\n');
-// Match toybox's portable nonblocking form; deliberately reject util-linux-only -w.
-if(args.length!==2||args[0]!=='-n'||args[1]!=='3'){process.exitCode=64;}
-else if(!regular||lock!==path.join(process.env.HOME,'.cccodroid/services/openai-bridge.lock')){process.exitCode=65;}
-else if(control.mode==='busy'){process.exitCode=1;}
-else if(control.mode==='missing-after-first-lock'){fs.rmSync(tool);}
+  // 用 sh 写：手机上冷启动一个 node 脚本要 200ms 以上，锁的重试节奏测不准；sh 是毫秒级
+  const sh = fs.existsSync("/system/bin/sh") ? "/system/bin/sh" : "/bin/sh";
+  const source = `#!${sh}
+PATH=/system/bin:/usr/bin:/bin:$PATH
+t="$0"
+mode=$(sed -n 's/.*"mode":"\\([a-z-]*\\)".*/\\1/p' "$t.fixture.json")
+[ -n "$mode" ] || exit 66
+lock=$(readlink /proc/$$/fd/3 2>/dev/null)
+if [ -f /proc/$$/fd/3 ]; then reg=true; else reg=false; fi
+a=""; for x in "$@"; do a="$a\${a:+,}\\"$x\\""; done
+printf '{"args":[%s],"mode":"%s","lock":"%s","regular":%s}\\n' "$a" "$mode" "$lock" "$reg" >> "$t.fixture.calls"
+# 照 toybox 的可移植写法：只认 -n 3，故意拒 util-linux 才有的 -w
+{ [ $# -eq 2 ] && [ "$1" = -n ] && [ "$2" = 3 ]; } || exit 64
+{ [ "$reg" = true ] && [ "$lock" = "$HOME/.cccodroid/services/openai-bridge.lock" ]; } || exit 65
+[ "$mode" = busy ] && exit 1
+[ "$mode" = missing-after-first-lock ] && rm -f "$t"
+exit 0
 `;
   fs.writeFileSync(fixture.tool, source, { mode: 0o700 }); fs.chmodSync(fixture.tool, 0o700);
   fixture.reset();

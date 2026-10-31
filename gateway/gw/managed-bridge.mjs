@@ -127,11 +127,14 @@ async function withRegistryLock(fn) {
     while (tools.length && performance.now() < deadline) {
       for (let i = 0; i < tools.length && performance.now() < deadline;) {
         if (!sameLock()) throw fail("retire-lock");
-        const result = await tryRegistryLock(tools[i], fd, Math.min(200, deadline - performance.now()));
+        // 每次尝试给满剩下的预算：手机内存紧时 exec 一次就可能过 200ms，以前 200ms 一到就杀掉、还把这个候选删了，
+        // 唯一能用的 /system/bin/flock 一次没起来就直接报卸载失败
+        const result = await tryRegistryLock(tools[i], fd, deadline - performance.now());
         if (!sameLock()) throw fail("retire-lock");
         if (result === "locked") { acquired = true; return await fn(file); }
         // -n 返回竞争失败说明工具可用；锁定此候选重试，不能借另一程序绕开同一把锁。
         if (result === "busy") { tools.splice(0, tools.length, tools[i]); break; }
+        if (result === "timeout") break;     // 预算已耗尽，统一交给下面报 retire-lock
         // 不存在与不兼容/执行失败均继续尝试下一固定候选，不依赖宿主恰有 util-linux。
         tools.splice(i, 1);
       }

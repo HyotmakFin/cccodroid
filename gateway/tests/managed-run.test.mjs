@@ -26,7 +26,9 @@ fs.appendFileSync(path.join(dir,'calls'),args[0]+'\\n');
 fs.writeFileSync(path.join(dir,'launcher.pid'),String(process.pid));
 setTimeout(()=>{process.exitCode=1;},300);
 `);
-fs.writeFileSync(cli, `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(cliMarker)},'called');process.exit(97);\n`, { mode: 0o700 });
+// 假 loader 用 sh：claude 的环境变量清掉了 LD_LIBRARY_PATH，有的机器上 node 离了它起不来（缺 libz），假 CLI 根本跑不到
+const sh = fs.existsSync("/system/bin/sh") ? "/system/bin/sh" : "/bin/sh";
+fs.writeFileSync(cli, `#!${sh}\necho called > ${JSON.stringify(cliMarker)}\nexit 97\n`, { mode: 0o700 });
 const endpoint = "http://127.0.0.1:34592";
 // 只使用自身临时配置；KEY 检查需要非空假值，不导入活 App 的 providers。
 fs.writeFileSync(providerFile, JSON.stringify({ active: "custom-managed-test", providers: {
