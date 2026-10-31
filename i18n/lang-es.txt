@@ -2563,3 +2563,7 @@
 2563	El título se escribe a partir de tu pregunta y la primera respuesta y aparece unos segundos después. Gasta algunos tokens más; puedes elegir un modelo barato y rápido solo para esto. Si lo desactivas, el modelo de la conversación la nombra cuando envíes tu segundo mensaje.
 2564	El mismo modelo que la conversación
 2565	Desactivado
+2566	Mostrar en el selector de modelos
+2567	Si lo desactivas, este proveedor no aparece en el selector de modelos bajo el cuadro de texto. Su configuración y su clave se conservan y puedes volver a activarlo cuando quieras. Una cuenta de Claude sin sesión iniciada o un modelo en el dispositivo sin modelos descargados no aparecen de todos modos.
+2568	El proveedor en uso siempre aparece
+2569	Este proveedor aún no está listo (sin sesión iniciada o sin modelo descargado). Configúralo primero en Ajustes.

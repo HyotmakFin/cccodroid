@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { PATHS, log } from "./config.mjs";
+import path from "node:path";
+import { CFG, PATHS, log } from "./config.mjs";
 import { SETTINGS } from "./settings-store.mjs";
 import { PROVIDER, fetchKeyed, keyOf, modelsUrlOk, providerBrief, providerById } from "./providers.mjs";
 import { NEXT, fetchJsonCapped, sendJson } from "./http.mjs";
@@ -52,6 +53,29 @@ export function normalizeModels(j) {
 /** 走官方账户登录（且没填密钥）时：凭据只归 claude 自己管。
  *  Anthropic 条款：第三方不得收集、保存或中转 claude.ai 凭据/会话令牌，登录须走官方流程。
  *  所以这种情况下网关既不读 .credentials.json，也不让请求经过本地桥 —— claude 直连官方。 */
+// ── 输入栏模型选单列哪几家 ──
+// 以前「走登录」「本机」一律算能用：没登录的官方账户、没下过模型的端侧也挂在选单里，点了用不了（群友 10-31）。
+// 官方账户：login.mjs 每次问过 claude auth status 都报到这里；网关刚起还没问过，就看凭据文件在不在。
+// 端侧：下过模型（或用自己配的 local-mode.json）才算。用户还能在设置里把某家从选单里藏起来（hidden），配置照留
+let LOGGED_IN = null;
+export function noteLoggedIn(v) { LOGGED_IN = v == null ? null : !!v; }   // null = 当没问过（测试复位用）
+const loginReady = () => (LOGGED_IN != null ? LOGGED_IN : fs.existsSync(path.join(CFG.home, ".claude", ".credentials.json")));
+// 每次开选单都扫模型目录不值当：结果记 5 秒
+let LOCAL_AT = 0, LOCAL_OK = false;
+const localReady = () => {
+  if (SETTINGS.localMode === "custom") return true;
+  if (Date.now() - LOCAL_AT > 5000) { LOCAL_OK = localModels().length > 0; LOCAL_AT = Date.now(); }
+  return LOCAL_OK;
+};
+export function providerList() {
+  const hide = new Set(Array.isArray(SETTINGS.hiddenProviders) ? SETTINGS.hiddenProviders : []);
+  return providerBrief().map((p) => ({
+    ...p,
+    usable: p.keyMode === "key" ? p.usable : p.login ? loginReady() : p.local ? localReady() : p.usable,
+    hidden: hide.has(p.id),
+  }));
+}
+
 export function isLoginMode(p = PROVIDER) { return !!(p && p.login && !keyOf(p)); }
 
 // 登录态拉不了清单（那要用令牌，我们不碰），给一份静态的；厂商配置里写了 fallbackModels 就用那份。
@@ -317,7 +341,7 @@ export async function routeModels(req, res, u, p) {
       provider: pp.id,                       // 这个会话用的那家
       listProvider: bp.id,                   // models 是哪家的
       globalProvider: PROVIDER.id,
-      providers: providerBrief(),
+      providers: providerList(),
       nativeModels: !!bp.nativeModels,
       defaultModel: bp.defaultModel || null,
       effort: now.effortRun || null,          // 真跑时的档位（跟来的档位那家不支持时已换过）

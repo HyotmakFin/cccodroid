@@ -2563,3 +2563,7 @@
 2563	Le titre est rédigé à partir de votre question et de la première réponse, et apparaît quelques secondes plus tard. Cela coûte quelques jetons de plus ; vous pouvez choisir un modèle rapide et bon marché rien que pour cela. Désactivé, c'est le modèle de la conversation qui la nomme à votre deuxième message.
 2564	Même modèle que la conversation
 2565	Désactivé
+2566	Afficher dans le sélecteur de modèle
+2567	Désactivé, ce fournisseur n’apparaît plus dans le sélecteur de modèle sous la zone de saisie. Ses réglages et sa clé sont conservés ; vous pouvez le réactiver à tout moment. Un compte Claude non connecté ou un modèle sur l’appareil sans modèle téléchargé n’y figure de toute façon pas.
+2568	Le fournisseur utilisé est toujours affiché
+2569	Ce fournisseur n’est pas encore prêt (pas connecté, ou aucun modèle téléchargé). Configurez-le d’abord dans les Réglages.

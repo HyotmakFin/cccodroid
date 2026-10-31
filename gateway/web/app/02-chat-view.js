@@ -144,7 +144,9 @@
     acts.innerHTML = actBtn("copy", t("复制")) + actBtn("resend", t("重发")) + actBtn("rewind", t("回退到这里")) + actBtn("mark", t("书签")) + actBtn("del", t("删除"));
     acts.addEventListener("click", (e) => {
       const a = e.target.closest("button")?.dataset.a;
-      if (a === "copy") { copyText(text); toast(t("已复制")); }
+      // 复制只要说的话：附件那几行 @/data/user/0/…/uploads/… 是给模型读文件用的，粘到别处只是一串长路径（群友 10-31）。
+      // 只发了附件没打字的，才照原样复制路径；重发照旧带上附件
+      if (a === "copy") { copyText(body.trim() || text); toast(t("已复制")); }
       if (a === "resend") { inputEl.value = text; autoGrow(); inputEl.focus(); }
       if (a === "rewind") rewindTo(b.parentElement);
       if (a === "mark") toggleMark(b.parentElement);

@@ -2240,6 +2240,7 @@ body{line-height:var(--phi)}
 .mp-seg::-webkit-scrollbar{display:none}
 .mp-seg button{flex:1 0 auto;padding:6px 8px}
 .mp-provseg button{padding:6px 10px}
+.mp-provseg button.off:not(.on){opacity:.5}
 .mp-provseg button.cur:not(.on)::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-inline-start:5px;vertical-align:2px}
 .mp-provhint{margin:6px 4px 0}
 .mp-sb{margin:0 0 var(--g1);background:var(--panel)}

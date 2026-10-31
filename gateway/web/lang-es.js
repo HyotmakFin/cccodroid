@@ -2566,4 +2566,8 @@ window.I18N_DICT["es"] = {
   "用你的提问和第一轮回答起标题，几秒后自己换上，会多花一点 token；可以指定一个便宜快速的型号专门起名。关掉后，等你发第二条消息时由对话里的模型起名。": "El título se escribe a partir de tu pregunta y la primera respuesta y aparece unos segundos después. Gasta algunos tokens más; puedes elegir un modelo barato y rápido solo para esto. Si lo desactivas, el modelo de la conversación la nombra cuando envíes tu segundo mensaje.",
   "跟随对话的模型": "El mismo modelo que la conversación",
   "不自动起名": "Desactivado",
+  "在模型选单里显示": "Mostrar en el selector de modelos",
+  "关掉后输入栏的模型选单里不列这一家，配置和密钥照留，随时能再打开。没登录的官方账户、没下过模型的端侧本来就不列。": "Si lo desactivas, este proveedor no aparece en el selector de modelos bajo el cuadro de texto. Su configuración y su clave se conservan y puedes volver a activarlo cuando quieras. Una cuenta de Claude sin sesión iniciada o un modelo en el dispositivo sin modelos descargados no aparecen de todos modos.",
+  "正在用的接口总会列在选单里": "El proveedor en uso siempre aparece",
+  "这一家还没就绪（没登录或没下模型），先到设置里配好": "Este proveedor aún no está listo (sin sesión iniciada o sin modelo descargado). Configúralo primero en Ajustes.",
 };

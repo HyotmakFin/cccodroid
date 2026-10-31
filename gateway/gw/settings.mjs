@@ -87,6 +87,8 @@ export async function routeSettings(req, res, u, p) {
       if (b.permNotice === false) SETTINGS.permNotice = false;
       // 条数、长度都有上限：每一轮都要拼进 claude 的命令行，塞几万条会 E2BIG，claude 再也起不来、重启也好不了（审查 v0513b 低-3）
       if (Array.isArray(b.addDirs)) SETTINGS.addDirs = strList(b.addDirs, 64, 4096, 16384);
+      // 正在用的那家不许藏（界面已经锁了，这里再挡一道直发的请求）
+      if (Array.isArray(b.hiddenProviders)) SETTINGS.hiddenProviders = strList(b.hiddenProviders, 64, 64).filter((id) => id !== PROVIDER.id);
       if (Array.isArray(b.allowedTools)) SETTINGS.allowedTools = strList(b.allowedTools, 200, 512, 8192);
       if (Array.isArray(b.disallowedTools)) SETTINGS.disallowedTools = strList(b.disallowedTools, 200, 512, 8192);
       if (b.memGuard && typeof b.memGuard === "object") {

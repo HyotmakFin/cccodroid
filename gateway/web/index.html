@@ -534,6 +534,10 @@
           </div>
           <!-- 选中那一家的配置卡：账户登录 / 密钥 / 自定义接口，由 app.js 按类型渲染 -->
           <div class="sblock prov-card" id="prov-card"></div>
+          <div class="srow" id="prov-show-row">
+            <div class="sl"><b data-i18n>在模型选单里显示</b><p id="prov-show-info" class="clamp" data-i18n>关掉后输入栏的模型选单里不列这一家，配置和密钥照留，随时能再打开。没登录的官方账户、没下过模型的端侧本来就不列。</p></div>
+            <div class="sc"><input type="checkbox" class="sw" id="set-provshow"></div>
+          </div>
           <div class="srow">
             <div class="sl"><b><span data-i18n>模型</span> <span class="pill" id="model-count"></span></b><p id="model-info" class="clamp" data-i18n-html>从厂商的 <code>/models</code> 实时拉取；也可在输入框直接打 <code>/model &lt;id&gt;</code>。</p></div>
             <div class="sc"><select id="set-model"></select></div>

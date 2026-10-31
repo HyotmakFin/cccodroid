@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { CFG, PATHS, log, tz } from "./config.mjs";
-import { isLoginMode } from "./models.mjs";
+import { isLoginMode, noteLoggedIn } from "./models.mjs";
 import { claudeArgv, claudeEnv } from "./claude.mjs";
 import { RUNS } from "./runs.mjs";
 import { NEXT, readBody, sendJson } from "./http.mjs";
@@ -92,6 +92,7 @@ export async function authStatus(force) {
     plan: j.subscriptionType || j.plan || null,
   };
   AUTH_CACHE = { at: Date.now(), v };
+  if (r.code === 0 || j.loggedIn != null) noteLoggedIn(v.loggedIn);   // 问不出结果（claude 没装好）就别下结论
   return v;
 }
 
@@ -119,6 +120,7 @@ export async function routeLogin(req, res, u, p) {
     if (RUNS.size && isLoginMode()) return sendJson(res, 409, { error: "busy", message: tz("这一轮还在生成，等它跑完再退出登录。") });
     const r = await runAuth(["logout"]);
     AUTH_CACHE = null;
+    if (r.code === 0) noteLoggedIn(false);
     clearRateLimits();
     return sendJson(res, 200, { ok: r.code === 0, output: r.out.slice(-500) });
   }

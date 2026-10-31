@@ -56,10 +56,27 @@
     $("prov-more").textContent = open ? t("收起") : t("详情");
   }
   $("prov-more").addEventListener("click", () => { provOpen = $("prov-card").classList.contains("hidden"); foldProvCard(); });
+  // 「在模型选单里显示」：管的是下拉框里正在看的那一家；正在用的那家总会列出来，开关锁住
+  function paintProvShow() {
+    const id = state.provView, p = (state.providers || []).find((x) => x.id === id), sw = $("set-provshow");
+    $("prov-show-row").classList.toggle("hidden", !p);
+    if (!p) return;
+    const hid = (state.settings?.hiddenProviders || []).includes(id);
+    sw.checked = p.active || !hid;
+    sw.disabled = !!p.active;
+    sw.title = p.active ? t("正在用的接口总会列在选单里") : "";
+  }
+  $("set-provshow").addEventListener("change", async (e) => {
+    const id = state.provView, cur = state.settings?.hiddenProviders || [];
+    const next = e.target.checked ? cur.filter((x) => x !== id) : [...new Set([...cur, id])];
+    if (await saveSettings({ hiddenProviders: next })) for (const p of state.provList || []) p.hidden = next.includes(p.id);
+    paintProvShow();
+  });
   function renderProvCard() {
     const box = $("prov-card");
     const id = state.provView;
     foldProvCard();
+    paintProvShow();
     // 卡片容器是复用的：密钥卡 / 自定义卡会在它上面挂 onclick（闭包里记着那一家）。
     // 换卡前必须摘掉，否则旧处理还在 —— 在登录卡上点「使用这个接口」，冒泡上来又把接口切回上一家
     // （实测：同一毫秒发出 provider=anthropic 和 provider=deepseek，后者赢）。

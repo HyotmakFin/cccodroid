@@ -7,7 +7,7 @@
     if (PJ.pm[id]) return Promise.resolve(PJ.pm[id]);
     return api("/api/models?browse=" + encodeURIComponent(id)).then((r) => { if (r.providers) state.provList = r.providers; return (PJ.pm[id] = r.models || []); }).catch(() => []);
   }
-  const usableProvs = () => (state.provList || []).filter((p) => p.usable);
+  const usableProvs = () => (state.provList || []).filter((p) => p.usable && !p.hidden);
   const provChoices = (follow, cur) => [["", follow], ...usableProvs().map((p) => [p.id, provLabel(p.id)]),
     ...(cur && !usableProvs().some((p) => p.id === cur) ? [[cur, provLabel(cur)]] : [])];
 

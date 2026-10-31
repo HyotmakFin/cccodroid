@@ -100,7 +100,7 @@ export async function routeCaps(req, res, u, p) {
       hasKey: !!API_KEY || !!PROVIDER.login,
       keyMode: API_KEY ? "key" : (PROVIDER.login ? "login" : "none"),
       // 别家填了 Key 也算接上了：会话可以单独选那家（0.3.16 起），首屏不该再叫人去接模型
-      otherKey: providerBrief().some((p) => !p.active && p.keyMode === "key"),
+      otherKey: providerBrief().some((p) => !p.active && p.keyMode === "key" && !(SETTINGS.hiddenProviders || []).includes(p.id)),
       model: SETTINGS.model || PROVIDER.defaultModel || null,
       provider: PROVIDER.id,
       providerLabel: PROVIDER.label || PROVIDER.id,

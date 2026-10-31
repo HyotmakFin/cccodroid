@@ -2600,5 +2600,9 @@ window.I18N_DICT.en = {
   "新对话第一轮答完，在后台起个标题": "Title new chats in the background after the first reply",
   "用你的提问和第一轮回答起标题，几秒后自己换上，会多花一点 token；可以指定一个便宜快速的型号专门起名。关掉后，等你发第二条消息时由对话里的模型起名。": "The title is written from your question and the first reply and shows up a few seconds later. It costs a few extra tokens; you can pick a cheap, fast model just for naming. When off, the model in the chat names it when you send your second message.",
   "跟随对话的模型": "Same model as the chat",
-  "不自动起名": "Off"
+  "不自动起名": "Off",
+  "在模型选单里显示": "Show in the model picker",
+  "关掉后输入栏的模型选单里不列这一家，配置和密钥照留，随时能再打开。没登录的官方账户、没下过模型的端侧本来就不列。": "When off, this provider isn't listed in the model picker under the input box. Its settings and key are kept, and you can turn it back on anytime. A Claude account that isn't signed in, or an on-device model with nothing downloaded, is never listed anyway.",
+  "正在用的接口总会列在选单里": "The provider in use is always listed",
+  "这一家还没就绪（没登录或没下模型），先到设置里配好": "This provider isn't ready yet (not signed in, or no model downloaded). Set it up in Settings first."
 };

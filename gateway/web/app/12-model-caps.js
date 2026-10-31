@@ -158,7 +158,7 @@
     const followBox = m.querySelector(".mp-follow");
     const paintFollow = () => {
       const d = state.settings || {};
-      const usable = (state.provList || []).filter((p) => p.usable).length;
+      const usable = (state.provList || []).filter((p) => p.usable && !p.hidden).length;
       const dm = (usable > 1 ? provLabel(globalProv()) + " · " : "") + (prettyModel(d.model) || t("默认")) + (d.effort ? " · " + d.effort : "");
       followBox.innerHTML = own()
         ? `<button type="button" class="mp-item mp-reset"><span>${esc(t("改回跟随默认"))}</span><small>${esc(dm)}</small></button>`
@@ -186,10 +186,13 @@
     // 接口：能用的（有 Key、走登录、本机）才列；只有一家就不显示这一行
     const provWrap = m.querySelector(".mp-provwrap"), provBox = m.querySelector(".mp-prov");
     const paintProv = () => {
-      const ps = (state.provList || []).filter((p) => p.usable || p.id === curProv());
+      // 正在用的、全局默认的、正在看的那家总要列出来：不然藏了自己在用的那家，用户看不到现在是谁
+      const ps = (state.provList || []).filter((p) => (p.usable && !p.hidden) || [curProv(), globalProv(), browse].includes(p.id));
       provWrap.classList.toggle("hidden", ps.length < 2);
       provBox.innerHTML = `<div class="seg mp-seg mp-provseg">${ps.map((p) =>
-        `<button type="button" class="${p.id === browse ? "on" : ""}${p.id === curProv() ? " cur" : ""}" data-prov="${esc(p.id)}">${esc(provLabel(p.id))}</button>`).join("")}</div>` +
+        `<button type="button" class="${p.id === browse ? "on" : ""}${p.id === curProv() ? " cur" : ""}${p.usable ? "" : " off"}" data-prov="${esc(p.id)}">${esc(provLabel(p.id))}</button>`).join("")}</div>` +
+        // 总要列出的那几家可能用不了（没登录的官方账户、没下模型的端侧）：灰掉，看它时说一句
+        (ps.some((p) => p.id === browse && !p.usable) ? `<div class="tiny mp-provhint">${esc(t("这一家还没就绪（没登录或没下模型），先到设置里配好"))}</div>` : "") +
         (browse !== curProv() ? `<div class="tiny mp-provhint">${esc(t("点一个模型，这个会话就换到「{name}」", { name: provLabel(browse) }))}</div>` : "");
       provBox.querySelector("button.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });   // 横滚里选中的那家露出来
     };

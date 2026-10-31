@@ -36,6 +36,8 @@ export const SETTINGS = {
   localMode: "chat",
   // 自动起名用的型号（#60）：null = 跟对话同一型号；"off" = 不自动起；其他 = 全局那家清单里的某个型号（见 autotitle.mjs）
   titleModel: null,
+  // 不在输入栏模型选单里显示的接口（只是不显示，配置照留；正在用的、全局默认的那家照样显示）
+  hiddenProviders: [],
 };
 
 /** 字符串数组：只留字符串，条数、每条长度、总长（字）都有上限 */
@@ -59,6 +61,7 @@ function loadSettings() {
   // 条数、每条长度之外还要管总长：64×4096 加上工具名单能超过 ARG_MAX（128 KB），每轮 spawn 都 E2BIG（10-31 复核）
   const cap = (a, n, len, total) => (Array.isArray(a) ? capList(a, n, len, total) : a);
   SETTINGS.addDirs = cap(SETTINGS.addDirs, 64, 4096, 16384) || [];
+  SETTINGS.hiddenProviders = Array.isArray(SETTINGS.hiddenProviders) ? capList(SETTINGS.hiddenProviders, 64, 64) : [];
   if (SETTINGS.allowedTools) SETTINGS.allowedTools = cap(SETTINGS.allowedTools, 200, 512, 8192);
   if (SETTINGS.disallowedTools) SETTINGS.disallowedTools = cap(SETTINGS.disallowedTools, 200, 512, 8192);
   // model 也原样进命令行：旧版存进去的超长值在这里丢掉（v0514 审查低-3）
