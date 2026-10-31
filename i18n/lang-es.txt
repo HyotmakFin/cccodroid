@@ -2525,3 +2525,30 @@
 2525	La instalación existente del puente no se puede migrar automáticamente. Haz una copia de seguridad y gestiona tú la instalación anterior; no se sobrescribió ni desinstaló nada.
 2526	¿Guardar esta configuración de API?\n\nCuando la uses, las conversaciones, los resultados de herramientas y las imágenes se enviarán a {origin}.\nGuardar no llama a ningún modelo remoto ni cambia la sesión actual.
 2527	Configurando… Espera a que termine.
+2528	Permitir la consulta automática de modelos (envía tu API Key al servicio indicado, sin conversaciones ni llamadas a modelos)
+2529	Reintentar la consulta
+2530	Buscar o escribir un modelo
+2531	Busca en la lista o escribe el nombre exacto que indique tu proveedor.
+2532	Guardar no llama a modelos remotos ni cambia la sesión actual
+2533	La inferencia del modelo no se ha probado
+2534	Destino: introduce primero una URL de API HTTPS válida.
+2535	Destino: {origin}
+2536	La consulta contactó con el servicio, pero la inferencia no se ha probado. Guardar no llama a modelos ni cambia la sesión actual.
+2537	Activa la consulta automática o escribe el modelo manualmente.
+2538	Introduce primero una URL de API HTTPS válida.
+2539	Introduce una API Key válida para consultar la lista automáticamente.
+2540	Consulta cancelada. Reintenta o escribe el modelo manualmente.
+2541	Preparando la consulta de modelos…
+2542	La API Key no fue autorizada. Revísala e inténtalo de nuevo.
+2543	El servicio rechazó la consulta. Revisa los permisos o escribe el modelo manualmente.
+2544	El servicio no ofrece una lista de modelos. Escribe el nombre manualmente.
+2545	Se alcanzó el límite de consultas. Inténtalo más tarde.
+2546	Se agotó el tiempo de consulta. Reintenta o escribe el modelo manualmente.
+2547	Introduce de nuevo la API Key y reintenta la consulta.
+2548	La lista no está disponible. Reintenta o escribe el modelo manualmente.
+2549	Consultando la lista de modelos…
+2550	La lista está vacía. Escribe el modelo manualmente o reintenta.
+2551	Se cargaron {count} modelos (hasta 500). Busca o escribe otro nombre manualmente.
+2552	Se cargaron {count} modelos. Escribe para buscar o introducir un nombre.
+2553	La consulta contactó con el servicio; la inferencia no se ha probado.
+2554	¿Guardar esta configuración de API?\n\nCuando la uses, las conversaciones, los resultados de herramientas y las imágenes se enviarán a {origin}.\n{verification}\nGuardar no llama a ningún modelo remoto ni cambia la sesión actual.

@@ -12,10 +12,13 @@ import { startManagedUiServer, REMOVAL_ERROR, CONFIG_ERROR, FAKE_OLD_KEY, FAKE_N
 
 // Fixed contract, independently checked against the real dispatcher and frontend source (never import gateway).
 const CONFIG_ROUTE = "/api/components/openai-bridge/config";
+const MODELS_ROUTE = "/api/components/openai-bridge/models";
 const routeSource = await fs.readFile(new URL("../gateway/gw/components.mjs", import.meta.url), "utf8");
 const configSource = await fs.readFile(new URL("../gateway/web/app/bridge-config.js", import.meta.url), "utf8");
-assert.match(routeSource, /if\s*\(p\s*===\s*"\/api\/components\/openai-bridge\/config"\)/, "real gateway dispatcher exposes the fixed configuration route");
-assert.match(configSource, /const\s+API\s*=\s*"\/api\/components\/openai-bridge\/config"\s*;/, "frontend must target the real gateway route, not a self-consistent mock alias");
+assert.ok(routeSource.includes('p === "' + CONFIG_ROUTE + '"'), "real gateway dispatcher exposes the fixed configuration route");
+assert.match(configSource, /const\s+API\s*=\s*"\/api\/components\/openai-bridge\/config"\s*[,;]/, "frontend must target the real gateway route, not a self-consistent mock alias");
+assert.ok(routeSource.includes('p === "' + MODELS_ROUTE + '"'), "real gateway exposes the fixed model-list route");
+assert.ok(configSource.includes('"' + MODELS_ROUTE + '"'), "model list must use the actual gateway route");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, label, timeout = 8000) {
@@ -255,7 +258,7 @@ try {
   await configOpen(true);
   await click('#bridge-config-panel [data-bc="edit"]');
   await until(() => cdp.eval(visible("#bc-form")), "edit old configuration");
-  const existing = await cdp.eval("({ key: document.querySelector('#bc-key').value, type: document.querySelector('#bc-key').type, count: document.querySelectorAll('#bc-form input').length, active: document.activeElement?.id, hint: document.querySelector('#bc-key-hint').innerText })");
+  const existing = await cdp.eval("({ key: document.querySelector('#bc-key').value, type: document.querySelector('#bc-key').type, count: document.querySelectorAll('#bc-form input:not([type=checkbox])').length, active: document.activeElement?.id, hint: document.querySelector('#bc-key-hint').innerText })");
   assert.equal(existing.key, "", "old API key never returns to input");
   assert.equal(existing.type, "password");
   assert.equal(existing.count, 3, "only endpoint/key/model inputs are shown");
@@ -304,7 +307,7 @@ try {
   fixture.state.configDelay = 0;
   assert.equal(Object.hasOwn(fixture.state.configRequests.at(-1), "apiKey"), false, "blank key omits replacement secret");
   assert.equal(fixture.state.config.apiKey, FAKE_OLD_KEY, "same-origin blank key retains old secret only on server");
-  assert.match(await cdp.eval("document.querySelector('#bc-saved').innerText"), /not tested|未测试/i);
+  assert.match(await cdp.eval("document.querySelector('#bc-saved').innerText"), /not (?:been )?tested|未测试|未验证/i);
   assert.equal(await cdp.eval("document.querySelector('#bc-key').value"), "");
   await unchanged();
   ok("bridge local-only save and unchanged session", "blank key retained server-side, duplicate controls disabled, remote untested, existing session unchanged");
@@ -351,6 +354,33 @@ try {
   await fill("#bc-endpoint", "https://new.synthetic.invalid");
   await fill("#bc-key", FAKE_NEW_KEY);
   await fill("#bc-model", "synthetic-new-model");
+  await sleep(800);
+  assert.equal(fixture.state.modelsRequests.length, 0, "typing credentials without model-list consent does not connect remotely");
+  await click("#bc-model-consent");
+  await until(() => fixture.state.modelsRequests.length === 1, "opt-in automatic model discovery");
+  await until(() => cdp.eval("document.querySelectorAll('#bc-model-list option').length === 2"), "model datalist filled");
+  assert.equal(fixture.state.modelsRequests[0].consent, true);
+  assert.equal(fixture.state.modelsRequests[0].apiKey, FAKE_NEW_KEY);
+  assert.equal(await cdp.eval("document.querySelector('#bc-model').value"), "synthetic-new-model", "list never chooses the first model over typed input");
+  assert.equal(fixture.state.modelsResponses.some((s) => s.includes(FAKE_NEW_KEY)), false);
+  await unchanged();
+  ok("bridge automatic model list opt-in", "no request before consent; debounce reads actual model route, populates searchable suggestions without selecting/saving");
+  fixture.state.modelsMode = "MODELS_AUTH";
+  await click("#bc-model-retry");
+  await until(() => fixture.state.modelsRequests.length === 2, "failed synthetic model retry");
+  await until(() => cdp.eval("!document.querySelector('#bc-model-retry').disabled"), "model retry unlocks after auth error");
+  assert.ok(await cdp.eval("document.querySelector('#bc-model-status').textContent.length > 0"));
+  assert.equal(await cdp.eval(`document.querySelector('#bridge-config-panel').innerText.includes(${q(CONFIG_ERROR)})`), false, "remote diagnostics are never echoed");
+  await fill("#bc-model", "synthetic-manual-fallback");
+  await sleep(800);
+  assert.equal(fixture.state.modelsRequests.length, 2, "model typing is local filtering, not another lookup");
+  fixture.state.modelsMode = "success";
+  await click("#bc-model-retry");
+  await until(() => fixture.state.modelsRequests.length === 3, "synthetic model recovery");
+  await until(() => cdp.eval("document.querySelectorAll('#bc-model-list option').length === 2 && !document.querySelector('#bc-model-retry').disabled"), "model recovery completes");
+  await fill("#bc-model", "synthetic-new-model");
+  await unchanged();
+  ok("bridge model list error and manual fallback", "static error, explicit retry only, model editing does not refetch, no inference or provider changes");
   assert.match(await cdp.eval("document.querySelector('#bc-endpoint-preview').innerText"), /https:\/\/new\.synthetic\.invalid\/v1\/chat\/completions/);
   await click("#bc-save");
   await until(() => cdp.eval(visible("#bc-saved")), "first setup succeeds");
@@ -410,7 +440,7 @@ try {
     await cdp.eval(`Theme.set(${q(pref)})`);
     await sleep(40);
     await click("#bc-endpoint");
-    const metrics = await cdp.eval(`(() => { const p = document.querySelector('#bridge-config-panel'), f = document.querySelector('#bc-form'), r = f.getBoundingClientRect(), root = document.documentElement; return { skin: root.dataset.skin, theme: root.dataset.theme, width: innerWidth, left: r.left, right: r.right, horizontalOverflow: f.scrollWidth - f.clientWidth, font: getComputedStyle(p).fontFamily, parentFont: getComputedStyle(p.parentElement).fontFamily, fields: [...f.querySelectorAll('input')].map(e => ({label: !!document.querySelector('label[for="' + e.id + '"]'), h: e.getBoundingClientRect().height, w: e.getBoundingClientRect().width})) }; })()`);
+    const metrics = await cdp.eval(`(() => { const p = document.querySelector('#bridge-config-panel'), f = document.querySelector('#bc-form'), r = f.getBoundingClientRect(), root = document.documentElement; return { skin: root.dataset.skin, theme: root.dataset.theme, width: innerWidth, left: r.left, right: r.right, horizontalOverflow: f.scrollWidth - f.clientWidth, font: getComputedStyle(p).fontFamily, parentFont: getComputedStyle(p.parentElement).fontFamily, fields: [...f.querySelectorAll('input:not([type=checkbox])')].map(e => ({label: !!document.querySelector('label[for="' + e.id + '"]'), h: e.getBoundingClientRect().height, w: e.getBoundingClientRect().width})) }; })()`);
     assert.equal(metrics.skin, skin); assert.equal(metrics.theme, mode);
     assert.ok(metrics.left >= -1 && metrics.right <= metrics.width + 1, `${skin}/${mode} form stays within narrow viewport`);
     assert.ok(metrics.horizontalOverflow <= 1, `${skin}/${mode} has no horizontal form overflow`);

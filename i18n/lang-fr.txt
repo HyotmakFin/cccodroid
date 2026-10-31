@@ -2525,3 +2525,30 @@
 2525	L'installation existante du pont ne peut pas être migrée automatiquement. Sauvegardez-la et gérez vous-même l'ancienne installation ; rien n'a été écrasé ni désinstallé.
 2526	Enregistrer cette configuration d'API ?\n\nLors de son utilisation, les conversations, résultats d'outils et images seront envoyés à {origin}.\nL'enregistrement lui-même n'appelle aucun modèle distant et ne change pas la session actuelle.
 2527	Configuration en cours… Veuillez attendre qu'elle se termine.
+2528	Autoriser la liste automatique des modèles (envoie votre API Key au service indiqué, sans conversation ni appel de modèle)
+2529	Réessayer la lecture
+2530	Rechercher ou saisir un modèle
+2531	Recherchez dans la liste ou saisissez le nom exact donné par votre fournisseur.
+2532	Enregistrer n'appelle aucun modèle distant et ne change pas la session actuelle
+2533	L'inférence du modèle n'a pas été testée
+2534	Destination : saisissez d'abord une URL d'API HTTPS valide.
+2535	Destination : {origin}
+2536	La liste a contacté le service, mais l'inférence n'a pas été testée. Enregistrer n'appelle aucun modèle et ne change pas la session actuelle.
+2537	Cochez pour charger la liste automatiquement, ou saisissez un modèle manuellement.
+2538	Saisissez d'abord une URL d'API HTTPS valide.
+2539	Saisissez une API Key valide pour charger la liste automatiquement.
+2540	Lecture annulée. Réessayez ou saisissez un modèle manuellement.
+2541	Préparation de la liste des modèles…
+2542	L'API Key n'a pas été autorisée. Vérifiez-la et réessayez.
+2543	Le service refuse la liste. Vérifiez les droits ou saisissez un modèle manuellement.
+2544	Le service ne propose pas de liste de modèles. Saisissez le nom manuellement.
+2545	Trop de demandes de liste. Réessayez plus tard.
+2546	Le délai de lecture est dépassé. Réessayez ou saisissez un modèle manuellement.
+2547	Saisissez à nouveau l'API Key, puis réessayez la lecture.
+2548	La liste est indisponible. Réessayez ou saisissez un modèle manuellement.
+2549	Chargement de la liste des modèles…
+2550	La liste est vide. Saisissez un modèle manuellement ou réessayez.
+2551	{count} modèles chargés (500 maximum). Recherchez ou saisissez un autre nom manuellement.
+2552	{count} modèles chargés. Saisissez pour rechercher ou ajouter un nom.
+2553	La liste a contacté le service ; l'inférence du modèle n'a pas été testée.
+2554	Enregistrer cette configuration d'API ?\n\nLors de son utilisation, les conversations, résultats d'outils et images seront envoyés à {origin}.\n{verification}\nL'enregistrement lui-même n'appelle aucun modèle distant et ne change pas la session actuelle.

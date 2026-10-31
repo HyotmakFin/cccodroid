@@ -23,6 +23,8 @@ export async function startManagedUiServer() {
     requests: [], unexpected: [], removeCount: 0, sseConnections: 0, sourceHashes: {},
     removalMode: "success", historyDelay: {}, ui: {},
     configRequests: [], configResponses: [], configMode: "success", configDelay: 0,
+    modelsRequests: [], modelsResponses: [], modelsMode: "success", modelsDelay: 0,
+    models: [{ id: "synthetic-listed-a" }, { id: "synthetic-listed-b" }],
     config: { installed: true, configured: true, hasKey: true, apiKey: FAKE_OLD_KEY, endpoint: "https://old.synthetic.invalid/v1", model: "synthetic-old-model", providerId: "synthetic-bridge", local: { state: "ready" } },
     providerActive: "synthetic", sessionModelWrites: [],
     component: {
@@ -96,6 +98,21 @@ export async function startManagedUiServer() {
         removal = res; held.add(res);
         if (state.removalMode !== "held") finishRemoval();
         return;
+      }
+      if (p === "/api/components/openai-bridge/models") {
+        if (req.method !== "POST") return json(res, { ok: false }, 405);
+        const body = await bodyOf(req);
+        state.modelsRequests.push(body);
+        if (state.modelsDelay) await new Promise((r) => setTimeout(r, state.modelsDelay));
+        if (body.consent !== true) return json(res, { ok: false, code: "consent_required" }, 400);
+        let endpoint;
+        try { endpoint = normalizedEndpoint(body.endpoint); } catch { return json(res, { ok: false, code: "invalid_endpoint" }, 400); }
+        const changed = state.config.hasKey && new URL(state.config.endpoint).origin !== new URL(endpoint).origin;
+        if (!body.apiKey && (!state.config.hasKey || changed)) return json(res, { ok: false, field: "apiKey", code: changed ? "KEY_HOST_CHANGED" : "KEY_REQUIRED" }, 400);
+        if (state.modelsMode !== "success" && state.modelsMode !== "empty") return json(res, { ok: false, code: state.modelsMode, message: CONFIG_ERROR }, 400);
+        const reply = { ok: true, models: state.modelsMode === "empty" ? [] : state.models, truncated: false };
+        state.modelsResponses.push(JSON.stringify(reply));
+        return json(res, reply);
       }
       if (p === "/api/components/openai-bridge/config") {
         if (req.method === "GET") {

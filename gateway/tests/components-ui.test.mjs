@@ -228,6 +228,20 @@ test("component UI: interrupted POST keeps waiting when the backend still report
   assert.equal(u.timers.size, 1, "backend removal is polled until it settles");
 });
 
+test("component UI: fetching model list occupies installed card with translated non-mutating status", async () => {
+  const u = ui(item("fetching-models"));
+  await u.load();
+  assert.ok(u.html.includes(u.t("正在读取模型清单…")));
+  assert.match(u.html, /role="status"/);
+  assert.match(u.html, /data-tags="[^"]*inst/);
+  assert.doesNotMatch(u.html, /data-c="(?:install|remove|cancel|configure)"/);
+  assert.equal(u.timers.size, 1, "model fetching is polled until the operation completes");
+  u.list({ supported: true, items: [item()] });
+  await u.load();
+  assert.match(u.html, /data-c="configure"/);
+  assert.equal(u.timers.size, 0);
+});
+
 test("component UI: stale cancel rejected by backend displays failure and reloads removing, not cancelled", async () => {
   const u = ui(item("downloading"));
   await u.load();
@@ -283,7 +297,7 @@ test("component lifecycle strings have real translations in every shipped dictio
   for (const code of ["en", "ar", "es", "fr", "ja", "ko", "ru", "zh-Hant"]) {
     const box = { window: {} };
     vm.runInNewContext(fs.readFileSync(new URL(`lang-${code}.js`, WEB), "utf8"), box);
-    for (const key of ["配置界面尚未就绪，请刷新后重试", "正在配置…请等待完成", "正在卸载…", removingHint, retainedError]) {
+    for (const key of ["配置界面尚未就绪，请刷新后重试", "正在配置…请等待完成", "正在读取模型清单…", "正在卸载…", removingHint, retainedError]) {
       const translated = box.window.I18N_DICT[code][key];
       assert.equal(typeof translated, "string", `${code}: ${key}`);
       assert.notEqual(translated, key, `${code} does not fall back to Simplified Chinese`);

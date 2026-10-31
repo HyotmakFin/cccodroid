@@ -10,12 +10,28 @@ import { PROVIDERS_CFG, routeProviders } from "./providers.mjs";
 import { beginManagedBridgeConfiguration } from "./managed-bridge.mjs";
 
 const ID = "openai-bridge", ENTRY = "lib/openai-bridge/component.cjs";
+const MODELS_MAX_BYTES = 128 << 10;
+const COMPONENT_ERRORS = ["INVALID_INPUT", "KEY_REQUIRED", "KEY_HOST_CHANGED", "RUNTIME_CONFLICT", "BUSY"];
+const modelsUnavailable = () => tz("暂时无法读取模型清单，可重试或手填模型。");
+const MODELS_ERRORS = {
+  MODELS_AUTH: () => tz("API Key 未获授权，请检查后重试。"),
+  MODELS_FORBIDDEN: () => tz("服务拒绝读取模型清单，请检查权限或手填模型。"),
+  MODELS_NOT_FOUND: () => tz("服务不支持读取模型清单，请手填模型名称。"),
+  MODELS_RATE_LIMIT: () => tz("读取模型清单过于频繁，请稍后重试。"),
+  MODELS_TIMEOUT: () => tz("读取模型清单超时，可重试或手填模型。"),
+  MODELS_NETWORK: modelsUnavailable,
+  MODELS_INVALID_RESPONSE: modelsUnavailable,
+  MODELS_TOO_LARGE: modelsUnavailable,
+  MODELS_REDIRECT: modelsUnavailable,
+  MODELS_FAILED: modelsUnavailable,
+};
+const MODELS_ERROR_CODES = Object.keys(MODELS_ERRORS);
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const safeRel = (value) => typeof value === "string" && value.length > 0 && !value.includes("\0") && !value.includes("\\") &&
   !path.isAbsolute(value) && value.split("/").every((part) => part && part !== "." && part !== "..");
 
 function failure(code, field = "") {
-  const error = new Error(code === "RUNTIME_CONFLICT"
+  const error = new Error(MODELS_ERROR_CODES.includes(code) ? MODELS_ERRORS[code]() : code === "RUNTIME_CONFLICT"
     ? tz("已有桥安装不能自动迁移，请先备份并由你处理原安装；未覆盖或卸载。")
     : tz("桥配置未完成，请检查字段或组件状态后重试；当前会话保持不变。"));
   error.code = code;
@@ -90,8 +106,13 @@ function stopLauncher(child, signal) {
 }
 
 // 只收固定入口的一份有界 JSON；错误只提取白名单静态 code，不回传 stderr/异常/命令。
-function invokeComponent(command, input) {
+function invokeComponent(command, input, signal) {
+  const isModels = command === "gui-models", abortSignal = isModels ? signal : undefined;
+  if (abortSignal?.aborted) return Promise.reject(failure("MODELS_FAILED"));
   const entry = componentEntry();
+  const stdoutLimit = isModels ? MODELS_MAX_BYTES : 16384;
+  const responseCode = isModels ? "MODELS_INVALID_RESPONSE" : "component_response";
+  const failedCode = isModels ? "MODELS_FAILED" : "component_failed";
   return new Promise((resolve, reject) => {
     let child, timer, killTimer, settled = false, stopping = false, length = 0, errorLength = 0;
     const chunks = [], errors = [];
@@ -99,11 +120,12 @@ function invokeComponent(command, input) {
       if (settled) return;
       settled = true;
       clearTimeout(timer); clearTimeout(killTimer);
+      abortSignal?.removeEventListener("abort", abort);
       child?.stdout?.destroy(); child?.stderr?.destroy();
       if (error) reject(error);
       else {
         try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
-        catch { reject(failure("component_response")); }
+        catch { reject(failure(responseCode)); }
       }
     };
     const stop = (error) => {
@@ -111,34 +133,38 @@ function invokeComponent(command, input) {
       stopping = true; clearTimeout(timer); stopLauncher(child, "SIGTERM");
       killTimer = setTimeout(() => { stopLauncher(child, "SIGKILL"); finish(error); }, 300);
     };
+    const abort = () => stop(failure("MODELS_FAILED"));
     try { child = spawn(process.execPath, [entry, command], { env: componentEnv(), stdio: ["pipe", "pipe", "pipe"], detached: true }); }
-    catch { finish(failure("component_spawn")); return; }
+    catch { finish(failure(isModels ? failedCode : "component_spawn")); return; }
     child.stdin.on("error", () => {});
-    child.on("error", () => { if (!stopping) finish(failure("component_spawn")); });
+    child.on("error", () => { if (!stopping) finish(failure(isModels ? failedCode : "component_spawn")); });
     child.stdout.on("data", (chunk) => {
       if (stopping || settled) return;
       length += chunk.length;
-      if (length > 16384) { stop(failure("component_response")); return; }
+      if (length > stdoutLimit) { stop(failure(isModels ? "MODELS_TOO_LARGE" : responseCode)); return; }
       chunks.push(chunk);
     });
     child.stderr.on("data", (chunk) => {
       if (stopping || settled) return;
       errorLength += chunk.length;
-      if (errorLength > 16384) { stop(failure("component_response")); return; }
+      if (errorLength > 16384) { stop(failure(isModels ? "MODELS_TOO_LARGE" : responseCode)); return; }
       errors.push(chunk);
     });
-    child.stdout.on("error", () => stop(failure("component_response")));
-    child.stderr.on("error", () => stop(failure("component_response")));
+    child.stdout.on("error", () => stop(failure(responseCode)));
+    child.stderr.on("error", () => stop(failure(responseCode)));
     child.on("close", (code) => {
       if (stopping || settled) return;
       if (code === 0) { finish(); return; }
       let result;
       try { result = JSON.parse(Buffer.concat(errors).toString("utf8")); } catch {}
-      const known = result?.schema === 1 && result.id === ID && ["INVALID_INPUT", "KEY_REQUIRED", "KEY_HOST_CHANGED", "RUNTIME_CONFLICT", "BUSY"].includes(result.error?.code);
-      const errorCode = known ? result.error.code : "component_failed";
+      const known = result?.schema === 1 && result.id === ID &&
+        (COMPONENT_ERRORS.includes(result.error?.code) || (isModels && MODELS_ERROR_CODES.includes(result.error?.code)));
+      const errorCode = known ? result.error.code : failedCode;
       finish(failure(errorCode, ["KEY_REQUIRED", "KEY_HOST_CHANGED"].includes(errorCode) ? "apiKey" : ""));
     });
-    timer = setTimeout(() => stop(failure("component_timeout")), command === "gui-status" ? 10000 : 120000);
+    timer = setTimeout(() => stop(failure(isModels ? "MODELS_TIMEOUT" : "component_timeout")), isModels ? 15000 : command === "gui-status" ? 10000 : 120000);
+    abortSignal?.addEventListener("abort", abort, { once: true });
+    if (abortSignal?.aborted) { abort(); child.stdin.end(); return; }
     child.stdin.end(input ? JSON.stringify(input) : undefined);
   });
 }
@@ -189,14 +215,67 @@ function defaultConnection(model) {
   } catch { throw failure("RUNTIME_CONFLICT"); }
 }
 
-function validateInput(body) {
-  if (!object(body) || Object.keys(body).some((key) => !["endpoint", "apiKey", "model", "consent"].includes(key)) || body.consent !== true) throw failure("consent_required");
+function validateInput(body, modelsOnly = false) {
+  const fields = modelsOnly ? ["endpoint", "apiKey", "consent"] : ["endpoint", "apiKey", "model", "consent"];
+  if (!object(body) || Object.keys(body).some((key) => !fields.includes(key)) || body.consent !== true) throw failure("consent_required");
   const endpoint = normalizeBridgeEndpoint(body.endpoint);
   if (body.apiKey !== undefined && typeof body.apiKey !== "string") throw failure("invalid_key", "apiKey");
   const apiKey = (body.apiKey || "").trim();
   if ((body.apiKey || "").length > 1024 || /[\u0000-\u001f\u007f]/.test(body.apiKey || "") || /\s/.test(apiKey)) throw failure("invalid_key", "apiKey");
+  if (modelsOnly) return { endpoint, apiKey };
   if (typeof body.model !== "string" || !body.model.trim() || body.model.length > 200 || /[,\u0000-\u001f\u007f]/.test(body.model)) throw failure("invalid_model", "model");
   return { endpoint, apiKey, model: body.model.trim() };
+}
+
+function modelsView(result, apiKey = "") {
+  if (!object(result) || result.schema !== 1 || result.id !== ID || !Array.isArray(result.models) || typeof result.truncated !== "boolean") throw failure("MODELS_INVALID_RESPONSE");
+  if (result.models.length > 500) throw failure("MODELS_TOO_LARGE");
+  const ids = new Set();
+  const models = result.models.map((model) => {
+    const id = object(model) ? model.id : undefined;
+    if (typeof id !== "string" || !id.trim() || id.length > 200 || /[,\u0000-\u001f\u007f]/.test(id) || ids.has(id) || (apiKey && id.includes(apiKey))) throw failure("MODELS_INVALID_RESPONSE");
+    ids.add(id);
+    return { id };
+  });
+  const view = { ok: true, models, truncated: result.truncated };
+  if (Buffer.byteLength(JSON.stringify(view)) > MODELS_MAX_BYTES) throw failure("MODELS_TOO_LARGE");
+  return view;
+}
+
+export async function fetchBridgeModels(body, signal) {
+  const input = validateInput(body, true);
+  try {
+    // 健康状态只检查固定组件入口；旧 key 的安全实例/同 origin 匹配全由组件 resolver 处理。
+    // 不做 gui-status 预检，也不触发配置、provider、持久化或常驻服务启动。
+    return modelsView(await invokeComponent("gui-models", input, signal), input.apiKey);
+  } finally { input.apiKey = ""; }
+}
+
+export async function handleBridgeModels(req, res, signal) {
+  try {
+    if (req.method !== "POST") return sendJson(res, 405, { ok: false, code: "method" });
+    let body, abortBody;
+    try {
+      const pending = readBodyBuf(req, 16384);
+      const cancelled = new Promise((_, reject) => {
+        abortBody = () => reject(failure("MODELS_FAILED"));
+        signal?.addEventListener("abort", abortBody, { once: true });
+        if (signal?.aborted) abortBody();
+      });
+      body = JSON.parse((await Promise.race([pending, cancelled])).toString("utf8"));
+    } catch { throw failure(signal?.aborted ? "MODELS_FAILED" : "invalid_input"); }
+    finally { signal?.removeEventListener("abort", abortBody); }
+    const view = await fetchBridgeModels(body, signal);
+    if (!res.destroyed && !res.writableEnded) return sendJson(res, 200, view);
+  } catch (error) {
+    if (res.destroyed || res.writableEnded) return;
+    const codes = [...COMPONENT_ERRORS, ...MODELS_ERROR_CODES, "not_installed", "consent_required", "invalid_input", "invalid_endpoint", "unsupported_path", "invalid_key"];
+    const code = codes.includes(error.code) ? error.code : "MODELS_FAILED";
+    const status = ["BUSY", "RUNTIME_CONFLICT", "not_installed"].includes(code) ? 409 : 400;
+    log(`[bridge-config] models failed stage=${code}`);
+    return sendJson(res, status, { ok: false, code,
+      ...(["endpoint", "apiKey"].includes(error.field) ? { field: error.field } : {}), message: failure(code).message });
+  }
 }
 
 const providerStateFile = () => path.join(CFG.home, ".cccodroid", "services", "openai-bridge-app.json");

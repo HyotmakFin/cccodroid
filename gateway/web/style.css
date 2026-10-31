@@ -3371,7 +3371,7 @@ html[data-motion="on"] .lin-prof .mo-ghost .mo-st,html[data-motion="on"] .lin-pr
 #bridge-config-panel h3{font-size:16px;font-weight:600;margin:0 0 24px}
 #bridge-config-panel .field{margin-bottom:24px}
 #bridge-config-panel .field > label{font-size:14px;color:var(--fg);font-weight:500;margin-bottom:9px}
-#bridge-config-panel .field input{height:48px;font-size:16px;background:var(--input-bg,var(--bg));border-radius:min(var(--radius),9px)}
+#bridge-config-panel .field input{min-width:0;max-width:100%;height:48px;font-size:16px;background:var(--input-bg,var(--bg));border-radius:min(var(--radius),9px)}
 #bridge-config-panel .field input:focus{outline:2px solid var(--accent);outline-offset:2px}
 #bridge-config-panel .field input[aria-invalid="true"]{border-color:var(--err)}
 #bridge-config-panel .bc-hint{font-size:12px;line-height:1.8;color:var(--fg2);margin:7px 0 0}
@@ -3380,6 +3380,14 @@ html[data-motion="on"] .lin-prof .mo-ghost .mo-st,html[data-motion="on"] .lin-pr
 #bridge-config-panel .bc-key-wrap input{padding-inline-end:54px}
 #bridge-config-panel .bc-eye{position:absolute;inset-inline-end:1px;top:1px;width:46px;height:46px;display:grid;place-items:center;background:none;border:0;color:var(--fg2);cursor:pointer}
 #bridge-config-panel .bc-eye:hover{background:var(--bg3)}
+#bridge-config-panel .bc-discovery{margin:0 0 24px;padding:12px;border:1px solid var(--line);border-radius:min(var(--radius),9px);background:var(--input-bg,var(--bg))}
+#bridge-config-panel .bc-model-consent{display:flex;align-items:flex-start;gap:10px;min-height:44px;font-size:12px;line-height:1.8;cursor:pointer}
+#bridge-config-panel .bc-model-consent input{width:20px;height:20px;margin:3px 0 0;flex:none;accent-color:var(--accent)}
+#bridge-config-panel .bc-model-consent input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#bridge-config-panel .bc-model-consent span{min-width:0}
+#bridge-config-panel .bc-model-feedback{display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px 12px;margin-top:8px}
+#bridge-config-panel .bc-model-feedback .bc-hint{flex:1 1 180px;min-width:0;margin:0}
+#bridge-config-panel .bc-model-retry{flex:0 1 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 #bridge-config-panel .btn{min-height:46px}
 #bridge-config-panel .bc-privacy{margin:0 0 18px}
 #bridge-config-panel .bc-center{text-align:center}

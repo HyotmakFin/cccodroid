@@ -10,7 +10,7 @@ import { SKILLS_DIR, skillMeta } from "./extensions.mjs";
 import { modulesMissingFor } from "./modules.mjs";
 import { ghProxy, pget } from "./pget.mjs";
 import { retireManagedBridge } from "./managed-bridge.mjs";
-import { clearBridgeConfigMapping, handleBridgeConfig } from "./bridge-config.mjs";
+import { clearBridgeConfigMapping, handleBridgeConfig, handleBridgeModels } from "./bridge-config.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -391,6 +391,9 @@ async function compInstall(id) {
   const dk = devkitIdentity();
   if (!dk || !dk.sha256) return { ok: false, message: tz("工具包还没装好（或是本地文件装的，没有版本身份），装不了组件") };
   const ix = await compIndex(true);
+  // 拉索引期间可能已有配置、取清单或卸载占槽；不能覆盖它们的 job。
+  const pending = COMP_JOBS.get(id);
+  if (pending && !pending.finished) return { ok: false, message: "busy" };
   const entry = ix.data && ix.data.components && ix.data.components[id];
   if (!entry) return { ok: false, message: ix.error || tz("没有这个组件") };
   const un = compUnsupported(entry);
@@ -567,7 +570,7 @@ function compCancel(id) {
   if (!job || job.finished) return { ok: false, message: "not running" };
   if (job.phase === "installing") return { ok: false, message: tz("正在放进工具包，这一步不能中断") };
   if (job.phase === "removing") return { ok: false, message: tz("正在卸载，这一步不能取消，请等待完成") };
-  if (job.phase === "configuring") return { ok: false, message: "busy" };
+  if (["configuring", "fetching-models"].includes(job.phase)) return { ok: false, message: "busy" };
   job.cancelled = true;
   if (job.child) killTree(job.child);
   return { ok: true };
@@ -775,14 +778,34 @@ async function handleComponents(req, res, p, u) {
 
 // ── 路由：/api/components /api/gh/ ──
 export async function routeComponents(req, res, u, p) {
-  if (p === "/api/components/openai-bridge/config") {
-    const current = COMP_JOBS.get("openai-bridge");
+  if (p === "/api/components/openai-bridge/config" || p === "/api/components/openai-bridge/models") {
+    const models = p === "/api/components/openai-bridge/models", handler = models ? handleBridgeModels : handleBridgeConfig;
+    let current = COMP_JOBS.get("openai-bridge");
+    // 保存优先于只读取清单：即使客户端 close 尚未到达，也先终止短命任务再接手，绝不等待活网络。
+    if (!models && req.method === "POST" && current?.phase === "fetching-models" && !current.finished) {
+      current.abort.abort();
+      await current.completion;
+      current = COMP_JOBS.get("openai-bridge");
+    }
     if (current && !current.finished) return sendJson(res, 409, { ok: false, code: "BUSY", message: "busy" });
-    if (req.method !== "POST") return handleBridgeConfig(req, res);
-    const job = { phase: "configuring", done: 0, total: 0, finished: false };
+    if (req.method !== "POST") return handler(req, res);
+    const job = { phase: models ? "fetching-models" : "configuring", done: 0, total: 0, finished: false };
+    let complete;
+    const disconnect = () => { if (!res.writableEnded) job.abort.abort(); };
+    if (models) {
+      job.abort = new AbortController();
+      job.completion = new Promise((resolve) => { complete = resolve; });
+      req.once("aborted", disconnect);
+      res.once?.("close", disconnect);
+      if (req.aborted || res.destroyed) disconnect();
+    }
     COMP_JOBS.set("openai-bridge", job);
-    try { return await handleBridgeConfig(req, res); }
-    finally { if (COMP_JOBS.get("openai-bridge") === job) COMP_JOBS.delete("openai-bridge"); }
+    try { return await handler(req, res, job.abort?.signal); }
+    finally {
+      if (models) { req.removeListener("aborted", disconnect); res.removeListener?.("close", disconnect); }
+      if (COMP_JOBS.get("openai-bridge") === job) COMP_JOBS.delete("openai-bridge");
+      complete?.();
+    }
   }
   // ── 可选组件（浏览器组件等）──
   if (p === "/api/components" || p.startsWith("/api/components/")) return handleComponents(req, res, p, u);

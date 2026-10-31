@@ -17,29 +17,48 @@ const fresh = () => saved({ configured: false, hasKey: false, endpoint: "", mode
 const deferred = () => { let resolve; const promise = new Promise((yes) => { resolve = yes; }); return { promise, resolve }; };
 
 function ui(initial = fresh()) {
-  const nodes = new Map(), listeners = new Map(), observers = [], calls = [], confirms = [];
+  const nodes = new Map(), listeners = new Map(), observers = [], calls = [], confirms = [], htmlWrites = [], createdTags = [], violations = [];
+  const timers = new Map(); let now = 0, nextTimer = 0;
+  // Production catches fetch/storage errors; retain mock contract failures so those catches cannot hide a failed assertion.
+  const guard = (check) => { try { return check(); } catch (error) { violations.push(error); throw error; } };
+  const verify = () => { if (violations.length) throw violations[0]; };
+  const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); verify(); };
   class Node {
     constructor(id = "", tag = "div") {
-      this.id = id; this.tagName = tag.toUpperCase(); this.value = ""; this.type = ""; this.textContent = "";
-      this.attributes = {}; this.dataset = {}; this.children = []; this.listeners = {}; this.disabled = false; this.scrollTop = 0; this.isConnected = true;
+      this.id = id; this.tagName = tag.toUpperCase(); this.value = ""; this.type = ""; this._textContent = "";
+      this.attributes = {}; this.dataset = {}; this.children = []; this.listeners = {}; this.disabled = false; this.checked = false; this.scrollTop = 0; this.isConnected = true;
       const classes = new Set();
       this.classList = { add: (...a) => a.forEach((c) => classes.add(c)), remove: (...a) => a.forEach((c) => classes.delete(c)), contains: (c) => classes.has(c), toggle(c, force) { const on = force === undefined ? !classes.has(c) : force; if (on) classes.add(c); else classes.delete(c); return on; } };
     }
     set innerHTML(html) {
-      this.html = html; if (this.id) nodes.set(this.id, this);
-      for (const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+      this.html = String(html); this._textContent = ""; this.children = []; htmlWrites.push({ id: this.id, html: this.html });
+      if (this.id) nodes.set(this.id, this);
+      for (const match of this.html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
         const el = new Node(match[3], match[1]);
         for (const attr of match[2].matchAll(/([\w-]+)="([^"]*)"/g)) el.setAttribute(attr[1], attr[2]);
+        for (const attr of match[2].matchAll(/(?:^|\s)(checked|disabled|required)(?=\s|\/?$)/g)) el.setAttribute(attr[1], "");
         this.appendChild(el); nodes.set(el.id, el);
       }
-      const eye = new Node("bc-eye", "button"); eye.dataset.bc = "eye"; this.appendChild(eye); nodes.set("bc-eye", eye);
-      for (const action of ["back", "use", "edit"]) {
-        const button = new Node("bc-action-" + action, "button"); button.dataset.bc = action; this.appendChild(button); nodes.set(button.id, button);
+      if (this.id === "bridge-config-panel") {
+        const eye = new Node("bc-eye", "button"); eye.dataset.bc = "eye"; this.appendChild(eye); nodes.set("bc-eye", eye);
+        for (const action of ["back", "use", "edit"]) {
+          const button = new Node("bc-action-" + action, "button"); button.dataset.bc = action; this.appendChild(button); nodes.set(button.id, button);
+        }
       }
     }
     get innerHTML() { return this.html || ""; }
+    set textContent(value) { this._textContent = String(value); this.html = ""; this.children = []; }
+    get textContent() { return this._textContent + this.children.map((el) => el.textContent).join(""); }
     appendChild(el) { this.children.push(el); el.parentElement = this; return el; }
-    setAttribute(name, value) { this.attributes[name] = String(value); if (name === "class") this.classList.add(...value.split(/\s+/).filter(Boolean)); if (name === "type") this.type = value; }
+    append(...elements) { elements.forEach((el) => this.appendChild(el)); }
+    replaceChildren(...elements) { this.children = []; this._textContent = ""; this.html = ""; this.append(...elements); }
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+      if (name === "class") this.classList.add(...String(value).split(/\s+/).filter(Boolean));
+      if (["type", "value"].includes(name)) this[name] = String(value);
+      if (["checked", "disabled", "required"].includes(name)) this[name] = true;
+      if (name.startsWith("data-")) this.dataset[name.slice(5)] = String(value);
+    }
     getAttribute(name) { return this.attributes[name] ?? null; }
     removeAttribute(name) { delete this.attributes[name]; }
     addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
@@ -48,27 +67,40 @@ function ui(initial = fresh()) {
     getClientRects() { return this.closest(".hidden") ? [] : [{}]; }
     closest(selector) { if (selector === "[data-bc]" && this.dataset.bc) return this; if (selector === ".hidden") { for (let el = this; el; el = el.parentElement) if (el.classList.contains("hidden")) return el; } return null; }
     focus() { document.activeElement = this; }
-    reset() { for (const el of nodes.values()) if (el.tagName === "INPUT") el.value = ""; }
+    reset() { for (const el of nodes.values()) if (el.tagName === "INPUT") { el.value = ""; el.checked = false; } }
   }
   const get = (id) => nodes.get(id);
   for (const id of ["tab-ext", "pages", "page-body", "anchor"]) nodes.set(id, new Node(id));
   const document = {
     activeElement: get("anchor"), hidden: false, getElementById: get,
-    createElement: (tag) => new Node("", tag), querySelectorAll: () => [],
+    createElement: (tag) => { createdTags.push(String(tag).toUpperCase()); return new Node("", tag); }, querySelectorAll: () => [],
     addEventListener(type, fn) { (listeners.get("doc:" + type) || listeners.set("doc:" + type, []).get("doc:" + type)).push(fn); },
   };
-  let response = initial, nextPost = null, backCount = 0, acceptConsent = true;
+  let response = initial, nextPost = null, nextModels = null, backCount = 0, acceptConsent = true;
   const sandbox = {
-    URL, document, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
+    URL, AbortController, document, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
+    setTimeout(fn, delay = 0) { const id = ++nextTimer; timers.set(id, { fn, at: now + Number(delay) }); return id; },
+    clearTimeout(id) { timers.delete(id); },
     addEventListener(type, fn) { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); },
     __ccBack() { backCount++; return false; },
     confirm(message) { confirms.push(message); return acceptConsent; },
-    localStorage: { getItem() { assert.fail("bridge form must not read storage"); }, setItem() { assert.fail("bridge form must not persist secrets"); } },
-    sessionStorage: { getItem() { assert.fail("bridge form must not read storage"); }, setItem() { assert.fail("bridge form must not persist secrets"); } },
+    localStorage: { getItem() { guard(() => assert.fail("bridge form must not read storage")); }, setItem() { guard(() => assert.fail("bridge form must not persist secrets")); } },
+    sessionStorage: { getItem() { guard(() => assert.fail("bridge form must not read storage")); }, setItem() { guard(() => assert.fail("bridge form must not persist secrets")); } },
     fetch: async (url, opts) => {
-      assert.equal(url, "/api/components/openai-bridge/config", "only the real same-origin component configuration route is allowed");
-      assert.equal(opts.cache, "no-store"); assert.equal(opts.credentials, "same-origin");
-      calls.push({ method: opts.method, body: opts.body ? JSON.parse(opts.body) : null });
+      const body = opts.body ? JSON.parse(opts.body) : null;
+      const call = { url, method: opts.method, body, signal: opts.signal };
+      calls.push(call);
+      guard(() => {
+        assert.ok(["/api/components/openai-bridge/config", "/api/components/openai-bridge/models"].includes(url), "only the real same-origin bridge configuration/models routes are allowed; no provider, inference or session APIs");
+        assert.equal(opts.cache, "no-store"); assert.equal(opts.credentials, "same-origin");
+        if (url.endsWith("/models")) {
+          assert.equal(opts.method, "POST"); assert.equal(body.consent, true, "a models request requires explicit current consent");
+          assert.equal(get("bc-model-consent").checked, true, "the body flag cannot replace the visible checked opt-in");
+          assert.deepEqual(Object.keys(body).sort(), (body.apiKey === undefined ? ["consent", "endpoint"] : ["apiKey", "consent", "endpoint"]), "model discovery sends no chat, selected model or provider mutation");
+          assert.equal(opts.headers["Content-Type"], "application/json");
+        }
+      });
+      if (url.endsWith("/models")) return nextModels ? nextModels(call) : reply({ ok: true, models: [{ id: "synthetic-model" }], truncated: false });
       if (opts.method === "POST" && nextPost) return nextPost();
       return { ok: true, status: 200, json: async () => structuredClone(response) };
     },
@@ -76,20 +108,40 @@ function ui(initial = fresh()) {
   sandbox.window = sandbox;
   vm.runInNewContext(source, sandbox, { filename: "bridge-config.js" });
   return {
-    get, calls, document, confirms,
+    get, calls, document, confirms, htmlWrites, createdTags, flush,
     consent(value) { acceptConsent = value; },
-    open: (opts = {}) => sandbox.CCBridgeConfig.open({ anchor: get("anchor"), ...opts }),
-    close: () => sandbox.CCBridgeConfig.close(),
-    response(value) { response = value; }, post(fn) { nextPost = fn; },
-    async submit() { await get("bc-form").listeners.submit[0]({ preventDefault() {} }); },
-    async click(action) {
-      const node = action === "eye" ? get("bc-eye") : get("bc-action-" + action);
-      for (const fn of get("bridge-config-panel").listeners.click) fn({ target: node });
-      await new Promise((r) => setImmediate(r));
+    async open(opts = {}) { await sandbox.CCBridgeConfig.open({ anchor: get("anchor"), ...opts }); verify(); },
+    close() { const closed = sandbox.CCBridgeConfig.close(); verify(); return closed; },
+    response(value) { response = value; }, post(fn) { nextPost = fn; }, models(fn) { nextModels = fn; },
+    modelCalls: () => calls.filter((call) => call.url.endsWith("/models")),
+    configPosts: () => calls.filter((call) => call.url.endsWith("/config") && call.method === "POST"),
+    checkbox: () => [...nodes.values()].find((el) => el.tagName === "INPUT" && el.type === "checkbox"),
+    modelList: () => get(get("bc-model").getAttribute("list")),
+    pendingTimers: () => timers.size,
+    async advance(ms) {
+      const target = now + ms; let count = 0;
+      while (true) {
+        const next = [...timers].sort((a, b) => a[1].at - b[1].at || a[0] - b[0]).find(([, timer]) => timer.at <= target);
+        if (!next) break;
+        assert.ok(++count < 100, "timer callbacks must not spin");
+        const [id, timer] = next; now = timer.at; timers.delete(id); timer.fn(); await flush();
+      }
+      now = target; await flush();
     },
-    input(name, value) { const el = get("bc-" + name); el.value = value; for (const fn of el.listeners.input || []) fn(); },
+    async submit() { await get("bc-form").listeners.submit[0]({ preventDefault() {} }); verify(); },
+    async click(action) {
+      const node = action === "eye" ? get("bc-eye") : get("bc-action-" + action) || [...nodes.values()].find((el) => el.dataset.bc === action);
+      assert.ok(node, `missing bridge action: ${action}`);
+      if (node.disabled) { await flush(); return; }
+      for (const fn of node.listeners.click || []) fn({ target: node });
+      for (const fn of get("bridge-config-panel").listeners.click) fn({ target: node });
+      await flush();
+    },
+    input(name, value) { const el = get("bc-" + name); el.value = value; for (const fn of el.listeners.input || []) fn({ target: el }); },
+    change(id, checked) { const el = get(id); assert.ok(el, `missing bridge input: ${id}`); el.checked = checked; for (const fn of el.listeners.change || []) fn({ target: el }); },
     back: () => sandbox.__ccBack(), backCount: () => backCount,
     blur() { for (const fn of listeners.get("blur") || []) fn(); },
+    pagehide() { for (const fn of listeners.get("pagehide") || []) fn(); },
     leavePage() { get("tab-ext").classList.add("hidden"); observers.forEach((fn) => fn([])); },
   };
 }
@@ -160,7 +212,7 @@ test("bridge form: card stays inside Extensions, old key is not echoed and save 
   assert.deepEqual(u.calls[1].body, { endpoint: "https://api.example.com/v1", model: "synthetic-model", consent: true });
   assert.equal(used, 0);
   assert.equal(u.get("bc-local-state").textContent, "本地已准备好");
-  assert.match(u.get("bridge-config-panel").innerHTML, /远端尚未测试/);
+  assert.equal(u.get("bc-remote-state").textContent, "模型推理尚未验证");
   await u.click("use");
   assert.equal(used, 1);
   assert.equal(u.get("tab-ext").classList.contains("bridge-config-open"), false);
@@ -279,4 +331,404 @@ test("bridge form: hide/show applies only to newly entered key, blur remasks it,
   assert.equal(u.back(), true); assert.equal(u.get("bc-key").value, "");
   assert.equal(u.get("tab-ext").classList.contains("bridge-config-open"), false);
   assert.equal(u.backCount(), 0); assert.equal(u.back(), false); assert.equal(u.backCount(), 1);
+});
+
+test("bridge models: the visible opt-in defaults off and API/key/model edits alone never query or save", async () => {
+  for (const initial of [fresh(), saved({ apiKey: "never-echo-saved-synthetic-key" })]) {
+    const u = ui(initial); let used = 0;
+    await u.open({ useNew: async () => { used++; } });
+    if (initial.configured) await u.click("edit");
+    const checkbox = u.checkbox();
+    assert.ok(checkbox, "the opt-in is a visible checkbox, not a confirm-only implicit grant");
+    assert.equal(checkbox.checked, false);
+    assert.equal(checkbox.closest(".hidden"), null);
+    assert.equal(u.get("bc-key").value, "", "status replies never populate the secret input");
+    assert.ok(!u.get("bridge-config-panel").innerHTML.includes("never-echo-saved-synthetic-key"));
+    fill(u); u.input("model", "manual-model-without-discovery");
+    assert.equal(checkbox.disabled, false, "a valid API address enables the optional visible consent");
+    await u.advance(2000);
+    assert.equal(u.modelCalls().length, 0);
+    assert.equal(u.configPosts().length, 0);
+    assert.equal(u.calls.length, 1, "no inference, provider mutation, session creation or automatic save");
+    assert.equal(used, 0);
+    assert.equal(u.confirms.length, 0);
+    assert.equal(u.get("bc-model").disabled, false);
+    assert.equal(u.get("bc-model").tagName, "INPUT", "manual model entry is never replaced with a fixed select");
+    assert.equal(u.modelList()?.tagName, "DATALIST", "the editable model field supplies native search suggestions");
+    u.change(checkbox.id, false); await u.advance(2000);
+    assert.equal(u.calls.length, 1, "an explicit false consent must still make zero models requests");
+  }
+});
+
+test("bridge models: consent plus valid API/key debounces input for 650ms and never auto-selects, saves or creates a session", async () => {
+  const u = ui(); let used = 0;
+  await u.open({ useNew: async () => { used++; } });
+  const checkbox = u.checkbox(); assert.ok(checkbox);
+  u.input("endpoint", "https://api.example.com/v1");
+  u.change(checkbox.id, true);
+  await u.advance(1000);
+  assert.equal(u.modelCalls().length, 0, "consent and an API address are insufficient without a key");
+  u.input("key", "synthetic-partial-key");
+  await u.advance(400);
+  assert.equal(u.modelCalls().length, 0);
+  u.input("key", "synthetic-final-key");
+  await u.advance(649);
+  assert.equal(u.modelCalls().length, 0, "typing resets the debounce instead of querying on every keystroke");
+  await u.advance(1);
+  assert.equal(u.modelCalls().length, 1);
+  assert.deepEqual(u.modelCalls()[0].body, { endpoint: "https://api.example.com/v1", apiKey: "synthetic-final-key", consent: true });
+  assert.equal(u.get("bc-model").value, "", "listing models does not pick the first suggestion for the user");
+  assert.deepEqual(u.modelList().children.map((el) => el.value), ["synthetic-model"]);
+  assert.equal(u.configPosts().length, 0);
+  assert.equal(u.calls.length, 2, "only the initial configuration read and one model-list request are allowed");
+  assert.equal(used, 0);
+  assert.equal(u.confirms.length, 0, "models opt-in and save-time conversation consent are separate");
+});
+
+test("bridge models: opt-in never bypasses malformed endpoint/key checks or blocks manual save", async () => {
+  for (const [endpoint, key] of [
+    ["http://api.example.com/v1", "synthetic-key"],
+    ["https://user:pass@api.example.com/v1", "synthetic-key"],
+    ["https://api.example.com/v1?key=synthetic", "synthetic-key"],
+    ["https://api.example.com/v1/responses", "synthetic-key"],
+    ["https://api.example.com/private", "synthetic-key"],
+    ["https://api.example.com/v1", ""],
+    ["https://api.example.com/v1", "synthetic key"],
+    ["https://api.example.com/v1", "synthetic\nkey"],
+  ]) {
+    const u = ui(); await u.open();
+    u.input("endpoint", endpoint); u.input("key", key);
+    const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+    await u.advance(2000);
+    assert.equal(u.modelCalls().length, 0, `${endpoint}: only valid credentials may trigger discovery`);
+    assert.equal(u.configPosts().length, 0);
+    assert.equal(u.get("bc-model").disabled, false);
+  }
+  const u = ui(); await u.open(); fill(u); await u.advance(2000);
+  u.response(saved()); await u.submit();
+  assert.equal(u.modelCalls().length, 0, "the optional model-list checkbox is not required for a manual save");
+  assert.equal(u.configPosts().length, 1);
+  assert.equal(u.confirms.length, 1, "manual save still requires its distinct data-sharing confirmation");
+  assert.equal(u.get("bc-key").value, "");
+});
+
+test("bridge models: model edits and datalist choices neither query again nor replace the user draft", async () => {
+  const u = ui(); await u.open(); fill(u);
+  const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+  await u.advance(650);
+  assert.equal(u.modelCalls().length, 1);
+  for (const model of ["s", "synthetic-model", "manual-not-in-returned-list"]) {
+    u.input("model", model); await u.advance(1000);
+    assert.equal(u.get("bc-model").value, model);
+    assert.equal(u.modelCalls().length, 1, "model selection only changes the local editable input");
+  }
+  assert.equal(u.configPosts().length, 0);
+  u.response(saved({ model: "manual-not-in-returned-list" })); await u.submit();
+  assert.equal(u.configPosts()[0].body.model, "manual-not-in-returned-list");
+  assert.equal(u.modelCalls().length, 1);
+  assert.equal(u.get("bc-saved-model").textContent, "manual-not-in-returned-list");
+});
+
+test("bridge models: an old saved key is usable only through a consented same-origin request and never echoed", async () => {
+  const u = ui(saved({ apiKey: "never-display-the-old-synthetic-key" })); await u.open();
+  await u.advance(1000); assert.equal(u.modelCalls().length, 0, "the saved summary never silently contacts the upstream");
+  await u.click("edit");
+  const checkbox = u.checkbox(); assert.ok(checkbox);
+  assert.equal(checkbox.checked, false);
+  u.change(checkbox.id, true); await u.advance(650);
+  assert.equal(u.modelCalls().length, 1);
+  assert.deepEqual(u.modelCalls()[0].body, { endpoint: "https://api.example.com/v1", consent: true }, "the server resolves the saved key; the browser never reads it");
+  assert.equal(u.get("bc-key").value, "");
+  u.input("endpoint", "https://api.example.com/custom/chat/completions");
+  assert.equal(checkbox.checked, true, "a path-only edit stays within the already-consented origin");
+  await u.advance(650);
+  assert.equal(u.modelCalls().length, 2);
+  assert.deepEqual(u.modelCalls()[1].body, { endpoint: "https://api.example.com/custom/chat/completions", consent: true });
+  assert.equal(u.get("bc-key").value, "");
+  assert.ok(!u.get("bridge-config-panel").innerHTML.includes("never-display-the-old-synthetic-key"));
+  assert.ok(!u.get("bridge-config-panel").textContent.includes("never-display-the-old-synthetic-key"));
+  assert.equal(u.configPosts().length, 0);
+});
+
+test("bridge models: changing origin or port clears entered keys and consent before a new address can be queried", async () => {
+  for (const endpoint of ["https://other.example.com/v1", "https://api.example.com:444/v1"]) {
+    const u = ui(saved()); await u.open(); await u.click("edit");
+    u.input("key", "do-not-send-this-previous-origin-key");
+    const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+    await u.advance(400);
+    u.input("endpoint", endpoint);
+    assert.equal(checkbox.checked, false, "origin changes require a fresh visible opt-in");
+    assert.equal(u.get("bc-key").value, "", "even an unsaved replacement key cannot follow the API origin");
+    await u.advance(2000);
+    assert.equal(u.modelCalls().length, 0, "an old-origin debounce cannot send either key to the new origin");
+    u.change(checkbox.id, true); await u.advance(1000);
+    assert.equal(u.modelCalls().length, 0, "consent alone cannot reuse a saved cross-origin key");
+    u.input("key", "explicit-new-origin-synthetic-key"); await u.advance(650);
+    assert.equal(u.modelCalls().length, 1);
+    assert.deepEqual(u.modelCalls()[0].body, { endpoint, apiKey: "explicit-new-origin-synthetic-key", consent: true });
+    assert.equal(u.configPosts().length, 0);
+  }
+});
+
+test("bridge models: withdrawing consent cancels debounce or fetch and rejects late results without erasing a manual model", async () => {
+  for (const inFlight of [false, true]) {
+    const u = ui(), pending = deferred(); await u.open(); fill(u);
+    u.models(() => pending.promise);
+    const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+    await u.advance(inFlight ? 650 : 400);
+    assert.equal(u.modelCalls().length, inFlight ? 1 : 0);
+    const call = u.modelCalls()[0];
+    u.change(checkbox.id, false);
+    if (call) { assert.ok(call.signal); assert.equal(call.signal.aborted, true); }
+    assert.equal(u.pendingTimers(), 0, "withdrawal removes the pending debounce instead of merely ignoring its reply");
+    pending.resolve(reply({ ok: true, models: [{ id: "late-withdrawn-model" }], truncated: false }));
+    await u.flush(); await u.advance(2000);
+    assert.equal(u.modelCalls().length, inFlight ? 1 : 0);
+    assert.deepEqual(u.modelList().children, []);
+    assert.equal(u.get("bc-model").value, "synthetic-model");
+    assert.equal(u.get("bc-model").disabled, false);
+    assert.equal(u.get("bc-save").disabled, false);
+    assert.equal(u.configPosts().length, 0);
+  }
+});
+
+test("bridge models: remote IDs are untrusted text-valued option nodes, never injected HTML", async () => {
+  const u = ui(); await u.open(); fill(u);
+  const malicious = '\"><img src=x onerror=alert(1)>', ampersands = "vendor/<script>&\"'";
+  u.models(() => reply({ ok: true, models: [{ id: malicious }, { id: ampersands }, { id: "safe-model" }], truncated: false }));
+  u.input("model", "");
+  const writesBefore = u.htmlWrites.length, tagsBefore = u.createdTags.length;
+  const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true); await u.advance(650);
+  const list = u.modelList();
+  assert.deepEqual(list.children.map((el) => el.value).sort(), [malicious, ampersands, "safe-model"].sort());
+  assert.ok(list.children.every((el) => el.tagName === "OPTION"));
+  assert.ok(list.children.every((el) => el.children.length === 0));
+  assert.ok(list.children.every((el) => !Object.keys(el.attributes).some((name) => /^on/i.test(name))));
+  assert.ok(u.createdTags.slice(tagsBefore).every((tag) => tag === "OPTION"), "a remote model name cannot become an img/script element");
+  assert.ok(!u.htmlWrites.slice(writesBefore).some(({ html }) => html.includes(malicious) || html.includes(ampersands)), "model IDs must use value/textContent rather than innerHTML");
+  assert.equal(u.get("bc-model").value, "");
+  assert.equal(u.configPosts().length, 0);
+});
+
+test("bridge models: close, back and page exit clear the secret, consent, timer and in-flight suggestions", async () => {
+  for (const exit of ["close", "back", "pagehide", "leavePage"]) for (const inFlight of [false, true]) {
+    const u = ui(), pending = deferred(); await u.open(); fill(u);
+    u.models(() => pending.promise);
+    const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+    await u.advance(inFlight ? 650 : 400);
+    const call = u.modelCalls()[0];
+    if (["close", "back"].includes(exit)) assert.equal(u[exit](), true, "model discovery must not lock the back action");
+    else u[exit]();
+    assert.equal(u.get("tab-ext").classList.contains("bridge-config-open"), false);
+    assert.equal(u.get("bc-key").value, "", `${exit}: leaving must erase newly typed keys`);
+    assert.equal(u.get("bc-key").type, "password");
+    assert.equal(checkbox.checked, false);
+    assert.equal(u.pendingTimers(), 0);
+    if (call) { assert.ok(call.signal); assert.equal(call.signal.aborted, true); }
+    pending.resolve(reply({ ok: true, models: [{ id: "late-after-leaving" }], truncated: false }));
+    await u.flush(); await u.advance(2000);
+    assert.equal(u.modelCalls().length, inFlight ? 1 : 0);
+    assert.deepEqual(u.modelList().children, []);
+    assert.equal(u.configPosts().length, 0);
+    assert.equal(u.get("tab-ext").classList.contains("bridge-config-open"), false, "late replies cannot reopen the panel");
+    assert.equal(u.get("bc-key").value, "");
+  }
+});
+
+test("bridge models: a reopened form has neither the old key nor consent and cannot inherit an earlier response", async () => {
+  const u = ui(), pending = deferred(); await u.open(); fill(u);
+  u.models(() => pending.promise);
+  u.change(u.checkbox().id, true); await u.advance(650); u.close();
+  await u.open();
+  assert.equal(u.checkbox().checked, false);
+  assert.equal(u.get("bc-key").value, "");
+  assert.deepEqual(u.modelList().children, []);
+  u.models(() => reply({ ok: true, models: [{ id: "reopened-current-model" }], truncated: false }));
+  fill(u, "synthetic-key-entered-after-reopen"); u.input("model", ""); u.change(u.checkbox().id, true); await u.advance(650);
+  pending.resolve(reply({ ok: true, models: [{ id: "previous-opening-model" }], truncated: false }));
+  await u.flush();
+  assert.deepEqual(u.modelList().children.map((el) => el.value), ["reopened-current-model"]);
+  assert.equal(u.get("bc-key").value, "synthetic-key-entered-after-reopen");
+  assert.equal(u.modelCalls().length, 2);
+  assert.equal(u.configPosts().length, 0);
+});
+
+test("bridge models: saving cancels outstanding discovery before posting config and late replies cannot alter saved state", async () => {
+  for (const inFlight of [false, true]) {
+    const u = ui(), pending = deferred(); let used = 0;
+    await u.open({ useNew: async () => { used++; } }); fill(u);
+    u.models(() => pending.promise);
+    u.change(u.checkbox().id, true); await u.advance(inFlight ? 650 : 400);
+    const call = u.modelCalls()[0];
+    u.response(saved()); await u.submit();
+    assert.equal(u.pendingTimers(), 0, "save must remove a queued model-list timer");
+    if (call) { assert.ok(call.signal); assert.equal(call.signal.aborted, true, "save aborts a model-list request before changing panels"); }
+    assert.equal(u.configPosts().length, 1);
+    assert.equal(u.configPosts()[0].body.apiKey, "synthetic-test-key");
+    assert.equal(u.get("bc-key").value, "");
+    assert.equal(u.get("bc-saved").classList.contains("hidden"), false);
+    assert.equal(u.get("bc-form").classList.contains("hidden"), true);
+    pending.resolve(reply({ ok: true, models: [{ id: "late-after-save" }], truncated: false }));
+    await u.flush(); await u.advance(2000);
+    assert.equal(u.modelCalls().length, inFlight ? 1 : 0);
+    assert.equal(u.configPosts().length, 1, "discovery never adds a second save");
+    assert.equal(u.get("bc-saved-model").textContent, "synthetic-model");
+    assert.deepEqual(u.modelList().children, []);
+    assert.equal(used, 0, "neither discovering nor saving implicitly creates a session");
+    await u.click("edit");
+    assert.equal(u.checkbox().checked, false);
+    assert.equal(u.get("bc-key").value, "");
+    await u.advance(1000);
+    assert.equal(u.modelCalls().length, inFlight ? 1 : 0, "an edited saved config must ask for model-list consent again");
+  }
+});
+
+test("bridge models: list errors are nonfatal, do not expose upstream secrets, and leave manual saving available", async () => {
+  for (const failure of [
+    () => reply({ ok: false, code: "UPSTREAM_AUTH_FAILED", message: "never-render-upstream-secret" }, 401),
+    () => reply({ ok: false, code: "MODELS_UNSUPPORTED", message: "never-render-upstream-secret" }, 404),
+    () => reply({ ok: false, message: "never-render-upstream-secret" }, 429),
+    () => reply({ ok: false, message: "never-render-upstream-secret" }, 502),
+    () => Promise.reject(new Error("never-render-upstream-secret")),
+    () => ({ ok: true, status: 200, json: async () => { throw new Error("never-render-upstream-secret"); } }),
+  ]) {
+    const u = ui(); await u.open(); fill(u); u.models(failure);
+    u.change(u.checkbox().id, true); await u.advance(650);
+    assert.equal(u.modelCalls().length, 1);
+    assert.equal(u.get("bc-form").classList.contains("hidden"), false);
+    assert.equal(u.get("bc-model").disabled, false);
+    assert.equal(u.get("bc-save").disabled, false);
+    assert.equal(u.get("bc-key").value, "synthetic-test-key");
+    assert.ok(!u.get("bridge-config-panel").textContent.includes("never-render-upstream-secret"));
+    assert.ok(!u.get("bridge-config-panel").innerHTML.includes("never-render-upstream-secret"));
+    assert.equal(u.configPosts().length, 0);
+    u.input("model", "manual-after-model-list-error");
+    u.response(saved({ model: "manual-after-model-list-error" })); await u.submit();
+    assert.equal(u.configPosts().length, 1);
+    assert.equal(u.configPosts()[0].body.model, "manual-after-model-list-error");
+    assert.equal(u.get("bc-key").value, "");
+    assert.equal(u.get("bc-saved").classList.contains("hidden"), false);
+  }
+});
+
+test("bridge models: explicit retry uses current credentials once, and controls prevent retry without consent", async () => {
+  const u = ui(), pending = deferred(); let used = 0;
+  await u.open({ useNew: async () => { used++; } }); fill(u);
+  const checkbox = u.checkbox(), retry = u.get("bc-model-retry"); assert.ok(checkbox); assert.ok(retry);
+  assert.equal(retry.disabled, true); await u.click("models-retry"); await u.advance(1000);
+  assert.equal(u.modelCalls().length, 0);
+  let attempt = 0;
+  u.models(() => ++attempt === 1
+    ? reply({ ok: false, code: "upstream_failed", message: "synthetic-secret-not-for-display" }, 502)
+    : attempt === 2 ? pending.promise : reply({ ok: true, models: [{ id: "synthetic-retried-model" }], truncated: false }));
+  u.change(checkbox.id, true);
+  assert.equal(retry.disabled, true, "a queued auto-request cannot be doubled by retry");
+  await u.advance(650);
+  assert.equal(u.modelCalls().length, 1);
+  assert.equal(retry.disabled, false);
+  assert.match(u.get("bc-model-status").textContent, /重试|手填/);
+  assert.ok(!u.get("bc-model-status").textContent.includes("synthetic-secret"));
+  await u.click("models-retry"); await u.advance(0);
+  assert.equal(u.modelCalls().length, 2);
+  assert.deepEqual(u.modelCalls()[1].body, { endpoint: "https://api.example.com/v1", apiKey: "synthetic-test-key", consent: true });
+  assert.equal(retry.disabled, true, "in-flight retries remain single-shot");
+  await u.click("models-retry"); await u.advance(0); assert.equal(u.modelCalls().length, 2);
+  pending.resolve(reply({ ok: true, models: [{ id: "synthetic-retried-model" }], truncated: false })); await u.flush();
+  assert.equal(retry.disabled, false);
+  assert.deepEqual(u.modelList().children.map((el) => el.value), ["synthetic-retried-model"]);
+  u.input("model", "RETRIED");
+  assert.deepEqual(u.modelList().children.map((el) => el.value), ["synthetic-retried-model"], "search uses the existing native datalist without another request");
+  assert.equal(u.modelCalls().length, 2);
+  await u.click("models-retry"); await u.advance(0); assert.equal(u.modelCalls().length, 3);
+  u.change(checkbox.id, false);
+  assert.equal(retry.disabled, true); await u.click("models-retry"); await u.advance(1000);
+  assert.equal(u.modelCalls().length, 3, "retry cannot bypass a revoked opt-in");
+  assert.equal(u.configPosts().length, 0);
+  assert.equal(u.calls.length, 4, "only configuration GET and model-list requests occur");
+  assert.equal(used, 0);
+  assert.equal(u.confirms.length, 0);
+});
+
+test("bridge models: empty or truncated lists retain manual entry, deduplicate IDs and bound suggestions", async () => {
+  for (const data of [
+    { ok: true, models: [], truncated: false },
+    { ok: true, models: [{ id: "synthetic-listed-model" }], truncated: true },
+    { ok: true, models: [{ id: "duplicate" }, { id: "duplicate" }, { id: "" }, null, { id: 42 }, { id: "comma,model" }, { id: "line\nbreak" }, { id: "x".repeat(201) }, { id: "also-valid" }], truncated: false },
+    { ok: true, models: Array.from({ length: 505 }, (_, i) => ({ id: `synthetic-${i}` })), truncated: false },
+  ]) {
+    const u = ui(); await u.open(); fill(u); u.input("model", ""); u.models(() => reply(data));
+    u.change(u.checkbox().id, true); await u.advance(650);
+    const values = u.modelList().children.map((el) => el.value);
+    assert.ok(values.length <= 500);
+    assert.equal(new Set(values).size, values.length);
+    assert.ok(values.every((id) => typeof id === "string" && id && id.length <= 200 && !/[,\u0000-\u001f\u007f]/.test(id)));
+    if (!data.models.length) assert.match(u.get("bc-model-status").textContent, /清单为空.*手填/);
+    if (data.truncated || data.models.length > 500) assert.match(u.get("bc-model-status").textContent, /500.*手填/);
+    if (data.models.length === 9) assert.deepEqual(values, ["duplicate", "also-valid"]);
+    assert.equal(u.get("bc-model").value, "", "empty/truncated lists never auto-select a model");
+    assert.equal(u.get("bc-model").disabled, false);
+    u.input("model", "manual-outside-the-list");
+    u.response(saved({ model: "manual-outside-the-list" })); await u.submit();
+    assert.equal(u.configPosts()[0].body.model, "manual-outside-the-list");
+    assert.equal(u.modelCalls().length, 1);
+    assert.equal(u.get("bc-key").value, "");
+  }
+});
+
+test("bridge models: saved summary distinguishes list connectivity from model inference and never persists it across reopening", async () => {
+  for (const discover of [false, true]) {
+    const u = ui(); let used = 0;
+    await u.open({ useNew: async () => { used++; } }); fill(u);
+    if (discover) { u.change(u.checkbox().id, true); await u.advance(650); }
+    assert.match(u.get("bc-save-note").textContent, /不调用远端模型.*不切换当前会话/);
+    if (discover) assert.match(u.get("bc-save-note").textContent, /读取清单已连接服务.*尚未验证模型推理/);
+    u.response(saved()); await u.submit();
+    const status = u.get("bc-remote-state").textContent;
+    assert.match(status, /(?:尚未验证模型推理|模型推理尚未验证)/);
+    assert.equal(status.includes("读取清单已连接服务"), discover);
+    assert.equal(u.get("bc-local-state").textContent, "本地已准备好", "local lifecycle readiness is independent of upstream inference");
+    assert.equal(u.get("bc-key").value, "");
+    assert.equal(u.modelCalls().length, discover ? 1 : 0);
+    assert.equal(u.configPosts().length, 1);
+    assert.equal(used, 0);
+    assert.match(u.confirms[0], /模型推理.*尚未验证|尚未验证模型推理/);
+    if (discover) assert.match(u.confirms[0], /读取清单已连接服务/);
+    assert.equal(u.close(), true); await u.open({ useNew: async () => { used++; } });
+    assert.equal(u.get("bc-remote-state").textContent, "模型推理尚未验证", "a past list request is not a persisted service/inference health check");
+    await u.advance(1000);
+    assert.equal(u.modelCalls().length, discover ? 1 : 0);
+    assert.equal(used, 0);
+  }
+});
+
+test("bridge models: edited key or origin aborts a previous request and late fetch/JSON cannot overwrite a newer list", async () => {
+  for (const change of ["key", "origin"]) for (const lateAt of ["fetch", "json"]) {
+    const u = ui(), pending = deferred(); await u.open(); fill(u);
+    let attempt = 0;
+    u.models(() => ++attempt === 1
+      ? lateAt === "fetch" ? pending.promise : { ok: true, status: 200, json: () => pending.promise }
+      : reply({ ok: true, models: [{ id: "current-only-model" }], truncated: false }));
+    const checkbox = u.checkbox(); assert.ok(checkbox); u.change(checkbox.id, true);
+    await u.advance(650);
+    assert.equal(u.modelCalls().length, 1);
+    const oldCall = u.modelCalls()[0]; assert.ok(oldCall.signal); assert.equal(oldCall.signal.aborted, false);
+    if (change === "origin") {
+      u.input("endpoint", "https://new-origin.example.com/v1");
+      assert.equal(checkbox.checked, false); assert.equal(u.get("bc-key").value, "");
+      u.input("key", "synthetic-second-key"); u.change(checkbox.id, true);
+    } else u.input("key", "synthetic-second-key");
+    assert.equal(oldCall.signal.aborted, true);
+    u.input("model", "current-only");
+    await u.advance(650);
+    assert.equal(u.modelCalls().length, 2);
+    assert.deepEqual(u.modelList().children.map((el) => el.value), ["current-only-model"]);
+    const late = { ok: true, models: [{ id: "late-obsolete-model" }], truncated: true };
+    pending.resolve(lateAt === "fetch" ? reply(late) : late);
+    await u.flush(); await u.advance(1000);
+    assert.deepEqual(u.modelList().children.map((el) => el.value), ["current-only-model"], `${change}/${lateAt}: stale results cannot repopulate suggestions`);
+    assert.equal(u.get("bc-model").value, "current-only");
+    assert.equal(u.get("bc-key").value, "synthetic-second-key");
+    assert.equal(u.modelCalls().length, 2);
+    assert.equal(u.configPosts().length, 0);
+  }
 });

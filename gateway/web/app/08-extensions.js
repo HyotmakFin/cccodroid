@@ -194,7 +194,7 @@
       const size = c.available ? t("下载约 {a}，装好后约 {b}", { a: MB(c.bytes), b: MB(c.installed) }) : "";
       const st = {
         absent: c.available ? t("未安装") : t("暂无适配当前工具包的版本"),
-        downloading: t("下载中"), verifying: t("校验中"), installing: t("正在装进工具包…"), removing: t("正在卸载…"), configuring: t("正在配置…请等待完成"),
+        downloading: t("下载中"), verifying: t("校验中"), installing: t("正在装进工具包…"), removing: t("正在卸载…"), configuring: t("正在配置…请等待完成"), "fetching-models": t("正在读取模型清单…"),
         ok: t("已安装"), update: t("有新版本"), outdated: t("工具包已更新，需要重新安装"),
         damaged: t("安装不完整，需要重新安装"), error: t("安装失败"),
       }[c.state] || c.state;
@@ -233,15 +233,16 @@
       const used = (c.usedBy || []).map((d) => esc(pickLang(d.name) || d.id));
       const cat = c.category && CAT()[c.category] ? c.category : "other";
       const tags = ["cat:" + cat];
-      if (["ok", "removing", "configuring"].includes(c.state)) tags.push("inst");
+      if (["ok", "removing", "configuring", "fetching-models"].includes(c.state)) tags.push("inst");
       if (["update", "outdated", "damaged", "error"].includes(c.state)) tags.push("upd");
       // 设计稿的卡片：分类色图标 + 名称 + 「版本 · 大小」，验证过的带盾牌；底下一条虚线隔开状态和按钮
       const [cc, ci] = CAT_LOOK[cat] || CAT_LOOK.other;
-      const dotSt = { ok: "ok", update: "warn", downloading: "warn", verifying: "warn", installing: "warn", removing: "warn", configuring: "warn", outdated: "err", damaged: "err", error: "err" }[c.state] || "";
-      const dotL = c.unsupported && !["removing", "configuring"].includes(c.state) ? (gpuOnly === "mali" ? t("需要 Mali GPU") : t("需要骁龙")) : { ok: t("已装"), update: t("可更新"), absent: c.available ? t("未装") : t("暂无适配版本") }[c.state] || st;
+      const dotSt = { ok: "ok", update: "warn", downloading: "warn", verifying: "warn", installing: "warn", removing: "warn", configuring: "warn", "fetching-models": "warn", outdated: "err", damaged: "err", error: "err" }[c.state] || "";
+      const dotL = c.unsupported && !["removing", "configuring", "fetching-models"].includes(c.state) ? (gpuOnly === "mali" ? t("需要 Mali GPU") : t("需要骁龙")) : { ok: t("已装"), update: t("可更新"), absent: c.available ? t("未装") : t("暂无适配版本") }[c.state] || st;
       let cbtn = "";
       if (c.state === "removing") cbtn = compRemovalHint();
       else if (c.state === "configuring") cbtn = '<span class="tiny muted" role="status">' + esc(t("正在配置…请等待完成")) + "</span>";
+      else if (c.state === "fetching-models") cbtn = '<span class="tiny muted" role="status">' + esc(t("正在读取模型清单…")) + "</span>";
       else if (c.unsupported && c.state !== "ok") cbtn = '<span class="muted">' + t("本机用不了") + "</span>";
       else if (c.state === "absent" && c.available) cbtn = btn("install", c.id, ei("download") + MB(c.bytes)).replace("<button ", '<button class="btn sm ghost" ');
       else if (c.state === "downloading" || c.state === "verifying") cbtn = btn("cancel", c.id, t("取消")).replace("<button ", '<button class="btn sm ghost" ');
@@ -255,7 +256,7 @@
       const live = (c.id === "gh" && c.state === "ok") || (c.id === "llama-cpp" && c.state === "ok") ? desc.slice(desc.indexOf(c.id === "gh" ? '<div class="gh-auth"' : '<details class="llm-dl"')) : "";
       const more = (live ? desc.slice(0, desc.length - live.length) : desc) + '<div class="it-meta">' + meta + "</div>";
       const warn = (c.error ? '<div class="tiny err">' + esc(c.error) + "</div>" : "") + (miss.length && c.state !== "ok" ? '<div class="tiny warn">' + t("要先装：{names}", { names: listOf(miss) }) + "</div>" : "");
-      return (`<div class="item ccard${c.unsupported && !["ok", "removing", "configuring"].includes(c.state) ? " dim" : ""}" data-tags="${esc(tags.join(" "))}">
+      return (`<div class="item ccard${c.unsupported && !["ok", "removing", "configuring", "fetching-models"].includes(c.state) ? " dim" : ""}" data-tags="${esc(tags.join(" "))}">
         <div class="cc-top"><span class="icobox" style="--c:${cc}">${ei(ci)}</span><div class="grow"><b>${name}</b><div class="mono muted">${esc(ver || "")}${ver ? " · " : ""}${MB(c.state === "ok" ? c.installed : c.bytes)}</div></div>${c.verified ? `<span class="vmark" title="${esc(t("真机验证过"))}">${ei("shield")}</span>` : ""}</div>
         ${warn}${bar}${live}<div class="it-more">${more}</div>
         <div class="cc-foot">${sdot(dotSt, dotL)}<span class="cc-btns">${cbtn}</span></div></div>`)
@@ -276,7 +277,7 @@
       if (llmDl.open) loadLlmDl();
     }
     // 有在跑的就一秒刷一次；抽屉关了 / 换了页签就停
-    if ((compRemoving.size || (r.items || []).some((c) => c.progress || ["removing", "configuring"].includes(c.state))) && pageOn("ext"))
+    if ((compRemoving.size || (r.items || []).some((c) => c.progress || ["removing", "configuring", "fetching-models"].includes(c.state))) && pageOn("ext"))
       compTimer = setTimeout(loadComponents, 1000);
     // 先显示的是上回存下的列表、网关还在后台拉新索引：两秒后再要一次，拉完自然停
     else if (r.refreshing && pageOn("ext"))
