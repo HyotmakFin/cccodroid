@@ -2468,3 +2468,87 @@
 2468	Este mensaje es demasiado largo (más de 2.000.000 caracteres). Envíalo como archivo.
 2469	Hay demasiados archivos con el mismo nombre en la carpeta de exportación
 2470	Abrirla en el navegador quita la protección «Sin conexión»: los scripts de la página pueden enviar a otro sitio los archivos de su carpeta. Hazlo solo con páginas de confianza.
+2471	El puente local de OpenAI no está listo, así que se detuvo esta solicitud. Revisa la configuración del componente o su estado de ejecución.
+2472	Desinstalando…
+2473	Desinstalando. Este paso no se puede cancelar; espera a que termine.
+2474	No se pudo desactivar el puente local de OpenAI. Se conservaron los archivos del componente. Revisa su estado de ejecución y vuelve a intentar desinstalarlo.
+2475	El formulario de configuración aún no está listo. Actualiza la página y vuelve a intentarlo.
+2476	Introduce una URL completa de API HTTPS, por ejemplo https://api.example.com/v1.
+2477	Usa una URL de API HTTPS sin nombre de usuario, contraseña, parámetros de consulta ni fragmento.
+2478	Aquí se necesita una URL de Chat Completions. La API Responses aún no es compatible.
+2479	Esta ruta no se puede completar automáticamente. Introduce la URL completa de /chat/completions que facilita tu proveedor.
+2480	Volver a Extensiones
+2481	Puente local de protocolo para la API de OpenAI
+2482	Configúralo aquí, en Extensiones. Solo tienes que rellenar estos tres campos.
+2483	Conecta tu API
+2484	URL de la API
+2485	Introduce la URL de API de tu proveedor, no su sitio web ni la página de inicio de sesión.
+2486	API Key
+2487	Mostrar clave
+2488	Nombre del modelo
+2489	Introduce el nombre del modelo que facilita tu proveedor
+2490	Introduce el nombre exactamente como lo indica tu proveedor.
+2491	Las conversaciones, los resultados de herramientas y las imágenes se enviarán al servicio que indiques.
+2492	Guardar configuración
+2493	No llama al modelo remoto ni cambia la sesión actual
+2494	Configuración guardada
+2495	Configurada · no se muestra
+2496	API remota sin probar
+2497	Se añadió a «Proveedores y modelos». La sesión actual no cambia.
+2498	Usar en una sesión nueva
+2499	Editar configuración
+2500	Solo es compatible con la API Chat Completions de OpenAI. La API Responses aún no es compatible.
+2501	Ocultar clave
+2502	URL de la solicitud: {url}
+2503	La URL del servicio ha cambiado. Introduce de nuevo la API Key; la clave anterior no se enviará a la nueva URL.
+2504	La clave guardada no se muestra. Déjalo en blanco para conservarla o introduce una nueva para sustituirla.
+2505	La clave no se muestra después de guardarla.
+2506	Preparando el puente local…
+2507	Guardando y comprobando el puente local, sin llamar a un modelo remoto…
+2508	Guardada; déjalo en blanco para conservarla
+2509	Pega la clave que facilita tu proveedor
+2510	Puente local listo
+2511	Configuración guardada, pero el puente local aún no está listo
+2512	Primero instala o actualiza el componente de puente local de protocolo para la API de OpenAI.
+2513	No se pudo leer la configuración del puente. Vuelve a Extensiones e inténtalo de nuevo.
+2514	Introduce la API Key que facilita tu proveedor.
+2515	La API Key no puede contener espacios ni saltos de línea.
+2516	Introduce el nombre exacto del modelo, sin comas ni saltos de línea.
+2517	La configuración está incompleta. Revisa los campos y vuelve a intentarlo.
+2518	La configuración se guardó, pero el puente local aún no está listo. No se cambiará de proveedor; edita la configuración y vuelve a intentarlo.
+2519	La URL de la API no superó la validación. Comprueba la URL que facilita tu proveedor.
+2520	Introduce de nuevo la API Key. No se puede reutilizar la clave anterior al cambiar la URL del servicio.
+2521	El puente local está en uso o se está desinstalando. Inténtalo más tarde; la sesión actual no cambia.
+2522	La configuración no se terminó de guardar. Comprueba el estado local y vuelve a intentarlo; la sesión actual no cambia.
+2523	No se pudo seleccionar este proveedor para una sesión nueva. Inténtalo de nuevo; no se envió ningún mensaje.
+2524	La configuración del puente está incompleta. Revisa los campos o el estado del componente y vuelve a intentarlo; la sesión actual no cambia.
+2525	La instalación existente del puente no se puede migrar automáticamente. Haz una copia de seguridad y gestiona tú la instalación anterior; no se sobrescribió ni desinstaló nada.
+2526	¿Guardar esta configuración de API?\n\nCuando la uses, las conversaciones, los resultados de herramientas y las imágenes se enviarán a {origin}.\nGuardar no llama a ningún modelo remoto ni cambia la sesión actual.
+2527	Configurando… Espera a que termine.
+2528	Permitir la consulta automática de modelos (envía tu API Key al servicio indicado, sin conversaciones ni llamadas a modelos)
+2529	Reintentar la consulta
+2530	Buscar o escribir un modelo
+2531	Busca en la lista o escribe el nombre exacto que indique tu proveedor.
+2532	Guardar no llama a modelos remotos ni cambia la sesión actual
+2533	La inferencia del modelo no se ha probado
+2534	Destino: introduce primero una URL de API HTTPS válida.
+2535	Destino: {origin}
+2536	La consulta contactó con el servicio, pero la inferencia no se ha probado. Guardar no llama a modelos ni cambia la sesión actual.
+2537	Activa la consulta automática o escribe el modelo manualmente.
+2538	Introduce primero una URL de API HTTPS válida.
+2539	Introduce una API Key válida para consultar la lista automáticamente.
+2540	Consulta cancelada. Reintenta o escribe el modelo manualmente.
+2541	Preparando la consulta de modelos…
+2542	La API Key no fue autorizada. Revísala e inténtalo de nuevo.
+2543	El servicio rechazó la consulta. Revisa los permisos o escribe el modelo manualmente.
+2544	El servicio no ofrece una lista de modelos. Escribe el nombre manualmente.
+2545	Se alcanzó el límite de consultas. Inténtalo más tarde.
+2546	Se agotó el tiempo de consulta. Reintenta o escribe el modelo manualmente.
+2547	Introduce de nuevo la API Key y reintenta la consulta.
+2548	La lista no está disponible. Reintenta o escribe el modelo manualmente.
+2549	Consultando la lista de modelos…
+2550	La lista está vacía. Escribe el modelo manualmente o reintenta.
+2551	Se cargaron {count} modelos (hasta 500). Busca o escribe otro nombre manualmente.
+2552	Se cargaron {count} modelos. Escribe para buscar o introducir un nombre.
+2553	La consulta contactó con el servicio; la inferencia no se ha probado.
+2554	¿Guardar esta configuración de API?\n\nCuando la uses, las conversaciones, los resultados de herramientas y las imágenes se enviarán a {origin}.\n{verification}\nGuardar no llama a ningún modelo remoto ni cambia la sesión actual.

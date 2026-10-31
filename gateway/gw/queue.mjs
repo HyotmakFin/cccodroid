@@ -174,6 +174,7 @@ export function endRun(run, fields = {}) {
 export function abortRun(run) {
   if (!run || run.ended) return false;
   run.aborted = true;
+  run.readyAbort?.abort();
   // 停止要和排队的消息严格隔开：此刻排着的一律挂起，不许这一轮一结束就自动发出去
   // （以前点停止反而是"立刻发下一条"）。用户点 ⚡ 才发；停止之后新发的消息不受影响，照常先跑
   // 并行时只挂起这个会话自己排着的，别的会话不受影响
