@@ -44,9 +44,10 @@
   }
 
   // ── 会话切换 / 历史翻页 ────────────────────────────────────────────
-  function resetView(sessionId) {
+  function resetView(sessionId, keepPendingModel = false) {
     view.sessionId = sessionId || null;
-    state.pendingModel = null;               // 新会话面板里暂存的选择只属于那个新会话
+    // 同一个未发送的新会话重连：hello 不能冲掉刚选的接口；显式打开 / 新建仍清空。
+    if (view.sessionId || !keepPendingModel) state.pendingModel = null;
     refreshSessModel();                      // 模型标签换成这个会话自己的（打开、启动、重连都经过这里）
     view.gen++;
     WROTE.clear();                           // 写过的文件只认本会话的
@@ -665,7 +666,7 @@
     const keepRuns = new Set(view.runIds), keepCids = new Set(view.cids);
     const sid = view.sessionId, keepProj = view.projectId, keepMerge = view.pendingMerge;   // 重连会重置视图：新会话已挑的项目、汇合来源留着
     const resume = sid && view.next != null && !view.anchor ? view.cursor : null;   // 正看着中间某一段：重连后接着那段
-    resetView(sid);
+    resetView(sid, !sid);
     if (resume != null) view.resume = resume;
     if (!sid && keepProj) { view.projectId = keepProj; paintProjChip(); }
     if (!sid) view.pendingMerge = keepMerge || null;

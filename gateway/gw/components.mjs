@@ -10,6 +10,7 @@ import { SKILLS_DIR, skillMeta } from "./extensions.mjs";
 import { modulesMissingFor } from "./modules.mjs";
 import { ghProxy, pget } from "./pget.mjs";
 import { retireManagedBridge } from "./managed-bridge.mjs";
+import { clearBridgeConfigMapping, handleBridgeConfig } from "./bridge-config.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -565,17 +566,31 @@ function compCancel(id) {
   const job = COMP_JOBS.get(id);
   if (!job || job.finished) return { ok: false, message: "not running" };
   if (job.phase === "installing") return { ok: false, message: tz("正在放进工具包，这一步不能中断") };
+  if (job.phase === "removing") return { ok: false, message: tz("正在卸载，这一步不能取消，请等待完成") };
+  if (job.phase === "configuring") return { ok: false, message: "busy" };
   job.cancelled = true;
   if (job.child) killTree(job.child);
   return { ok: true };
 }
 
-async function compRemove(id) {
+function compRemovalRecord(id) {
+  let st;
+  try { st = fs.lstatSync(compRecFile(id)); }
+  catch (e) { if (e.code === "ENOENT") return { exists: false, rec: null }; throw e; }
+  // 坏记录只能清自己的元数据；不能凭 id 猜文件，也不能跟着记录软链去信任另一份清单。
+  const rec = st.isFile() && !st.isSymbolicLink() ? compRecord(id) : null;
+  const safeRel = (r) => typeof r === "string" && r.length > 0 && !r.includes("\0") && !r.includes("\\") &&
+    !path.isAbsolute(r) && r.split("/").every((p) => p && p !== "." && p !== "..");
+  const valid = rec && typeof rec === "object" && !Array.isArray(rec) && rec.id === id &&
+    Array.isArray(rec.files) && rec.files.every(safeRel) && (!rec.skill || !!skillDst(rec.skill));
+  return { exists: true, rec: valid ? rec : null };
+}
+
+export async function compRemove(id) {
   if (!PREFIX) return { ok: false, message: "only available in cccodroid" };
+  if (typeof id !== "string" || !/^[a-z0-9-]{1,40}$/.test(id)) return { ok: false, message: "bad id" };
   const job = COMP_JOBS.get(id);
   if (job && !job.finished) return { ok: false, message: "busy" };
-  const rec = compRecord(id);
-  if (!rec) return { ok: false, message: "not installed" };
   const users = compUsers(id);
   if (users.length) {
     const comps = (compIndexCache.data && compIndexCache.data.components) || {};
@@ -584,15 +599,29 @@ async function compRemove(id) {
   // 停用服务需要等待子进程，期间仍占住组件槽，避免重装和第二次卸载交错。
   const removal = { phase: "removing", finished: false };
   COMP_JOBS.set(id, removal);
+  let stage = "read-record";
   try {
-    await retireManagedBridge(id);
-    compRemoveFiles(id, rec);
+    const { exists, rec } = compRemovalRecord(id);
+    stage = "retire-managed-bridge";
+    const retired = await retireManagedBridge(id);
+    stage = "clear-app-mapping";
+    const unmapped = clearBridgeConfigMapping(id);
+    if (!exists && !retired && !unmapped) return { ok: false, message: "not installed" };
+    stage = "remove-files";
+    // installing / damaged 的完整记录仍有原受管文件清单，照既有管理器处理共享文件和技能。
+    if (rec) compRemoveFiles(id, rec);
+    else log(`[comp] ${id} 卸载恢复：安装记录缺失或损坏，未删除工具包内文件和技能`);
+    stage = "remove-record";
     fs.rmSync(compRecFile(id), { force: true });
+    stage = "clear-stage";
     compClearStage(id);
-    log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
+    log(`[comp] ${id} 已卸载（${rec ? rec.files.length : 0} 个文件）`);
     return { ok: true };
-  } catch (e) { return { ok: false, message: e.message }; }
-  finally { if (COMP_JOBS.get(id) === removal) COMP_JOBS.delete(id); }
+  } catch (e) {
+    if (stage === "retire-managed-bridge" && ["retire-spawn", "retire-exit", "retire-timeout"].includes(e.stage)) stage = e.stage;
+    log(`[comp] ${id} 卸载失败（stage=${stage}）`);
+    return { ok: false, message: e.message, stage };
+  } finally { if (COMP_JOBS.get(id) === removal) COMP_JOBS.delete(id); }
 }
 
 // ── 组件的运行数据：约定放在 ~/.cccodroid/<id>/（blender 的 Debian 环境、下载缓存等），卸载组件不碰它。
@@ -746,6 +775,15 @@ async function handleComponents(req, res, p, u) {
 
 // ── 路由：/api/components /api/gh/ ──
 export async function routeComponents(req, res, u, p) {
+  if (p === "/api/components/openai-bridge/config") {
+    const current = COMP_JOBS.get("openai-bridge");
+    if (current && !current.finished) return sendJson(res, 409, { ok: false, code: "BUSY", message: "busy" });
+    if (req.method !== "POST") return handleBridgeConfig(req, res);
+    const job = { phase: "configuring", done: 0, total: 0, finished: false };
+    COMP_JOBS.set("openai-bridge", job);
+    try { return await handleBridgeConfig(req, res); }
+    finally { if (COMP_JOBS.get("openai-bridge") === job) COMP_JOBS.delete("openai-bridge"); }
+  }
   // ── 可选组件（浏览器组件等）──
   if (p === "/api/components" || p.startsWith("/api/components/")) return handleComponents(req, res, p, u);
   if (p.startsWith("/api/gh/")) return handleGh(req, res, p);

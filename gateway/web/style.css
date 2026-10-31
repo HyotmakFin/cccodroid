@@ -3355,3 +3355,43 @@ html[data-motion="on"] .lin-prof .mo-ghost .mo-st,html[data-motion="on"] .lin-pr
 .lp-key i.pre{background:var(--line)}
 .lp-key i.ag{background:var(--lm-blue)}
 .lp-sub .lp-l span{font-size:12.5px;-webkit-line-clamp:1}
+
+/* OpenAI bridge configuration is an Extensions detail, not a settings replacement. */
+#tab-ext > #bridge-config-panel{display:none;max-width:620px;margin:0 auto}
+#tab-ext.bridge-config-open > :not(#bridge-config-panel){display:none!important}
+#tab-ext.bridge-config-open > #bridge-config-panel{display:block}
+#bridge-config-panel{font-family:var(--font-ui);color:var(--fg);overflow-wrap:anywhere}
+#bridge-config-panel .bc-back{display:inline-flex;align-items:center;gap:4px;min-height:44px;padding:0;background:none;border:0;color:var(--fg2);font:inherit;font-size:13px;cursor:pointer}
+#bridge-config-panel svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+[dir="rtl"] #bridge-config-panel .bc-back svg{transform:scaleX(-1)}
+#bridge-config-panel .bc-heading{margin:10px 0 22px}
+#bridge-config-panel h2{font-size:21px;line-height:1.45;font-weight:600;margin:0}
+#bridge-config-panel .bc-heading p{font-size:13px;color:var(--fg2);margin:7px 0 0}
+#bridge-config-panel .bc-card{padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+#bridge-config-panel h3{font-size:16px;font-weight:600;margin:0 0 24px}
+#bridge-config-panel .field{margin-bottom:24px}
+#bridge-config-panel .field > label{font-size:14px;color:var(--fg);font-weight:500;margin-bottom:9px}
+#bridge-config-panel .field input{height:48px;font-size:16px;background:var(--input-bg,var(--bg));border-radius:min(var(--radius),9px)}
+#bridge-config-panel .field input:focus{outline:2px solid var(--accent);outline-offset:2px}
+#bridge-config-panel .field input[aria-invalid="true"]{border-color:var(--err)}
+#bridge-config-panel .bc-hint{font-size:12px;line-height:1.8;color:var(--fg2);margin:7px 0 0}
+#bridge-config-panel .bc-error{font-size:12px;line-height:1.7;color:var(--err);margin:7px 0 0}
+#bridge-config-panel .bc-key-wrap{position:relative}
+#bridge-config-panel .bc-key-wrap input{padding-inline-end:54px}
+#bridge-config-panel .bc-eye{position:absolute;inset-inline-end:1px;top:1px;width:46px;height:46px;display:grid;place-items:center;background:none;border:0;color:var(--fg2);cursor:pointer}
+#bridge-config-panel .bc-eye:hover{background:var(--bg3)}
+#bridge-config-panel .btn{min-height:46px}
+#bridge-config-panel .bc-privacy{margin:0 0 18px}
+#bridge-config-panel .bc-center{text-align:center}
+#bridge-config-panel .bc-footnote{margin:18px 2px 4px}
+#bridge-config-panel .bc-notice{border:1px solid var(--err);color:var(--err);padding:12px;font-size:13px;line-height:1.7;border-radius:var(--radius);margin:0 0 16px}
+#bridge-config-panel .bc-summary{margin:0 0 20px;border-block:1px solid var(--line)}
+#bridge-config-panel .bc-summary > div{display:flex;align-items:baseline;gap:16px;padding:12px 0;font-size:13px}
+#bridge-config-panel .bc-summary > div + div{border-top:1px solid var(--line)}
+#bridge-config-panel dt{color:var(--fg2);min-width:70px;flex:none}
+#bridge-config-panel dd{margin:0;min-width:0;overflow-wrap:anywhere}
+#bridge-config-panel .bc-status{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--fg2);margin-bottom:16px}
+#bridge-config-panel .bc-ready{color:var(--ok);font-weight:500}
+#bridge-config-panel .bc-pending{color:var(--fg2);font-weight:500}
+html[data-skin="goucheng"] #bridge-config-panel .bc-card{box-shadow:4px 4px 0 var(--gc-hard)}
+@media (max-width:420px){#bridge-config-panel .bc-card{padding:18px}#bridge-config-panel h2{font-size:19px}#bridge-config-panel .bc-summary > div{gap:10px}}

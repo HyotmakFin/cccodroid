@@ -2469,3 +2469,59 @@
 2469	Trop de fichiers portant le même nom dans le dossier d'export
 2470	L'ouvrir dans le navigateur retire la protection « Hors ligne » : les scripts de la page peuvent envoyer ailleurs les fichiers de son dossier. Ne le faites que pour des pages de confiance.
 2471	Le pont OpenAI local n'est pas prêt ; cette requête a été arrêtée. Vérifiez la configuration du composant ou son état d'exécution.
+2472	Désinstallation…
+2473	Désinstallation en cours. Cette étape ne peut pas être annulée ; veuillez attendre qu'elle se termine.
+2474	Le pont OpenAI local n'a pas pu être désactivé. Les fichiers du composant ont été conservés. Vérifiez son état d'exécution, puis réessayez de le désinstaller.
+2475	Le formulaire de configuration n'est pas encore prêt. Actualisez la page et réessayez.
+2476	Saisissez une URL d'API HTTPS complète, par exemple https://api.example.com/v1.
+2477	Utilisez une URL d'API HTTPS sans nom d'utilisateur, mot de passe, paramètres de requête ni fragment.
+2478	Une URL Chat Completions est nécessaire ici. L'API Responses n'est pas encore prise en charge.
+2479	Ce chemin ne peut pas être complété automatiquement. Saisissez l'URL /chat/completions complète fournie par votre fournisseur.
+2480	Retour aux extensions
+2481	Pont de protocole local pour l'API OpenAI
+2482	Configurez-le ici, dans les extensions. Il suffit de remplir ces trois champs.
+2483	Connectez votre API
+2484	URL de l'API
+2485	Saisissez l'URL d'API de votre fournisseur, pas son site web ni sa page de connexion.
+2486	API Key
+2487	Afficher la clé
+2488	Nom du modèle
+2489	Saisissez le nom du modèle fourni par votre fournisseur
+2490	Saisissez le nom exact indiqué par votre fournisseur.
+2491	Les conversations, résultats d'outils et images seront envoyés au service que vous indiquez.
+2492	Enregistrer la configuration
+2493	Aucun appel au modèle distant ; la session actuelle reste inchangée
+2494	Configuration enregistrée
+2495	Définie · jamais affichée
+2496	API distante non testée
+2497	Ajouté à « Fournisseurs et modèles ». La session actuelle reste inchangée.
+2498	Utiliser dans une nouvelle session
+2499	Modifier la configuration
+2500	Seule l'API Chat Completions d'OpenAI est prise en charge. L'API Responses ne l'est pas encore.
+2501	Masquer la clé
+2502	URL de la requête : {url}
+2503	L'URL du service a changé. Saisissez à nouveau l'API Key ; l'ancienne clé ne sera pas envoyée à la nouvelle URL.
+2504	La clé enregistrée n'est jamais affichée. Laissez ce champ vide pour la conserver, ou saisissez une nouvelle clé pour la remplacer.
+2505	La clé n'est jamais affichée après son enregistrement.
+2506	Préparation du pont local…
+2507	Enregistrement et vérification du pont local, sans appel à un modèle distant…
+2508	Enregistrée ; laissez vide pour la conserver
+2509	Collez la clé fournie par votre fournisseur
+2510	Pont local prêt
+2511	Configuration enregistrée, mais le pont local n'est pas encore prêt
+2512	Installez ou mettez d'abord à jour le composant de pont de protocole local pour l'API OpenAI.
+2513	Impossible de lire la configuration du pont. Retournez aux extensions et réessayez.
+2514	Saisissez l'API Key fournie par votre fournisseur.
+2515	L'API Key ne peut pas contenir d'espaces ni de retours à la ligne.
+2516	Saisissez le nom exact du modèle, sans virgules ni retours à la ligne.
+2517	La configuration est incomplète. Vérifiez les champs et réessayez.
+2518	La configuration a été enregistrée, mais le pont local n'est pas encore prêt. Le fournisseur ne sera pas changé ; modifiez la configuration et réessayez.
+2519	L'URL de l'API n'a pas passé la validation. Vérifiez l'URL fournie par votre fournisseur.
+2520	Saisissez à nouveau l'API Key. L'ancienne clé ne peut pas être réutilisée si l'URL du service change.
+2521	Le pont local est utilisé ou en cours de désinstallation. Réessayez plus tard ; la session actuelle reste inchangée.
+2522	L'enregistrement de la configuration n'est pas terminé. Vérifiez l'état local et réessayez ; la session actuelle reste inchangée.
+2523	Impossible de sélectionner ce fournisseur pour une nouvelle session. Réessayez ; aucun message n'a été envoyé.
+2524	La configuration du pont est incomplète. Vérifiez les champs ou l'état du composant et réessayez ; la session actuelle reste inchangée.
+2525	L'installation existante du pont ne peut pas être migrée automatiquement. Sauvegardez-la et gérez vous-même l'ancienne installation ; rien n'a été écrasé ni désinstallé.
+2526	Enregistrer cette configuration d'API ?\n\nLors de son utilisation, les conversations, résultats d'outils et images seront envoyés à {origin}.\nL'enregistrement lui-même n'appelle aucun modèle distant et ne change pas la session actuelle.
+2527	Configuration en cours… Veuillez attendre qu'elle se termine.

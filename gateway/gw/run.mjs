@@ -100,6 +100,7 @@ export async function startRun(item) {
     emit({ type: "error", message: tr(LAST_LANG, tz("Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。")) });
     return endRun(run, { failed: true });
   }
+  if (run.aborted) return endRun(run, {});
   run.readyAbort = new AbortController();
   try {
     await ensureManagedBridge(P, { signal: run.readyAbort.signal });
