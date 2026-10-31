@@ -621,7 +621,7 @@ export async function compRemove(id) {
     log(`[comp] ${id} 已卸载（${rec ? rec.files.length : 0} 个文件）`);
     return { ok: true };
   } catch (e) {
-    if (stage === "retire-managed-bridge" && ["retire-spawn", "retire-exit", "retire-timeout"].includes(e.stage)) stage = e.stage;
+    if (stage === "retire-managed-bridge" && ["retire-lock", "retire-spawn", "retire-exit", "retire-timeout"].includes(e.stage)) stage = e.stage;
     log(`[comp] ${id} 卸载失败（stage=${stage}）`);
     return { ok: false, message: e.message, stage };
   } finally { if (COMP_JOBS.get(id) === removal) COMP_JOBS.delete(id); }

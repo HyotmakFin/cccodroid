@@ -1,11 +1,12 @@
 import "../gw/config.mjs"; // 必须经 scripts/test.mjs：只操作隔离 HOME / fake PREFIX。
-import { test, after } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { ensureManagedBridge, retireManagedBridge } from "../gw/managed-bridge.mjs";
+import { guardRegistryFlock, registryFlockFixture } from "./fixtures/registry-flock.mjs";
 
 // 用确定的假值验证环境隔离；不读取或转发调用者的任何真实凭据。
 process.env.ANTHROPIC_API_KEY = "fixture-only-do-not-forward";
@@ -16,6 +17,8 @@ const root = fs.mkdtempSync(path.join(process.env.CCAPP_WORKSPACE, "managed-"));
 const reg = path.join(home, ".cccodroid/services/openai-bridge.json");
 const record = path.join(path.dirname(prefix), "components/openai-bridge.json");
 const component = path.join(prefix, "lib/openai-bridge/component.cjs");
+const lockFixture = registryFlockFixture();
+beforeEach(() => lockFixture.reset());
 const put = (p, o) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, JSON.stringify(o), { mode: 0o600 }); };
 const replaceJson = (p, o) => { put(p + ".new", o); fs.renameSync(p + ".new", p); };
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -318,6 +321,46 @@ test("合法停用失败保留注册，返回卸载专用错误且允许修复�
   assert.equal(fs.existsSync(reg), true);
   fs.writeFileSync(path.join(f.dir, "mode"), "ok");
   assert.equal(await retireManagedBridge("openai-bridge"), true);
+});
+
+test("retire 注册锁仅支持toybox -n：健康停用与坏注册清理都无需host -w", async () => {
+  const f = fixture("leave-reg");
+  assert.equal(await retireManagedBridge("openai-bridge"), true);
+  assert.equal(fs.existsSync(reg), false); assert.deepEqual(f.calls().map((call) => call.command), ["uninstall"]);
+  assert.ok(lockFixture.calls().length >= 2);
+  assert.ok(lockFixture.calls().every((call) => JSON.stringify(call.args) === JSON.stringify(["-n", "3"])));
+  put(reg, { ...f.r, schema: 2 });
+  assert.equal(await retireManagedBridge("openai-bridge"), true);
+  assert.equal(fs.existsSync(reg), false); assert.equal(f.calls().length, 1, "坏注册只能清固定元数据，不能执行uninstall");
+});
+
+test("retire 注册锁持续争用约1秒：专用锁失败保注册，释放后重试不粘retiring", async (t) => {
+  const f = fixture(), original = fs.readFileSync(reg, "utf8"), guard = guardRegistryFlock(t, lockFixture); lockFixture.setMode("busy");
+  const started = performance.now(); let ticks = 0; const heartbeat = setInterval(() => ticks++, 20);
+  try {
+    await assert.rejects(retireManagedBridge("openai-bridge"), (error) => {
+      assert.equal(error.code, "MANAGED_BRIDGE_RETIRE_FAILED"); assert.equal(error.stage, "retire-lock");
+      assert.match(error.message, /卸载|停用/); assert.doesNotMatch(error.message, /已停止本轮请求/);
+      return true;
+    });
+    const elapsed = performance.now() - started;
+    assert.ok(elapsed >= 900 && elapsed < 2200, `retire锁等待必须约1秒且有界，实际${elapsed}ms`);
+    assert.ok(ticks >= 10, "锁争用时应异步重试而非阻塞网关");
+    assert.ok(lockFixture.calls().length > 1); assert.deepEqual(f.calls(), []);
+    assert.equal(fs.readFileSync(reg, "utf8"), original); assert.equal(fs.existsSync(component), true); assert.equal(fs.existsSync(record), true);
+  } finally { clearInterval(heartbeat); lockFixture.setMode("ok"); guard.restore(); }
+  assert.equal(await retireManagedBridge("openai-bridge"), true);
+  assert.equal(fs.existsSync(reg), false); assert.deepEqual(f.calls().map((call) => call.command), ["uninstall"]);
+});
+
+test("坏注册遇到锁争用也不能无锁删除，锁恢复后可安全清掉而不执行组件", async (t) => {
+  const f = fixture(), guard = guardRegistryFlock(t, lockFixture); fs.writeFileSync(reg, "{bad-registry-json"); lockFixture.setMode("busy");
+  try {
+    await assert.rejects(retireManagedBridge("openai-bridge"), { code: "MANAGED_BRIDGE_RETIRE_FAILED", stage: "retire-lock" });
+    assert.equal(fs.readFileSync(reg, "utf8"), "{bad-registry-json"); assert.deepEqual(f.calls(), []);
+  } finally { lockFixture.setMode("ok"); guard.restore(); }
+  assert.equal(await retireManagedBridge("openai-bridge"), true);
+  assert.equal(fs.existsSync(reg), false); assert.deepEqual(f.calls(), []);
 });
 
 test("已 aborted 的等待者不启动 ensure", async () => {

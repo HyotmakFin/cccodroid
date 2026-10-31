@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 网关测试：node scripts/test.mjs [文件名片段 …]
 //
-// 每次在一个新建的临时目录里跑：CCAPP_HOME / HOME / CCAPP_WORKSPACE 指过去，假 $PREFIX 里只放一个指向系统 curl 的 bin/curl，
+// 每次在一个新建的临时目录里跑：CCAPP_HOME / HOME / CCAPP_WORKSPACE 指过去，假 $PREFIX 里放系统 curl 链接与受控 toybox兼容 flock fixture，
 // CCAPP_TEST=1 让网关模块导入时不做任何启动动作（见 gw/config.mjs 的 LIVE）。所以在开发机上跑也碰不到真数据。
 // 临时目录要能建软链：安卓上别放 /sdcard（没设 TMPDIR 时自动用 ~/.cache）。
 import fs from "node:fs";
@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { installRegistryFlock } from "../gateway/tests/fixtures/registry-flock.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TESTS = path.join(ROOT, "gateway", "tests");
@@ -29,6 +30,7 @@ fs.mkdirSync(home, { recursive: true });
 fs.mkdirSync(workspace, { recursive: true });
 fs.mkdirSync(path.join(prefix, "bin"), { recursive: true });
 fs.symlinkSync(curl, path.join(prefix, "bin", "curl"));
+installRegistryFlock(prefix, home, tmp); // 只写本轮假 PREFIX；锁协议测试不依赖开发机 util-linux / toybox。
 
 // 在 cccodroid 里跑时环境里有二十几个 CCAPP_* 指着真数据：一个不留全删，再只设测试要的（审查 L18）
 const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("CCAPP_")));

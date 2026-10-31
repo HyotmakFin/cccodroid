@@ -11,7 +11,11 @@
   // Discovery state contains only IDs/origins and cancellation handles, never a key or key fingerprint.
   let modelsTimer = null, modelsDeadline = null, modelsAbort = null, modelsSeq = 0;
   let modelItems = [], modelsConnected = false, currentOrigin = "", consentOrigin = "";
-  const readError = (status) => status === 404 || status === 409 ? t("请先安装或更新 OpenAI API 本地协议桥组件。") : t("读取桥配置失败，请返回扩展后重试。");
+  const readError = (status, code) => {
+    if (code === "BUSY") return t("本地桥正在使用或卸载中，请稍后重试；当前会话保持不变。");
+    if (code === "RUNTIME_CONFLICT") return t("已有桥安装不能自动迁移，请先备份并由你处理原安装；未覆盖或卸载。");
+    return status === 404 || code === "not_installed" ? t("请先安装或更新 OpenAI API 本地协议桥组件。") : t("读取桥配置失败，请返回扩展后重试。");
+  };
   const visible = () => !!panel && $("tab-ext").classList.contains("bridge-config-open") && !$("tab-ext").classList.contains("hidden") && !$("pages").classList.contains("hidden") && !$("pages")._moLeave;
 
   // Only unambiguous Chat Completions paths are completed; the server validates again.
@@ -306,7 +310,7 @@
     } catch (e) {
       if (id !== seq || !visible()) return;
       $("bc-loading").classList.add("hidden");
-      notice(readError(e.status));
+      notice(readError(e.status, e.code));
     } finally { if (id === seq) setBusy(false); }
   }
   function close(force = false) {

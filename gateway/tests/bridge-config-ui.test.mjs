@@ -76,7 +76,7 @@ function ui(initial = fresh()) {
     createElement: (tag) => { createdTags.push(String(tag).toUpperCase()); return new Node("", tag); }, querySelectorAll: () => [],
     addEventListener(type, fn) { (listeners.get("doc:" + type) || listeners.set("doc:" + type, []).get("doc:" + type)).push(fn); },
   };
-  let response = initial, nextPost = null, nextModels = null, backCount = 0, acceptConsent = true;
+  let response = initial, nextGet = null, nextPost = null, nextModels = null, backCount = 0, acceptConsent = true;
   const sandbox = {
     URL, AbortController, document, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
     setTimeout(fn, delay = 0) { const id = ++nextTimer; timers.set(id, { fn, at: now + Number(delay) }); return id; },
@@ -101,6 +101,7 @@ function ui(initial = fresh()) {
         }
       });
       if (url.endsWith("/models")) return nextModels ? nextModels(call) : reply({ ok: true, models: [{ id: "synthetic-model" }], truncated: false });
+      if (opts.method === "GET" && nextGet) return nextGet();
       if (opts.method === "POST" && nextPost) return nextPost();
       return { ok: true, status: 200, json: async () => structuredClone(response) };
     },
@@ -112,7 +113,7 @@ function ui(initial = fresh()) {
     consent(value) { acceptConsent = value; },
     async open(opts = {}) { await sandbox.CCBridgeConfig.open({ anchor: get("anchor"), ...opts }); verify(); },
     close() { const closed = sandbox.CCBridgeConfig.close(); verify(); return closed; },
-    response(value) { response = value; }, post(fn) { nextPost = fn; }, models(fn) { nextModels = fn; },
+    response(value) { response = value; }, read(fn) { nextGet = fn; }, post(fn) { nextPost = fn; }, models(fn) { nextModels = fn; },
     modelCalls: () => calls.filter((call) => call.url.endsWith("/models")),
     configPosts: () => calls.filter((call) => call.url.endsWith("/config") && call.method === "POST"),
     checkbox: () => [...nodes.values()].find((el) => el.tagName === "INPUT" && el.type === "checkbox"),
@@ -299,6 +300,56 @@ test("bridge form: absent or malformed component status never enables configurat
   }
   const u = ui(saved({ providerId: "", local: { state: "ready" } })); await u.open({ useNew: async () => assert.fail("must not create without a provider") });
   assert.equal(u.get("bc-use").disabled, true);
+});
+
+test("bridge form: config GET 409 BUSY reports retry instead of installation", async () => {
+  const u = ui();
+  u.read(() => reply({ ok: false, code: "BUSY", message: "synthetic-private-server-detail" }, 409));
+  await u.open(); await u.advance(1000);
+  assert.equal(u.get("bc-notice").textContent, "本地桥正在使用或卸载中，请稍后重试；当前会话保持不变。");
+  assert.equal(u.get("bc-notice").classList.contains("hidden"), false);
+  assert.equal(u.get("bc-loading").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-form").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-saved").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-key").value, "");
+  assert.deepEqual(u.calls.map(({ url, method }) => ({ url, method })), [{ url: "/api/components/openai-bridge/config", method: "GET" }]);
+  assert.equal(u.confirms.length, 0);
+  assert.equal(u.close(), true, "a failed read releases busy state so the user can leave");
+});
+
+test("bridge form: config GET 409 RUNTIME_CONFLICT preserves the existing-install warning instead of installation", async () => {
+  const u = ui();
+  u.read(() => reply({ ok: false, code: "RUNTIME_CONFLICT", message: "synthetic-private-server-detail" }, 409));
+  await u.open(); await u.advance(1000);
+  assert.equal(u.get("bc-notice").textContent, "已有桥安装不能自动迁移，请先备份并由你处理原安装；未覆盖或卸载。");
+  assert.equal(u.get("bc-notice").classList.contains("hidden"), false);
+  assert.equal(u.get("bc-loading").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-form").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-saved").classList.contains("hidden"), true);
+  assert.equal(u.get("bc-key").value, "");
+  assert.deepEqual(u.calls.map(({ url, method }) => ({ url, method })), [{ url: "/api/components/openai-bridge/config", method: "GET" }]);
+  assert.equal(u.close(), true);
+});
+
+test("bridge form: config GET 404 or not_installed alone prompts installation; unknown 409 remains a read failure", async () => {
+  for (const [status, code, expected] of [
+    [404, undefined, "请先安装或更新 OpenAI API 本地协议桥组件。"],
+    [409, "not_installed", "请先安装或更新 OpenAI API 本地协议桥组件。"],
+    [409, "component_failed", "读取桥配置失败，请返回扩展后重试。"],
+    [409, undefined, "读取桥配置失败，请返回扩展后重试。"],
+  ]) {
+    const u = ui(); u.read(() => reply({ ok: false, ...(code ? { code } : {}), message: "synthetic-private-server-detail" }, status));
+    await u.open(); await u.advance(1000);
+    assert.equal(u.get("bc-notice").textContent, expected, `${status}/${code || "no-code"}`);
+    assert.equal(u.get("bc-form").classList.contains("hidden"), true);
+    assert.equal(u.get("bc-saved").classList.contains("hidden"), true);
+    assert.equal(u.get("bc-loading").classList.contains("hidden"), true);
+    assert.equal(u.get("bc-key").value, "");
+    assert.equal(u.calls.length, 1);
+    assert.equal(u.configPosts().length, 0);
+    assert.equal(u.modelCalls().length, 0);
+    assert.equal(u.close(), true);
+  }
 });
 
 test("bridge form: partial save failure reports saved versus readiness without losing replacement input", async () => {

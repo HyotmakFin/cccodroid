@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { performance } from "node:perf_hooks";
 import { CFG, PREFIX, log, tz } from "./config.mjs";
 
 const ID = "openai-bridge";
@@ -45,7 +46,7 @@ function jsonSnapshot(file, max = 4096) {
   return { value: JSON.parse(s.data.toString("utf8")), identity: s.identity };
 }
 
-function withRegistryFile(fn) {
+function registryDirectory() {
   // HOME 是宿主指定的信任根。逐级固定目录 fd，既不跟 .cccodroid/services 的链接，
   // 也不让并发改名把 unlink 引到别处；最后的注册链接只会被 unlink，绝不跟随。
   let fd = fs.openSync(CFG.home, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY);
@@ -56,8 +57,19 @@ function withRegistryFile(fn) {
       fs.closeSync(fd);
       fd = next;
     }
-    return fn(`/proc/self/fd/${fd}/${ID}.json`);
-  } finally { fs.closeSync(fd); }
+    return fd;
+  } catch (error) { fs.closeSync(fd); throw error; }
+}
+
+function withRegistryFile(fn) {
+  const fd = registryDirectory();
+  try { return fn(`/proc/self/fd/${fd}/${ID}.json`); }
+  finally { fs.closeSync(fd); }
+}
+
+function registrationExists() {
+  try { return withRegistryFile((file) => { fs.lstatSync(file); return true; }); }
+  catch (error) { if (error.code === "ENOENT") return false; throw fail("retire-lock"); }
 }
 
 const readRegistration = () => withRegistryFile((file) => jsonSnapshot(file));
@@ -76,27 +88,64 @@ function inspectRegistration(file) {
   return current;
 }
 
-function withRegistryLock(fn) {
-  return withRegistryFile((file) => {
-    // 和组件 service-registration.cjs 共用同一 flock/open-file-description 协议。
-    // 不依赖 PATH，不运行注册或 runtime 指定的程序，锁文件也不能是符号链接。
-    const fd = fs.openSync(path.join(path.dirname(file), ID + ".lock"),
-      fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK, 0o600);
+function tryRegistryLock(tool, fd, timeout) {
+  return new Promise((resolve) => {
+    let child, timer, settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); resolve(result);
+    };
     try {
-      if (!fs.fstatSync(fd).isFile()) throw fail();
-      const tools = [...new Set([path.join(PREFIX, "bin", "flock"), path.join(path.dirname(process.execPath), "flock"), "/system/bin/flock"])];
-      let locked = false;
-      for (const tool of tools) {
-        const result = spawnSync(tool, ["-w", "1", "3"], {
-          env: componentEnv(), stdio: ["ignore", "ignore", "ignore", fd], timeout: 1500, killSignal: "SIGKILL",
-        });
-        if (!result.error && result.status === 0) { locked = true; break; }
-        if (result.error?.code !== "ENOENT") break;
-      }
-      if (!locked) throw fail();
-      return fn(file);
-    } finally { fs.closeSync(fd); }
+      // util-linux 和 Android toybox 都支持 -n；不能用后者不支持的 -w，也不用 shell。
+      child = spawn(tool, ["-n", "3"], { env: componentEnv(), stdio: ["ignore", "ignore", "ignore", fd] });
+    } catch (error) { finish(error.code === "ENOENT" ? "missing" : "unsupported"); return; }
+    child.once("error", (error) => finish(error.code === "ENOENT" ? "missing" : "unsupported"));
+    child.once("close", (code) => finish(code === 0 ? "locked" : code === 1 ? "busy" : "unsupported"));
+    timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+      finish("timeout");
+    }, Math.max(1, timeout));
   });
+}
+
+async function withRegistryLock(fn) {
+  let dir, fd, acquired = false;
+  try {
+    dir = registryDirectory();
+    const file = `/proc/self/fd/${dir}/${ID}.json`, lock = `/proc/self/fd/${dir}/${ID}.lock`;
+    // 和组件共用同一 open-file-description；目录/锁 fd 跨异步重试保持打开。
+    fd = fs.openSync(lock, fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK, 0o600);
+    const st = fs.fstatSync(fd, { bigint: true });
+    const sameLock = () => {
+      const current = fs.lstatSync(lock, { bigint: true }), opened = fs.fstatSync(fd, { bigint: true });
+      return st.isFile() && current.isFile() && opened.isFile() &&
+        ["dev", "ino", "mode"].every((key) => st[key] === current[key] && st[key] === opened[key]);
+    };
+    if (!sameLock()) throw fail("retire-lock");
+    const tools = [...new Set([path.join(PREFIX, "bin", "flock"), path.join(path.dirname(process.execPath), "flock"), "/system/bin/flock"])];
+    const deadline = performance.now() + 1000;
+    while (tools.length && performance.now() < deadline) {
+      for (let i = 0; i < tools.length && performance.now() < deadline;) {
+        if (!sameLock()) throw fail("retire-lock");
+        const result = await tryRegistryLock(tools[i], fd, Math.min(200, deadline - performance.now()));
+        if (!sameLock()) throw fail("retire-lock");
+        if (result === "locked") { acquired = true; return await fn(file); }
+        // -n 返回竞争失败说明工具可用；锁定此候选重试，不能借另一程序绕开同一把锁。
+        if (result === "busy") { tools.splice(0, tools.length, tools[i]); break; }
+        // 不存在与不兼容/执行失败均继续尝试下一固定候选，不依赖宿主恰有 util-linux。
+        tools.splice(i, 1);
+      }
+      const remaining = deadline - performance.now();
+      if (tools.length && remaining > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(25, remaining)));
+    }
+    throw fail("retire-lock");
+  } catch (error) {
+    if (acquired || error.stage === "retire-lock" || error.code === "ENOENT") throw error;
+    throw fail("retire-lock");
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    if (dir !== undefined) fs.closeSync(dir);
+  }
 }
 
 function clearRegistration(file, expected, sameInstance) {
@@ -338,7 +387,7 @@ export async function ensureManagedBridge(p, { signal } = {}) {
 
 /**
  * false = 非本组件/无可安全清除的注册；true = 已停用，或只清理固定残留注册并跳过脚本。
- * 只有健康绑定的固定 uninstall 进程失败才拒绝（静态 code/stage），让组件管理器保包。
+ * 固定 uninstall 或注册锁失败会拒绝（静态 code/stage），让组件管理器保包。
  */
 export function retireManagedBridge(id) {
   if (id !== ID || !PREFIX) return Promise.resolve(false);
@@ -352,7 +401,9 @@ export function retireManagedBridge(id) {
     await Promise.allSettled(pending.map((task) => task.promise));
     let r, original;
     try {
-      const result = withRegistryLock((file) => {
+      // 缺失注册不需要打开/创建锁，更不能因 flock 不可用阻塞元数据降级清理。
+      if (!registrationExists()) return false;
+      const result = await withRegistryLock((file) => {
         const expected = inspectRegistration(file);
         try { return { r: installedBinding(expected.stored), original: expected }; }
         catch {
@@ -362,17 +413,29 @@ export function retireManagedBridge(id) {
       });
       if (!result.r) return result.cleared;
       ({ r, original } = result);
-    } catch {
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        try { if (!registrationExists()) return false; } catch {}
+        throw fail("retire-lock");
+      }
+      if (error.stage === "retire-lock") throw error;
       log("[comp] openai-bridge 卸载降级（stage=retire-binding）");
       return false;
     }
     await launch(r, "uninstall").promise;
     // uninstall 自己也要拿注册锁，不能跨进程执行持锁；返回后重新拿锁校验身份。
-    // 原实例已消失正常，同实例残留可清，别的新实例绝不删；不访问 runtimeDir。
-    try { withRegistryLock((file) => clearRegistration(file, original, r)); }
-    catch {
+    // 原实例已消失则无需拿锁；同实例残留可清，别的新实例绝不删，不访问 runtimeDir。
+    try {
+      if (!registrationExists()) return true;
+      await withRegistryLock((file) => clearRegistration(file, original, r));
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        try { if (!registrationExists()) return true; } catch {}
+        throw fail("retire-lock");
+      }
+      if (error.stage === "retire-lock") throw error;
       log("[comp] openai-bridge 卸载降级（stage=retire-cleanup）");
-    } // 注册被替换或锁不可用不应保包，更不能盲删新注册。
+    }
     return true;
   }).finally(() => { retiring = null; });
   retiring.catch(() => {});
