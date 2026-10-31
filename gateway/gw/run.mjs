@@ -24,6 +24,7 @@ import { pathWatch, previewHint, settlePathNote, takePathNote } from "./pathnote
 import { SPOOF_NOTE, checkSession, integrityHint, integrityNote, neutralizeMarkers, sealSession } from "./integrity.mjs";
 import { recordExtra } from "./lineage-store.mjs";
 import { refNote, refNoteSync } from "./merge.mjs";
+import { ensureManagedBridge } from "./managed-bridge.mjs";
 
 // 必须由人回答的工具：全部放行也照问（问题、计划审批）
 const HUMAN_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
@@ -99,6 +100,14 @@ export async function startRun(item) {
     emit({ type: "error", message: tr(LAST_LANG, tz("Claude Code 未安装。到 设置 → 更新 里点「安装…」选一个版本装上。")) });
     return endRun(run, { failed: true });
   }
+  run.readyAbort = new AbortController();
+  try {
+    await ensureManagedBridge(P, { signal: run.readyAbort.signal });
+  } catch (e) {
+    if (!run.aborted) emit({ type: "error", message: tr(LAST_LANG, e.message) });
+    return endRun(run, { failed: !run.aborted });
+  } finally { run.readyAbort = null; }
+  if (run.aborted) return endRun(run, {});
   if (P.id === PROVIDER.id && !isLoginMode() && !(await ensureBridge())) {   // 别家直连，不经桥
     emit({ type: "error", message: tr(LAST_LANG, tz("本地 DNS 桥启动失败，无法连接 API。")) });
     return endRun(run, { failed: true });

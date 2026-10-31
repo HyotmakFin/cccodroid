@@ -103,3 +103,33 @@ test("通道网址里不带上游地址，不认识的通道号 404，带账号�
     assert.equal((await fetch(`http://127.0.0.1:${STREAMFIX.port}${p}`, { method: "POST", body: "{}" })).status, 404, p);
   STREAMFIX.server.close();
 });
+
+test("取消通道请求会关闭上游，转发器仍能接受下一次请求", async () => {
+  let cancelled;
+  const closed = new Promise((r) => { cancelled = r; });
+  const up = http.createServer((req, res) => {
+    if (req.url === "/v1/models") return res.end('{"data":[]}');
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.write(START + textBlock(0, "持续输出"));
+    const tick = setInterval(() => res.write(": heartbeat\n\n"), 20);
+    res.once("close", () => { clearInterval(tick); cancelled(); });
+  });
+  await new Promise((r) => up.listen(0, "127.0.0.1", r));
+  STREAMFIX.server = null; STREAMFIX.port = 0;
+  startStreamFix();
+  while (!STREAMFIX.port) await new Promise((r) => setTimeout(r, 10));
+  try {
+    const base = fixedBaseUrl(`http://127.0.0.1:${up.address().port}`);
+    const controller = new AbortController();
+    const response = await fetch(base + "/v1/messages", { method: "POST", body: "{}", signal: controller.signal });
+    const reader = response.body.getReader();
+    assert.equal((await reader.read()).done, false);
+    controller.abort();
+    await assert.rejects(reader.read(), { name: "AbortError" });
+    await Promise.race([closed, new Promise((_, reject) => { const t = setTimeout(() => reject(new Error("上游未取消")), 2000); t.unref(); })]);
+    assert.equal(await (await fetch(base + "/v1/models")).text(), '{"data":[]}');
+  } finally {
+    up.closeAllConnections(); up.close();
+    STREAMFIX.server.closeAllConnections(); STREAMFIX.server.close();
+  }
+});

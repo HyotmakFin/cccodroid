@@ -2505,5 +2505,6 @@ window.I18N_DICT.en = {
   "这个项目的 CLAUDE.md 不是普通文件（可能是软链接），不在这里读写": "This project's CLAUDE.md isn't a regular file (maybe a symlink), so it isn't read or written here",
   "这条消息太长了（超过 200 万字），改成文件发吧。": "This message is too long (over 2,000,000 characters). Send it as a file instead.",
   "导出目录里同名文件太多了": "Too many files with the same name in the export folder",
-  "在浏览器里打开就没有「不联网」的保护了：网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页这样做。": "Opening it in the browser drops the “Offline” protection: scripts on the page can send files from its folder elsewhere. Only do this for pages you trust."
+  "在浏览器里打开就没有「不联网」的保护了：网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页这样做。": "Opening it in the browser drops the “Offline” protection: scripts on the page can send files from its folder elsewhere. Only do this for pages you trust.",
+  "本地 OpenAI 桥未就绪，已停止本轮请求。请检查组件配置或运行状态。": "The local OpenAI bridge isn't ready, so this request was stopped. Check the component's configuration or runtime status."
 };

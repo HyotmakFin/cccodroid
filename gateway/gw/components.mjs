@@ -9,6 +9,7 @@ import { termEnv } from "./terminal.mjs";
 import { SKILLS_DIR, skillMeta } from "./extensions.mjs";
 import { modulesMissingFor } from "./modules.mjs";
 import { ghProxy, pget } from "./pget.mjs";
+import { retireManagedBridge } from "./managed-bridge.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -569,7 +570,7 @@ function compCancel(id) {
   return { ok: true };
 }
 
-function compRemove(id) {
+async function compRemove(id) {
   if (!PREFIX) return { ok: false, message: "only available in cccodroid" };
   const job = COMP_JOBS.get(id);
   if (job && !job.finished) return { ok: false, message: "busy" };
@@ -580,12 +581,18 @@ function compRemove(id) {
     const comps = (compIndexCache.data && compIndexCache.data.components) || {};
     return { ok: false, message: tz("{names} 要用它，先卸载那些组件", { names: users.map((rid) => compName(rid, comps).zh || rid).join("、") }) };
   }
-  compRemoveFiles(id, rec);
-  fs.rmSync(compRecFile(id), { force: true });
-  compClearStage(id);
-  COMP_JOBS.delete(id);
-  log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
-  return { ok: true };
+  // 停用服务需要等待子进程，期间仍占住组件槽，避免重装和第二次卸载交错。
+  const removal = { phase: "removing", finished: false };
+  COMP_JOBS.set(id, removal);
+  try {
+    await retireManagedBridge(id);
+    compRemoveFiles(id, rec);
+    fs.rmSync(compRecFile(id), { force: true });
+    compClearStage(id);
+    log(`[comp] ${id} 已卸载（${(rec.files || []).length} 个文件）`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e.message }; }
+  finally { if (COMP_JOBS.get(id) === removal) COMP_JOBS.delete(id); }
 }
 
 // ── 组件的运行数据：约定放在 ~/.cccodroid/<id>/（blender 的 Debian 环境、下载缓存等），卸载组件不碰它。
@@ -732,7 +739,7 @@ async function handleComponents(req, res, p, u) {
   if (!/^[a-z0-9-]{1,40}$/.test(id)) return sendJson(res, 400, { ok: false, message: "bad id" });
   if (p === "/api/components/install") return sendJson(res, 200, await compInstall(id));
   if (p === "/api/components/cancel") return sendJson(res, 200, compCancel(id));
-  if (p === "/api/components/remove") { const r = compRemove(id); if (r.ok) r.data = await compDataInfo(id); return sendJson(res, 200, r); }
+  if (p === "/api/components/remove") { const r = await compRemove(id); if (r.ok) r.data = await compDataInfo(id); return sendJson(res, 200, r); }
   if (p === "/api/components/purge") return sendJson(res, 200, await compPurgeData(id));
   return sendJson(res, 404, { error: "not found" });
 }

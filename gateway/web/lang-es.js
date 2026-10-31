@@ -2471,4 +2471,5 @@ window.I18N_DICT["es"] = {
   "这条消息太长了（超过 200 万字），改成文件发吧。": "Este mensaje es demasiado largo (más de 2.000.000 caracteres). Envíalo como archivo.",
   "导出目录里同名文件太多了": "Hay demasiados archivos con el mismo nombre en la carpeta de exportación",
   "在浏览器里打开就没有「不联网」的保护了：网页里的脚本能把它所在文件夹里的文件发到别处。只对你信得过的网页这样做。": "Abrirla en el navegador quita la protección «Sin conexión»: los scripts de la página pueden enviar a otro sitio los archivos de su carpeta. Hazlo solo con páginas de confianza.",
+  "本地 OpenAI 桥未就绪，已停止本轮请求。请检查组件配置或运行状态。": "El puente local de OpenAI no está listo, así que se detuvo esta solicitud. Revisa la configuración del componente o su estado de ejecución.",
 };
