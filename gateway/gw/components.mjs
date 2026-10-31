@@ -11,6 +11,7 @@ import { modulesMissingFor } from "./modules.mjs";
 import { ghProxy, pget } from "./pget.mjs";
 import { retireManagedBridge } from "./managed-bridge.mjs";
 import { clearBridgeConfigMapping, handleBridgeConfig, handleBridgeModels } from "./bridge-config.mjs";
+import { archiveProblem, parseTarListing } from "./archive-check.mjs";
 
 /** 前端文件（web/ 下全部，含 i18n.js 与各语言词典）的最后修改时间戳。界面拿它来判断「我是不是该刷新了」——
  *  这样以后只改 web/ 也能自动生效，不用重开 App。 */
@@ -518,7 +519,14 @@ async function compRunInstall(id, b, job) {
   fs.rmSync(tree, { recursive: true, force: true });
   fs.mkdirSync(tree, { recursive: true });
   // 解包失败就把压缩包也删了：下次重试从头下载，不再拿同一份去撞
-  try { await compRun(job, path.join(PREFIX, "bin", "tar"), ["-xzf", gz, "-C", tree]); }
+  // 解之前按目录查：MANIFEST 在包里、解完才核，经包内软链写到暂存区外面的条目那时已经落地了（v0514 审查低-2）
+  try {
+    const list = await new Promise((ok, no) => execFile(path.join(PREFIX, "bin", "tar"), ["-tzv", "--quoting-style=c", "-f", gz],
+      { maxBuffer: 256 << 20 }, (e, out) => e ? no(e) : ok(String(out))));
+    const bad = archiveProblem(parseTarListing(list));
+    if (bad) throw new Error(tz("这个压缩包里有条目会写到包外面（{p}），为安全起见不解开", { p: String(bad.name).slice(0, 200) }));
+    await compRun(job, path.join(PREFIX, "bin", "tar"), ["-xzf", gz, "-C", tree]);
+  }
   catch (e) { if (!job.cancelled) fs.rmSync(gz, { force: true }); throw e; }
   const lx = `libexec/devkit/components/${id}`;
   const man = fs.readFileSync(path.join(tree, "usr", lx, "MANIFEST"), "utf8").trim().split("\n");

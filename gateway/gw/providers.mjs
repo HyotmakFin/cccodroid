@@ -313,13 +313,16 @@ function composeProvider(id, raw) {
   return v;
 }
 
-let PROVIDERS_RAW = { active: null, providers: {} };   // 配置文件原样（只含用户字段与自定义条目）
+// 三张表都不带原型：id 是外面传进来的，providers["constructor"] / PRESETS["__proto__"] 不能被当成认识的厂商（v0514 审查低-4）
+Object.setPrototypeOf(PRESETS, null);
+const bare = (o) => Object.assign(Object.create(null), o);
+let PROVIDERS_RAW = { active: null, providers: bare({}) };   // 配置文件原样（只含用户字段与自定义条目）
 function loadProviders() {
   try {
     const j = JSON.parse(fs.readFileSync(PROVIDERS_FILE, "utf8"));
-    if (j && typeof j === "object") PROVIDERS_RAW = { ...j, providers: (j.providers && typeof j.providers === "object") ? j.providers : {} };
+    if (j && typeof j === "object") PROVIDERS_RAW = { ...j, providers: bare((j.providers && typeof j.providers === "object") ? j.providers : {}) };
   } catch {}
-  const providers = {};
+  const providers = bare({});
   for (const id of Object.keys(PRESETS)) providers[id] = composeProvider(id, PROVIDERS_RAW.providers[id]);
   for (const [id, raw] of Object.entries(PROVIDERS_RAW.providers)) {
     if (!PRESETS[id] && raw && raw.baseUrl) providers[id] = composeProvider(id, raw);

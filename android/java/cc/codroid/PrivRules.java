@@ -130,8 +130,10 @@ final class PrivRules {
         "logcat", "pm", "cmd", "am", "settings", "appops", "device_config", "wm", "true", "false"));
     private static final Set<String> PM_RO = new HashSet<>(Arrays.asList(
         "list", "path", "dump", "resolve-activity", "query-activities", "query-services", "query-receivers", "has-feature"));
+    // am start 不在里面：能免问把浏览器弹到任意网址、拨号盘预填号码，拿来钓鱼（v0514 审查低-1）。
+    // 停后台这几条留着：内存管家（cc-mem）要用，最坏是把别的应用停掉，不碰数据
     private static final Set<String> AM_OK = new HashSet<>(Arrays.asList(
-        "start", "start-activity", "force-stop", "stop-app", "compact", "get-current-user", "get-config",
+        "force-stop", "stop-app", "compact", "get-current-user", "get-config",
         "get-bg-restriction-level", "set-bg-restriction-level", "get-standby-bucket"));
     // dumpsys 后面的参数里出现这些词，多半是在改状态或交出平时脱敏的内容
     // （dumpsys battery set、deviceidle whitelist +x / deep、jobscheduler run、notification --noredact…）
@@ -142,7 +144,9 @@ final class PrivRules {
 
     // 这些服务的输出本身就是隐私：账户、最近位置、剪贴板、通知内容、无障碍状态、短信与通话（10-31 三轮复核）
     private static final Set<String> DUMP_PRIVATE = new HashSet<>(Arrays.asList(
-        "account", "location", "clipboard", "notification", "accessibility", "isms", "telecom", "telephony.registry", "phone", "contacts", "credential"));
+        "account", "location", "clipboard", "notification", "accessibility", "isms", "telecom", "telephony.registry", "phone", "contacts", "credential",
+        // 已存的 Wi-Fi（能推出常去的地方）、各应用用了多久、配对过的蓝牙设备（v0514 审查低-1）
+        "wifi", "wifiscanner", "usagestats", "bluetooth_manager"));
 
     static boolean cmdOk(List<String> c) { return cmdOk(c, "/"); }
 
@@ -160,14 +164,10 @@ final class PrivRules {
             case "settings": case "device_config": return "get".equals(sub) || "list".equals(sub);
             case "appops": return "get".equals(sub) || "query-op".equals(sub);
             case "wm": return a.size() == 1 && ("size".equals(sub) || "density".equals(sub));
-            case "am":
-                if (!AM_OK.contains(sub)) return false;
-                // am start 本身只是打开界面；拨号类（shell 有 CALL_PHONE）直接就打出去了
-                if (sub.startsWith("start")) for (String x : a) if (x.toLowerCase(Locale.ROOT).contains("call")) return false;
-                return true;
+            case "am": return AM_OK.contains(sub);
             case "dumpsys":
                 // 服务名前面能夹选项（dumpsys -t 10 clipboard、--proto account）：哪个位置出现都算（10-31 四轮复核）
-                for (String x : a) if (DUMP_PRIVATE.contains(x.toLowerCase(Locale.ROOT))) return false;
+                for (String x : a) { String l = x.toLowerCase(Locale.ROOT); if (DUMP_PRIVATE.contains(l) || l.startsWith("wifi")) return false; }   // wifiaware / wifip2p 等同族
                 for (int i = 1; i < a.size(); i++) if (DUMP_ACT.matcher(a.get(i).replaceFirst("^-+", "")).matches()) return false;
                 return true;
             case "logcat":
@@ -217,9 +217,6 @@ final class PrivRules {
 
     static boolean sharedPath(String x) { return x.matches("/(sdcard|storage/emulated/0)(/.*)?"); }
 
-    /** 重定向只许写到共享存储（不进 Android/）或 /dev/null */
-    static boolean targetOk(String t) {
-        if ("/dev/null".equals(t)) return true;
-        return sharedPath(norm(t)) && pathOk(t) && !inAndroid(t);
-    }
+    /** 免问的重定向只有 /dev/null：写共享存储能悄悄改掉用户放在那里的脚本、放诱饵文件（v0514 审查低-1） */
+    static boolean targetOk(String t) { return "/dev/null".equals(t); }
 }

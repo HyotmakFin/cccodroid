@@ -21,7 +21,11 @@ export function normalizeModels(j) {
   return raw.filter((m) => m && m.id).map((m) => {
     const caps = m.capabilities || {};
     // 官方形状：effort 档位散在 capabilities.effort 底下，键名就是档位名
-    let effort = m.effort || null;
+    // 只收形状对的：档位进命令行，supported_levels 不是数组的话 includes 直接抛错（v0514 复核）
+    const LV = ["low", "medium", "high", "xhigh", "max"];
+    let effort = m.effort && typeof m.effort === "object" && Array.isArray(m.effort.supported_levels)
+      ? { supported_levels: m.effort.supported_levels.filter((x) => LV.includes(x)), default_level: LV.includes(m.effort.default_level) ? m.effort.default_level : null }
+      : null;
     if (!effort && caps.effort && typeof caps.effort === "object") {
       const lv = ["low", "medium", "high", "xhigh", "max"]
         .filter((k) => caps.effort[k] && caps.effort[k].supported);
@@ -33,9 +37,10 @@ export function normalizeModels(j) {
       const img = caps.image_input && caps.image_input.supported;
       mods = img ? ["text", "image"] : ["text"];
     }
+    // id / 名字限长：清单可以是导入配置里的内嵌 data:，选中的 id 会进 claude 的命令行（v0514 复核）
     return {
-      id: m.id,
-      name: m.name || m.display_name || m.id,
+      id: String(m.id).slice(0, 200),
+      name: String(m.name || m.display_name || m.id).slice(0, 200),
       context_window: Number(m.context_window || m.contextWindow || m.max_input_tokens) || 0,
       max_output_tokens: Number(m.max_output_tokens || m.maxOutputTokens || m.max_tokens) || 0,
       input_modalities: mods,
@@ -203,6 +208,13 @@ async function fetchModelsOf(p, force) {
   if (p.local) return keep(localModels(), false);   // 端侧：模型目录里有什么就是什么（每次现扫，刚放进去的文件马上能选）
   if (isLoginMode(p)) return keep((p.fallbackModels && p.fallbackModels.length) ? p.fallbackModels : LOGIN_MODELS);
 
+  // 写在配置里的内嵌清单（data:application/json,…）：本地解析，不发请求、不带密钥，网络那边的同主机限制不用放宽（#57）
+  const inline = inlineModels(p.modelsUrl);
+  if (inline) {
+    const list = withCatalog(mergeKnown(inline, p.fallbackModels), p);
+    if (list.length) return keep(list);
+  }
+
   const key = keyOf(p);
   // 不带密钥（modelsAuth:"none"）也一样要过 modelsUrlOk：配置能分享导入，不能让它拿网关当跳板，每轮去敲内网地址（v0513b 中-2）
   if (p.modelsUrl && (key || p.modelsAuth === "none") && modelsUrlOk(p)) {
@@ -232,10 +244,31 @@ async function fetchModelsOf(p, force) {
   return keep(c && c.list ? c.list
     : (p.fallbackModels || []).map((m) => ({ context_window: 0, max_output_tokens: 0, input_modalities: ["text"], effort: null, ...m })));
 }
-/** 已缓存的那家清单（不发请求）；没拉过就是目录里写的 */
+/** data: 形式的内嵌清单 → 归一后的列表；不是 data: 或解不开就 null。只认 JSON，限 256 KB */
+export function inlineModels(url) {
+  if (typeof url !== "string" || !/^data:/i.test(url) || url.length > 512 << 10) return null;
+  const m = /^data:application\/json(;charset=[\w-]+)?(;base64)?,(.*)$/is.exec(url);
+  if (!m) return null;
+  try {
+    const text = m[2] ? Buffer.from(m[3], "base64").toString("utf8") : decodeURIComponent(m[3]);
+    if (text.length > 256 << 10) return null;
+    const list = normalizeModels(JSON.parse(text));
+    return list.length ? list : null;
+  } catch { return null; }
+}
+
+/** 已缓存的那家清单（不发请求）；没拉过就是目录里写的（配了内嵌清单就用它，冷启动也拿得到窗口） */
 export function cachedModels(p = PROVIDER) {
   const c = CACHE.get(p.id);
-  return withWindows((c && c.list) || (p.id === PROVIDER.id && MODELS) || p.fallbackModels || []);
+  const list = (c && c.list) || (p.id === PROVIDER.id && MODELS);
+  if (list) return withWindows(list);
+  const inline = inlineModels(p.modelsUrl);
+  return withWindows(inline ? mergeKnown(inline, p.fallbackModels) : p.fallbackModels || []);
+}
+/** 这家的清单拉过没有（过期的也算）：拉过就不必让这一轮干等网络 */
+export function modelsCached(p = PROVIDER) {
+  const c = CACHE.get(p.id);
+  return !!((c && c.list) || (p.id === PROVIDER.id && MODELS));
 }
 
 /** 厂商的 /models 多是 OpenAI 形状：不报窗口，还混着向量、语音、画图模型。

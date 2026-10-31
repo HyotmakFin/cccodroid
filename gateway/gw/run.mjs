@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { CFG, LAST_LANG, PATHS, log, tr, tz } from "./config.mjs";
 import { SETTINGS, capList } from "./settings-store.mjs";
 import { PERM_MODES, PROVIDER, billAfterRun, keyOf, noteTokens, providerById } from "./providers.mjs";
-import { ALIAS_SEEN, effortLevelsOf, fetchModels, isLoginMode, normEffort } from "./models.mjs";
+import { ALIAS_SEEN, effortLevelsOf, fetchModels, isLoginMode, modelsCached, normEffort } from "./models.mjs";
 import { claudeCmd, claudeEnv, currentModelInfo, ensureBridge, settingsArgs } from "./claude.mjs";
 import { tasksCheck } from "./goal.mjs";
 import { setLastInit } from "./caps.mjs";
@@ -134,7 +134,17 @@ export async function startRun(item) {
   // 原生厂商只认 claude 自家的模型名；别家的名字（切厂商前留下的）宁可不传，交给 claude 自己选
   if (P.nativeModels && model && !/^(claude-|opus|sonnet|haiku|fable|default|best)/i.test(model)) model = "";
   // 别家的清单拉一次（10 分钟缓存）：窗口、档位映射要用。思考强度是跟着全局 / 项目来的、这家模型不支持时，换成它支持的
-  if (P.id !== PROVIDER.id && !P.local) await fetchModels(false, P).catch(() => {});
+  // 全局那家也一样：没打开过设置 / 型号清单时冷缓存里没有窗口，claude 只能按 200k 跑（#57）。拉过的就后台刷新，不让这一轮干等
+  if (!P.local) {
+    // 已经知道这个型号的窗口（拉过清单、或配置里的内嵌清单 / fallbackModels 写了）就不等：离线时首轮别干等 15 秒（v0514 复核）
+    const known = modelsCached(P) || Number(currentModelInfo(model, P).context_window) > 0;
+    if (P.id !== PROVIDER.id || !known) await fetchModels(false, P).catch(() => {});
+    else fetchModels(false, P).catch(() => {});
+  }
+  // 出口处统一收口：型号名来自设置、会话、厂商默认、导入的配置和清单，哪条都可能超长或夹控制字符，
+  // 进命令行前截住，免得每轮 E2BIG / spawn 抛错（v0514 复核）。档位只认 claude 的五档
+  model = model.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200);
+  if (!["low", "medium", "high", "xhigh", "max"].includes(effort)) effort = "";
   if (effort && !P.local) {
     const mi = currentModelInfo(model, P);
     if (!effortLevelsOf(mi, P).includes(effort)) effort = normEffort(mi, effort, P) || "";

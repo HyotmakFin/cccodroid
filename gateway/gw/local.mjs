@@ -325,7 +325,8 @@ function modelFetch(e, urls) {
       for (const url of urls) {
         for (let i = 0; i < 3 && !job.cancelled; i++) {
           try {
-            await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "20000", "--speed-time", "60", "-o", part, url]);
+            // 跳转也只许 https：用户贴的链接可能跳到 http 或内网地址（v0514 审查低-6）
+            await compRun(job, path.join(PREFIX, "bin", "curl"), ["-fL", "--proto", "=https", "--proto-redir", "=https", "-sS", "-C", "-", "--retry", "3", "--speed-limit", "20000", "--speed-time", "60", "-o", part, url]);
             lastErr = null; break;
           } catch (er) { lastErr = er; }
           // 下全了没改名（续传回 416）：直接去校验
@@ -435,7 +436,8 @@ export async function routeLocal(req, res, u, p) {
   if (req.method === "POST" && p === "/api/freeze") {
     let j = {};
     try { j = JSON.parse(await readBody(req)); } catch {}
-    const touch = Array.isArray(j.touch) ? j.touch.slice(-40).map((x) => String(x).slice(0, 80)).join(" | ") : "";
+    // 去掉换行：不能借它在日志里伪造一行（v0514 审查低-8）
+    const touch = Array.isArray(j.touch) ? j.touch.slice(-40).map((x) => String(x).replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 80)).join(" | ") : "";
     log(`滚动冻结脱困（${j.why === "auto" ? "自动" : "手动"}）${touch ? "，触摸：" + touch : ""}`);
     return sendJson(res, 200, { ok: true });
   }

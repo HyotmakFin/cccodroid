@@ -20,14 +20,12 @@ public final class PrivRulesTest {
         sh(false, "settings get secure default_input_method");
         sh(false, "am force-stop 'com.example.app'; am stop-app 'com.foo.bar'");
         sh(false, "am set-bg-restriction-level 'com.foo' restricted");
-        sh(false, "am start --activity-reorder-to-front -n li.dsh.claudecli/.MainActivity");
         sh(false, "dumpsys batterystats --checkin");
         sh(false, "id -u");
         sh(false, "logcat -d -t 200 | grep cccodroid");
         sh(false, "pm path com.foo");
         want(false, "/system/bin/dumpsys", "battery");
-        sh(false, "echo hi > /sdcard/a.txt");
-        sh(false, "dumpsys battery 2>/dev/null >> /sdcard/b.txt");
+        sh(false, "dumpsys battery 2>/dev/null >/dev/null");
         sh(false, "getprop ro.build.version.sdk");
         // 白名单以外的一律要问（10-31 二次复核：按命令长相猜危险防不住控制 argv 的一方）
         sh(true, "screencap -p /sdcard/x.png");
@@ -44,6 +42,15 @@ public final class PrivRulesTest {
         sh(true, "am start-foreground-service -n com.x/.S");
         sh(true, "am start-service -n com.x/.S");
         sh(true, "am start -a android.intent.action.CALL -d tel:10086");
+        // v0514 审查低-1：打开界面、写共享存储、读 Wi-Fi / 使用记录都要问
+        sh(true, "am start --activity-reorder-to-front -n li.dsh.claudecli/.MainActivity");
+        sh(true, "am start -a android.intent.action.VIEW -d https://example.com");
+        sh(true, "am start-activity -n com.x/.A");
+        sh(true, "echo hi > /sdcard/a.txt");
+        sh(true, "dumpsys battery >> /sdcard/cccodroid/b.txt");
+        sh(true, "dumpsys wifi");
+        sh(true, "dumpsys -t 5 usagestats");
+        sh(true, "dumpsys bluetooth_manager");
         sh(true, "dumpsys deviceidle whitelist +com.evil");
         sh(true, "dumpsys battery set level 1");
         sh(true, "dumpsys batterystats --reset");

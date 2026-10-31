@@ -79,7 +79,8 @@ export async function routeSettings(req, res, u, p) {
       const b = JSON.parse((await readBody(req)) || "{}");
       for (const k of ["model", "outputStyle", "effort"]) {
         // 只收字符串：塞个对象进来会落盘，之后每一轮都在 .trim() / spawn 那里抛错，重启也好不了（审查 10-29 低7）
-        if (k in b) { if (b[k] != null && typeof b[k] !== "string") return sendJson(res, 400, { error: `${k} must be a string` }); SETTINGS[k] = b[k] || null; }
+        // 长度也限：model 原样进 claude 的命令行，单个参数过 128 KB 就 E2BIG，每一轮都起不来（v0514 审查低-3）
+        if (k in b) { if (b[k] != null && (typeof b[k] !== "string" || b[k].length > 200 || /[\x00-\x1f\x7f]/.test(b[k]))) return sendJson(res, 400, { error: `${k} must be a string (max 200)` }); SETTINGS[k] = b[k] || null; }
       }
       // 权限模式只收 claude 认的值；正在跑的那一轮也当场切过去
       if ("permissionMode" in b && b.permissionMode !== SETTINGS.permissionMode) setPermMode(String(b.permissionMode || "default"));
@@ -121,7 +122,7 @@ export async function routeSettings(req, res, u, p) {
       //  以前没这道闸，"连发消息 + 切厂商"叠在一起就是一场 401 暴雨。
       if ("provider" in b) {
         const want = b.provider ? String(b.provider) : null;
-        const known = want && (want === BUILTIN_PROVIDER.id || (PROVIDERS_CFG && PROVIDERS_CFG.providers[want]));
+        const known = want && (want === BUILTIN_PROVIDER.id || (PROVIDERS_CFG && Object.hasOwn(PROVIDERS_CFG.providers, want)));   // constructor / __proto__ 别从原型上认出来（v0514 审查低-4）
         if (want && !known) return sendJson(res, 400, { error: "unknown provider", provider: want });
 
         if (want !== PROVIDER.id) {
