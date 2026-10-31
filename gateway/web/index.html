@@ -438,8 +438,8 @@
             </div>
           </div>
           <div class="srow">
-            <div class="sl"><b data-i18n>外观</b><p data-i18n>原生、「求索」「逐月」或「构成」配色</p></div>
-            <div class="sc"><span class="seg" id="seg-skin"><button data-sk="native" data-i18n>原生</button><button data-sk="qiusuo" data-i18n>求索</button><button data-sk="zhuyue" data-i18n>逐月</button><button data-sk="goucheng" data-i18n>构成</button></span></div>
+            <div class="sl"><b data-i18n>外观</b><p data-i18n>原生、「求索」「逐月」「构成」或「拾色」配色</p></div>
+            <div class="sc"><span class="seg" id="seg-skin"><button data-sk="native" data-i18n>原生</button><button data-sk="qiusuo" data-i18n>求索</button><button data-sk="zhuyue" data-i18n>逐月</button><button data-sk="goucheng" data-i18n>构成</button><button data-sk="shise" data-i18n>拾色</button></span></div>
           </div>
           <div class="srow">
             <div class="sl"><b data-i18n>深浅</b></div>
@@ -458,6 +458,9 @@
                 <option value="gc-auto" data-i18n>构成 · 跟随系统</option>
                 <option value="gc-light" data-i18n>构成 · 浅色</option>
                 <option value="gc-dark" data-i18n>构成 · 深色</option>
+                <option value="ss-auto" data-i18n>拾色 · 跟随系统</option>
+                <option value="ss-light" data-i18n>拾色 · 浅色</option>
+                <option value="ss-dark" data-i18n>拾色 · 深色</option>
               </select>
             </div>
           </div>
@@ -538,6 +541,10 @@
           <div class="srow">
             <div class="sl"><b data-i18n>思考强度（--effort）</b><p id="effort-info" class="clamp" data-i18n-html>档位随模型变化。也可在输入框打 <code>/effort &lt;level&gt;</code>。</p></div>
             <div class="sc"><select id="set-effort"></select></div>
+          </div>
+          <div class="srow">
+            <div class="sl"><b data-i18n>自动起名</b><p data-i18n>新对话第一轮答完，在后台起个标题</p><p class="clamp" data-i18n>用你的提问和第一轮回答起标题，几秒后自己换上，会多花一点 token；可以指定一个便宜快速的型号专门起名。关掉后，等你发第二条消息时由对话里的模型起名。</p></div>
+            <div class="sc"><select id="set-titlemodel"></select></div>
           </div>
           <!-- 压缩线：拖动设 autoCompactWindow（和「Claude 行为」里的数字框是同一项） -->
           <div class="sblock ac-slide" id="ac-slide">

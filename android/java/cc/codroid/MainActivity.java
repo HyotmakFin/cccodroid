@@ -267,6 +267,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() { super.onResume(); visible = true; applyLandBars(); Battery.foreground(true);
         if (pane != null) pane.resume();
+        pushWall();
         getSystemService(android.app.NotificationManager.class).cancel(41);    // Priv.toFront 的「点此回来」
         Notify.get(this).onForeground(); }                                    // 确认卡就在眼前，通知撤掉
     @Override protected void onPause() { visible = false; Battery.foreground(false); super.onPause();
@@ -321,9 +322,30 @@ public class MainActivity extends Activity {
         super.onMultiWindowModeChanged(on, cfg);
         applyLandBars();
     }
+    /** 壁纸主色（安卓 12+ 的动态取色，系统 system_accent1_500）；更早的系统没有，返回空串。
+     *  按名字查资源：编译用的 SDK 不一定认得 android.R.color.system_accent1_500 这个常量 */
+    String wallColor() {
+        if (Build.VERSION.SDK_INT < 31) return "";
+        try {
+            int id = getResources().getIdentifier("system_accent1_500", "color", "android");
+            if (id == 0) return "";
+            return String.format("#%06x", getResources().getColor(id, null) & 0xffffff);
+        } catch (Exception e) { return ""; }
+    }
+    private String lastWall = null;
+    /** 回到前台时看壁纸主色变没变：变了告诉界面（「拾色」外观跟着换色）。第一次只记下，不推 */
+    void pushWall() {
+        String w = wallColor();
+        if (w.isEmpty() || w.equals(lastWall)) return;
+        boolean first = lastWall == null;
+        lastWall = w;
+        if (!first && web != null) web.evaluateJavascript(guarded("Theme.wall", "window.Theme&&Theme.wall&&Theme.wall('" + w + "')"), null);
+    }
+
     @Override public void onConfigurationChanged(android.content.res.Configuration cfg) {
         super.onConfigurationChanged(cfg);
         applyLandBars();
+        pushWall();
         if (web != null) web.evaluateJavascript(guarded("Theme.system", "window.Theme&&Theme.system(" + systemNight() + ")"), null);
     }
 
@@ -1488,10 +1510,17 @@ public class MainActivity extends Activity {
             @android.webkit.JavascriptInterface public String whatsNew(String lang) { return WhatsNew.pending(MainActivity.this, lang); }
             @android.webkit.JavascriptInterface public void whatsNewSeen(String k) { if (!Env.bridgeOk(k)) return; WhatsNew.seen(MainActivity.this); }
             @android.webkit.JavascriptInterface public boolean nightMode() { return systemNight(); }
+            @android.webkit.JavascriptInterface public String wallColor() { return MainActivity.this.wallColor(); }
+            /** 拾色外观算好的外壳配色：浅色、深色各 8 个 #rrggbb，顺序同 BrowserPane.pal 的键 */
+            @android.webkit.JavascriptInterface public void skinPal(String k, String light, String dark) { if (!Env.bridgeOk(k)) return;
+                String re = "#[0-9a-f]{6}(,#[0-9a-f]{6}){7}";
+                if (light == null || dark == null || !light.matches(re) || !dark.matches(re)) return;
+                getSharedPreferences("ui", MODE_PRIVATE).edit().putString("pal_light", light).putString("pal_dark", dark).apply();
+            }
             @android.webkit.JavascriptInterface public void setBars(String k, boolean dark) { if (!Env.bridgeOk(k)) return; ui.post(() -> applyBars(dark)); }
-            /** 界面里的风格（native / qiusuo / zhuyue / goucheng）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
+            /** 界面里的风格（native / qiusuo / zhuyue / goucheng / shise）：状态栏、安装页、对话框、内置浏览器的颜色按它取。theme.js 在 setBars 之前调 */
             @android.webkit.JavascriptInterface public void skinPref(String k, String s) { if (!Env.bridgeOk(k)) return;
-                if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s) || "goucheng".equals(s))
+                if ("native".equals(s) || "qiusuo".equals(s) || "zhuyue".equals(s) || "goucheng".equals(s) || "shise".equals(s))
                     getSharedPreferences("ui", MODE_PRIVATE).edit().putString("skin", s).commit();
             }
             /** 界面里自定的强调色（theme.js 按外观底色调过深浅的两份）：外壳的加载动画、安装页、对话框跟着换；空串 = 用外观原色 */

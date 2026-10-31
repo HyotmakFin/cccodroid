@@ -15,6 +15,7 @@ import { LL, ensureLlama, localCustomActive } from "./local.mjs";
 import { deviceMcpConfig, privCall, usageAdd, usageIsPrompt, usageMeter } from "./usage.mjs";
 import { TASKS_HINT, contextWindowOf, toolsHint, translate } from "./stream.mjs";
 import { archiveHint } from "./archive.mjs";
+import { autoTitle } from "./autotitle.mjs";
 import { SUBAGENT_HINT, agentBook, takeAgentNote, onShared, privateAgentsBase } from "./agents.mjs";
 import { findSessionFile, peekSession } from "./sessions.mjs";
 import { projectById, projectDefaults, projectOfDir } from "./projects.mjs";
@@ -528,6 +529,8 @@ export async function startRun(item) {
       billAfterRun(run.provider);
       if (!isCmd && !lastResult.is_error && run.sessionId) idleArm(run.sessionId, flags);
       if (!isCmd && !P.local && !lastResult.is_error) settlePathNote(run.sessionId, run.paths);
+      // 新会话第一轮答完就在后台起个标题，不等第二条消息（#60，见 autotitle.mjs）；定时任务的会话不起
+      if (!isCmd && !P.local && !run.sched && !lastResult.is_error) autoTitle(run.sessionId, P, model);
       return endRun(run, {
         durationMs: ms,
         // claude 按内置的 Anthropic 价目表算账；第三方厂商的价格差得远，报出来能高一二十倍，干脆不报

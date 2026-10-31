@@ -833,7 +833,11 @@
     const cur = /^#[0-9a-f]{6}$/i.test(uiGet("accent") || "") ? uiGet("accent") : "", skin = Theme.skin, mode = Theme.current || "light";
     const sw = (hex) => Theme.accentFor(hex, skin, mode).acc;
     const custom = cur && !AC_PRESETS.some(([h]) => h === cur);
-    box.innerHTML = `<button type="button" class="ac-dot ac-def${cur ? "" : " on"}" data-ac="" title="${esc(t("默认"))}"><svg viewBox="0 0 24 24"><path d="M6 18L18 6"/></svg></button>`
+    // 拾色的「默认」就是跟随壁纸：色块直接涂成壁纸推出来的主色，不画斜杠
+    const wall = skin === "shise" ? Theme.accentFor(Theme.wallSeed() || "#6750a4", skin, mode).acc : "";
+    box.innerHTML = (wall
+      ? `<button type="button" class="ac-dot${cur ? "" : " on"}" data-ac="" title="${esc(t("跟随壁纸"))}" style="background:${wall}"></button>`
+      : `<button type="button" class="ac-dot ac-def${cur ? "" : " on"}" data-ac="" title="${esc(t("默认"))}"><svg viewBox="0 0 24 24"><path d="M6 18L18 6"/></svg></button>`)
       + AC_PRESETS.map(([h, n]) => `<button type="button" class="ac-dot${cur === h ? " on" : ""}" data-ac="${h}" title="${esc(t(n))}" style="background:${sw(h)}"></button>`).join("")
       + `<label class="ac-dot ac-pick${custom ? " on" : ""}" title="${esc(t("自定颜色"))}"${custom ? ` style="background:${sw(cur)}"` : ""}><input type="color" value="${custom ? cur : "#2b6fd6"}"></label>`;
   }

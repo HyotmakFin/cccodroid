@@ -2552,3 +2552,14 @@
 2552	Se cargaron {count} modelos. Escribe para buscar o introducir un nombre.
 2553	La consulta contactó con el servicio; la inferencia no se ha probado.
 2554	¿Guardar esta configuración de API?\n\nCuando la uses, las conversaciones, los resultados de herramientas y las imágenes se enviarán a {origin}.\n{verification}\nGuardar no llama a ningún modelo remoto ni cambia la sesión actual.
+2555	Material
+2556	Material · Según el sistema
+2557	Material · Claro
+2558	Material · Oscuro
+2559	Colores Nativo, Qiusuo, Zhuyue, Construct o Material
+2560	Según el fondo de pantalla
+2561	Título automático
+2562	Titular las conversaciones nuevas en segundo plano tras la primera respuesta
+2563	El título se escribe a partir de tu pregunta y la primera respuesta y aparece unos segundos después. Gasta algunos tokens más; puedes elegir un modelo barato y rápido solo para esto. Si lo desactivas, el modelo de la conversación la nombra cuando envíes tu segundo mensaje.
+2564	El mismo modelo que la conversación
+2565	Desactivado

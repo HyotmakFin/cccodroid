@@ -2589,5 +2589,16 @@ window.I18N_DICT.en = {
   "已读取 {count} 个模型（最多 500 个），可搜索或手填其他名称。": "Loaded {count} models (up to 500). Search or enter another name manually.",
   "已读取 {count} 个模型，可输入搜索或手填。": "Loaded {count} models. Type to search or enter a name manually.",
   "读取清单已连接服务，尚未验证模型推理。": "Discovery contacted the service; model inference has not been tested.",
-  "保存此 API 配置？\n\n后续使用时，对话、工具结果和图片将发往 {origin}。\n{verification}\n保存本身不调用远端模型，也不切换当前会话。": "Save this API configuration?\n\nWhen you use it later, conversations, tool results and images will be sent to {origin}.\n{verification}\nSaving itself does not call a remote model or switch the current session."
+  "保存此 API 配置？\n\n后续使用时，对话、工具结果和图片将发往 {origin}。\n{verification}\n保存本身不调用远端模型，也不切换当前会话。": "Save this API configuration?\n\nWhen you use it later, conversations, tool results and images will be sent to {origin}.\n{verification}\nSaving itself does not call a remote model or switch the current session.",
+  "拾色": "Material",
+  "拾色 · 跟随系统": "Material · Follow system",
+  "拾色 · 浅色": "Material · Light",
+  "拾色 · 深色": "Material · Dark",
+  "原生、「求索」「逐月」「构成」或「拾色」配色": "Native, Qiusuo, Zhuyue, Construct or Material colors",
+  "跟随壁纸": "Match wallpaper",
+  "自动起名": "Auto-title",
+  "新对话第一轮答完，在后台起个标题": "Title new chats in the background after the first reply",
+  "用你的提问和第一轮回答起标题，几秒后自己换上，会多花一点 token；可以指定一个便宜快速的型号专门起名。关掉后，等你发第二条消息时由对话里的模型起名。": "The title is written from your question and the first reply and shows up a few seconds later. It costs a few extra tokens; you can pick a cheap, fast model just for naming. When off, the model in the chat names it when you send your second message.",
+  "跟随对话的模型": "Same model as the chat",
+  "不自动起名": "Off"
 };

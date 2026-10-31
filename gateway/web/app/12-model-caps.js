@@ -292,6 +292,12 @@
       } else if (r.nativeModels) sel.value = "";
       else if (curId) sel.value = curId;
       $("model-count").textContent = t("{n} 个", { n: MODELS.length });
+      // 自动起名的型号：跟对话 / 关 / 全局这家清单里的某个（存的不在清单里也补一项，别显示成空白）
+      const tsel = $("set-titlemodel"), tv = state.settings.titleModel || "";
+      tsel.innerHTML = `<option value="">${t("跟随对话的模型")}</option><option value="off">${t("不自动起名")}</option>`
+        + MODELS.map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`).join("");
+      if (tv && tv !== "off" && !MODELS.some((m) => m.id === tv)) tsel.insertAdjacentHTML("beforeend", `<option value="${esc(tv)}">${esc(tv)}</option>`);
+      tsel.value = tv;
       renderEffort(r.effortLevels || [], r.effort || "", r.effortDefault);
 
       // 用量条：总刻度用厂商给的真实窗口，但设了压缩窗口就改以它为满刻度
@@ -439,7 +445,7 @@
   // 没存上：控件回到真正存着的值，别留着没保存的样子让人以为生效了（审查 D-05）
   function revertSet(patch) {
     const S = state.settings || {};
-    const v = { model: ["set-model", S.model || ""], effort: ["set-effort", S.effort || ""], outputStyle: ["set-style", S.outputStyle || ""],
+    const v = { model: ["set-model", S.model || ""], titleModel: ["set-titlemodel", S.titleModel || ""], effort: ["set-effort", S.effort || ""], outputStyle: ["set-style", S.outputStyle || ""],
       maxParallel: ["set-parallel", S.maxParallel || 3] };
     const c = { staticCompat: ["set-static", S.staticCompat !== false], idleCompaction: ["set-idlecompact", S.idleCompaction !== false], guard: ["set-guard", S.guard !== false],
       workIsland: ["set-workisland", S.workIsland === true] };
@@ -463,6 +469,7 @@
   $("set-perm").addEventListener("change", (e) => changePermMode(e.target.value));
   $("set-style").addEventListener("change", (e) => saveSettings({ outputStyle: e.target.value }));
   $("set-effort").addEventListener("change", (e) => saveSettings({ effort: e.target.value }));
+  $("set-titlemodel").addEventListener("change", (e) => saveSettings({ titleModel: e.target.value }));
 
   $("set-static").addEventListener("change", (e) => saveSettings({ staticCompat: e.target.checked }));
   // 执行方式：存在 files/.exec-mode，重启网关生效（36 的包选「直接执行」网关会拒）

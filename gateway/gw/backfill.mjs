@@ -138,7 +138,8 @@ export function userPrompt(sessTitle, items, fix) {
     const prev = it.prev ? (zh() ? `上一章题名：${it.prev}\n` : `Previous chapter title: ${it.prev}\n`) : "";
     const kind = it.open ? (zh() ? "这一章用户的提问：" : "User prompts in this chapter:") : (zh() ? "结束时的压缩摘要：" : "Summary at the end:");
     const bad = fix && fix[it.n] ? (zh() ? `\n上次起的「${fix[it.n].title}」不合格：${fix[it.n].errors.join("；")}` : `\nLast attempt "${fix[it.n].title}" was rejected: ${fix[it.n].errors.join("; ")}`) : "";
-    return `${label}\n${prev}${kind}\n${it.src}${bad}`;
+    const reply = it.reply ? (zh() ? "\n助手的回答（节选）：\n" : "\nAssistant's reply (excerpt):\n") + it.reply : "";
+    return `${label}\n${prev}${kind}\n${it.src}${reply}${bad}`;
   }).join("\n\n");
   return head + "\n\n" + body;
 }
@@ -155,15 +156,17 @@ export function parseTitles(text) {
 }
 
 const WORK = path.join(CFG.home, ".cache", "ccapp-backfill");
-function ask(prompt) {
+/** 问一次。o.provider / o.model：自动起名用对话那家（autotitle.mjs）；不给就是补档，走全局默认、子进程挂在 JOB 上好停 */
+export function ask(prompt, o = {}) {
   return new Promise((resolve) => {
     fs.mkdirSync(WORK, { recursive: true });
-    const [cmd, args] = claudeCmd([...settingsArgs(), "-p", "--no-session-persistence", "--tools", "", "--strict-mcp-config",
-      "--system-prompt", systemPrompt(), "--output-format", "json"]);
-    const child = spawn(cmd, args, { cwd: WORK, env: claudeEnv(), stdio: ["pipe", "pipe", "pipe"], detached: true });
-    JOB.child = child;
+    const P = o.provider || PROVIDER, own = !o.provider;
+    const [cmd, args] = claudeCmd([...settingsArgs(P), "-p", "--no-session-persistence", "--tools", "", "--strict-mcp-config",
+      "--system-prompt", systemPrompt(), "--output-format", "json", ...(o.model ? ["--model", o.model] : [])]);
+    const child = spawn(cmd, args, { cwd: WORK, env: own ? claudeEnv() : claudeEnv({ model: o.model || "", provider: P }), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    if (own) JOB.child = child;
     let out = "", err = "", done = false;
-    const fin = (r) => { if (done) return; done = true; clearTimeout(timer); JOB.child = null; resolve(r); };
+    const fin = (r) => { if (done) return; done = true; clearTimeout(timer); if (own) JOB.child = null; resolve(r); };
     const timer = setTimeout(() => { killTree(child); fin({ error: "timeout" }); }, 240000);
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
     child.stdout.on("data", (d) => { out += d; });

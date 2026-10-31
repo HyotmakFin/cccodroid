@@ -34,6 +34,8 @@ export const SETTINGS = {
   workIsland: false,
   // 端侧小模型：chat = 纯聊天（不给工具，提示只有几十 token）；custom = 用户自己的 ~/.cccodroid/local-mode.json
   localMode: "chat",
+  // 自动起名用的型号（#60）：null = 跟对话同一型号；"off" = 不自动起；其他 = 全局那家清单里的某个型号（见 autotitle.mjs）
+  titleModel: null,
 };
 
 /** 字符串数组：只留字符串，条数、每条长度、总长（字）都有上限 */
@@ -60,7 +62,7 @@ function loadSettings() {
   if (SETTINGS.allowedTools) SETTINGS.allowedTools = cap(SETTINGS.allowedTools, 200, 512, 8192);
   if (SETTINGS.disallowedTools) SETTINGS.disallowedTools = cap(SETTINGS.disallowedTools, 200, 512, 8192);
   // model 也原样进命令行：旧版存进去的超长值在这里丢掉（v0514 审查低-3）
-  for (const k of ["model", "outputStyle", "effort"]) if (SETTINGS[k] != null && (typeof SETTINGS[k] !== "string" || SETTINGS[k].length > 200)) SETTINGS[k] = null;
+  for (const k of ["model", "outputStyle", "effort", "titleModel"]) if (SETTINGS[k] != null && (typeof SETTINGS[k] !== "string" || SETTINGS[k].length > 200)) SETTINGS[k] = null;
   // 权限模式一次性迁移：以前界面没法点「允许」，默认只能全部放行。设置里的 bypassPermissions
   // 分不清是用户选的还是当年的默认值 —— 一律改回逐项确认，界面给一条可关的提示；之后再选回去就尊重用户。
   // manual 是旧下拉里的无效值（claude 不认），同样改掉。

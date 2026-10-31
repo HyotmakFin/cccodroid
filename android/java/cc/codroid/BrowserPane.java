@@ -216,7 +216,7 @@ public class BrowserPane extends LinearLayout {
     }
 
     /** 外壳自己画的东西（状态栏、安装页、对话框、浏览器工具条）和界面同一套色。
-     *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）| zhuyue（Kimi 式的黑白，强调色就是黑 / 白）| goucheng（构成主义：牛皮纸 + 墨黑 + 红）。
+     *  风格由 theme.js → CCApp.skinPref 存在 prefs "ui" 的 skin：native（暖色 + 陶土橙）| qiusuo（DeepSeek Harness 的冷灰 + 蓝）| zhuyue（Kimi 式的黑白，强调色就是黑 / 白）| goucheng（构成主义：牛皮纸 + 墨黑 + 红）| shise（拾色：Material You，theme.js 按壁纸主色现算，经 CCApp.skinPal 存在 pal_light / pal_dark）。
      *  键：bg 页面底 / card 对话框 / field 输入框 / line 分隔线 / fg 正文 / dim 次要字 / hint 提示字 / accent 强调色 */
     static int pal(Context c, boolean night, String k) {
         android.content.SharedPreferences ui = c.getSharedPreferences("ui", Context.MODE_PRIVATE);
@@ -227,7 +227,12 @@ public class BrowserPane extends LinearLayout {
         String skin = ui.getString("skin", "native");
         boolean qs = "qiusuo".equals(skin);
         String[] keys = { "bg", "card", "field", "line", "fg", "dim", "hint", "accent" };
-        String[] v = "goucheng".equals(skin)
+        String own = "shise".equals(skin) ? ui.getString(night ? "pal_dark" : "pal_light", "") : "";
+        String[] v = own.matches("#[0-9a-f]{6}(,#[0-9a-f]{6}){7}") ? own.split(",")
+            : "shise".equals(skin)     // 还没算过（刚切过来、界面没起来）：M3 的默认紫
+            ? (night ? new String[] { "#141218", "#1d1b20", "#2b2930", "#49454f", "#e6e0e9", "#cac4d0", "#938f99", "#d0bcff" }
+                     : new String[] { "#fef7ff", "#f7f2fa", "#ece6f0", "#cac4d0", "#1d1b20", "#49454f", "#79747e", "#6750a4" })
+            : "goucheng".equals(skin)
             ? (night ? new String[] { "#151412", "#1f1d1a", "#2a2723", "#4a453d", "#f0e6d2", "#c9bea7", "#9a8f7c", "#f0473b" }
                      : new String[] { "#f3eee3", "#faf7ef", "#e9e2d2", "#cdc2aa", "#1a1a1a", "#4f483d", "#6b6255", "#c8211b" })
             : "zhuyue".equals(skin)

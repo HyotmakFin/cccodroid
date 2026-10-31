@@ -77,7 +77,7 @@ export async function routeSettings(req, res, u, p) {
     if (req.method === "GET") return sendJson(res, 200, { ...SETTINGS, maxParallel: maxParallel(), maxParallelCap: MAX_PARALLEL_CAP, workspace: CFG.workspace, outputStyles: outputStyles() });
     if (req.method === "POST") {
       const b = JSON.parse((await readBody(req)) || "{}");
-      for (const k of ["model", "outputStyle", "effort"]) {
+      for (const k of ["model", "outputStyle", "effort", "titleModel"]) {
         // 只收字符串：塞个对象进来会落盘，之后每一轮都在 .trim() / spawn 那里抛错，重启也好不了（审查 10-29 低7）
         // 长度也限：model 原样进 claude 的命令行，单个参数过 128 KB 就 E2BIG，每一轮都起不来（v0514 审查低-3）
         if (k in b) { if (b[k] != null && (typeof b[k] !== "string" || b[k].length > 200 || /[\x00-\x1f\x7f]/.test(b[k]))) return sendJson(res, 400, { error: `${k} must be a string (max 200)` }); SETTINGS[k] = b[k] || null; }

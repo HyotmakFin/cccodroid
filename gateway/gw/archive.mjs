@@ -38,6 +38,8 @@ export async function fileChapter(sid, { title, same, status, chapter, misc, by 
   if (pick.error) return { ok: false, errors: [pick.error] };
   const n = pick.n, old = entry.chapters[n];
   if (old?.locked && by === "ai") return { ok: false, errors: [/^zh/i.test(LAST_LANG) ? `第 ${n} 章的题名用户改过并锁定了，不用再建` : `chapter ${n} was titled by the user and is locked; nothing to do`] };
+  // 自动起名（autotitle.mjs）是最弱的来源：已经有题名（AI 建的、用户交的）一律不盖。和下面的写入在同一段同步代码里，不留竞态窗口（v0515 复核低-2）
+  if (by === "auto" && old?.title) return { ok: false, errors: ["chapter already titled"] };
   const hist = old?.hist || [];
   if (old?.title && old.title !== v.title) hist.push({ title: old.title, at: old.at || 0, by: old.by || null });
   entry.chapters[n] = { title: v.title, status: st || old?.status || null, same: !!same && n > 1, by, at: Date.now(), spec: SPEC_VERSION, locked: by === "user" || !!old?.locked, hist: hist.slice(-20) };

@@ -2552,3 +2552,14 @@
 2552	{count} modèles chargés. Saisissez pour rechercher ou ajouter un nom.
 2553	La liste a contacté le service ; l'inférence du modèle n'a pas été testée.
 2554	Enregistrer cette configuration d'API ?\n\nLors de son utilisation, les conversations, résultats d'outils et images seront envoyés à {origin}.\n{verification}\nL'enregistrement lui-même n'appelle aucun modèle distant et ne change pas la session actuelle.
+2555	Material
+2556	Material · Selon le système
+2557	Material · Clair
+2558	Material · Sombre
+2559	Couleurs natives, Qiusuo, Zhuyue, Construct ou Material
+2560	Selon le fond d'écran
+2561	Titre automatique
+2562	Titrer les nouvelles conversations en arrière-plan après la première réponse
+2563	Le titre est rédigé à partir de votre question et de la première réponse, et apparaît quelques secondes plus tard. Cela coûte quelques jetons de plus ; vous pouvez choisir un modèle rapide et bon marché rien que pour cela. Désactivé, c'est le modèle de la conversation qui la nomme à votre deuxième message.
+2564	Même modèle que la conversation
+2565	Désactivé
